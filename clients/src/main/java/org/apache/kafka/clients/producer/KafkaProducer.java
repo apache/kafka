@@ -69,7 +69,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
@@ -248,20 +247,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String JMX_PREFIX = "kafka.producer";
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
-
-    private static final String INIT_TXN_TIMEOUT_MSG = "InitTransactions timed out — " +
-            "did not complete coordinator discovery or " +
-            "receive the InitProducerId response within max.block.ms.";
-
-    private static final String SEND_OFFSETS_TIMEOUT_MSG =
-            "SendOffsetsToTransaction timed out – did not reach the coordinator or " +
-                    "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
-    private static final String COMMIT_TXN_TIMEOUT_MSG =
-            "CommitTransaction timed out – did not complete EndTxn with the transaction coordinator within max.block.ms";
-    private static final String ABORT_TXN_TIMEOUT_MSG =
-            "AbortTransaction timed out – did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
-    private static final String METADATA_TIMEOUT_MSG =
-            "Metadata update timed out – did not complete metadata update within max.block.ms";
 
     private final String clientId;
     // Visible for testing
@@ -687,7 +672,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions(keepPreparedTxn);
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, () -> new KafkaException(INIT_TXN_TIMEOUT_MSG));
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordInit(time.nanoseconds() - now);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
     }
@@ -776,7 +761,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long start = time.nanoseconds();
             TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
             sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, () -> new KafkaException(SEND_OFFSETS_TIMEOUT_MSG));
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
             producerMetrics.recordSendOffsets(time.nanoseconds() - start);
         }
     }
@@ -862,7 +847,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, () -> new KafkaException(COMMIT_TXN_TIMEOUT_MSG));
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordCommitTxn(time.nanoseconds() - commitStart);
     }
 
@@ -897,7 +882,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, () -> new KafkaException(ABORT_TXN_TIMEOUT_MSG));
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
     }
 
@@ -1246,18 +1231,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                Throwable cause;
-                Errors error = metadata.getError(topic);
-                if (error != null && error != Errors.NONE) {
-                    cause = error.exception();
-                } else if (ex.getCause() != null) {
-                    cause = ex.getCause();
-                } else {
-                    cause = new KafkaException(METADATA_TIMEOUT_MSG);
-                }
-
                 final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
-                throw new TimeoutException(errorMessage, cause);
+                if (metadata.getError(topic) != null) {
+                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
+                }
+                throw new TimeoutException(errorMessage);
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;

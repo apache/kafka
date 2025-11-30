@@ -17,13 +17,11 @@
 package org.apache.kafka.clients.producer.internals;
 
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 public final class TransactionalRequestResult {
     private final CountDownLatch latch;
@@ -49,12 +47,16 @@ public final class TransactionalRequestResult {
         this.latch.countDown();
     }
 
-    public void await(long timeout, TimeUnit unit, Supplier<KafkaException> potentialCauseException) {
+    public void await() {
+        this.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+    }
+
+    public void await(long timeout, TimeUnit unit) {
         try {
             boolean success = latch.await(timeout, unit);
             if (!success) {
                 throw new TimeoutException("Timeout expired after " + unit.toMillis(timeout) +
-                    "ms while awaiting " + operation, potentialCauseException.get());
+                    "ms while awaiting " + operation);
             }
 
             isAcked = true;

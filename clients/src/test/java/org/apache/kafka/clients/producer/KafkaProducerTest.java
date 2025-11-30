@@ -174,14 +174,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
-
-    private static final String INIT_TXN_TIMEOUT_MSG =
-            "InitTransactions timed out — " +
-            "did not complete coordinator discovery or " +
-            "receive the InitProducerId response within max.block.ms.";
-    private static final String METADATA_TIMEOUT_MSG =
-            "Metadata update timed out – did not complete metadata update within max.block.ms";
-
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
@@ -893,8 +885,7 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            var e = assertThrows(ExecutionException.class, future::get);
-            assertInstanceOf(TimeoutException.class, e.getCause());
+            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -961,8 +952,7 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
         try {
-            var e = assertThrows(ExecutionException.class, future::get);
-            assertInstanceOf(TimeoutException.class, e.getCause());
+            assertInstanceOf(TimeoutException.class, assertThrows(ExecutionException.class, future::get).getCause());
         } finally {
             producer.close(Duration.ofMillis(0));
         }
@@ -1090,11 +1080,7 @@ public class KafkaProducerTest {
             assertNotNull(producer.partitionsFor(topic));
             exchanger.exchange(null);  // 2
             exchanger.exchange(null);  // 3
-
-            var timeout = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
-            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
-            assertEquals(METADATA_TIMEOUT_MSG, kafkaEx.getMessage());
-
+            assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
             t.join();
         }
     }
@@ -1366,9 +1352,7 @@ public class KafkaProducerTest {
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
-            var timeout = assertThrows(TimeoutException.class, producer::initTransactions);
-            var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
-            assertEquals(INIT_TXN_TIMEOUT_MSG, kafkaEx.getMessage());
+            assertThrows(TimeoutException.class, producer::initTransactions);
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
@@ -2380,11 +2364,7 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 metadata, client, null, time);
-
-        var timeout = assertThrows(TimeoutException.class, producer::initTransactions);
-        var kafkaEx = assertInstanceOf(KafkaException.class, timeout.getCause());
-        assertEquals(INIT_TXN_TIMEOUT_MSG, kafkaEx.getMessage());
-
+        assertThrows(TimeoutException.class, producer::initTransactions);
         // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
             assertThrows(IllegalStateException.class, producer::beginTransaction);

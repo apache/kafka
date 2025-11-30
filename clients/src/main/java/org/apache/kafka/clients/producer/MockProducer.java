@@ -424,7 +424,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             if (injectTimeoutExceptionCounter > 0) {
                 --injectTimeoutExceptionCounter;
             }
-            throw new TimeoutException(new KafkaException("TimeoutExceptions are successfully injected for test."));
+            throw new TimeoutException();
         }
 
         return clientInstanceId;
