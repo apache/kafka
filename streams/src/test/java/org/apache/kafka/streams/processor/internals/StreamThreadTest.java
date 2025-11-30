@@ -1321,18 +1321,11 @@ public class StreamThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("data")
-    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
-        // The state updater is disabled for this test because this test relies on the fact the mainConsumer.resume()
-        // is not called. This is not true when the state updater is enabled which leads to
-        // java.lang.IllegalStateException: No current assignment for partition topic1-2.
-        // Since this tests verifies an aspect that is independent from the state updater, it is OK to disable
-        // the state updater and leave the rewriting of the test to later, when the code path for disabled state updater
-        // is removed.
-        assumeFalse(stateUpdaterEnabled);
+    @ValueSource(booleans = {true, false})
+    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress(final boolean processingThreadsEnabled) throws InterruptedException {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final Properties props = configProps(true, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(true, processingThreadsEnabled);
         thread =
             createStreamThread(CLIENT_ID, new StreamsConfig(props), new MockTime(1));
 
@@ -1345,6 +1338,14 @@ public class StreamThreadTest {
         assignedPartitions.add(t1p2);
         activeTasks.put(task1, Collections.singleton(t1p1));
         activeTasks.put(task2, Collections.singleton(t1p2));
+
+        // set up mock consumer
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
+        mockConsumer.subscribe(Collections.singleton(topic1));
+        mockConsumer.updateBeginningOffsets(Map.of(t1p1, 0L, t1p2, 0L));
+
+        // assign partitions before starting the thread
+        mockConsumer.rebalance(assignedPartitions);
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
 
@@ -1362,7 +1363,7 @@ public class StreamThreadTest {
         assertTrue(thread.isAlive());
 
         Thread.sleep(1000);
-        assertEquals(Set.of(task1, task2), thread.taskManager().activeTaskIds());
+        assertEquals(Set.of(task1, task2), thread.taskManager().allTasks().keySet());
         assertEquals(StreamThread.State.PENDING_SHUTDOWN, thread.state());
 
         thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
@@ -1371,7 +1372,7 @@ public class StreamThreadTest {
             () -> thread.state() == StreamThread.State.DEAD,
             10 * 1000,
             "Thread never shut down.");
-        assertEquals(Collections.emptySet(), thread.taskManager().activeTaskIds());
+        assertEquals(Collections.emptySet(), thread.taskManager().allTasks().keySet());
     }
 
     @ParameterizedTest
