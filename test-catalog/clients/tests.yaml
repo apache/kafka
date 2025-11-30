@@ -5273,6 +5273,13 @@ org.apache.kafka.common.utils.ExitTest:
 - shouldExitImmediately
 - shouldHaltImmediately
 - shouldNotInvokeShutdownHookImmediately
+org.apache.kafka.common.utils.ExponentialBackoffManagerTest:
+- testBackOffWithJitter
+- testBackOffWithoutJitter
+- testCanAttempt
+- testIncrementAttempt
+- testInitialState
+- testResetAttempts
 org.apache.kafka.common.utils.ExponentialBackoffTest:
 - testExponentialBackoff
 - testExponentialBackoffWithInvalidJitter

@@ -629,7 +629,6 @@ org.apache.kafka.coordinator.group.NetworkPartitionMetadataClientTest:
 - testLazyInitializationWithEmptyPartitions
 - testLazyInitializationWithNullPartitions
 - testListLatestOffsetsAuthenticationError
-- testListLatestOffsetsDisconnected
 - testListLatestOffsetsEmptyPartitionLeader
 - testListLatestOffsetsEmptyPartitions
 - testListLatestOffsetsMissingPartitionInResponse
@@ -642,8 +641,11 @@ org.apache.kafka.coordinator.group.NetworkPartitionMetadataClientTest:
 - testListLatestOffsetsNullResponseBody
 - testListLatestOffsetsServerError
 - testListLatestOffsetsSuccess
-- testListLatestOffsetsTimedOut
 - testListLatestOffsetsVersionMismatch
+- testMaxRetryAttemptsExhaustedOnDisconnect
+- testMaxRetryAttemptsExhaustedOnTimeout
+- testRetryOnDisconnect
+- testRetryOnTimeout
 org.apache.kafka.coordinator.group.OffsetAndMetadataTest:
 - testAttributes
 - testFromRecord
