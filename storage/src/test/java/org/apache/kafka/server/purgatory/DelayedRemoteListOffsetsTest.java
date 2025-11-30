@@ -193,7 +193,7 @@ public class DelayedRemoteListOffsetsTest {
         Map<TopicIdPartition, ListOffsetsPartitionStatus> statusByPartition = Map.of(
             new TopicIdPartition(Uuid.randomUuid(), 0, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
             new TopicIdPartition(Uuid.randomUuid(), 1, "test"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
-            new TopicIdPartition(Uuid.randomUuid(), 0, "test1"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
+            new TopicIdPartition(Uuid.randomUuid(), 0, "test1"), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(errorFutureHolder)).build()
         );
 
         DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
