@@ -70,19 +70,19 @@ public class DescribeFeaturesTest {
         // Test unstable.api.versions.enable on controller nodes
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
             // unstable.api.versions.enable is true on node 3000
-            assertFeatures(admin, 3000, true);
+            assertFeatures(admin, 3000, true, clusterInstance.config().metadataVersion());
 
             // unstable.api.versions.enable is false on node 3001
-            assertFeatures(admin, 3001, false);
+            assertFeatures(admin, 3001, false, clusterInstance.config().metadataVersion());
         }
 
         // Test unstable.feature.versions.enable on broker nodes
         try (Admin admin = clusterInstance.admin()) {
             // unstable.feature.versions.enable is true on node 0
-            assertFeatures(admin, 0, true);
+            assertFeatures(admin, 0, true, clusterInstance.config().metadataVersion());
 
             // unstable.feature.versions.enable is false on node 1
-            assertFeatures(admin, 1, false);
+            assertFeatures(admin, 1, false, clusterInstance.config().metadataVersion());
         }
     }
 
@@ -103,9 +103,14 @@ public class DescribeFeaturesTest {
         }
     }
 
-    private void assertFeatures(Admin admin, int nodeId, boolean unstable) {
+    private void assertFeatures(Admin admin, int nodeId, boolean unstable, MetadataVersion metadataVersion) {
         FeatureMetadata featureMetadata = assertDoesNotThrow(
             () -> admin.describeFeatures(new DescribeFeaturesOptions().nodeId(nodeId)).featureMetadata().get());
+
+        assertEquals(Map.of(
+            MetadataVersion.FEATURE_NAME, new FinalizedVersionRange(metadataVersion.featureLevel(), metadataVersion.featureLevel())
+        ), featureMetadata.finalizedFeatures());
+
         if (unstable) {
             assertEquals(Map.of(
                 GroupVersion.FEATURE_NAME, new SupportedVersionRange(Feature.GROUP_VERSION.minimumProduction(), Feature.GROUP_VERSION.latestTesting()),
