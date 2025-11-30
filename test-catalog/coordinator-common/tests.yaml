@@ -63,7 +63,7 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testLargeUncompressibleRecordTriggersFlushAndFails
 - testLingerTimeComparisonInMaybeFlushCurrentBatch
 - testNonRetryableTimer
-- testOnNewMetadataImage
+- testOnMetadataUpdate
 - testPartitionLoadGeneratesSnapshotAtHighWatermark
 - testPartitionLoadGeneratesSnapshotAtHighWatermarkNoRecordsLoaded
 - testPartitionLoadSensor
