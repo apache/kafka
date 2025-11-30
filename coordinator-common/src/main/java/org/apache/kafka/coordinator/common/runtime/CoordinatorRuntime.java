@@ -571,7 +571,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         /**
          * The current state.
          */
-        CoordinatorState state;
+        volatile CoordinatorState state;
 
         /**
          * The current epoch of the coordinator. This represents
