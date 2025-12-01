@@ -60,7 +60,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-                "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.3-IV3\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.3-IV3\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
         assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
@@ -86,7 +86,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-                "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
         assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +

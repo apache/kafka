@@ -225,8 +225,8 @@ public class TaskManager {
         // We need to stop all processing, since we need to commit non-corrupted tasks as well.
         maybeLockTasks(activeTasks);
 
-        final Set<Task> corruptedActiveTasks = new HashSet<>();
-        final Set<Task> corruptedStandbyTasks = new HashSet<>();
+        final Set<Task> corruptedActiveTasks = new TreeSet<>(Comparator.comparing(Task::id));
+        final Set<Task> corruptedStandbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
 
         for (final TaskId taskId : corruptedTasks) {
             final Task task = tasks.task(taskId);
@@ -559,7 +559,7 @@ public class TaskManager {
     private void handleTasksPendingInitialization() {
         // All tasks pending initialization are not part of the usual bookkeeping
 
-        final Set<Task> tasksToCloseDirty = new HashSet<>();
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
 
         for (final Task task : tasks.drainPendingTasksToInit()) {
             closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
@@ -577,7 +577,7 @@ public class TaskManager {
 
         // recycle the startup standbys to active, and remove them from the set of actives that need to be created
         if (!startupStandbyTasksToRecycle.isEmpty()) {
-            final Set<Task> tasksToCloseDirty = new HashSet<>();
+            final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
             for (final Map.Entry<Task, Set<TopicPartition>> entry : startupStandbyTasksToRecycle.entrySet()) {
                 final Task task = entry.getKey();
                 recycleTaskFromStateUpdater(task, entry.getValue(), tasksToCloseDirty, failedTasks);
@@ -635,8 +635,8 @@ public class TaskManager {
                                                  final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                                  final Map<TaskId, RuntimeException> failedTasks) {
         final Map<Task, Set<TopicPartition>> tasksToRecycleFromStateUpdater = new HashMap<>();
-        final Set<Task> tasksToCloseCleanFromStateUpdater = new HashSet<>();
-        final Set<Task> tasksToCloseDirtyFromStateUpdater = new HashSet<>();
+        final Set<Task> tasksToCloseCleanFromStateUpdater = new TreeSet<>(Comparator.comparing(Task::id));
+        final Set<Task> tasksToCloseDirtyFromStateUpdater = new TreeSet<>(Comparator.comparing(Task::id));
         handleTasksInStateUpdater(
             activeTasksToCreate,
             standbyTasksToCreate,
@@ -1152,8 +1152,8 @@ public class TaskManager {
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
         final Set<TopicPartition> remainingRevokedPartitions = new HashSet<>(revokedPartitions);
 
-        final Set<Task> revokedActiveTasks = new HashSet<>();
-        final Set<Task> commitNeededActiveTasks = new HashSet<>();
+        final Set<Task> revokedActiveTasks = new TreeSet<>(Comparator.comparing(Task::id));
+        final Set<Task> commitNeededActiveTasks = new TreeSet<>(Comparator.comparing(Task::id));
         final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
@@ -1192,7 +1192,7 @@ public class TaskManager {
         // even if commit failed, we should still continue and complete suspending those tasks, so we would capture
         // any exception and rethrow it at the end. some exceptions may be handled immediately and then swallowed,
         // as such we just need to skip those dirty tasks in the checkpoint
-        final Set<Task> dirtyTasks = new HashSet<>();
+        final Set<Task> dirtyTasks = new TreeSet<>(Comparator.comparing(Task::id));
         try {
             if (revokedTasksNeedCommit) {
                 // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
@@ -1337,8 +1337,9 @@ public class TaskManager {
     private void removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit() {
         if (stateUpdater != null) {
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
-            final Set<Task> tasksToCloseClean = new HashSet<>(tasks.drainPendingActiveTasksToInit());
-            final Set<Task> tasksToCloseDirty = new HashSet<>();
+            final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
+            tasksToCloseClean.addAll(tasks.drainPendingActiveTasksToInit());
+            final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
             for (final Task restoringTask : stateUpdater.tasks()) {
                 if (restoringTask.isActive()) {
                     futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
@@ -1592,8 +1593,8 @@ public class TaskManager {
                 final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
                 futures.put(task.id(), future);
             }
-            final Set<Task> tasksToCloseClean = new HashSet<>();
-            final Set<Task> tasksToCloseDirty = new HashSet<>();
+            final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
+            final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
             addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
             // at this point we removed all tasks, so the shutdown should not take a lot of time
             stateUpdater.shutdown(Duration.ofMinutes(1L));
@@ -1635,7 +1636,7 @@ public class TaskManager {
                 .collect(Collectors.toSet());
         maybeLockTasks(ids);
 
-        final Set<Task> tasksToCloseDirty = new HashSet<>();
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
         tasksToCloseDirty.addAll(tryCloseCleanActiveTasks(activeTasks, clean, firstException));
         tasksToCloseDirty.addAll(tryCloseCleanStandbyTasks(standbyTasks, clean, firstException));
 
@@ -1751,7 +1752,7 @@ public class TaskManager {
         if (!clean) {
             return standbyTaskIterable();
         }
-        final Set<Task> tasksToCloseDirty = new HashSet<>();
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
 
         // first committing and then suspend / close clean
         for (final Task task : standbyTasksToClose) {
@@ -2083,8 +2084,8 @@ public class TaskManager {
 
     void maybeCloseTasksFromRemovedTopologies(final Set<String> currentNamedTopologies) {
         try {
-            final Set<Task> activeTasksToRemove = new HashSet<>();
-            final Set<Task> standbyTasksToRemove = new HashSet<>();
+            final Set<Task> activeTasksToRemove = new TreeSet<>(Comparator.comparing(Task::id));
+            final Set<Task> standbyTasksToRemove = new TreeSet<>(Comparator.comparing(Task::id));
             for (final Task task : tasks.allTasks()) {
                 if (!currentNamedTopologies.contains(task.id().topologyName())) {
                     if (task.isActive()) {

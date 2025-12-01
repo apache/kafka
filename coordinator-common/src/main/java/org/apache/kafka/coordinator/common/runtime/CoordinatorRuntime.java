@@ -75,7 +75,7 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.Coo
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
  * or the transaction coordinator.
  *
- * The runtime framework maps each underlying partitions (e.g. __consumer_offsets) that that broker is a
+ * The runtime framework maps each underlying partitions (e.g. __consumer_offsets) that the broker is a
  * leader of to a coordinator replicated state machine. A replicated state machine holds the hard and soft
  * state of all the objects (e.g. groups or offsets) assigned to the partition. The hard state is stored in
  * timeline datastructures backed by a SnapshotRegistry. The runtime supports two type of operations
@@ -578,7 +578,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         /**
          * The current state.
          */
-        CoordinatorState state;
+        volatile CoordinatorState state;
 
         /**
          * The current epoch of the coordinator. This represents
@@ -2611,14 +2611,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * Util method which returns all the topic partitions for which
-     * the state machine is in active state.
-     * <p>
-     * This could be useful if the caller does not have a specific
-     * target internal topic partition.
-     * @return List of {@link TopicPartition} whose coordinators are active
+     * @return List of {@link TopicPartition} whose coordinators are active.
      */
-    public List<TopicPartition> activeTopicPartitions() {
+    public List<TopicPartition> activeCoordinators() {
         if (coordinators == null || coordinators.isEmpty()) {
             return List.of();
         }

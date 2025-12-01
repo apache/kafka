@@ -9032,7 +9032,7 @@ class KafkaApisTest extends Logging {
       )).thenReturn(group1Future)
 
       val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
+      when(groupCoordinator.fetchOffsets(
         requestChannelRequest.context,
         new OffsetFetchRequestData.OffsetFetchRequestGroup()
           .setGroupId("group-2")
@@ -9041,7 +9041,7 @@ class KafkaApisTest extends Logging {
       )).thenReturn(group2Future)
 
       val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
+      when(groupCoordinator.fetchOffsets(
         requestChannelRequest.context,
         new OffsetFetchRequestData.OffsetFetchRequestGroup()
           .setGroupId("group-3")
@@ -9050,7 +9050,7 @@ class KafkaApisTest extends Logging {
       )).thenReturn(group3Future)
 
       val group4Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
+      when(groupCoordinator.fetchOffsets(
         requestChannelRequest.context,
         new OffsetFetchRequestData.OffsetFetchRequestGroup()
           .setGroupId("group-4")
@@ -9190,7 +9190,7 @@ class KafkaApisTest extends Logging {
     )).thenReturn(group1Future)
 
     val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
+    when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-2")
@@ -9384,7 +9384,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = makeRequest(version)
 
     val future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
+    when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-1")
@@ -9546,7 +9546,7 @@ class KafkaApisTest extends Logging {
 
     // group-3 is allowed and bar is allowed.
     val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
+    when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-3")

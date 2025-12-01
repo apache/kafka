@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -29,7 +29,7 @@ public enum ShareAcquireMode {
 
     public final String name;
 
-    public final byte id;
+    final byte id;
 
     ShareAcquireMode(final String name, final byte id) {
         this.name = name;
@@ -40,6 +40,9 @@ public enum ShareAcquireMode {
      * Case-insensitive acquire mode lookup by string name.
      */
     public static ShareAcquireMode of(final String name) {
+        if (name == null) {
+            throw new IllegalArgumentException("ShareAcquireMode is null");
+        }
         try {
             return ShareAcquireMode.valueOf(name.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
@@ -65,7 +68,7 @@ public enum ShareAcquireMode {
 
     @Override
     public String toString() {
-        return "ShareAcquireMode(" + name + " (" + id + "))";
+        return name;
     }
 
     public static class Validator implements ConfigDef.Validator {
