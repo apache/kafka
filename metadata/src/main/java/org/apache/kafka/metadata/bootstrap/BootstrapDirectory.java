@@ -23,6 +23,7 @@ import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -91,7 +92,7 @@ public class BootstrapDirectory {
             CLUSTER_METADATA_TOPIC_PARTITION.partition()),
             BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
-            return readFromConfiguration();
+            throw new FileNotFoundException(binaryBootstrapPath.toString());
         } else {
             return readFromBinaryFile(binaryBootstrapPath.toString());
         }
