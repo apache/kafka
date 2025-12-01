@@ -61,7 +61,7 @@ String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
 else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.14.2"
+  mockitoVersion = "5.20.0"
 else
   mockitoVersion = "4.11.0"
 
@@ -75,6 +75,11 @@ if (mockitoVersion.startsWith("4."))
   mockitoArtifactName = "mockito-inline"
 else
   mockitoArtifactName = "mockito-core"
+
+if (JavaVersion.current().isJava8())
+  versions["spotbugs"] = "4.8.6"
+else
+  versions["spotbugs"] = "4.9.8"
 
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
@@ -159,7 +164,6 @@ versions += [
   scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.8.6",
   zinc: "1.9.2",
   zookeeper: "3.8.4",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json

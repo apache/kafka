@@ -132,6 +132,14 @@ allprojects {
     mavenCentral()
   }
 
+  plugins.withType(JavaPlugin).configureEach {
+    java {
+      toolchain {
+        languageVersion = JavaLanguageVersion.of(javaToolChainVersion)
+      }
+    }
+  }
+
   dependencyUpdates {
     revision="release"
     resolutionStrategy {
@@ -251,7 +259,7 @@ if (repo != null) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${java.toolchain.languageVersion.get()} and Scala ${versions.scala}")
 println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -288,13 +296,6 @@ subprojects {
     fineTuneEclipseClasspathFile(eclipse, project)
   }
 
-  plugins.withType(JavaPlugin).configureEach {
-    java {
-      toolchain {
-        languageVersion = JavaLanguageVersion.of(javaToolChainVersion)
-      }
-    }
-  }
 
   java {
     consistentResolution {
@@ -304,9 +305,6 @@ subprojects {
   }
 
   tasks.withType(JavaCompile) {
-    doFirst {
-      println("Compiling project ${project.name} with Java ${java.toolchain.languageVersion.get()}")
-    }
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
