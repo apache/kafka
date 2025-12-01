@@ -284,8 +284,8 @@ class MetadataVersionTest {
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testListOffsetsValueVersion(MetadataVersion metadataVersion) {
-        final short expectedVersion = 11;
-        if (metadataVersion.isAtLeast(IBP_4_2_IV1)) {
+        final short expectedVersion = 12;
+        if (metadataVersion.isAtLeast(IBP_4_3_IV0)) {
             assertEquals(expectedVersion, metadataVersion.listOffsetRequestVersion());
         } else {
             assertTrue(metadataVersion.listOffsetRequestVersion() < expectedVersion);
