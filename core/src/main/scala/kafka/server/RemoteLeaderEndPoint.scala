@@ -106,21 +106,29 @@ class RemoteLeaderEndPoint(logPrefix: String,
   }
 
   private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, timestamp: Long): OffsetAndEpoch = {
+    val metadataVersion = metadataVersionSupplier()
+    val topicIdPartition = replicaManager.topicIdPartition(topicPartition)
+
     val topic = new ListOffsetsTopic()
       .setName(topicPartition.topic)
+      .setTopicId(topicIdPartition.topicId())
       .setPartitions(Collections.singletonList(
         new ListOffsetsPartition()
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
           .setTimestamp(timestamp)))
-    val metadataVersion = metadataVersionSupplier()
+
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = blockingSender.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetsResponse]
-    val responsePartition = response.topics.asScala.find(_.name == topicPartition.topic).get
-      .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
+    val responseTopic = if (metadataVersion.listOffsetRequestVersion >= 12) {
+      response.topics.asScala.find(_.topicId == topicIdPartition.topicId()).get
+    } else {
+      response.topics.asScala.find(_.name == topicPartition.topic).get
+    }
+    val responsePartition = responseTopic.partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
 
     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE => new OffsetAndEpoch(responsePartition.offset, responsePartition.leaderEpoch)
