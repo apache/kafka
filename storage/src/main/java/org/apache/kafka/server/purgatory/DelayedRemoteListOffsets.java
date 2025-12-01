@@ -100,9 +100,13 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
     @Override
     public void onComplete() {
         Map<String, ListOffsetsResponseData.ListOffsetsTopicResponse> groupedByTopic = new HashMap<>();
-        statusByPartition.forEach((tp, status) -> {
-            ListOffsetsResponseData.ListOffsetsTopicResponse response = groupedByTopic.computeIfAbsent(tp.topic(), k ->
-                    new ListOffsetsResponseData.ListOffsetsTopicResponse().setName(tp.topic()));
+        statusByPartition.forEach((topicIdPartition, status) -> {
+            ListOffsetsResponseData.ListOffsetsTopicResponse response = groupedByTopic.computeIfAbsent(
+                topicIdPartition.topic(),
+                k -> new ListOffsetsResponseData.ListOffsetsTopicResponse()
+                    .setName(topicIdPartition.topic())
+                    .setTopicId(topicIdPartition.topicId())
+            );
             status.responseOpt().ifPresent(res -> response.partitions().add(res));
         });
         responseCallback.accept(groupedByTopic.values());
