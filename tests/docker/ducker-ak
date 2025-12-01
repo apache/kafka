@@ -44,8 +44,9 @@ docker_run_memory_limit="2000m"
 # The default number of cluster nodes to bring up if a number is not specified.
 default_num_nodes=14
 
-# The default OpenJDK base image.
-default_jdk="openjdk:8"
+# The default JDK base image with apt-get support.
+# The openjdk image has been officially deprecated. For more information, see: https://hub.docker.com/_/openjdk
+default_jdk="eclipse-temurin:8-jdk-jammy"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"

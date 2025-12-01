@@ -18,7 +18,6 @@
 import subprocess
 import tempfile
 import os
-from distutils.dir_util import copy_tree
 import shutil
 
 def execute(command):
@@ -34,8 +33,8 @@ def get_input(message):
 def build_docker_image_runner(command, image_type):
     temp_dir_path = tempfile.mkdtemp()
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    copy_tree(f"{current_dir}/{image_type}", f"{temp_dir_path}/{image_type}")
-    copy_tree(f"{current_dir}/resources", f"{temp_dir_path}/{image_type}/resources")
+    shutil.copytree(f"{current_dir}/{image_type}", f"{temp_dir_path}/{image_type}")
+    shutil.copytree(f"{current_dir}/resources", f"{temp_dir_path}/{image_type}/resources")
     command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/{image_type}/Dockerfile")
     command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/{image_type}")
     try:
