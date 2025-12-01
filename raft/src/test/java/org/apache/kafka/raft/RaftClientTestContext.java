@@ -121,6 +121,8 @@ public final class RaftClientTestContext {
     final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
+    final int fetchSnapshotMaxSizeBytes;
+    final int fetchMaxSizeBytes;
 
     private int electionTimeoutMs;
     private int requestTimeoutMs;
@@ -185,6 +187,8 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
         private boolean autoJoin = false;
+        private int fetchSnapshotMaxSizeBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES;
+        private int fetchMaxSizeBytes = QuorumConfig.DEFAULT_QUORUM_FETCH_SIZE_MAX_BYTES;
 
         public Builder(int localId, Set<Integer> staticVoters) {
             this(OptionalInt.of(localId), staticVoters);
@@ -385,6 +389,16 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withFetchSnapshotMaxSizeBytes(int fetchSnapshotMaxSizeBytes) {
+            this.fetchSnapshotMaxSizeBytes = fetchSnapshotMaxSizeBytes;
+            return this;
+        }
+
+        Builder withFetchMaxSizeBytes(int fetchMaxSizeBytes) {
+            this.fetchMaxSizeBytes = fetchMaxSizeBytes;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -421,6 +435,8 @@ public final class RaftClientTestContext {
             configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, appendLingerMs);
             configMap.put(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, autoJoin);
+            configMap.put(QuorumConfig.QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES_CONFIG, fetchSnapshotMaxSizeBytes);
+            configMap.put(QuorumConfig.QUORUM_FETCH_SIZE_MAX_BYTES_CONFIG, fetchMaxSizeBytes);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
 
             List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
@@ -487,7 +503,9 @@ public final class RaftClientTestContext {
                 canBecomeVoter,
                 metrics,
                 externalKRaftMetrics,
-                listener
+                listener,
+                fetchSnapshotMaxSizeBytes,
+                fetchMaxSizeBytes
             );
 
             context.electionTimeoutMs = electionTimeoutMs;
@@ -516,7 +534,9 @@ public final class RaftClientTestContext {
         boolean canBecomeVoter,
         Metrics metrics,
         ExternalKRaftMetrics externalKRaftMetrics,
-        MockListener listener
+        MockListener listener,
+        int fetchSnapshotMaxSizeBytes,
+        int fetchMaxSizeBytes
     ) {
         this.clusterId = clusterId;
         this.localId = localId;
@@ -535,6 +555,8 @@ public final class RaftClientTestContext {
         this.metrics = metrics;
         this.externalKRaftMetrics = externalKRaftMetrics;
         this.listener = listener;
+        this.fetchSnapshotMaxSizeBytes = fetchSnapshotMaxSizeBytes;
+        this.fetchMaxSizeBytes = fetchMaxSizeBytes;
     }
 
     int electionTimeoutMs() {
@@ -1791,7 +1813,7 @@ public final class RaftClientTestContext {
             message.data(),
             "unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
-        assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
+        assertEquals(fetchMaxSizeBytes, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
 
         assertEquals(1, request.topics().size());
@@ -1886,6 +1908,7 @@ public final class RaftClientTestContext {
         return request
             .setMaxWaitMs(maxWaitTimeMs)
             .setClusterId(clusterId)
+            .setMaxBytes(fetchMaxSizeBytes)
             .setReplicaState(
                 new FetchRequestData.ReplicaState().setReplicaId(replicaKey.id())
             );

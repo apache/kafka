@@ -17,6 +17,8 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.internal.ArbitraryMemoryRecords;
@@ -90,6 +92,73 @@ public final class KafkaRaftClientFetchTest {
 
         assertEquals(oldLogEndOffset, context.log.endOffset().offset());
     }
+
+    @Test
+    void testSentFetchUsesQuorumMaxBytesConfiguration() throws Exception {
+        int epoch = 2;
+        int localId = KafkaRaftClientTest.randomReplicaId();
+        ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
+        ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            local.id(),
+            local.directoryId().get()
+        )
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withElectedLeader(epoch, electedLeader.id())
+            // Explicitly change the configuration here.
+            .withFetchMaxSizeBytes(1024)
+            .build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        // assertFetchRequestData contains a check which verifies the SizeBytes field of the Fetch request.
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0, OptionalLong.empty());
+    }
+
+    @Test
+    public void testMaxBytesRequestedFromLogsUsesValueFromFetch() throws Exception {
+        var epoch = 2;
+        var id = KafkaRaftClientTest.randomReplicaId();
+        var localKey = KafkaRaftClientTest.replicaKey(id, true);
+        var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
+        var localMaxSizeBytes = 1024;
+        var remoteMaxSizeBytes = 512;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+                localKey.id(),
+                localKey.directoryId().get()
+        )
+                .appendToLog(epoch, List.of("a", "b", "c"))
+                .appendToLog(epoch, List.of("d", "e", "f"))
+                .withStartingVoters(
+                        VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
+                )
+                .withUnknownLeader(epoch)
+                .withFetchMaxSizeBytes(localMaxSizeBytes)
+                .build();
+
+        context.unattachedToLeader();
+        epoch = context.currentEpoch();
+
+        // The next read from MockLog will be intended for a fetch request.
+        // We wish to assert that it uses the value supplied from the fetch.
+        context.log.setExpectedMaxTotalRecordsSizeBytes(remoteMaxSizeBytes);
+
+        // Send a fetch request with max bytes that are different from the configured value.
+        FetchRequestData request = context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
+        request.setMaxBytes(remoteMaxSizeBytes);
+        context.deliverRequest(request);
+
+        context.pollUntilResponse();
+        FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
+        // Hint: Exceptions which fail this test may be logged to standard output.
+        assertEquals(Errors.NONE.code(), partitionData.errorCode());
+    }
+
+
 
     @Test
     void testReplicationOfHigherPartitionLeaderEpoch() throws Exception {

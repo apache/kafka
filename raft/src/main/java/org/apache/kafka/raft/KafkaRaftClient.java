@@ -1517,7 +1517,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             requestMetadata.apiVersion(),
             replicaKey,
             fetchPartition,
-            currentTimeMs
+            currentTimeMs,
+            request.maxBytes()
         );
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
@@ -1587,7 +1588,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     requestMetadata.apiVersion(),
                     replicaKey,
                     fetchPartition,
-                    completionTimeMs
+                    completionTimeMs,
+                    request.maxBytes()
                 );
             }
         });
@@ -1598,7 +1600,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         short apiVersion,
         ReplicaKey replicaKey,
         FetchRequestData.FetchPartition request,
-        long currentTimeMs
+        long currentTimeMs,
+        int maxSizeBytes
     ) {
         try {
             Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.currentLeaderEpoch());
@@ -1622,7 +1625,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             final Records records;
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
-                LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
+                LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED, maxSizeBytes);
 
                 if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
@@ -2989,7 +2992,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         return request
-            .setMaxBytes(MAX_FETCH_SIZE_BYTES)
+            .setMaxBytes(quorumConfig.fetchMaxSizeBytes())
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
             .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(quorum.localIdOrSentinel()));
@@ -3013,7 +3016,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             log.topicPartition(),
             quorum.epoch(),
             snapshotId,
-            MAX_FETCH_SIZE_BYTES,
+            quorumConfig.fetchSnapshotSizeMaxBytes(),
             snapshotSize
         );
     }

@@ -118,14 +118,22 @@ public class KafkaRaftLog implements RaftLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, Isolation readIsolation) {
+    public int defaultReadMaxBatchSizeBytes() {
+        return config.internalMaxFetchSizeInBytes();
+    }
+
+    @Override
+    public LogFetchInfo read(long startOffset, Isolation readIsolation, int maxTotalBatchSizeBytes) {
         FetchIsolation isolation = switch (readIsolation) {
             case COMMITTED -> FetchIsolation.HIGH_WATERMARK;
             case UNCOMMITTED -> FetchIsolation.LOG_END;
         };
 
         try {
-            FetchDataInfo fetchInfo = log.read(startOffset, config.internalMaxFetchSizeInBytes(), isolation, true);
+            FetchDataInfo fetchInfo = log.read(startOffset,
+                    maxTotalBatchSizeBytes,
+                    isolation,
+                    true);
             return new LogFetchInfo(
                     fetchInfo.records,
                     new LogOffsetMetadata(

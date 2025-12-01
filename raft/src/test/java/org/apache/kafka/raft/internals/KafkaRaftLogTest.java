@@ -25,14 +25,17 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
-import org.apache.kafka.common.record.internal.ArbitraryMemoryRecords;
-import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
-import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.record.ArbitraryMemoryRecords;
+import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.LogAppendInfo;
+import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
@@ -61,6 +64,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -1081,6 +1085,74 @@ public class KafkaRaftLogTest {
                 latestSnapshotOffset >= log.startOffset(),
                 "latest snapshot offset (" + latestSnapshotOffset + " must be >= log start offset (" + log.startOffset() + ")"
         );
+    }
+
+    @Test
+    public void testReadRespectsDefaultInternalMaxFetchSize() throws IOException {
+        int defaultMaxToReadBytes = 1;
+        MetadataLogConfig config = createMetadataLogConfig(
+                10240,
+                10 * 1000,
+                10240,
+                60 * 1000,
+                128,
+                defaultMaxToReadBytes
+        );
+        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
+        // Append twice to ensure we have 2 batches.
+        append(log, 2, 1);
+        append(log, 1, 1);
+
+        LogFetchInfo info = log.read(0, Isolation.UNCOMMITTED);
+
+        // There are 2 batches. The 1st has 2 records and will be larger than 1 Byte in size.
+        // read implementation will return at least 1 batch.
+        assertRecordBatches(info, 2, 2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3})
+    public void testReadRespectsMaxSizeInBytes(int expectedBatches) throws IOException {
+        // 5 records are written in batches of 101 bytes each (at time of writing).
+        int magicMaxBatchSizeBytes = 101;
+        MetadataLogConfig config = createMetadataLogConfig(
+                10240,
+                10 * 1000,
+                10240,
+                60 * 1000,
+                magicMaxBatchSizeBytes,
+                1
+        );
+        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
+        int recordsPerBatch = 5;
+        append(log, recordsPerBatch, 1);
+        append(log, recordsPerBatch, 1);
+        append(log, recordsPerBatch, 1);
+        append(log, recordsPerBatch, 1);
+
+        LogFetchInfo info = log.read(0,
+                Isolation.UNCOMMITTED,
+                magicMaxBatchSizeBytes * expectedBatches);
+        assertRecordBatches(info, recordsPerBatch * expectedBatches, recordsPerBatch);
+
+    }
+
+    private static void assertRecordBatches(LogFetchInfo info, int numberExpected, int recordsPerBatch) {
+        // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
+        // [0..R-1] converted to an utf-8 string with empty keys and headers.
+        int count = 0;
+        for (Record record : info.records.records()) {
+            byte[] expectedValue = String.valueOf(count % recordsPerBatch).getBytes(StandardCharsets.UTF_8);
+            SimpleRecord expected = new SimpleRecord(expectedValue);
+            SimpleRecord actual = new SimpleRecord(record.timestamp(),
+                        record.key(),
+                        record.value(),
+                        record.headers());
+
+            assertEquals(expected, actual);
+            count += 1;
+        }
+        assertEquals(numberExpected, count);
     }
 
     private static MetadataLogConfig createMetadataLogConfig(

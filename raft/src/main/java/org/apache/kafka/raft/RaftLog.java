@@ -58,8 +58,22 @@ public interface RaftLog extends AutoCloseable {
 
     /**
      * Read a set of records within a range of offsets.
+     * maxTotalBatchSizeBytes specifies a "soft" max for total byte size of the record batches to read.
      */
-    LogFetchInfo read(long startOffsetInclusive, Isolation isolation);
+    LogFetchInfo read(long startOffsetInclusive, Isolation isolation, int maxTotalBatchSizeBytes);
+
+    /**
+     * Configures a soft max for total size of bytes read for {@link #read(long, Isolation)}.
+     */
+    int defaultReadMaxBatchSizeBytes();
+
+    /**
+     * Read a set of records within a range of offsets. Implementors set a "soft" max for the number of bytes to read
+     * by implementing defaultLocalReadMaxRecordsSizeBytes.
+     */
+    default LogFetchInfo read(long startOffsetInclusive, Isolation isolation) {
+        return read(startOffsetInclusive, isolation, defaultReadMaxBatchSizeBytes());
+    }
 
     /**
      * Return the latest epoch. For an empty log, the latest epoch is defined
@@ -175,7 +189,7 @@ public interface RaftLog extends AutoCloseable {
 
     /**
      * Update the high watermark and associated metadata (which is used to avoid
-     * index lookups when handling reads with {@link #read(long, Isolation)} with
+     * index lookups when handling reads with {@link #read(long, Isolation, int)} with
      * the {@link Isolation#COMMITTED} isolation level).
      *
      * @param offsetMetadata The offset and optional metadata
