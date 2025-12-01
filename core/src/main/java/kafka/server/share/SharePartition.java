@@ -774,7 +774,7 @@ public class SharePartition {
                 // check for the floor entry and adjust the base offset accordingly.
                 if (baseOffset < startOffset) {
                     log.info("Adjusting base offset for the fetch as it's prior to start offset: {}-{}"
-                            + "from {} to {}", groupId, topicIdPartition, baseOffset, startOffset);
+                            + " from {} to {}", groupId, topicIdPartition, baseOffset, startOffset);
                     baseOffset = startOffset;
                 }
             } else if (floorEntry.getValue().lastOffset() >= baseOffset) {
