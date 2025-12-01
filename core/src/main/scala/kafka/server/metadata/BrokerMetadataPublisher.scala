@@ -242,7 +242,7 @@ class BrokerMetadataPublisher(
 
       try {
         // Propagate the new image to the share coordinator.
-        shareCoordinator.onNewMetadataImage(new KRaftCoordinatorMetadataImage(newImage), newImage.features(), new KRaftCoordinatorMetadataDelta(delta))
+        shareCoordinator.onMetadataUpdate(delta, newImage)
       } catch {
         case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
           s"coordinator with local changes in $deltaName", t)

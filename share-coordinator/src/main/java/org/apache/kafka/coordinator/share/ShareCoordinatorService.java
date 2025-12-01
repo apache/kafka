@@ -45,16 +45,17 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSupplier;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
-import org.apache.kafka.image.FeaturesImage;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -82,7 +83,7 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ShareCoordinatorService implements ShareCoordinator {
     private final ShareCoordinatorConfig config;
     private final Logger log;
@@ -1098,10 +1099,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public void onNewMetadataImage(CoordinatorMetadataImage newImage, FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta) {
+    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
         throwIfNotActive();
-        this.runtime.onMetadataUpdate(delta, newImage);
-        boolean enabled = isShareGroupsEnabled(newFeaturesImage);
+        this.runtime.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(delta),
+            new KRaftCoordinatorMetadataImage(newImage)
+        );
+        boolean enabled = isShareGroupsEnabled(newImage);
         // enabled    shouldRunJob         result (XOR)
         // 0            0               no op on flag, do not call jobs
         // 0            1               disable flag, do not call jobs                      => action
@@ -1129,9 +1133,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
         }
     }
 
-    private boolean isShareGroupsEnabled(FeaturesImage image) {
+    private boolean isShareGroupsEnabled(MetadataImage image) {
         return shareGroupConfigEnabledSupplier.get() || ShareVersion.fromFeatureLevel(
-            image.finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
+            image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
         ).supportsShareGroups();
     }
 
