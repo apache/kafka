@@ -21,7 +21,7 @@ import java.nio.file.Files
 import java.util.{Optional, Properties}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+import org.apache.kafka.metadata.bootstrap.{BootstrapMetadata, LegacyBootstrapDirectory}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.network.SocketServerConfigs
@@ -109,7 +109,7 @@ class KafkaRaftServerTest {
   }
 
   private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
-    val bootstrapDirectory = new BootstrapDirectory(logDir.toString)
+    val bootstrapDirectory = new LegacyBootstrapDirectory(logDir.toString)
     bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
   }
 

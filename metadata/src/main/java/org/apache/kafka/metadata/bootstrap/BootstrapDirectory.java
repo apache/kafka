@@ -17,127 +17,29 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
-import org.apache.kafka.metadata.util.BatchFileReader;
-import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
-import org.apache.kafka.metadata.util.BatchFileWriter;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
-
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-
-import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 
 /**
- * A read-only class that holds the controller bootstrap metadata. A file named "bootstrap.checkpoint" is used and the
- * format is the same as a KRaft snapshot.
+ * Abstraction for reading controller bootstrap metadata from disk.
  */
-public class BootstrapDirectory {
-    public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
+public interface BootstrapDirectory {
+    String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
 
-    public static final String BINARY_BOOTSTRAP_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint";
-
-    private final String directoryPath;
+    String BINARY_BOOTSTRAP_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint";
 
     /**
-     * Create a new BootstrapDirectory object.
+     * Read the bootstrap metadata from the configured location.
      *
-     * @param directoryPath     The path to the directory with the bootstrap file.
+     * @return the loaded {@link BootstrapMetadata}
+     * @throws Exception if the metadata cannot be read
      */
-    public BootstrapDirectory(
-        String directoryPath
-    ) {
-        this.directoryPath = Objects.requireNonNull(directoryPath);
-    }
+    BootstrapMetadata read() throws Exception;
 
-    public BootstrapMetadata maybeReadLegacyBootstrapCheckpoint() throws Exception {
-        Path path = Paths.get(directoryPath);
-        if (!Files.isDirectory(path)) {
-            if (Files.exists(path)) {
-                throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
-                        "a directory.");
-            } else {
-                throw new RuntimeException("No such directory as " + directoryPath);
-            }
-        }
-        Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
-        if (!Files.exists(binaryBootstrapPath)) {
-            return readFromConfiguration();
-        } else {
-            return readFromBinaryFile(binaryBootstrapPath.toString());
-        }
-    }
-
-    public BootstrapMetadata read() throws Exception {
-        Path path = Paths.get(directoryPath);
-        if (!Files.isDirectory(path)) {
-            if (Files.exists(path)) {
-                throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
-                        "a directory.");
-            } else {
-                throw new RuntimeException("No such directory as " + directoryPath);
-            }
-        }
-        Path binaryBootstrapPath = Paths.get(directoryPath, String.format("%s-%d",
-            CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-            CLUSTER_METADATA_TOPIC_PARTITION.partition()),
-            BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
-        if (!Files.exists(binaryBootstrapPath)) {
-            throw new FileNotFoundException(binaryBootstrapPath.toString());
-        } else {
-            return readFromBinaryFile(binaryBootstrapPath.toString());
-        }
-        
-    }
-
-    BootstrapMetadata readFromConfiguration() {
-        return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
-    }
-
-    BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        try (BatchFileReader reader = new BatchFileReader.Builder().
-                setPath(binaryPath).build()) {
-            while (reader.hasNext()) {
-                BatchAndType batchAndType = reader.next();
-                if (!batchAndType.isControl()) {
-                    records.addAll(batchAndType.batch().records());
-                }
-            }
-        }
-        return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
-                "the binary bootstrap metadata file: " + binaryPath);
-    }
-
-    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException {
-        if (!Files.isDirectory(Paths.get(directoryPath))) {
-            throw new RuntimeException("No such directory as " + directoryPath);
-        }
-        Path tempPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME + ".tmp");
-        Files.deleteIfExists(tempPath);
-        try {
-            try (BatchFileWriter writer = BatchFileWriter.open(tempPath)) {
-                for (ApiMessageAndVersion message : bootstrapMetadata.records()) {
-                    writer.append(message);
-                }
-            }
-
-            Files.move(
-                tempPath,
-                Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME),
-                ATOMIC_MOVE, REPLACE_EXISTING
-            );
-        } finally {
-            Files.deleteIfExists(tempPath);
-        }
-    }
+    /**
+     * Write bootstrap metadata to the configured location.
+     *
+     * @param bootstrapMetadata the metadata to write
+     * @throws IOException if the metadata cannot be written
+     */
+    void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException;
 }

@@ -28,7 +28,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.{Feature, MetadataVersion}
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
+import org.apache.kafka.metadata.bootstrap.TestBootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
@@ -397,7 +397,7 @@ Found problem:
       "--feature", "share.version=1")))
 
     // Verify that the feature override is applied by checking the bootstrap metadata
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+    val bootstrapMetadata = new TestBootstrapDirectory(availableDirs.head.toString).read
 
     // Verify that the share.version feature is set to 1 as specified
     assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
@@ -426,7 +426,7 @@ Found problem:
       "--feature", "group.version=1")))
 
     // Verify that all features are properly bootstrapped by checking the bootstrap metadata
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+    val bootstrapMetadata = new TestBootstrapDirectory(availableDirs.head.toString).read
 
     // Verify that all specified features are set correctly
     assertEquals(1.toShort, bootstrapMetadata.featureLevel("share.version"),
@@ -854,7 +854,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
+    val bootstrapMetadata = new TestBootstrapDirectory(availableDirs.head.toString).read
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])

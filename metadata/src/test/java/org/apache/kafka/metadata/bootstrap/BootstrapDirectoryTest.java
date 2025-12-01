@@ -69,11 +69,12 @@ public class BootstrapDirectoryTest {
     }
 
     @Test
+    @SuppressWarnings("resource")
     public void testReadFromEmptyConfiguration() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
                     "the default bootstrap"),
-                new BootstrapDirectory(testDirectory.path()).read());
+                new LegacyBootstrapDirectory(testDirectory.path()).read());
         }
     }
 
@@ -81,17 +82,18 @@ public class BootstrapDirectoryTest {
     public void testMissingDirectory() {
         assertEquals("No such directory as ./non/existent/directory",
             assertThrows(RuntimeException.class, () ->
-                new BootstrapDirectory("./non/existent/directory").read()).getMessage());
+                new LegacyBootstrapDirectory("./non/existent/directory").read()).getMessage());
     }
 
     @Test
+    @SuppressWarnings("resource")
     public void testReadFromConfigurationFile() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            BootstrapDirectory directory = new BootstrapDirectory(testDirectory.path());
+            LegacyBootstrapDirectory directory = new LegacyBootstrapDirectory(testDirectory.path());
             BootstrapMetadata metadata = BootstrapMetadata.fromRecords(SAMPLE_RECORDS1,
                     "the binary bootstrap metadata file: " + testDirectory.binaryBootstrapPath());
             directory.writeBinaryFile(metadata);
-            assertEquals(metadata, directory.maybeReadLegacyBootstrapCheckpoint());
+            assertEquals(metadata, directory.read());
         }
     }
 }
