@@ -4709,6 +4709,7 @@ org.apache.kafka.common.security.oauthbearer.DefaultJwtRetrieverTest:
 - testSaslOauthbearerTokenEndpointUrlIsNotAllowed
 - testUrlencodeHeader
 org.apache.kafka.common.security.oauthbearer.DefaultJwtValidatorTest:
+- testConfigureWithJwksUrl
 - testConfigureWithVerificationKeyResolver
 - testConfigureWithoutVerificationKeyResolver
 org.apache.kafka.common.security.oauthbearer.JwtBearerJwtRetrieverTest:

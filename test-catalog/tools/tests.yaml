@@ -810,7 +810,6 @@ org.apache.kafka.tools.consumer.group.ResetConsumerGroupOffsetTest:
 - testResetOffsetsWithPartitionNotExist
 - testResetWithUnrecognizedNewConsumerOption
 org.apache.kafka.tools.consumer.group.SaslClientsWithInvalidCredentialsTest:
-- initializationError
 - testConsumerGroupServiceWithAuthenticationFailure
 - testConsumerGroupServiceWithAuthenticationSuccess
 org.apache.kafka.tools.consumer.group.ShareGroupCommandTest:

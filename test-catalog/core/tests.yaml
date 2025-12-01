@@ -1,4 +1,5 @@
 integration.kafka.api.ClientOAuthIntegrationTest:
+- testAuthenticationErrorOnTamperedJwt
 - testBasicClientCredentials
 - testBasicJwtBearer
 - testBasicJwtBearer2
