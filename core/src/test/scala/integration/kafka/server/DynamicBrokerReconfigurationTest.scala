@@ -180,6 +180,20 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNonDefaultKControllerDynamicConfiguration(groupProtocol: String): Unit = {
+    val props = new Properties
+    props.put(ServerConfigs.NUM_IO_THREADS_CONFIG, "9")
+    reconfigureServers(props, perBrokerConfig = false, (ServerConfigs.NUM_IO_THREADS_CONFIG, "9"))
+
+    val controller = controllerServer
+    TestUtils.retry(60000) {
+      assertNotNull(controller.controllerApisHandlerPool)
+      assertEquals(9, controller.controllerApisHandlerPool.threadPoolSize.get())
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testConfigDescribeUsingAdminClient(groupProtocol: String): Unit = {
 
     def verifyConfig(configName: String, configEntry: ConfigEntry, isSensitive: Boolean, isReadOnly: Boolean,
