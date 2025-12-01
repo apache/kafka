@@ -70,6 +70,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
@@ -1102,8 +1103,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
         throwIfNotActive();
         this.runtime.onMetadataUpdate(
-            new KRaftCoordinatorMetadataDelta(delta),
-            new KRaftCoordinatorMetadataImage(newImage)
+            new KRaftCoordinatorMetadataDelta(Objects.requireNonNull(delta, "delta must be provided")),
+            new KRaftCoordinatorMetadataImage(Objects.requireNonNull(newImage, "newImage must be provided"))
         );
         boolean enabled = isShareGroupsEnabled(newImage);
         // enabled    shouldRunJob         result (XOR)
