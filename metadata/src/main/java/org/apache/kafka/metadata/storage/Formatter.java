@@ -38,6 +38,7 @@ import org.apache.kafka.snapshot.Snapshots;
 
 import java.io.File;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -437,10 +438,6 @@ public class Formatter {
                     setDirectoryId(directoryId).
                     build());
             }
-            copier.setWriteErrorHandler((errorLogDir, e) -> {
-                throw new FormatterException("Error while writing meta.properties file " +
-                        errorLogDir + ": " + e);
-            });
             copier.setPreWriteHandler((writeLogDir, __, ____) -> {
                 printStream.printf("Formatting %s %s with %s %s.%n",
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
@@ -453,6 +450,10 @@ public class Formatter {
                         featureLevels.get(KRaftVersion.FEATURE_NAME),
                         controllerListenerName);
                 }
+            });
+            copier.setWriteErrorHandler((errorLogDir, e) -> {
+                throw new FormatterException("Error while writing meta.properties file " +
+                        errorLogDir + ": " + e);
             });
             copier.writeLogDirChanges();
         }
@@ -503,24 +504,29 @@ public class Formatter {
         short kraftVersion,
         String controllerListenerName
     ) {
-        File parentDir = new File(writeLogDir);
-        File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
-                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-                CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
-            setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
-            setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
-            setRawSnapshotWriter(FileRawSnapshotWriter.create(
-                clusterMetadataDirectory.toPath(),
-                Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
-            setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion));
-        if (initialControllers.isPresent()) {
-            VoterSet voterSet = initialControllers.get().toVoterSet(controllerListenerName);
-            builder.setVoterSet(Optional.of(voterSet));
-        }
-        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
-            writer.append(bootstrapMetadata.records());
-            writer.freeze();
+        try {
+            File parentDir = new File(writeLogDir);
+            File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
+                    CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+                    CLUSTER_METADATA_TOPIC_PARTITION.partition()));
+            RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
+                setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
+                setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
+                setRawSnapshotWriter(FileRawSnapshotWriter.create(
+                    clusterMetadataDirectory.toPath(),
+                    Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
+                setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion));
+            if (initialControllers.isPresent()) {
+                VoterSet voterSet = initialControllers.get().toVoterSet(controllerListenerName);
+                builder.setVoterSet(Optional.of(voterSet));
+            }
+            try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
+                writer.append(bootstrapMetadata.records());
+                writer.freeze();
+            }
+        } catch (UncheckedIOException e) {
+            throw new FormatterException("Error while writing 00000000000000000000-0000000000.checkpoint file " +
+                writeLogDir + ": " + e, e);
         }
     }
 }
