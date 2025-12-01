@@ -1027,8 +1027,8 @@ public final class QuorumController implements Controller {
                         if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID) && !messages.isEmpty()) {
                             if (bootstrapMetadata.source().contains(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
                                 log.warn("{} with metadata records exists alongside {}",
-                                BootstrapDirectory.BINARY_BOOTSTRAP_CHECKPOINT_FILENAME,
-                                BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME);
+                                    BootstrapDirectory.BINARY_BOOTSTRAP_CHECKPOINT_FILENAME,
+                                    BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME);
                             }
                             bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
                         } else {
