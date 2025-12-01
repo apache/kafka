@@ -452,6 +452,10 @@ public class Formatter {
                     setDirectoryId(directoryId).
                     build());
             }
+            copier.setWriteErrorHandler((errorLogDir, e) -> {
+                throw new FormatterException("Error while writing meta.properties file " +
+                        errorLogDir + ": " + e);
+            });
             copier.setPreWriteHandler((writeLogDir, __, ____) -> {
                 printStream.printf("Formatting %s %s with %s %s.%n",
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
@@ -464,10 +468,6 @@ public class Formatter {
                         featureLevels.get(KRaftVersion.FEATURE_NAME),
                         controllerListenerName);
                 }
-            });
-            copier.setWriteErrorHandler((errorLogDir, e) -> {
-                throw new FormatterException("Error while writing meta.properties file " +
-                        errorLogDir + ": " + e);
             });
             copier.writeLogDirChanges();
         }
