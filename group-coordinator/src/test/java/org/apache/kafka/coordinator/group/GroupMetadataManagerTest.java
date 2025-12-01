@@ -825,9 +825,8 @@ public class GroupMetadataManagerTest {
             .addRacks()
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(
-            newMetadataImage,
-            newMetadataImage.emptyDelta()
+        context.groupMetadataManager.onMetadataUpdate(
+            newMetadataImage.emptyDelta(), newMetadataImage
         );
         // If a topic is updated, related topic hash is cleanup.
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -916,9 +915,8 @@ public class GroupMetadataManagerTest {
         delta.replay(new RemoveTopicRecord().setTopicId(fooTopicId));
         MetadataImage newMetadataImage = delta.apply(MetadataProvenance.EMPTY);
 
-        context.groupMetadataManager.onNewMetadataImage(
-            new KRaftCoordinatorMetadataImage(newMetadataImage),
-            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newMetadataImage))
+        context.groupMetadataManager.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newMetadataImage)), new KRaftCoordinatorMetadataImage(newMetadataImage)
         );
         // If a topic is removed, related topic hash is cleanup.
         assertEquals(Map.of(), context.groupMetadataManager.topicHashCache());
@@ -3408,7 +3406,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testOnNewMetadataImageWithEmptyDelta() {
+    public void testOnMetadataUpdateWithEmptyDelta() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(new MockPartitionAssignor("range")))
             .build();
@@ -3416,12 +3414,12 @@ public class GroupMetadataManagerTest {
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
 
-        context.groupMetadataManager.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta));
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
         assertEquals(new KRaftCoordinatorMetadataImage(image), context.groupMetadataManager.image());
     }
 
     @Test
-    public void testOnNewMetadataImage() {
+    public void testOnMetadataUpdate() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
@@ -3490,7 +3488,7 @@ public class GroupMetadataManagerTest {
         image = delta.apply(MetadataProvenance.EMPTY);
 
         // Update metadata image with the delta.
-        context.groupMetadataManager.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta));
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
 
         // Verify the groups.
         List.of("group1", "group2", "group3", "group4").forEach(groupId -> {
@@ -15453,7 +15451,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId, topicName, 1)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -15531,7 +15529,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId2, topicName2, 1)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -15610,7 +15608,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId2, topicName2, 1)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         // A first member joins to create the group.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
@@ -15685,7 +15683,7 @@ public class GroupMetadataManagerTest {
             .setImage(image)
             .build();
 
-        context.groupMetadataManager.onNewMetadataImage(coordinatorMetadataImage, new KRaftCoordinatorMetadataDelta(delta));
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), coordinatorMetadataImage);
 
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -15906,7 +15904,7 @@ public class GroupMetadataManagerTest {
             .addTopic(barTopicId, barTopicName, 1)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         // Member 1 joins the group.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
@@ -18849,7 +18847,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsOnNewMetadataImage() {
+    public void testStreamsOnMetadataUpdate() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
 
         // Topology of group 1 uses a and b.
@@ -18929,7 +18927,7 @@ public class GroupMetadataManagerTest {
         image = delta.apply(MetadataProvenance.EMPTY);
 
         // Update metadata image with the delta.
-        context.groupMetadataManager.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(delta));
+        context.groupMetadataManager.onMetadataUpdate(new KRaftCoordinatorMetadataDelta(delta), new KRaftCoordinatorMetadataImage(image));
 
         // Verify the groups.
         List.of("group1", "group2", "group3", "group4").forEach(groupId -> {
@@ -19478,7 +19476,7 @@ public class GroupMetadataManagerTest {
             .addTopic(fooTopicId, fooTopicName, 6)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         // Session timer is scheduled on first heartbeat.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
@@ -21477,9 +21475,8 @@ public class GroupMetadataManagerTest {
             .addTopic(foooTopicId, foooTopicName, 1)
             .build(2L);
 
-        context.groupMetadataManager.onNewMetadataImage(
-            new KRaftCoordinatorMetadataImage(newImage),
-            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newImage))
+        context.groupMetadataManager.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(new MetadataDelta(newImage)), new KRaftCoordinatorMetadataImage(newImage)
         );
 
         // A member heartbeats.
@@ -22794,7 +22791,7 @@ public class GroupMetadataManagerTest {
             .addTopic(t2Uuid, t2Name, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -22860,7 +22857,7 @@ public class GroupMetadataManagerTest {
             .addTopic(t3Uuid, t3Name, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -22928,7 +22925,7 @@ public class GroupMetadataManagerTest {
             .buildCoordinatorMetadataImage();
 
         CoordinatorMetadataDelta delta = image.emptyDelta();
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onMetadataUpdate(delta, image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -22990,7 +22987,7 @@ public class GroupMetadataManagerTest {
 
         CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
         CoordinatorMetadataDelta delta = image.emptyDelta();
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.onMetadataUpdate(delta, image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23049,7 +23046,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId2, topicName2, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23142,7 +23139,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId4, topicName4, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23249,7 +23246,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId1, topicName1, 3)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23333,7 +23330,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId2, topicName2, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23418,7 +23415,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId2, topicName2, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23508,7 +23505,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId2, topicName2, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23581,7 +23578,7 @@ public class GroupMetadataManagerTest {
             .addTopic(topicId2, topicName2, 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
@@ -23622,7 +23619,7 @@ public class GroupMetadataManagerTest {
 
         String groupId = "share-group";
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         Uuid memberId = Uuid.randomUuid();
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
@@ -23684,7 +23681,7 @@ public class GroupMetadataManagerTest {
             .addTopic(t2Uuid, "t2", 2)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
 
         assignor.prepareGroupAssignment(new GroupAssignment(
             Map.of(
@@ -23760,7 +23757,7 @@ public class GroupMetadataManagerTest {
 
         String groupId = "share-group";
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -23866,7 +23863,7 @@ public class GroupMetadataManagerTest {
 
         String groupId = "share-group";
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(CoordinatorMetadataDelta.class));
+        context.groupMetadataManager.onMetadataUpdate(mock(CoordinatorMetadataDelta.class), image);
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -24082,7 +24079,7 @@ public class GroupMetadataManagerTest {
             .addTopic(t3Id, t3Name, 3)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(metadataImage, metadataImage.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(metadataImage.emptyDelta(), metadataImage);
 
         // Since t1 is initializing and t2 is initialized due to replay above.
         timeNow = timeNow + initRetryTimeoutMs + 1;
@@ -24128,7 +24125,7 @@ public class GroupMetadataManagerTest {
             .addTopic(t2Id, t2Name, 3)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         // Cleanup happens from initialzing state only.
         context.groupMetadataManager.replay(
@@ -24213,7 +24210,7 @@ public class GroupMetadataManagerTest {
             .addTopic(t6Id, t6Name, 3)
             .buildCoordinatorMetadataImage();
 
-        context.groupMetadataManager.onNewMetadataImage(image, image.emptyDelta());
+        context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
