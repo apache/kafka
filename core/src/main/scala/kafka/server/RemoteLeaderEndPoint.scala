@@ -108,23 +108,28 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, timestamp: Long): OffsetAndEpoch = {
     val metadataVersion = metadataVersionSupplier()
     val topicIdPartition = replicaManager.topicIdPartition(topicPartition)
+    val topicId = if (topicIdPartition != null) topicIdPartition.topicId() else Uuid.ZERO_UUID
+    val useTopicId = metadataVersion.listOffsetRequestVersion >= 12 && topicId != Uuid.ZERO_UUID
 
     val topic = new ListOffsetsTopic()
-      .setName(topicPartition.topic)
-      .setTopicId(topicIdPartition.topicId())
-      .setPartitions(Collections.singletonList(
-        new ListOffsetsPartition()
-          .setPartitionIndex(topicPartition.partition)
-          .setCurrentLeaderEpoch(currentLeaderEpoch)
-          .setTimestamp(timestamp)))
+    if (useTopicId) {
+      topic.setTopicId(topicId)
+    } else {
+      topic.setName(topicPartition.topic)
+    }
+    topic.setPartitions(Collections.singletonList(
+      new ListOffsetsPartition()
+        .setPartitionIndex(topicPartition.partition)
+        .setCurrentLeaderEpoch(currentLeaderEpoch)
+        .setTimestamp(timestamp)))
 
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = blockingSender.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetsResponse]
-    val responseTopic = if (metadataVersion.listOffsetRequestVersion >= 12) {
-      response.topics.asScala.find(_.topicId == topicIdPartition.topicId()).get
+    val responseTopic = if (useTopicId) {
+      response.topics.asScala.find(_.topicId == topicId).get
     } else {
       response.topics.asScala.find(_.name == topicPartition.topic).get
     }
