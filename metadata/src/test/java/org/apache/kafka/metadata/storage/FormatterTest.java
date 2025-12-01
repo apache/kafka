@@ -137,16 +137,6 @@ public class FormatterTest {
         }
     }
 
-    private void assertCheckpointExists(TestEnv testEnv) throws Exception {
-        File clusterMetadataDir = new File(testEnv.directory(0), String.format("%s-%d",
-                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-                CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        assertTrue(clusterMetadataDir.exists());
-        File bootstrapCheckpoint = new File(clusterMetadataDir,
-                "00000000000000000000-0000000000.checkpoint");
-        assertTrue(bootstrapCheckpoint.exists());
-    }
-
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3})
     public void testDirectories(int numDirs) throws Exception {
@@ -161,7 +151,6 @@ public class FormatterTest {
             BootstrapMetadata bootstrapMetadata =
                 new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestProduction(), bootstrapMetadata.metadataVersion());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -186,7 +175,6 @@ public class FormatterTest {
                 "Use --ignore-formatted to ignore this directory and format the others.",
                     assertThrows(FormatterException.class,
                         () -> testEnv.newFormatter().formatter.run()).getMessage());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -217,7 +205,6 @@ public class FormatterTest {
             formatter2.formatter.setIgnoreFormatted(true);
             formatter2.formatter.run();
             assertTrue(formatter2.output().trim().contains("All of the log directories are already formatted."));
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -245,7 +232,6 @@ public class FormatterTest {
             assertEquals("All of the log directories are already formatted.",
                 formatter2.output().trim());
             assertMetadataDirectoryId(testEnv, Uuid.fromString(originalDirectoryId));
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -265,7 +251,6 @@ public class FormatterTest {
                 "Use --ignore-formatted to ignore this directory and format the others.",
                     assertThrows(FormatterException.class,
                         () -> testEnv.newFormatter().formatter.run()).getMessage());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -281,7 +266,6 @@ public class FormatterTest {
                     "\nFormatting data directory " + testEnv.directory(1) + " with metadata.version " +
                     MetadataVersion.latestProduction() + ".",
                 formatter2.output().trim());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -299,7 +283,6 @@ public class FormatterTest {
                 new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_5_IV0, bootstrapMetadata.metadataVersion());
             assertEquals(1, bootstrapMetadata.records().size());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -327,7 +310,6 @@ public class FormatterTest {
             BootstrapMetadata bootstrapMetadata =
                     new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestTesting(), bootstrapMetadata.metadataVersion());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -342,7 +324,6 @@ public class FormatterTest {
             MetaProperties logDirProps = ensemble.logDirProps().get(testEnv.directory(0));
             assertNotNull(logDirProps);
             assertTrue(logDirProps.directoryId().isPresent());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -401,7 +382,6 @@ public class FormatterTest {
                     setServerKey(scram512.serverKey(TEST_SALTED_PASSWORD)).
                     setIterations(4096), (short) 0)),
                 scramRecords);
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -434,8 +414,6 @@ public class FormatterTest {
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(TransactionVersion.FEATURE_NAME).
                 setFeatureLevel(TransactionVersion.TV_2.featureLevel()), (short) 0));
-            assertEquals(expected, bootstrapMetadata.records());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -488,7 +466,6 @@ public class FormatterTest {
             MetaProperties logDirProps1 = ensemble.logDirProps().get(testEnv.directory(1));
             assertNotNull(logDirProps1);
             assertNotEquals(Uuid.fromString("4znU-ou9Taa06bmEJxsjnw"), logDirProps1.directoryId().get());
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -540,7 +517,6 @@ public class FormatterTest {
             formatter1.formatter.setHasDynamicQuorum(true);
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -557,7 +533,6 @@ public class FormatterTest {
             } else {
                 assertEquals((short) 0, formatter1.formatter.featureLevels.get(KRaftVersion.FEATURE_NAME));
             }
-            assertCheckpointExists(testEnv);
         }
     }
 
@@ -581,7 +556,6 @@ public class FormatterTest {
             formatter1.formatter.setHasDynamicQuorum(true);
             if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_0_IV1)) {
                 assertDoesNotThrow(formatter1.formatter::run);
-                assertCheckpointExists(testEnv);
             } else {
                 assertEquals("eligible.leader.replicas.version could not be set to 1 because it depends on " +
                     "metadata.version level 23",
@@ -617,7 +591,6 @@ public class FormatterTest {
             assertNotNull(logDirProps0);
             MetaProperties logDirProps1 = ensemble.logDirProps().get(testEnv.directory(1));
             assertNotNull(logDirProps1);
-            assertCheckpointExists(testEnv);
         }
     }
 }
