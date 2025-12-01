@@ -3371,9 +3371,8 @@ public class StreamThreadTest {
         );
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testNamedTopologyWithStreamsProtocol(final boolean stateUpdaterEnabled) {
+    @Test
+    public void testNamedTopologyWithStreamsProtocol() {
         final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
         final StreamsConfig config = new StreamsConfig(props);
@@ -3430,9 +3429,8 @@ public class StreamThreadTest {
         assertTrue(thread.streamsRebalanceData().isEmpty());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testStreamsRebalanceDataWithExtraCopartition(final boolean stateUpdaterEnabled) {
+    @Test
+    public void testStreamsRebalanceDataWithExtraCopartition() {
         final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
 
