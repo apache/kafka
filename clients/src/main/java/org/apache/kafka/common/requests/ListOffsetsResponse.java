@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
@@ -28,10 +27,8 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.util.Collections;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * Possible error codes:
@@ -109,14 +106,6 @@ public class ListOffsetsResponse extends AbstractResponse {
         return version >= 12;
     }
 
-    public static Builder newBuilder(boolean useTopicIds) {
-        if (useTopicIds) {
-            return new TopicIdBuilder();
-        } else {
-            return new TopicNameBuilder();
-        }
-    }
-
     public static ListOffsetsTopicResponse singletonListOffsetsTopicResponse(TopicPartition tp, Errors error, long timestamp, long offset, int epoch) {
         return new ListOffsetsTopicResponse()
                  .setName(tp.topic())
@@ -128,154 +117,5 @@ public class ListOffsetsResponse extends AbstractResponse {
                          .setLeaderEpoch(epoch)));
     }
 
-    public abstract static class Builder {
-        protected ListOffsetsResponseData data = new ListOffsetsResponseData();
-
-        protected abstract void add(
-                ListOffsetsTopicResponse topic
-        );
-
-        protected abstract ListOffsetsTopicResponse get(
-                Uuid topicId,
-                String topicName
-        );
-
-        protected abstract ListOffsetsTopicResponse getOrCreate(
-                Uuid topicId,
-                String topicName
-        );
-
-        public Builder addPartition(
-                Uuid topicId,
-                String topicName,
-                int partitionIndex,
-                Errors error
-        ) {
-            final ListOffsetsTopicResponse topicResponse = getOrCreate(topicId, topicName);
-            topicResponse.partitions().add(new ListOffsetsPartitionResponse()
-                    .setPartitionIndex(partitionIndex)
-                    .setErrorCode(error.code()));
-            return this;
-        }
-
-        public <P> Builder addPartitions(
-                Uuid topicId,
-                String topicName,
-                List<P> partitions,
-                Function<P, Integer> partitionIndex,
-                Errors error
-        ) {
-            final ListOffsetsTopicResponse topicResponse = getOrCreate(topicId, topicName);
-            partitions.forEach(partition ->
-                    topicResponse.partitions().add(new ListOffsetsPartitionResponse()
-                            .setPartitionIndex(partitionIndex.apply(partition))
-                            .setErrorCode(error.code()))
-            );
-            return this;
-        }
-
-        public Builder merge(
-                ListOffsetsResponseData newData
-        ) {
-            if (data.topics().isEmpty()) {
-                // If the current data is empty, we can discard it and use the new data.
-                data = newData;
-            } else {
-                // Otherwise, we have to merge them together.
-                newData.topics().forEach(newTopic -> {
-                    ListOffsetsTopicResponse existingTopic = get(newTopic.topicId(), newTopic.name());
-                    if (existingTopic == null) {
-                        // If no topic exists, we can directly copy the new topic data.
-                        add(newTopic);
-                    } else {
-                        // Otherwise, we add the partitions to the existing one. Note we
-                        // expect non-overlapping partitions here as we don't verify
-                        // if the partition is already in the list before adding it.
-                        existingTopic.partitions().addAll(newTopic.partitions());
-                    }
-                });
-            }
-            return this;
-        }
-
-        public ListOffsetsResponse build() {
-            return new ListOffsetsResponse(data);
-        }
-
-    }
-
-    public static class TopicIdBuilder extends Builder {
-        private final HashMap<Uuid, ListOffsetsTopicResponse> byTopicId = new HashMap<>();
-
-        @Override
-        protected void add(ListOffsetsTopicResponse topic) {
-            throwIfTopicIdIsNull(topic.topicId());
-            data.topics().add(topic);
-            byTopicId.put(topic.topicId(), topic);
-        }
-
-        @Override
-        protected ListOffsetsTopicResponse get(Uuid topicId, String topicName) {
-            throwIfTopicIdIsNull(topicId);
-            return byTopicId.get(topicId);
-        }
-
-        @Override
-        protected ListOffsetsResponseData.ListOffsetsTopicResponse getOrCreate(Uuid topicId, String topicName) {
-            throwIfTopicIdIsNull(topicId);
-            ListOffsetsResponseData.ListOffsetsTopicResponse topic = byTopicId.get(topicId);
-            if (topic == null) {
-                topic = new ListOffsetsResponseData.ListOffsetsTopicResponse()
-                        .setName(topicName)
-                        .setTopicId(topicId);
-                data.topics().add(topic);
-                byTopicId.put(topicId, topic);
-            }
-            return topic;
-        }
-
-        private static void throwIfTopicIdIsNull(Uuid topicId) {
-            if (topicId == null) {
-                throw new IllegalArgumentException("TopicId cannot be null.");
-            }
-        }
-    }
-
-    public static class TopicNameBuilder extends Builder {
-        private final HashMap<String, ListOffsetsTopicResponse> byTopicName = new HashMap<>();
-
-        @Override
-        protected void add(ListOffsetsTopicResponse topic) {
-            throwIfTopicNameIsNull(topic.name());
-            data.topics().add(topic);
-            byTopicName.put(topic.name(), topic);
-        }
-
-        @Override
-        protected ListOffsetsTopicResponse get(Uuid topicId, String topicName) {
-            throwIfTopicNameIsNull(topicName);
-            return byTopicName.get(topicName);
-        }
-
-        @Override
-        protected ListOffsetsTopicResponse getOrCreate(Uuid topicId, String topicName) {
-            throwIfTopicNameIsNull(topicName);
-            ListOffsetsTopicResponse topic = byTopicName.get(topicName);
-            if (topic == null) {
-                topic = new ListOffsetsTopicResponse()
-                        .setName(topicName)
-                        .setTopicId(topicId);
-                data.topics().add(topic);
-                byTopicName.put(topicName, topic);
-            }
-            return topic;
-        }
-
-        private void throwIfTopicNameIsNull(String topicName) {
-            if (topicName == null) {
-                throw new IllegalArgumentException("TopicName cannot be null.");
-            }
-        }
-    }
 
 }
