@@ -53,6 +53,9 @@ plugins {
 ext {
   gradleVersion = versions.gradle
   minJavaVersion = 8
+  javaToolChainVersion = project.hasProperty('javaToolChainVersion')
+          ? project.property('javaToolChainVersion').toString().toInteger()
+          : JavaVersion.current().majorVersion.toInteger()
   buildVersionFileName = "kafka-version.properties"
 
   defaultMaxHeapSize = "2g"
@@ -285,6 +288,14 @@ subprojects {
     fineTuneEclipseClasspathFile(eclipse, project)
   }
 
+  plugins.withType(JavaPlugin).configureEach {
+    java {
+      toolchain {
+        languageVersion = JavaLanguageVersion.of(javaToolChainVersion)
+      }
+    }
+  }
+
   java {
     consistentResolution {
       // resolve the compileClasspath and then "inject" the result of resolution as strict constraints into the runtimeClasspath
@@ -293,6 +304,9 @@ subprojects {
   }
 
   tasks.withType(JavaCompile) {
+    doFirst {
+      println("Compiling project ${project.name} with Java ${java.toolchain.languageVersion.get()}")
+    }
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
