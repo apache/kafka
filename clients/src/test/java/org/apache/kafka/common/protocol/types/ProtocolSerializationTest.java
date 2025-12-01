@@ -142,7 +142,7 @@ public class ProtocolSerializationTest {
         check(new CompactArrayOf(Type.COMPACT_STRING),
                 new Object[] {"hello", "there", "beautiful"},
                 "COMPACT_ARRAY(COMPACT_STRING)");
-        check(new ArrayOf(Type.STRING), null, "NULLABLE_ARRAY(STRING)");
+        check(new NullableArrayOf(Type.STRING), null, "NULLABLE_ARRAY(STRING)");
         check(new CompactNullableArrayOf(Type.COMPACT_STRING), null,
                 "COMPACT_NULLABLE_ARRAY(COMPACT_STRING)");
     }
