@@ -79,7 +79,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
-    val topicId = createTopicWithAdminRaw(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )

@@ -104,7 +104,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
     // Create the topic.
-    val topicId = createTopicWithAdminRaw(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -183,7 +183,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
       assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
       // Create the topic.
-      val topicId = createTopicWithAdminRaw(
+      val topicId = createTopic(
         topic = "foo",
         numPartitions = 3
       )
@@ -276,8 +276,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
   @ClusterTest
   def testEmptyConsumerGroupId(): Unit = {
-    val admin = cluster.admin()
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -387,7 +385,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
     // Create the topic.
-    val topicId = createTopicWithAdminRaw(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -498,7 +496,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
 
     // Create the topic.
-    val topicId = createTopicWithAdminRaw(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
