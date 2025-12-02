@@ -296,7 +296,6 @@ subprojects {
     fineTuneEclipseClasspathFile(eclipse, project)
   }
 
-
   java {
     consistentResolution {
       // resolve the compileClasspath and then "inject" the result of resolution as strict constraints into the runtimeClasspath
