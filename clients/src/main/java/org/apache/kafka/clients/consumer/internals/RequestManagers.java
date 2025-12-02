@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
@@ -167,7 +168,8 @@ public class RequestManagers implements Closeable {
                                                      final Metrics metrics,
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
-                                                     final Optional<StreamsRebalanceData> streamsRebalanceData
+                                                     final Optional<StreamsRebalanceData> streamsRebalanceData,
+                                                     final PositionsValidator positionsValidator
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -292,6 +294,7 @@ public class RequestManagers implements Closeable {
                     apiVersions,
                     networkClientDelegate,
                     commitRequestManager,
+                    positionsValidator,
                     logContext);
 
                 return new RequestManagers(
@@ -317,6 +320,7 @@ public class RequestManagers implements Closeable {
     @SuppressWarnings({"checkstyle:ParameterNumber"})
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
+                                                     final ShareAcknowledgementEventHandler shareAcknowledgementEventHandler,
                                                      final BackgroundEventHandler backgroundEventHandler,
                                                      final ShareConsumerMetadata metadata,
                                                      final SubscriptionState subscriptions,
@@ -371,7 +375,7 @@ public class RequestManagers implements Closeable {
                         subscriptions,
                         shareFetchConfig,
                         fetchBuffer,
-                        backgroundEventHandler,
+                        shareAcknowledgementEventHandler,
                         shareFetchMetricsManager,
                         retryBackoffMs,
                         retryBackoffMaxMs);

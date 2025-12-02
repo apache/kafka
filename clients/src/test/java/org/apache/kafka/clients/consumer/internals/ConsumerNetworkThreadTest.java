@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -203,7 +204,7 @@ public class ConsumerNetworkThreadTest {
     public void testSendUnsentRequests() {
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
         consumerNetworkThread.cleanup();
-        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
+        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong(), eq(true));
     }
 
     @ParameterizedTest

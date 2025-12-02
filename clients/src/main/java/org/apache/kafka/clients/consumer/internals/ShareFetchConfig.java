@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.common.IsolationLevel;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;

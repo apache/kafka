@@ -301,7 +301,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
-                runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
+                runtime.activeCoordinators().forEach(tp -> futures.add(performRecordPruning(tp)));
 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
                     .whenComplete((res, exp) -> {
@@ -1100,7 +1100,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     @Override
     public void onNewMetadataImage(CoordinatorMetadataImage newImage, FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta) {
         throwIfNotActive();
-        this.runtime.onNewMetadataImage(newImage, delta);
+        this.runtime.onMetadataUpdate(delta, newImage);
         boolean enabled = isShareGroupsEnabled(newFeaturesImage);
         // enabled    shouldRunJob         result (XOR)
         // 0            0               no op on flag, do not call jobs

@@ -133,6 +133,24 @@ public class ProcessorNodeTest {
         assertDoesNotThrow(() -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
     }
 
+    @Test
+    public void shouldRethrowExceptionWhenProcessingExceptionHandlerIsNull() {
+        // This simulates the global thread case where no ProcessingExceptionHandler is set
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
+        // Initialize without a ProcessingExceptionHandler (simulates global thread initialization)
+        node.init(internalProcessorContext);
+
+        // The exception should be rethrown since there's no handler to process it
+        final RuntimeException exception = assertThrows(RuntimeException.class,
+            () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
+
+        assertEquals("Processing exception should be caught and handled by the processing exception handler.",
+            exception.getMessage());
+    }
+
     @ParameterizedTest
     @CsvSource({
         "FailedProcessingException,java.lang.RuntimeException,Fail processing",
@@ -279,7 +297,7 @@ public class ProcessorNodeTest {
     public void testMetricsWithBuiltInMetricsVersionLatest() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", "processId", "applicationId", new MockTime());
+            new StreamsMetricsImpl(metrics, "test-client", new MockTime());
         final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
         final ProcessorNode<Object, Object, Object, Object> node =
             new ProcessorNode<>(NAME, new NoOpProcessor(), Collections.emptySet());
@@ -363,7 +381,7 @@ public class ProcessorNodeTest {
     public void testTopologyLevelClassCastExceptionDirect() {
         final Metrics metrics = new Metrics();
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-client", "processId", "applicationId", new MockTime());
+            new StreamsMetricsImpl(metrics, "test-client", new MockTime());
         final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
         final ProcessorNode<Object, Object, Object, Object> node =
             new ProcessorNode<>("pname", new ClassCastProcessor(), Collections.emptySet());
@@ -441,7 +459,7 @@ public class ProcessorNodeTest {
         final InternalProcessorContext<Object, Object> internalProcessorContext = mock(InternalProcessorContext.class, withSettings().strictness(Strictness.LENIENT));
 
         when(internalProcessorContext.taskId()).thenReturn(TASK_ID);
-        when(internalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(new Metrics(), "test-client", "processId", "applicationId", new MockTime()));
+        when(internalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(new Metrics(), "test-client", new MockTime()));
         when(internalProcessorContext.topic()).thenReturn(TOPIC);
         when(internalProcessorContext.partition()).thenReturn(PARTITION);
         when(internalProcessorContext.offset()).thenReturn(OFFSET);
