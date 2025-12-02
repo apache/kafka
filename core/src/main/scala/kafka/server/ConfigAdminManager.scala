@@ -58,7 +58,7 @@ import scala.jdk.CollectionConverters._
  * KIP-412 added support for changing log4j log levels via IncrementalAlterConfigs, but
  * not via the original AlterConfigs. In retrospect, this would have been better off as a
  * separate RPC, since the semantics are quite different. In particular, KIP-226 configs
- * are stored durably and persist across broker restarts, but KIP-412 log4j levels do not. 
+ * are stored durably and persist across broker restarts, but KIP-412 log4j levels do not.
  * However, we have to handle it here now in order to maintain compatibility.
  *
  * Configuration processing is split into two parts.
@@ -118,35 +118,34 @@ class ConfigAdminManager(nodeId: Int,
           if (containsDuplicates(resource.configs().asScala.map(_.name()))) {
             throw new InvalidRequestException("Error due to duplicate config keys")
           }
-          val nullUpdates = new util.ArrayList[String]()
-          resource.configs().forEach { config =>
-            if (config.configOperation() != AlterConfigOp.OpType.DELETE.id() &&
-              config.value() == null) {
-              nullUpdates.add(config.name())
-            }
-          }
-          if (!nullUpdates.isEmpty) {
-            throw new InvalidRequestException("Null value not supported for : " +
-              String.join(", ", nullUpdates))
-          }
-          resourceType match {
-            case BROKER_LOGGER =>
-              runtimeLoggerManager.applyChangesForResource(
-                  authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
-                  request.validateOnly(),
-                  resource)
-              results.put(resource, ApiError.NONE)
-            case BROKER =>
-              // The resource name must be either blank (if setting a cluster config) or
-              // the ID of this specific broker.
-              if (configResource.name().nonEmpty) {
-                validateResourceNameIsCurrentNodeId(resource.resourceName())
+          val nullError = ConfigAdminManager.validateNullValue(resource)
+          if (nullError.isEmpty) {
+            val unknownTypeError = ConfigAdminManager.validateUnknownConfigTypeError(configResource, resource)
+            if (unknownTypeError.isDefined) {
+              results.put(resource, unknownTypeError.get)
+            } else {
+              resourceType match {
+                case BROKER_LOGGER =>
+                  runtimeLoggerManager.applyChangesForResource(
+                    authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
+                    request.validateOnly(),
+                    resource)
+                  results.put(resource, ApiError.NONE)
+                case BROKER =>
+                  // The resource name must be either blank (if setting a cluster config) or
+                  // the ID of this specific broker.
+                  if (configResource.name().nonEmpty) {
+                    validateResourceNameIsCurrentNodeId(resource.resourceName())
+                  }
+                  validateBrokerConfigChange(resource, configResource)
+                case TOPIC | CLIENT_METRICS | GROUP =>
+                // Nothing to do.
+                case _ =>
+                  // no-op: since we already handled UNKNOWN resource types above
               }
-              validateBrokerConfigChange(resource, configResource)
-            case TOPIC | CLIENT_METRICS | GROUP =>
-            // Nothing to do.
-            case _ =>
-              throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
+            }
+          } else {
+            results.put(resource, nullError.get)
           }
         } catch {
           case t: Throwable =>
@@ -450,5 +449,37 @@ object ConfigAdminManager {
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
       }
     }
+  }
+
+  def validateNullValue(
+    resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
+  ): Option[ApiError] = {
+    val nullUpdates = new util.ArrayList[String]()
+    resource.configs.forEach { config =>
+      if (config.configOperation() != AlterConfigOp.OpType.DELETE.id() &&
+        config.value() == null) {
+        nullUpdates.add(config.name())
+      }
+    }
+    if (!nullUpdates.isEmpty) {
+      val exception = new InvalidRequestException("Null value not supported for : " + String.join(", ", nullUpdates))
+      val err = ApiError.fromThrowable(exception)
+      log.error(s"Error on processing incrementalAlterConfigs request on ${resource.resourceName()}", exception)
+      return Some(err)
+    }
+    None
+  }
+
+  def validateUnknownConfigTypeError(
+    configResource: ConfigResource,
+    resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
+  ): Option[ApiError] = {
+    if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
+      val exception = new InvalidRequestException(s"Unknown resource type ${resource.resourceType()}")
+      val err = ApiError.fromThrowable(exception)
+      log.error(s"Error on processing request on ${configResource}", exception)
+      return Some(err)
+    }
+    None
   }
 }

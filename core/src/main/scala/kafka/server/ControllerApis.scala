@@ -723,62 +723,52 @@ class ControllerApis(
     val brokerLoggerResponses = new util.ArrayList[AlterConfigsResourceResponse](1)
     val nullConfigsErrorResults = new util.IdentityHashMap[AlterConfigsResource, ApiError]()
     alterConfigsRequest.data.resources.forEach { resource =>
-      try {
-        val nullUpdates = new util.ArrayList[String]()
-        resource.configs().forEach { config =>
-          if (config.configOperation() != AlterConfigOp.OpType.DELETE.id() &&
-            config.value() == null) {
-            nullUpdates.add(config.name())
-          }
-        }
-        if (!nullUpdates.isEmpty) {
-          throw new InvalidRequestException("Null value not supported for : " +
-            String.join(", ", nullUpdates))
-        }
+      val nullError = ConfigAdminManager.validateNullValue(resource)
+      if (nullError.isEmpty) {
         val configResource = new ConfigResource(
           ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
-        if (configResource.`type`().equals(ConfigResource.Type.BROKER_LOGGER)) {
-          val apiError = try {
-            runtimeLoggerManager.applyChangesForResource(
-              authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
-              alterConfigsRequest.data().validateOnly(),
-              resource)
-            ApiError.NONE
-          } catch {
-            case t: Throwable => ApiError.fromThrowable(t)
-          }
-          brokerLoggerResponses.add(new AlterConfigsResourceResponse().
-            setResourceName(resource.resourceName()).
-            setResourceType(resource.resourceType()).
-            setErrorCode(apiError.error().code()).
-            setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
-        } else if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
+        val unknownTypeError = ConfigAdminManager.validateUnknownConfigTypeError(configResource, resource)
+        if (unknownTypeError.isDefined) {
           response.responses().add(new AlterConfigsResourceResponse().
-            setErrorCode(UNSUPPORTED_VERSION.code()).
-            setErrorMessage("Unknown resource type " + resource.resourceType() + ".").
+            setErrorCode(unknownTypeError.get.error().code()).
+            setErrorMessage(unknownTypeError.get.messageWithFallback()).
             setResourceName(resource.resourceName()).
             setResourceType(resource.resourceType()))
-        } else if (!duplicateResources.contains(configResource)) {
-          val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
-          resource.configs.forEach { config =>
-            altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-              AlterConfigOp.OpType.forId(config.configOperation), config.value))
-          }
-          if (configChanges.put(configResource, altersByName) != null) {
-            duplicateResources.add(configResource)
-            configChanges.remove(configResource)
-            response.responses().add(new AlterConfigsResourceResponse().
-              setErrorCode(INVALID_REQUEST.code()).
-              setErrorMessage("Duplicate resource.").
+        } else {
+          if (configResource.`type`().equals(ConfigResource.Type.BROKER_LOGGER)) {
+            val apiError = try {
+              runtimeLoggerManager.applyChangesForResource(
+                authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
+                alterConfigsRequest.data().validateOnly(),
+                resource)
+              ApiError.NONE
+            } catch {
+              case t: Throwable => ApiError.fromThrowable(t)
+            }
+            brokerLoggerResponses.add(new AlterConfigsResourceResponse().
               setResourceName(resource.resourceName()).
-              setResourceType(resource.resourceType()))
+              setResourceType(resource.resourceType()).
+              setErrorCode(apiError.error().code()).
+              setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
+          } else if (!duplicateResources.contains(configResource)) {
+            val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+            resource.configs.forEach { config =>
+              altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+                AlterConfigOp.OpType.forId(config.configOperation), config.value))
+            }
+            if (configChanges.put(configResource, altersByName) != null) {
+              duplicateResources.add(configResource)
+              configChanges.remove(configResource)
+              response.responses().add(new AlterConfigsResourceResponse().
+                setErrorCode(INVALID_REQUEST.code()).
+                setErrorMessage("Duplicate resource.").
+                setResourceName(resource.resourceName()).
+                setResourceType(resource.resourceType()))
+            }
           }
         }
-      } catch {
-        case t: Throwable =>
-          val err = ApiError.fromThrowable(t)
-          error(s"Error on processing incrementalAlterConfigs request on ${resource.resourceName()}", t)
-          nullConfigsErrorResults.put(resource, err)
+      } else {
+        nullConfigsErrorResults.put(resource, nullError.get)
       }
     }
     if (!nullConfigsErrorResults.isEmpty) {
