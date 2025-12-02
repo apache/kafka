@@ -18,18 +18,25 @@ package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.common.metrics.Metrics;
 
-public abstract class RebalanceMetricsManager extends AbstractConsumerMetricsManager {
+import org.junit.jupiter.api.Test;
 
-    RebalanceMetricsManager(Metrics metrics, String metricGroupName) {
-        super(metrics, metricGroupName);
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+public abstract class AbstractConsumerMetricsManagerTest {
+
+    protected abstract AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription);
+
+    @Test
+    public void testCleanup() {
+        try (Metrics metrics = new Metrics()) {
+            int metricCount = metrics.metrics().size();
+
+            try (AbstractConsumerMetricsManager metricsManager = metricsManager(metrics, "test")) {
+                assertTrue(metrics.metrics().size() > metricCount);
+            }
+
+            assertEquals(metricCount, metrics.metrics().size());
+        }
     }
-
-    public abstract void recordRebalanceStarted(long nowMs);
-
-    public abstract void recordRebalanceEnded(long nowMs);
-
-    public void maybeRecordRebalanceFailed() {
-    }
-
-    public abstract boolean rebalanceStarted();
 }

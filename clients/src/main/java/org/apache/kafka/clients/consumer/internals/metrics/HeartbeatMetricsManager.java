@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class HeartbeatMetricsManager {
+public class HeartbeatMetricsManager extends AbstractConsumerMetricsManager {
     // MetricName visible for testing
     final MetricName heartbeatResponseTimeMax;
     final MetricName heartbeatRate;
@@ -42,17 +42,17 @@ public class HeartbeatMetricsManager {
         this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
     }
 
+    @SuppressWarnings({"this-escape"})
     public HeartbeatMetricsManager(Metrics metrics, String metricGroupPrefix) {
-        final String metricGroupName = metricGroupPrefix + COORDINATOR_METRICS_SUFFIX;
-        heartbeatSensor = metrics.sensor("heartbeat-latency");
-        heartbeatResponseTimeMax = metrics.metricName("heartbeat-response-time-max",
-            metricGroupName,
+        super(metrics, metricGroupPrefix + COORDINATOR_METRICS_SUFFIX);
+        heartbeatSensor = sensor("heartbeat-latency");
+        heartbeatResponseTimeMax = metricName("heartbeat-response-time-max",
             "The max time taken to receive a response to a heartbeat request");
         heartbeatSensor.add(heartbeatResponseTimeMax, new Max());
 
         // windowed meters
-        heartbeatRate = metrics.metricName("heartbeat-rate", metricGroupName, "The number of heartbeats per second");
-        heartbeatTotal = metrics.metricName("heartbeat-total", metricGroupName, "The total number of heartbeats");
+        heartbeatRate = metricName("heartbeat-rate", "The number of heartbeats per second");
+        heartbeatTotal = metricName("heartbeat-total", "The total number of heartbeats");
         heartbeatSensor.add(new Meter(new WindowedCount(),
             heartbeatRate,
             heartbeatTotal));
@@ -65,10 +65,9 @@ public class HeartbeatMetricsManager {
             else
                 return TimeUnit.SECONDS.convert(now - lastHeartbeatSend, TimeUnit.MILLISECONDS);
         };
-        lastHeartbeatSecondsAgo = metrics.metricName("last-heartbeat-seconds-ago",
-            metricGroupName,
+        lastHeartbeatSecondsAgo = metricName("last-heartbeat-seconds-ago",
             "The number of seconds since the last coordinator heartbeat was sent");
-        metrics.addMetric(lastHeartbeatSecondsAgo, lastHeartbeat);
+        addMetric(lastHeartbeatSecondsAgo, lastHeartbeat);
     }
 
     public void recordHeartbeatSentMs(long timeMs) {

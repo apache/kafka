@@ -27,18 +27,16 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP;
 
-public class KafkaShareConsumerMetrics implements AutoCloseable {
-    private final Metrics metrics;
-    private final MetricName lastPollMetricName;
+public class KafkaShareConsumerMetrics extends AbstractConsumerMetricsManager {
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
+    @SuppressWarnings({"this-escape"})
     public KafkaShareConsumerMetrics(Metrics metrics) {
-        this.metrics = metrics;
-        final String metricGroupName = CONSUMER_SHARE_METRIC_GROUP;
+        super(metrics, CONSUMER_SHARE_METRIC_GROUP);
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
                 // if no poll is ever triggered, just return -1.
@@ -46,23 +44,20 @@ public class KafkaShareConsumerMetrics implements AutoCloseable {
             else
                 return TimeUnit.SECONDS.convert(now - lastPollMs, TimeUnit.MILLISECONDS);
         };
-        this.lastPollMetricName = metrics.metricName("last-poll-seconds-ago",
-                metricGroupName, "The number of seconds since the last poll() invocation.");
-        metrics.addMetric(lastPollMetricName, lastPoll);
+        MetricName lastPollMetricName = metricName("last-poll-seconds-ago",
+            "The number of seconds since the last poll() invocation.");
+        addMetric(lastPollMetricName, lastPoll);
 
-        this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
-        this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-avg",
-                        metricGroupName,
+        this.timeBetweenPollSensor = sensor("time-between-poll");
+        this.timeBetweenPollSensor.add(metricName("time-between-poll-avg",
                         "The average delay between invocations of poll() in milliseconds."),
                 new Avg());
-        this.timeBetweenPollSensor.add(metrics.metricName("time-between-poll-max",
-                        metricGroupName,
+        this.timeBetweenPollSensor.add(metricName("time-between-poll-max",
                         "The max delay between invocations of poll() in milliseconds."),
                 new Max());
 
-        this.pollIdleSensor = metrics.sensor("poll-idle-ratio-avg");
-        this.pollIdleSensor.add(metrics.metricName("poll-idle-ratio-avg",
-                        metricGroupName,
+        this.pollIdleSensor = sensor("poll-idle-ratio-avg");
+        this.pollIdleSensor.add(metricName("poll-idle-ratio-avg",
                         "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
                 new Avg());
     }
@@ -78,12 +73,5 @@ public class KafkaShareConsumerMetrics implements AutoCloseable {
         long pollTimeMs = pollEndMs - pollStartMs;
         double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
         this.pollIdleSensor.record(pollIdleRatio);
-    }
-
-    @Override
-    public void close() {
-        metrics.removeMetric(lastPollMetricName);
-        metrics.removeSensor(timeBetweenPollSensor.name());
-        metrics.removeSensor(pollIdleSensor.name());
     }
 }

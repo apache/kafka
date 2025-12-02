@@ -25,9 +25,14 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-public class OffsetCommitMetricsManagerTest {
+public class OffsetCommitMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
     private final Time time = new MockTime();
     private final Metrics metrics = new Metrics(time);
+
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        return new HeartbeatMetricsManager(metrics, groupDescription);
+    }
 
     @Test
     public void testOffsetCommitMetrics() {
