@@ -421,8 +421,8 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testOnLoadedSessionTimeoutExpirationForShareMember
 - testOnLoadedWithShareGroup
 - testOnLoadedWithStreamsGroup
-- testOnNewMetadataImage
-- testOnNewMetadataImageWithEmptyDelta
+- testOnMetadataUpdate
+- testOnMetadataUpdateWithEmptyDelta
 - testPartitionAssignorExceptionOnRegularHeartbeat
 - testPendingMemberBatchLeaveGroup
 - testPendingMembersLeaveGroup
@@ -581,7 +581,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testStreamsLeavingMemberRemovesMemberAndBumpsGroupEpoch
 - testStreamsNewJoiningMemberTriggersNewTargetAssignment
 - testStreamsNewMemberIsRejectedWithMaximumMembersIsReached
-- testStreamsOnNewMetadataImage
+- testStreamsOnMetadataUpdate
 - testStreamsOwnedTasksValidation
 - testStreamsPartitionMetadataRefreshedAfterGroupIsLoaded
 - testStreamsPartitionMetadataRefreshedAgainAfterWriteFailure
