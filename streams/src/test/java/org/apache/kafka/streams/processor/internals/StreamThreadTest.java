@@ -1731,7 +1731,6 @@ public class StreamThreadTest {
             ),
             10 * 1000,
             "State updater never returned tasks.");
-        
         addRecord(mockConsumer, 0L);
         shouldThrow.set(true);
         final TaskCorruptedException taskCorruptedException;
