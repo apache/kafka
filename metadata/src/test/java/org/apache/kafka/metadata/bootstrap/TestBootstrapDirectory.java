@@ -17,18 +17,13 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
-import org.apache.kafka.metadata.util.BatchFileWriter;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Objects;
 
-import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
 
 /**
@@ -60,34 +55,6 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
             throw new FileNotFoundException(binaryBootstrapPath.toString());
         } else {
             return readFromBinaryFile(binaryBootstrapPath.toString());
-        }
-    }
-
-    @Override
-    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException {
-        Path metadataDir = Paths.get(directoryPath, String.format("%s-%d",
-            CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-            CLUSTER_METADATA_TOPIC_PARTITION.partition()));
-        if (!Files.isDirectory(Paths.get(directoryPath))) {
-            throw new RuntimeException("No such directory as " + directoryPath);
-        }
-        Files.createDirectories(metadataDir);
-        Path tempPath = metadataDir.resolve(BINARY_BOOTSTRAP_CHECKPOINT_FILENAME + ".tmp");
-        Files.deleteIfExists(tempPath);
-        try {
-            try (BatchFileWriter writer = BatchFileWriter.open(tempPath)) {
-                for (ApiMessageAndVersion message : bootstrapMetadata.records()) {
-                    writer.append(message);
-                }
-            }
-
-            Files.move(
-                tempPath,
-                metadataDir.resolve(BINARY_BOOTSTRAP_CHECKPOINT_FILENAME),
-                ATOMIC_MOVE, REPLACE_EXISTING
-            );
-        } finally {
-            Files.deleteIfExists(tempPath);
         }
     }
 }

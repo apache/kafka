@@ -84,16 +84,4 @@ public class BootstrapDirectoryTest {
             assertThrows(RuntimeException.class, () ->
                 new LegacyBootstrapDirectory("./non/existent/directory").read()).getMessage());
     }
-
-    @Test
-    @SuppressWarnings("resource")
-    public void testReadFromConfigurationFile() throws Exception {
-        try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            LegacyBootstrapDirectory directory = new LegacyBootstrapDirectory(testDirectory.path());
-            BootstrapMetadata metadata = BootstrapMetadata.fromRecords(SAMPLE_RECORDS1,
-                    "the binary bootstrap metadata file: " + testDirectory.binaryBootstrapPath());
-            directory.writeBinaryFile(metadata);
-            assertEquals(metadata, directory.read());
-        }
-    }
 }

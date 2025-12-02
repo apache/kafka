@@ -21,7 +21,6 @@ import org.apache.kafka.metadata.util.BatchFileReader;
 import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -63,12 +62,4 @@ public interface BootstrapDirectory {
         return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
                 "the binary bootstrap metadata file: " + binaryPath);
     }
-
-    /**
-     * Write bootstrap metadata to the configured location.
-     *
-     * @param bootstrapMetadata the metadata to write
-     * @throws IOException if the metadata cannot be written
-     */
-    void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException;
 }

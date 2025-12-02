@@ -497,7 +497,7 @@ public class Formatter {
         }
     }
 
-    static void writeBoostrapSnapshot(
+    public static void writeBoostrapSnapshot(
         String writeLogDir,
         BootstrapMetadata bootstrapMetadata,
         Optional<DynamicVoters> initialControllers,

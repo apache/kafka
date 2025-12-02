@@ -17,18 +17,13 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
-import org.apache.kafka.metadata.util.BatchFileWriter;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Objects;
 
-import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
-import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 /**
  * Reads bootstrap metadata from the legacy {@code bootstrap.checkpoint} file.
@@ -61,29 +56,5 @@ public class LegacyBootstrapDirectory implements BootstrapDirectory {
 
     BootstrapMetadata readFromConfiguration() {
         return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
-    }
-
-    @Override
-    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException {
-        if (!Files.isDirectory(Paths.get(directoryPath))) {
-            throw new RuntimeException("No such directory as " + directoryPath);
-        }
-        Path tempPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME + ".tmp");
-        Files.deleteIfExists(tempPath);
-        try {
-            try (BatchFileWriter writer = BatchFileWriter.open(tempPath)) {
-                for (ApiMessageAndVersion message : bootstrapMetadata.records()) {
-                    writer.append(message);
-                }
-            }
-
-            Files.move(
-                tempPath,
-                Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME),
-                ATOMIC_MOVE, REPLACE_EXISTING
-            );
-        } finally {
-            Files.deleteIfExists(tempPath);
-        }
     }
 }
