@@ -69,7 +69,6 @@ public class BootstrapDirectoryTest {
     }
 
     @Test
-    @SuppressWarnings("resource")
     public void testReadFromEmptyConfiguration() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
