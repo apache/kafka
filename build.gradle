@@ -71,7 +71,7 @@ ext {
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 
-    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
+  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
     // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
     // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
     project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
@@ -1069,7 +1069,7 @@ project(':core') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
-    testImplementation libs.jacksonDatabindYaml
+    implementation libs.jacksonDatabindYaml
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
@@ -1118,7 +1118,9 @@ project(':core') {
   if (userEnableTestCoverage) {
     scoverage {
       scoverageVersion = versions.scoverage
-      scoverageScalaVersion = versions.scala
+      if (versions.baseScala == '2.13') {
+        scoverageScalaVersion = '2.13.9' // there's no newer 2.13 artifact, org.scoverage:scalac-scoverage-plugin_2.13.9:2.0.11 is the latest as of now
+      }
       reportDir = file("${layout.buildDirectory.get().asFile.path}/scoverage")
       highlighting = false
       minimumRate = 0.0
@@ -1483,7 +1485,7 @@ project(':group-coordinator') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':coordinator-common').sourceSets.test.output
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1605,7 +1607,7 @@ project(':test-common:test-common-runtime') {
 
     implementation libs.junitPlatformLanucher
     implementation libs.junitJupiter
-    testImplementation libs.jacksonDatabindYaml
+    implementation libs.jacksonDatabindYaml
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
@@ -2080,7 +2082,7 @@ project(':raft') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
@@ -2177,7 +2179,7 @@ project(':server-common') {
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2318,7 +2320,7 @@ project(':storage') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -2635,7 +2637,7 @@ project(':shell') {
     testImplementation project(':core')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
 
@@ -2684,7 +2686,7 @@ project(':streams') {
     testCompileOnly libs.bndlib
 
     testImplementation project(':clients').sourceSets.test.output
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
@@ -2829,7 +2831,7 @@ project(':streams:streams-scala') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
 
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation testLog4j2Libs
@@ -2933,7 +2935,7 @@ project(':streams:test-utils') {
     implementation libs.slf4jApi
 
     testImplementation project(':clients').sourceSets.test.output
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
@@ -3628,7 +3630,7 @@ project(':connect:runtime') {
     testImplementation project(':connect:test-plugins')
     testImplementation project(':server-common').sourceSets.test.output
 
-    testtestImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter
