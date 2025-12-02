@@ -80,6 +80,22 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     }
   }
 
+  protected def createTopicWithAdminRaw(
+    topic: String,
+    numPartitions: Int
+  ): Uuid = {
+    val admin = cluster.admin()
+    try {
+      TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = topic,
+        numPartitions = numPartitions,
+      )
+    } finally {
+      admin.close()
+    }
+  }
+
   protected def createTopic(
     topic: String,
     numPartitions: Int
