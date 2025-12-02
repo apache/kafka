@@ -27,6 +27,8 @@ import java.util.Set;
  * The partition assignment for a modern group member.
  *
  * @param partitions The partitions assigned to this member keyed by topicId.
+ *                   The map will not be made immutable, since the server-side assignors rely on
+ *                   being able to mutate the map while building new assignments.
  */
 public record MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) implements MemberAssignment {
     public MemberAssignmentImpl {
