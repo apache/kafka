@@ -767,15 +767,15 @@ public class KafkaAdminClientTest {
 
     private static FeatureMetadata defaultFeatureMetadata() {
         return new FeatureMetadata(
-            Utils.mkMap(Utils.mkEntry("test_feature_1", new FinalizedVersionRange((short) 2, (short) 2))),
+            Utils.mkMap(Utils.mkEntry("test_feature_1", new BrokerFinalizedVersionRange((short) 2, (short) 2))),
             Optional.of(1L),
-            Utils.mkMap(Utils.mkEntry("test_feature_1", new SupportedVersionRange((short) 1, (short) 5))));
+            Utils.mkMap(Utils.mkEntry("test_feature_1", new BrokerSupportedVersionRange((short) 1, (short) 5))));
     }
 
-    private static Features<org.apache.kafka.common.feature.SupportedVersionRange> convertSupportedFeaturesMap(Map<String, SupportedVersionRange> features) {
+    private static Features<org.apache.kafka.common.feature.SupportedVersionRange> convertSupportedFeaturesMap(Map<String, BrokerSupportedVersionRange> features) {
         final Map<String, org.apache.kafka.common.feature.SupportedVersionRange> featuresMap = new HashMap<>();
-        for (final Map.Entry<String, SupportedVersionRange> entry : features.entrySet()) {
-            final SupportedVersionRange versionRange = entry.getValue();
+        for (final Map.Entry<String, BrokerSupportedVersionRange> entry : features.entrySet()) {
+            final BrokerSupportedVersionRange versionRange = entry.getValue();
             featuresMap.put(
                 entry.getKey(),
                 new org.apache.kafka.common.feature.SupportedVersionRange(versionRange.minVersion(),

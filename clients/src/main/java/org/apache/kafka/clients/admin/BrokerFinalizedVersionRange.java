@@ -21,7 +21,7 @@ import java.util.Objects;
 /**
  * Represents a range of version levels supported by every broker in a cluster for some feature.
  */
-public class FinalizedVersionRange {
+public class BrokerFinalizedVersionRange {
     private final short minVersionLevel;
 
     private final short maxVersionLevel;
@@ -35,7 +35,7 @@ public class FinalizedVersionRange {
      *
      * @throws IllegalArgumentException   Raised when the condition described above is not met.
      */
-    public FinalizedVersionRange(final short minVersionLevel, final short maxVersionLevel) {
+    public BrokerFinalizedVersionRange(final short minVersionLevel, final short maxVersionLevel) {
         if (minVersionLevel < 0 || maxVersionLevel < 0 || maxVersionLevel < minVersionLevel) {
             throw new IllegalArgumentException(
                 String.format(
@@ -60,11 +60,11 @@ public class FinalizedVersionRange {
         if (this == other) {
             return true;
         }
-        if (!(other instanceof FinalizedVersionRange)) {
+        if (!(other instanceof BrokerFinalizedVersionRange)) {
             return false;
         }
 
-        final FinalizedVersionRange that = (FinalizedVersionRange) other;
+        final BrokerFinalizedVersionRange that = (BrokerFinalizedVersionRange) other;
         return this.minVersionLevel == that.minVersionLevel &&
             this.maxVersionLevel == that.maxVersionLevel;
     }
@@ -77,7 +77,7 @@ public class FinalizedVersionRange {
     @Override
     public String toString() {
         return String.format(
-            "FinalizedVersionRange[min_version_level:%d, max_version_level:%d]",
+            "BrokerFinalizedVersionRange[min_version_level:%d, max_version_level:%d]",
             minVersionLevel,
             maxVersionLevel);
     }
