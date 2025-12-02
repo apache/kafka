@@ -2261,7 +2261,7 @@ public class StreamThreadTest {
 
         TestUtils.waitForCondition(
             () -> mockRestoreConsumer.assignment().size() == 1,
-            "Never get the assignment");
+            "Never got the assignment");
 
         mockRestoreConsumer.addRecord(new ConsumerRecord<>(
             "stream-thread-test-count-changelog",
@@ -2285,7 +2285,7 @@ public class StreamThreadTest {
         // registered again with the changelog reader
         TestUtils.waitForCondition(
             () -> mockRestoreConsumer.assignment().size() == 1,
-            "Never get the assignment");
+            "Never got the assignment");
 
         // after handling the exception and reviving the task, the position
         // should be reset to the beginning.
@@ -2308,7 +2308,7 @@ public class StreamThreadTest {
 
         TestUtils.waitForCondition(
             () -> mockRestoreConsumer.assignment().isEmpty(),
-            "Never get the assignment");
+            "Never got the assignment");
     }
 
     @ParameterizedTest
