@@ -118,34 +118,26 @@ class ConfigAdminManager(nodeId: Int,
           if (containsDuplicates(resource.configs().asScala.map(_.name()))) {
             throw new InvalidRequestException("Error due to duplicate config keys")
           }
-          val nullError = ConfigAdminManager.validateNullValue(resource)
-          if (nullError.isEmpty) {
-            val unknownTypeError = ConfigAdminManager.validateUnknownConfigTypeError(configResource, resource)
-            if (unknownTypeError.isDefined) {
-              results.put(resource, unknownTypeError.get)
-            } else {
-              resourceType match {
-                case BROKER_LOGGER =>
-                  runtimeLoggerManager.applyChangesForResource(
-                    authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
-                    request.validateOnly(),
-                    resource)
-                  results.put(resource, ApiError.NONE)
-                case BROKER =>
-                  // The resource name must be either blank (if setting a cluster config) or
-                  // the ID of this specific broker.
-                  if (configResource.name().nonEmpty) {
-                    validateResourceNameIsCurrentNodeId(resource.resourceName())
-                  }
-                  validateBrokerConfigChange(resource, configResource)
-                case TOPIC | CLIENT_METRICS | GROUP =>
-                // Nothing to do.
-                case _ =>
-                  // no-op: since we already handled UNKNOWN resource types above
+          validateNullValue(resource)
+          validateUnknownConfigTypeError(configResource, resource)
+          resourceType match {
+            case BROKER_LOGGER =>
+              runtimeLoggerManager.applyChangesForResource(
+                authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
+                request.validateOnly(),
+                resource)
+              results.put(resource, ApiError.NONE)
+            case BROKER =>
+              // The resource name must be either blank (if setting a cluster config) or
+              // the ID of this specific broker.
+              if (configResource.name().nonEmpty) {
+                validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
-            }
-          } else {
-            results.put(resource, nullError.get)
+              validateBrokerConfigChange(resource, configResource)
+            case TOPIC | CLIENT_METRICS | GROUP =>
+            // Nothing to do.
+            case _ =>
+              // no-op: since we already handled UNKNOWN resource types above
           }
         } catch {
           case t: Throwable =>
@@ -453,7 +445,7 @@ object ConfigAdminManager {
 
   def validateNullValue(
     resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
-  ): Option[ApiError] = {
+  ): Unit = {
     val nullUpdates = new util.ArrayList[String]()
     resource.configs.forEach { config =>
       if (config.configOperation() != AlterConfigOp.OpType.DELETE.id() &&
@@ -463,23 +455,19 @@ object ConfigAdminManager {
     }
     if (!nullUpdates.isEmpty) {
       val exception = new InvalidRequestException("Null value not supported for : " + String.join(", ", nullUpdates))
-      val err = ApiError.fromThrowable(exception)
       log.error(s"Error on processing incrementalAlterConfigs request on ${resource.resourceName()}", exception)
-      return Some(err)
+      throw exception
     }
-    None
   }
 
   def validateUnknownConfigTypeError(
     configResource: ConfigResource,
     resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
-  ): Option[ApiError] = {
+  ): Unit = {
     if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
-      val exception = new InvalidRequestException(s"Unknown resource type ${resource.resourceType()}")
-      val err = ApiError.fromThrowable(exception)
+      val exception = new InvalidRequestException(s"Unknown resource type ${resource.resourceType()}.")
       log.error(s"Error on processing request on ${configResource}", exception)
-      return Some(err)
+      throw exception
     }
-    None
   }
 }

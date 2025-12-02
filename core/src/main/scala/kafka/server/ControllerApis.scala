@@ -48,7 +48,6 @@ import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
@@ -721,65 +720,53 @@ class ControllerApis(
     val configChanges = new util.HashMap[ConfigResource,
       util.Map[String, Entry[AlterConfigOp.OpType, String]]]()
     val brokerLoggerResponses = new util.ArrayList[AlterConfigsResourceResponse](1)
-    val nullConfigsErrorResults = new util.IdentityHashMap[AlterConfigsResource, ApiError]()
     alterConfigsRequest.data.resources.forEach { resource =>
-      val nullError = ConfigAdminManager.validateNullValue(resource)
-      if (nullError.isEmpty) {
+      try {
+        ConfigAdminManager.validateNullValue(resource)
         val configResource = new ConfigResource(
           ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
-        val unknownTypeError = ConfigAdminManager.validateUnknownConfigTypeError(configResource, resource)
-        if (unknownTypeError.isDefined) {
-          response.responses().add(new AlterConfigsResourceResponse().
-            setErrorCode(unknownTypeError.get.error().code()).
-            setErrorMessage(unknownTypeError.get.messageWithFallback()).
+        ConfigAdminManager.validateUnknownConfigTypeError(configResource, resource)
+        if (configResource.`type`().equals(ConfigResource.Type.BROKER_LOGGER)) {
+          val apiError = try {
+            runtimeLoggerManager.applyChangesForResource(
+              authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
+              alterConfigsRequest.data().validateOnly(),
+              resource)
+            ApiError.NONE
+          } catch {
+            case t: Throwable => ApiError.fromThrowable(t)
+          }
+          brokerLoggerResponses.add(new AlterConfigsResourceResponse().
             setResourceName(resource.resourceName()).
-            setResourceType(resource.resourceType()))
-        } else {
-          if (configResource.`type`().equals(ConfigResource.Type.BROKER_LOGGER)) {
-            val apiError = try {
-              runtimeLoggerManager.applyChangesForResource(
-                authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
-                alterConfigsRequest.data().validateOnly(),
-                resource)
-              ApiError.NONE
-            } catch {
-              case t: Throwable => ApiError.fromThrowable(t)
-            }
-            brokerLoggerResponses.add(new AlterConfigsResourceResponse().
+            setResourceType(resource.resourceType()).
+            setErrorCode(apiError.error().code()).
+            setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
+        } else if (!duplicateResources.contains(configResource)) {
+          val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+          resource.configs.forEach { config =>
+            altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+              AlterConfigOp.OpType.forId(config.configOperation), config.value))
+          }
+          if (configChanges.put(configResource, altersByName) != null) {
+            duplicateResources.add(configResource)
+            configChanges.remove(configResource)
+            response.responses().add(new AlterConfigsResourceResponse().
+              setErrorCode(INVALID_REQUEST.code()).
+              setErrorMessage("Duplicate resource.").
               setResourceName(resource.resourceName()).
-              setResourceType(resource.resourceType()).
-              setErrorCode(apiError.error().code()).
-              setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
-          } else if (!duplicateResources.contains(configResource)) {
-            val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
-            resource.configs.forEach { config =>
-              altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-                AlterConfigOp.OpType.forId(config.configOperation), config.value))
-            }
-            if (configChanges.put(configResource, altersByName) != null) {
-              duplicateResources.add(configResource)
-              configChanges.remove(configResource)
-              response.responses().add(new AlterConfigsResourceResponse().
-                setErrorCode(INVALID_REQUEST.code()).
-                setErrorMessage("Duplicate resource.").
-                setResourceName(resource.resourceName()).
-                setResourceType(resource.resourceType()))
-            }
+              setResourceType(resource.resourceType()))
           }
         }
-      } else {
-        nullConfigsErrorResults.put(resource, nullError.get)
+      } catch {
+        case t: Throwable =>
+          val err = ApiError.fromThrowable(t)
+          error(s"Error on processing incrementalAlterConfigs request on ${resource.resourceName()}", t)
+          response.responses().add(new AlterConfigsResourceResponse().
+            setErrorCode(err.error().code()).
+            setErrorMessage(err.messageWithFallback()).
+            setResourceName(resource.resourceName()).
+            setResourceType(resource.resourceType()))
       }
-    }
-    if (!nullConfigsErrorResults.isEmpty) {
-      nullConfigsErrorResults.forEach((resource, apiError) => {
-        response.responses().add(new AlterConfigsResourceResponse().
-          setErrorCode(apiError.error().code()).
-          setErrorMessage(apiError.messageWithFallback()).
-          setResourceName(resource.resourceName()).
-          setResourceType(resource.resourceType()))
-        configChanges.remove(resource)
-      })
     }
     val iterator = configChanges.keySet().iterator()
     while (iterator.hasNext) {
