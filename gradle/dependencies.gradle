@@ -108,7 +108,7 @@ versions += [
   kafka_41: "4.1.1",
   log4j2: "2.25.1",
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
-  lz4: "1.8.0",
+  lz4: "1.8.1",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
   mockito: "5.20.0",
