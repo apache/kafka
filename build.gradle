@@ -882,11 +882,10 @@ subprojects {
 
     doLast {
       def asfHeader = file("${rootProject.projectDir}/gradle/LICENSE.json").readLines()*.trim()
-      def resDir = file("src/main/resources")
-      if (!resDir.exists()) return
 
-      def incorrectFiles = fileTree(resDir) {
-        include '**/*.json'
+      def incorrectFiles = fileTree(projectDir) {
+        include 'src/main/resources/**/*.json'
+        include 'src/test/resources/**/*.json'
       }.findAll { f ->
         f.readLines().take(asfHeader.size())*.trim() != asfHeader
       }
