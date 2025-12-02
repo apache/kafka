@@ -16948,7 +16948,8 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setStatus(List.of()),
             result1.response().data()
         );
         assertRecordsEquals(

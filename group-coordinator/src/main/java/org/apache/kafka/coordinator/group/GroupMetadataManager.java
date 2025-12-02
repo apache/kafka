@@ -4212,7 +4212,8 @@ public class GroupMetadataManager {
         }
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch);
+            .setMemberEpoch(memberEpoch)
+            .setStatus(List.of());
 
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
