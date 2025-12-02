@@ -1749,8 +1749,6 @@ public class StreamThreadTest {
             ),
             10 * 1000,
             "State updater never returned tasks.");
-        
-
         // again, complete the restoration
         runOnce(processingThreadsEnabled);
         // transit to running and unpause
