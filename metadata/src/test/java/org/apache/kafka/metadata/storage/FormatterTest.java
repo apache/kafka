@@ -184,7 +184,7 @@ public class FormatterTest {
             FormatterContext formatter1 = testEnv.newFormatter();
             String expectedPrefix = "Error while writing 00000000000000000000-0000000000.checkpoint file";
             assertEquals(expectedPrefix,
-                    assertThrows(FormatterException.class,
+                assertThrows(FormatterException.class,
                     formatter1.formatter::run).
                         getMessage().substring(0, expectedPrefix.length()));
         }
@@ -392,6 +392,8 @@ public class FormatterTest {
             formatter1.formatter.setSupportedFeatures(Feature.TEST_AND_PRODUCTION_FEATURES);
             formatter1.formatter.setFeatureLevel(TestFeatureVersion.FEATURE_NAME, version);
             formatter1.formatter.run();
+            BootstrapMetadata bootstrapMetadata =
+                new TestBootstrapDirectory(testEnv.directory(0)).read();
             List<ApiMessageAndVersion> expected = new ArrayList<>();
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
@@ -411,6 +413,7 @@ public class FormatterTest {
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(TransactionVersion.FEATURE_NAME).
                 setFeatureLevel(TransactionVersion.TV_2.featureLevel()), (short) 0));
+            assertEquals(expected, bootstrapMetadata.records());
         }
     }
 
