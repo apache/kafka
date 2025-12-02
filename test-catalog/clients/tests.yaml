@@ -2159,10 +2159,14 @@ org.apache.kafka.clients.consumer.internals.ShareAcquireModeTest:
 - testValidator
 - testValidatorToString
 org.apache.kafka.clients.consumer.internals.ShareCompletedFetchTest:
+- testAcknowledgementsIncludeOnlyGaps
 - testAcquireOddRecords
 - testAcquiredRecords
 - testCommittedTransactionRecordsIncluded
 - testCorruptedMessage
+- testGapsForControlRecordsInAcquiredRange
+- testGapsWithControlRecordsAtBeginningAndEnd
+- testMixedRecordsAndGaps
 - testNegativeFetchCount
 - testNoRecordsInFetch
 - testOverlappingAcquiredRecordsLogsErrorAndRetainsFirstOccurrence
