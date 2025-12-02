@@ -37,10 +37,10 @@ plugins {
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.4.4' apply false
-  id 'org.scoverage' version '8.1' apply false
+  id "com.github.spotbugs" version '6.2.5' apply false
+  id 'org.scoverage' version '8.0.3' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
-  id 'com.diffplug.spotless' version "8.0.0"
+  id 'com.diffplug.spotless' version "7.2.1"
 }
 
 ext {
@@ -71,6 +71,13 @@ ext {
       "--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED"
     )
 
+    if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_25)) {
+    // Spotbugs is not compatible with Java 25+ so Gradle related tasks are disabled
+    // until version can be upgraded: https://github.com/spotbugs/spotbugs/issues/3564
+    project.gradle.startParameter.excludedTaskNames.add("spotbugsMain")
+    project.gradle.startParameter.excludedTaskNames.add("spotbugsTest")
+  }    
+
   maxTestForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : Runtime.runtime.availableProcessors()
   maxScalacThreads = project.hasProperty('maxScalacThreads') ? maxScalacThreads.toInteger() :
       Math.min(Runtime.runtime.availableProcessors(), 8)
@@ -95,7 +102,7 @@ ext {
   userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
   userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
   if (userKeepAliveMode == null) {
-    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name().toLowerCase())
+    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
@@ -129,25 +136,20 @@ ext {
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
       options.compilerArgs << "-Werror"
-      if (userKeepAliveMode == KeepAliveMode.SESSION){
-        // Suppress warning triggered under keepAliveMode=SESSION during joint compilation
-        // Unexpected javac output: warning: [path] bad path element ".../core/build/classes/java/main": no such file or directory
-        options.compilerArgs << "-Xlint:-path"
-      }
     }
   }
 
   runtimeTestLibs = [
     libs.slf4jLog4j2,
     libs.junitPlatformLanucher,
-    libs.jacksonDataformatYaml,
+    libs.jacksonDatabindYaml,
     project(":test-common:test-common-util")
   ]
 
   log4jReleaseLibs = [
     libs.slf4jLog4j2,
     libs.log4j1Bridge2Api,
-    libs.jacksonDataformatYaml
+    libs.jacksonDatabindYaml
   ]
 
   log4j2Libs = [
@@ -601,9 +603,6 @@ subprojects {
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
-    testClassesDirs = sourceSets.test.output.classesDirs
-    classpath = sourceSets.test.runtimeClasspath
-
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -636,9 +635,6 @@ subprojects {
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
-    testClassesDirs = sourceSets.test.output.classesDirs
-    classpath = sourceSets.test.runtimeClasspath
-
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -875,29 +871,6 @@ subprojects {
       removeUnusedImports()
     }
   }
-
-  tasks.register("checkJsonLicenseHeader") {
-    group = "Verification"
-    description = "Verify ASF License header in JSON files"
-
-    doLast {
-      def asfHeader = file("${rootProject.projectDir}/gradle/LICENSE.json").readLines()*.trim()
-
-      def incorrectFiles = fileTree(projectDir) {
-        include 'src/main/resources/**/*.json'
-        include 'src/test/resources/**/*.json'
-      }.findAll { f ->
-        f.readLines().take(asfHeader.size())*.trim() != asfHeader
-      }
-
-      if (incorrectFiles) {
-        println "\n${project.name}: Incorrect ASF license header in JSON files:"
-        incorrectFiles.each { println "  - $it" }
-        throw new GradleException("${incorrectFiles.size()} JSON files with incorrect ASF license header")
-      }
-    }
-  }
-  check.dependsOn("checkJsonLicenseHeader")
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
@@ -1096,7 +1069,7 @@ project(':core') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonDataformatYaml
+    testImplementation libs.jacksonDatabindYaml
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
@@ -1510,7 +1483,7 @@ project(':group-coordinator') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':coordinator-common').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1632,7 +1605,7 @@ project(':test-common:test-common-runtime') {
 
     implementation libs.junitPlatformLanucher
     implementation libs.junitJupiter
-    implementation libs.jacksonDataformatYaml
+    testImplementation libs.jacksonDatabindYaml
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
@@ -2031,20 +2004,21 @@ project(':clients') {
     include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/acl/*"
     include "**/org/apache/kafka/common/annotation/*"
-    include "**/org/apache/kafka/common/config/*"
-    include "**/org/apache/kafka/common/config/provider/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/metrics/*"
     include "**/org/apache/kafka/common/metrics/stats/*"
     include "**/org/apache/kafka/common/quota/*"
     include "**/org/apache/kafka/common/resource/*"
+    include "**/org/apache/kafka/common/serialization/*"
+    include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/common/config/provider/*"
     include "**/org/apache/kafka/common/security/auth/*"
-    include "**/org/apache/kafka/common/security/oauthbearer/*"
     include "**/org/apache/kafka/common/security/plain/*"
     include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
-    include "**/org/apache/kafka/common/serialization/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/secured/*"
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
@@ -2106,7 +2080,7 @@ project(':raft') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
@@ -2203,7 +2177,7 @@ project(':server-common') {
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2344,7 +2318,7 @@ project(':storage') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -2661,7 +2635,7 @@ project(':shell') {
     testImplementation project(':core')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
 
@@ -2710,7 +2684,7 @@ project(':streams') {
     testCompileOnly libs.bndlib
 
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
@@ -2855,7 +2829,7 @@ project(':streams:streams-scala') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
 
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation testLog4j2Libs
@@ -2959,7 +2933,7 @@ project(':streams:test-utils') {
     implementation libs.slf4jApi
 
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
@@ -3654,7 +3628,7 @@ project(':connect:runtime') {
     testImplementation project(':connect:test-plugins')
     testImplementation project(':server-common').sourceSets.test.output
 
-    testImplementation libs.jacksonDataformatYaml
+    testtestImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter
@@ -3739,12 +3713,8 @@ project(':connect:runtime') {
     buildClasspath = classpath + configurations.swagger
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
-    prettyPrint = true
-    sortOutput = true
-    encoding = 'UTF-8'
-    alwaysResolveAppPath = false
-    skipResolveAppPath = false
-    readAllResources = true
+    prettyPrint = 'TRUE'
+    sortOutput = 'TRUE'
     openApiFile = file("${layout.buildDirectory.get().asFile.path}/resources/docs/openapi.yaml")
     resourcePackages = ['org.apache.kafka.connect.runtime.rest.resources']
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
