@@ -1089,7 +1089,7 @@ public class SharePartition {
             if (!offsetState.getValue().memberId().equals(memberId) && !offsetState.getValue().memberId().equals(EMPTY_MEMBER_ID)) {
                 log.debug("Member {} is not the owner of offset: {} in batch: {} for the share"
                         + " partition: {}-{}. Skipping offset.", memberId, offsetState.getKey(), inFlightBatch, groupId, topicIdPartition);
-                return Optional.empty();
+                continue;
             }
             if (offsetState.getValue().state() == RecordState.ACQUIRED) {
                 // These records were fetched but they were not actually delivered to the client.

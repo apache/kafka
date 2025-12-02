@@ -11832,6 +11832,90 @@ public class SharePartitionTest {
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
     }
 
+    @Test
+    public void testReleaseAcquiredRecordsPerOffsetWithDifferentMemberId() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        // Acquire offsets 5-14 with member-1.
+        fetchAcquiredRecords(sharePartition.acquire(MEMBER_ID, ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE,
+            MAX_FETCH_RECORDS, 21, fetchPartitionData(memoryRecords(5, 10)), FETCH_ISOLATION_HWM), 10);
+
+        // Acknowledge 5-6 offsets with ACCEPT and 10-12 with RELEASE
+        sharePartition.acknowledge(MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(5, 6, List.of(AcknowledgeType.ACCEPT.id))));
+        sharePartition.acknowledge(MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(10, 12, List.of(AcknowledgeType.RELEASE.id))));
+
+        assertEquals(1, sharePartition.cachedState().size());
+        assertNotNull(sharePartition.cachedState().get(5L).offsetState());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(5L).state());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(6L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(7L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(8L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(9L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(10L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(11L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(12L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(13L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(14L).state());
+
+        // Acquire offsets 10-12 with member-2.
+        fetchAcquiredRecords(sharePartition.acquire("member-2", ShareAcquireMode.BATCH_OPTIMIZED, BATCH_SIZE,
+            MAX_FETCH_RECORDS, 21, fetchPartitionData(memoryRecords(10, 3)), FETCH_ISOLATION_HWM), 3);
+
+        assertEquals(1, sharePartition.cachedState().size());
+        assertNotNull(sharePartition.cachedState().get(5L).offsetState());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(5L).state());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(6L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(7L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(8L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(9L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(10L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(11L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(12L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(13L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(14L).state());
+
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(5L).memberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(6L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(7L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(8L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(9L).memberId());
+        assertEquals("member-2", sharePartition.cachedState().get(5L).offsetState().get(10L).memberId());
+        assertEquals("member-2", sharePartition.cachedState().get(5L).offsetState().get(11L).memberId());
+        assertEquals("member-2", sharePartition.cachedState().get(5L).offsetState().get(12L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(13L).memberId());
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(14L).memberId());
+
+        // Release acquired records for member-1
+        CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
+        assertNull(releaseResult.join());
+        assertFalse(releaseResult.isCompletedExceptionally());
+        assertEquals(7, sharePartition.nextFetchOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertNotNull(sharePartition.cachedState().get(5L).offsetState());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(5L).state());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(6L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(7L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(8L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(9L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(10L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(11L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(12L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(13L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(14L).state());
+
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(5L).memberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(6L).memberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(7L).memberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(8L).memberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(9L).memberId());
+        assertEquals("member-2", sharePartition.cachedState().get(5L).offsetState().get(10L).memberId());
+        assertEquals("member-2", sharePartition.cachedState().get(5L).offsetState().get(11L).memberId());
+        assertEquals("member-2", sharePartition.cachedState().get(5L).offsetState().get(12L).memberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(13L).memberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(14L).memberId());
+    }
+
     /**
      * This function produces transactional data of a given no. of records followed by a transactional marker (COMMIT/ABORT).
      */
