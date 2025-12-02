@@ -2521,6 +2521,109 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquireBatchPriorToStartOffset() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
+                    List.of(
+                        new PersisterStateBatch(5L, 99L, RecordState.AVAILABLE.id, (short) 1)
+                    ))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+        sharePartition.maybeInitialize();
+
+        // Validate the cached state after initialization.
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(99, sharePartition.cachedState().get(5L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
+
+        // Acquire offsets prior to start offset. Should not acquire any records.
+        fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                ShareAcquireMode.RECORD_LIMIT,
+                10,
+                10,
+                DEFAULT_FETCH_OFFSET,
+                fetchPartitionData(memoryRecords(0, 5)),
+                FETCH_ISOLATION_HWM),
+            0);
+
+        // Validate the cached state remains unchanged.
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(99, sharePartition.cachedState().get(5L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
+    }
+
+    /**
+     * Test validates the scenario where the partition has been re-initialized and the first fetch batch
+     * has start offset in middle and no overlap with the batch returned from the persister during initialization.
+     * In this case, the acquire logic should respect the start offset and not allow acquiring records
+     * prior to the start offset.
+     */
+    @Test
+    public void testAcquireBatchWithMovedStartOffsetAndNoOverlapWithCachedBatch() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
+                    List.of(
+                        new PersisterStateBatch(15L, 20L, RecordState.ARCHIVED.id, (short) 1)
+                    ))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+        sharePartition.maybeInitialize();
+
+        // Validate the cached state after initialization.
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(15, sharePartition.cachedState().get(15L).firstOffset());
+        assertEquals(20, sharePartition.cachedState().get(15L).lastOffset());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(15L).batchState());
+        // As there is a gap between 5-14 offsets, gap window should be created.
+        assertNotNull(sharePartition.persisterReadResultGapWindow());
+        assertEquals(5, sharePartition.persisterReadResultGapWindow().gapStartOffset());
+
+        // Acquire offsets starting prior to start offset and going beyond it. Only offsets from 5-9 should
+        // be acquired.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                ShareAcquireMode.RECORD_LIMIT,
+                10,
+                10,
+                5L,
+                fetchPartitionData(memoryRecords(0, 10)),
+                FETCH_ISOLATION_HWM),
+            5);
+
+        assertArrayEquals(expectedAcquiredRecord(5, 9, 1).toArray(), acquiredRecordsList.toArray());
+        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(10, sharePartition.nextFetchOffset());
+        assertEquals(5L, sharePartition.startOffset());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(9, sharePartition.cachedState().get(5L).lastOffset());
+        assertNotNull(sharePartition.persisterReadResultGapWindow());
+        assertEquals(10, sharePartition.persisterReadResultGapWindow().gapStartOffset());
+    }
+
+    @Test
     public void testNextFetchOffsetInitialState() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         assertEquals(0, sharePartition.nextFetchOffset());
@@ -10633,6 +10736,113 @@ public class SharePartitionTest {
         assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
         assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
         assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().max());
+    }
+
+    /**
+     * Test validates the scenario where the partition has been re-initialized with a moved start offset.
+     * In this case, the acquire logic should respect the new start offset and not allow acquiring
+     * records post the new start offset. For the test, simulate a scenario where the log batch is 0-99
+     * offsets, but post re-initialization, the start offset is moved to 5 hence share partition should
+     * have 5-99 offsets in AVAILABLE state in the cache. Post acquire and acknowledge of 5-14 offsets,
+     * the start offset is moved to 15. Next acquire on the same log batch should only allow acquiring
+     * offsets from 15 offset and should not create any other entries in the cache.
+     */
+    @Test
+    public void testAcquireBatchInRecordLimitModeWithMovedStartOffset() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionAllData(0, 3, 5L, Errors.NONE.code(), Errors.NONE.message(),
+                    List.of(
+                        new PersisterStateBatch(5L, 99L, RecordState.AVAILABLE.id, (short) 1)
+                    ))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+        sharePartition.maybeInitialize();
+
+        // Validate the cached state after initialization.
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertEquals(5, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(99, sharePartition.cachedState().get(5L).lastOffset());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
+
+        // Send the batch of 0-99 offsets for acquire, only 5-14 should be acquired. Though the start
+        // offset for the share partition is 5 and the log batch base offset is 0, but acquire should
+        // respect the share partition start offset.
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                ShareAcquireMode.RECORD_LIMIT,
+                10,
+                10,
+                5L,
+                fetchPartitionData(memoryRecords(0, 100)),
+                FETCH_ISOLATION_HWM),
+            10);
+
+        assertArrayEquals(expectedAcquiredRecords(5, 14, 2).toArray(), acquiredRecordsList.toArray());
+
+        assertEquals(15, sharePartition.nextFetchOffset());
+        assertEquals(5L, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(99, sharePartition.cachedState().get(5L).lastOffset());
+
+        // Offset state should be maintained since partial offsets in the batch are acquired.
+        assertThrows(IllegalStateException.class, () -> sharePartition.cachedState().get(5L).batchState());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(5L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(14L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(15L).state());
+
+        // Acknowledge the acquired offsets 5-14 so the start offset moves to 15.
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(List.of(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), List.of(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+        sharePartition.acknowledge(MEMBER_ID, List.of(
+            new ShareAcknowledgementBatch(5, 14, List.of(AcknowledgeType.ACCEPT.id))
+        ));
+
+        assertEquals(15, sharePartition.nextFetchOffset());
+        assertEquals(15L, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(99, sharePartition.cachedState().get(5L).lastOffset());
+
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(5L).state());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(14L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(15L).state());
+
+        // Re-acquire on the same log batch of 0-99 offsets, only 15-24 should be acquired.
+        acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                ShareAcquireMode.RECORD_LIMIT,
+                10,
+                10,
+                15,
+                fetchPartitionData(memoryRecords(0, 100)),
+                FETCH_ISOLATION_HWM),
+            10);
+
+        assertArrayEquals(expectedAcquiredRecords(15, 24, 2).toArray(), acquiredRecordsList.toArray());
+        assertEquals(25, sharePartition.nextFetchOffset());
+        assertEquals(15L, sharePartition.startOffset());
+        assertEquals(1, sharePartition.cachedState().size());
+        assertEquals(5, sharePartition.cachedState().get(5L).firstOffset());
+        assertEquals(99, sharePartition.cachedState().get(5L).lastOffset());
+
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(5L).state());
+        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).offsetState().get(14L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(15L).state());
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).offsetState().get(24L).state());
+        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).offsetState().get(25L).state());
     }
 
     @Test
