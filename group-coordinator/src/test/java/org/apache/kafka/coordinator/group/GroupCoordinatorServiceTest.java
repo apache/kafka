@@ -88,11 +88,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -1722,11 +1719,14 @@ public class GroupCoordinatorServiceTest {
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                 .setGroupId("group");
-        if (!fetchAllOffsets) {
-            request
-                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName("foo")
-                    .setPartitionIndexes(List.of(0))));
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
         }
 
         OffsetFetchResponseData.OffsetFetchResponseGroup response =
@@ -1753,9 +1753,7 @@ public class GroupCoordinatorServiceTest {
             )).thenReturn(CompletableFuture.completedFuture(response));
         }
 
-        TriFunction<RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, Boolean, CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup>> fetchOffsets =
-            fetchAllOffsets ? service::fetchAllOffsets : service::fetchOffsets;
-        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = fetchOffsets.apply(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
             request,
             requireStable
@@ -1784,16 +1782,17 @@ public class GroupCoordinatorServiceTest {
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                 .setGroupId("group");
-        if (!fetchAllOffsets) {
-            request
-                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName("foo")
-                    .setPartitionIndexes(List.of(0))));
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
         }
 
-        TriFunction<RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, Boolean, CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup>> fetchOffsets =
-            fetchAllOffsets ? service::fetchAllOffsets : service::fetchOffsets;
-        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = fetchOffsets.apply(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
             request,
             requireStable
@@ -1834,11 +1833,14 @@ public class GroupCoordinatorServiceTest {
         OffsetFetchRequestData.OffsetFetchRequestGroup request =
             new OffsetFetchRequestData.OffsetFetchRequestGroup()
                 .setGroupId("group");
-        if (!fetchAllOffsets) {
-            request
-                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                    .setName("foo")
-                    .setPartitionIndexes(List.of(0))));
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
         }
 
         when(runtime.scheduleWriteOperation(
@@ -1848,9 +1850,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
 
-        TriFunction<RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, Boolean, CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup>> fetchOffsets =
-            fetchAllOffsets ? service::fetchAllOffsets : service::fetchOffsets;
-        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = fetchOffsets.apply(
+        CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
             request,
             true
@@ -3163,7 +3163,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(new MetadataDelta(image)));
+        service.onMetadataUpdate(new MetadataDelta(image), image);
 
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-partition-deleted"),
@@ -3221,7 +3221,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), new KRaftCoordinatorMetadataDelta(new MetadataDelta(image)));
+        service.onMetadataUpdate(new MetadataDelta(image), image);
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
@@ -3268,10 +3268,10 @@ public class GroupCoordinatorServiceTest {
             .build();
         service.startup(() -> 3);
 
-        CoordinatorMetadataImage image = new MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "bar", 1)
-            .buildCoordinatorMetadataImage();
-        service.onNewMetadataImage(image, image.emptyDelta());
+            .build();
+        service.onMetadataUpdate(new MetadataDelta(image), image);
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
@@ -3318,8 +3318,8 @@ public class GroupCoordinatorServiceTest {
             .build();
         service.startup(() -> 3);
 
-        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
-        service.onNewMetadataImage(image, image.emptyDelta());
+        MetadataImage image = MetadataImage.EMPTY;
+        service.onMetadataUpdate(new MetadataDelta(image), image);
 
         // No error in partition deleted callback
         when(runtime.scheduleWriteAllOperation(
@@ -4146,7 +4146,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(new MetadataDelta(image), image);
 
         int partition = 1;
 
@@ -4229,7 +4229,7 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         // Forcing a null Metadata Image
-        service.onNewMetadataImage(null, null);
+        service.onMetadataUpdate(null, null);
 
         int partition = 1;
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
@@ -4273,7 +4273,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(null, image);
 
         int partition = 1;
 
@@ -4344,7 +4344,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(null, image);
 
         int partition = 1;
 
@@ -4380,7 +4380,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(null, image);
 
         int partition = 1;
 
@@ -4417,7 +4417,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(null, image);
 
         int partition = 1;
 
@@ -4507,7 +4507,7 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         // Forcing a null Metadata Image
-        service.onNewMetadataImage(null, null);
+        service.onMetadataUpdate(null, null);
 
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
@@ -4704,7 +4704,7 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         // Forcing a null Metadata Image
-        service.onNewMetadataImage(null, null);
+        service.onMetadataUpdate(null, null);
 
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId("share-group-id")
@@ -5581,7 +5581,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 3)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(null, image);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5756,7 +5756,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 3)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(null, image);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -5818,7 +5818,7 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         // Forcing a null Metadata Image
-        service.onNewMetadataImage(null, null);
+        service.onMetadataUpdate(null, null);
 
         String groupId = "share-group";
         AlterShareGroupOffsetsRequestData request = new AlterShareGroupOffsetsRequestData()
@@ -5974,7 +5974,7 @@ public class GroupCoordinatorServiceTest {
             .addTopic(topicId, "topic-name", 1)
             .build();
 
-        service.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        service.onMetadataUpdate(null, image);
 
         when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
@@ -6023,7 +6023,7 @@ public class GroupCoordinatorServiceTest {
         private CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime;
         private GroupCoordinatorMetrics metrics = new GroupCoordinatorMetrics();
         private Persister persister = new NoOpStatePersister();
-        private CoordinatorMetadataImage metadataImage = null;
+        private MetadataImage metadataImage = null;
         private PartitionMetadataClient partitionMetadataClient = null;
 
         GroupCoordinatorService build() {
@@ -6032,7 +6032,9 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorService build(boolean serviceStartup) {
             if (metadataImage == null) {
-                metadataImage = mock(CoordinatorMetadataImage.class);
+                metadataImage = new MetadataImageBuilder()
+                    .addTopic(TOPIC_ID, TOPIC_NAME, 1)
+                    .build();
             }
 
             GroupCoordinatorService service = new GroupCoordinatorService(
@@ -6048,14 +6050,8 @@ public class GroupCoordinatorServiceTest {
 
             if (serviceStartup) {
                 service.startup(() -> 1);
-                service.onNewMetadataImage(metadataImage, null);
+                service.onMetadataUpdate(null, metadataImage);
             }
-            when(metadataImage.topicNames()).thenReturn(Set.of(TOPIC_NAME));
-            var topicMetadata = mock(CoordinatorMetadataImage.TopicMetadata.class);
-            when(topicMetadata.name()).thenReturn(TOPIC_NAME);
-            when(topicMetadata.id()).thenReturn(TOPIC_ID);
-            when(metadataImage.topicMetadata(TOPIC_ID)).thenReturn(Optional.of(topicMetadata));
-            when(metadataImage.topicMetadata(TOPIC_NAME)).thenReturn(Optional.of(topicMetadata));
 
             return service;
         }
