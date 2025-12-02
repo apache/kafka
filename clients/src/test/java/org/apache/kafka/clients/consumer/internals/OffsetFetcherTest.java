@@ -780,6 +780,7 @@ public class OffsetFetcherTest {
             List<ListOffsetsTopicResponse> topics = Collections.singletonList(
                     new ListOffsetsTopicResponse()
                         .setName(tp0.topic())
+                        .setTopicId(topicId)
                         .setPartitions(Arrays.asList(
                                 tp0NoError,
                                 new ListOffsetsPartitionResponse()
@@ -798,6 +799,7 @@ public class OffsetFetcherTest {
                     List<ListOffsetsTopic> expectedTopics = Collections.singletonList(
                             new ListOffsetsTopic()
                                 .setName(tp0.topic())
+                                .setTopicId(topicId)
                                 .setPartitions(Arrays.asList(
                                         new ListOffsetsPartition()
                                             .setPartitionIndex(tp1.partition())
@@ -820,6 +822,7 @@ public class OffsetFetcherTest {
             List<ListOffsetsTopicResponse> topicsWithFatalError = Collections.singletonList(
                     new ListOffsetsTopicResponse()
                         .setName(tp0.topic())
+                        .setTopicId(topicId)
                         .setPartitions(Arrays.asList(
                                 tp0NoError,
                                 new ListOffsetsPartitionResponse()
@@ -1015,6 +1018,7 @@ public class OffsetFetcherTest {
                 .setThrottleTimeMs(0)
                 .setTopics(Collections.singletonList(new ListOffsetsTopicResponse()
                         .setName(tp0.topic())
+                        .setTopicId(topicId)
                         .setPartitions(Arrays.asList(
                                 new ListOffsetsPartitionResponse()
                                     .setPartitionIndex(tp0.partition())
@@ -1095,6 +1099,7 @@ public class OffsetFetcherTest {
                 .setThrottleTimeMs(0)
                 .setTopics(Collections.singletonList(new ListOffsetsTopicResponse()
                         .setName(tp0.topic())
+                        .setTopicId(topicId)
                         .setPartitions(Collections.singletonList(new ListOffsetsPartitionResponse()
                                 .setPartitionIndex(tp0.partition())
                                 .setErrorCode(Errors.NONE.code())
@@ -1665,6 +1670,7 @@ public class OffsetFetcherTest {
         for (Map.Entry<String, List<ListOffsetsPartitionResponse>> response : responses.entrySet()) {
             topics.add(new ListOffsetsTopicResponse()
                     .setName(response.getKey())
+                    .setTopicId(topicIds.getOrDefault(response.getKey(), Uuid.ZERO_UUID))
                     .setPartitions(response.getValue()));
         }
         ListOffsetsResponseData data = new ListOffsetsResponseData().setTopics(topics);
