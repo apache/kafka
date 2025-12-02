@@ -107,12 +107,14 @@ public class ShareSessionCache {
     }
 
     /**
-     * Remove all the share sessions from cache.
+     * Remove all the share sessions from cache. The method do not notify the share group listener
+     * and expects the caller to handle the cleanup for share partitions.
      */
     public synchronized void removeAllSessions() {
         sessions.clear();
         numMembersPerGroup.clear();
         numPartitions = 0;
+        connectionIdToSessionMap.clear();
     }
 
     public synchronized long totalPartitions() {
@@ -127,13 +129,13 @@ public class ShareSessionCache {
     }
 
     /**
-     * Maybe remove the session and notify listeners. This is called when the connection is disconnected
+     * Maybe remove the session for the client. This is called when the connection is disconnected
      * for the client. The session may have already been removed by the client as part of final epoch,
      * hence check if the session is still present in the cache.
      *
      * @param key The share session key.
      */
-    public synchronized void maybeRemoveAndNotifyListeners(ShareSessionKey key) {
+    private synchronized void maybeRemoveSession(ShareSessionKey key) {
         ShareSession session = get(key);
         if (session != null) {
             // Notify the share group listener that member has left the group. Notify listener prior
@@ -151,18 +153,27 @@ public class ShareSessionCache {
         }
         // Notify the share group listener if the group is empty. This should be checked regardless
         // session is evicted by connection disconnect or client's final epoch.
-        int numMembers = numMembersPerGroup.getOrDefault(key.groupId(), 0);
+        checkAndNotifyGroupListener(key.groupId());
+    }
+
+    /**
+     * Check if the share group is empty and notify the share group listener.
+     *
+     * @param groupId The share group id.
+     */
+    private synchronized void checkAndNotifyGroupListener(String groupId) {
+        int numMembers = numMembersPerGroup.getOrDefault(groupId, 0);
         if (numMembers == 0) {
             // Remove the group from the map as it is empty.
-            numMembersPerGroup.remove(key.groupId());
+            numMembersPerGroup.remove(groupId);
             if (shareGroupListener != null) {
-                shareGroupListener.onGroupEmpty(key.groupId());
+                shareGroupListener.onGroupEmpty(groupId);
             }
         }
     }
 
     /**
-     * Remove an entry from the session cache.
+     * Remove an entry from the session cache. Invoke the share group listener if registered.
      *
      * @param session The session.
      * @return The removed session, or None if there was no such session.
@@ -172,6 +183,8 @@ public class ShareSessionCache {
         if (removeResult != null) {
             numPartitions = numPartitions - session.cachedSize();
             numMembersPerGroup.compute(session.key().groupId(), (k, v) -> v != null ? v - 1 : 0);
+            maybeRemoveConnectionFromSession(removeResult.connectionId());
+            checkAndNotifyGroupListener(session.key().groupId());
         }
         return removeResult;
     }
@@ -201,7 +214,7 @@ public class ShareSessionCache {
     ) {
         if (sessions.size() < maxEntries) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
-                ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
+                ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH), clientConnectionId);
             sessions.put(session.key(), session);
             updateNumPartitions(session);
             numMembersPerGroup.compute(session.key().groupId(), (k, v) -> v != null ? v + 1 : 1);
@@ -219,6 +232,19 @@ public class ShareSessionCache {
         this.shareGroupListener = shareGroupListener;
     }
 
+    /**
+     * Remove the connection id to session mapping when the connection is closed. The removal is not
+     * guaranteed always as the connection can be removed as part of final epoch from client or disconnect,
+     * hence the method returns the session key if present. The invocation to the method is idempotent
+     * and shall always at least be called once for every connection id.
+     *
+     * @param connectionId The client connection id.
+     * @return The share session key if present, null otherwise.
+     */
+    public synchronized ShareSessionKey maybeRemoveConnectionFromSession(String connectionId) {
+        return connectionIdToSessionMap.remove(connectionId);
+    }
+
     // Visible for testing.
     Meter evictionsMeter() {
         return evictionsMeter;
@@ -234,12 +260,12 @@ public class ShareSessionCache {
         // When the client disconnects, the corresponding session should be removed from the cache.
         @Override
         public void onDisconnect(String connectionId) {
-            ShareSessionKey shareSessionKey = connectionIdToSessionMap.remove(connectionId);
+            ShareSessionKey shareSessionKey = maybeRemoveConnectionFromSession(connectionId);
             if (shareSessionKey != null) {
                 // Try removing session and notify listeners. The session might already be removed
                 // as part of final epoch from client, so we need to check if the session is still
                 // present in the cache.
-                maybeRemoveAndNotifyListeners(shareSessionKey);
+                maybeRemoveSession(shareSessionKey);
             }
         }
     }

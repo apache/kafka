@@ -113,7 +113,10 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testRemoveConnection() throws InterruptedException {
+        ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
         ShareSessionCache cache = new ShareSessionCache(3);
+        cache.registerShareGroupListener(mockListener);
+
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(2), "conn-2");
@@ -127,10 +130,12 @@ public class ShareSessionCacheTest {
         assertShareCacheContains(cache, List.of(key1, key2, key3));
 
         assertMetricsValues(3, 6, 0, cache);
+        Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty("grp");
 
         // Simulating the disconnection of client with connection id conn-1
         cache.connectionDisconnectListener().onDisconnect("conn-1");
         assertShareCacheContains(cache, List.of(key2, key3));
+        Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty("grp");
 
         assertMetricsValues(2, 5, 1, cache);
 
@@ -139,6 +144,45 @@ public class ShareSessionCacheTest {
         assertShareCacheContains(cache, List.of(key2, key3, key4));
 
         assertMetricsValues(3, 9, 1, cache);
+    }
+
+    @Test
+    public void testRemoveSession() throws InterruptedException {
+        ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.registerShareGroupListener(mockListener);
+
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+
+        ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
+        ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(2), "conn-2");
+        ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(3), "conn-3");
+
+        assertEquals(3, cache.size());
+        assertEquals(6, cache.totalPartitions());
+        assertMetricsValues(3, 6, 0, cache);
+
+        cache.remove(key1);
+        assertEquals(2, cache.size());
+        assertEquals(5, cache.totalPartitions());
+        assertMetricsValues(2, 5, 0, cache);
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(key1.groupId(), key1.memberId());
+        Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(key1.groupId());
+
+        cache.remove(key2);
+        assertEquals(1, cache.size());
+        assertEquals(3, cache.totalPartitions());
+        assertMetricsValues(1, 3, 0, cache);
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(key1.groupId(), key1.memberId());
+        Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(key1.groupId());
+
+        cache.remove(key3);
+        assertEquals(0, cache.size());
+        assertEquals(0, cache.totalPartitions());
+        assertMetricsValues(0, 0, 0, cache);
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(key1.groupId(), key1.memberId());
+        Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(key1.groupId());
     }
 
     @Test
@@ -196,10 +240,13 @@ public class ShareSessionCacheTest {
 
         // Simulate connection disconnect for memberId2.
         cache.connectionDisconnectListener().onDisconnect("conn-2");
-        // Verify both member leave event and empty group event should be triggered.
+        // Verify member leave for memberId2 has triggered along with empty group event. The memberId1
+        // leave event count should be same as before.
         Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId1);
         Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId, memberId2);
-        Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(groupId);
+        // Empty group event should be triggered now but would be called twice as the code path
+        // is same when the last member leaves via connection disconnect listener or remove session.
+        Mockito.verify(mockListener, Mockito.times(2)).onGroupEmpty(groupId);
         assertNull(cache.numMembers(groupId));
     }
 
@@ -226,7 +273,7 @@ public class ShareSessionCacheTest {
         // Remove session for group1 and verify listeners are only called for group1.
         cache.connectionDisconnectListener().onDisconnect("conn-1");
         Mockito.verify(mockListener, Mockito.times(1)).onMemberLeave(groupId1, memberId1);
-        Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(groupId1);
+        Mockito.verify(mockListener, Mockito.times(2)).onGroupEmpty(groupId1);
         // Listener should not be called for group2.
         Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId2, memberId2);
         Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId2);
