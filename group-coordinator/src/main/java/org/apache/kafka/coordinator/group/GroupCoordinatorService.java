@@ -129,6 +129,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -2310,8 +2311,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         MetadataImage newImage
     ) {
         throwIfNotActive();
-        var wrappedImage = newImage == null ? null : new KRaftCoordinatorMetadataImage(newImage);
-        var wrappedDelta = delta == null ? null : new KRaftCoordinatorMetadataDelta(delta);
+        Objects.requireNonNull(delta, "delta must be provided");
+        Objects.requireNonNull(newImage, "newImage must be provided");
+        var wrappedImage = new KRaftCoordinatorMetadataImage(newImage);
+        var wrappedDelta = new KRaftCoordinatorMetadataDelta(delta);
         metadataImage = wrappedImage;
         runtime.onMetadataUpdate(wrappedDelta, wrappedImage);
     }
