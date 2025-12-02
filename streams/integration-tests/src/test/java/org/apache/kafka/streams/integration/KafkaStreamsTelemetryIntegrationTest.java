@@ -192,7 +192,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             assertNotNull(globalStoreConsumerInstanceId);
             LOG.info("Global consumer instance id {}", globalStoreConsumerInstanceId);
             TestUtils.waitForCondition(
-                    () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),() -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),
+                    () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),
                     30_000,
                     "Never received subscribed metrics"
             );
@@ -222,6 +222,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
             final Uuid adminInstanceId = clientInstanceIds.adminInstanceId();
+
             final Uuid mainConsumerInstanceId = clientInstanceIds.consumerInstanceIds().entrySet().stream()
                     .filter(entry -> !entry.getKey().endsWith("-restore-consumer")
                             && !entry.getKey().endsWith("GlobalStreamThread-global-consumer"))
@@ -253,6 +254,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
             TestUtils.waitForCondition(
                 () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(adminInstanceId, Collections.emptyList()).isEmpty(),
+                30_000,
                 "Never received subscribed metrics"
             );
             final List<String> actualInstanceMetrics = TelemetryPlugin.SUBSCRIBED_METRICS.get(adminInstanceId);
@@ -261,13 +263,14 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 "org.apache.kafka.stream.client.state",
                 "org.apache.kafka.stream.failed.stream.threads",
                 "org.apache.kafka.stream.recording.level");
+
             assertEquals(expectedInstanceMetrics, actualInstanceMetrics);
 
             TestUtils.waitForCondition(() -> TelemetryPlugin.processId != null,
                     30_000,
                     "Never received the process id");
 
-                assertEquals(expectedProcessId, TelemetryPlugin.processId);
+            assertEquals(expectedProcessId, TelemetryPlugin.processId);
         }
     }
 
@@ -356,6 +359,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> streamsOneStateMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
                         .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+
                 final List<MetricName> consumerOnePassedTaskMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
                         .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> consumerOnePassedStateMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
@@ -365,6 +369,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> streamsTwoStateMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
                         .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+
                 final List<MetricName> consumerTwoPassedTaskMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
                         .passedMetrics().stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
                 final List<MetricName> consumerTwoPassedStateMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
