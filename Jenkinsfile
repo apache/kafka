@@ -181,7 +181,7 @@ pipeline {
           }
         }
 
-        stage('JDK 23 and Scala 2.13') {
+        stage('JDK 25 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_23_latest'
@@ -196,7 +196,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 23'
+            echo 'Skipping Kafka Streams archetype test for Java 25'
           }
         }
       }
