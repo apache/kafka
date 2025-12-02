@@ -132,14 +132,6 @@ allprojects {
     mavenCentral()
   }
 
-  plugins.withType(JavaPlugin).configureEach {
-    java {
-      toolchain {
-        languageVersion = JavaLanguageVersion.of(javaToolChainVersion)
-      }
-    }
-  }
-
   dependencyUpdates {
     revision="release"
     resolutionStrategy {
@@ -259,7 +251,7 @@ if (repo != null) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${java.toolchain.languageVersion.get()} and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java $javaToolChainVersion and Scala ${versions.scala}")
 println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -325,6 +317,9 @@ subprojects {
   }
 
   java {
+    toolchain {
+      languageVersion = JavaLanguageVersion.of(javaToolChainVersion)
+    }
     // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
     // `-target` incorrectly if this is unset
     sourceCompatibility = minJavaVersion
