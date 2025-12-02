@@ -17,7 +17,14 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
+import org.apache.kafka.metadata.util.BatchFileReader;
+import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Abstraction for reading controller bootstrap metadata from disk.
@@ -34,6 +41,28 @@ public interface BootstrapDirectory {
      * @throws Exception if the metadata cannot be read
      */
     BootstrapMetadata read() throws Exception;
+
+    /**
+     * Read bootstrap metadata from the given binary file path.
+     *
+     * @param binaryPath the path to the binary bootstrap file
+     * @return the loaded {@link BootstrapMetadata}
+     * @throws Exception if the metadata cannot be read
+     */
+    default BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        try (BatchFileReader reader = new BatchFileReader.Builder().
+                setPath(binaryPath).build()) {
+            while (reader.hasNext()) {
+                BatchAndType batchAndType = reader.next();
+                if (!batchAndType.isControl()) {
+                    records.addAll(batchAndType.batch().records());
+                }
+            }
+        }
+        return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
+                "the binary bootstrap metadata file: " + binaryPath);
+    }
 
     /**
      * Write bootstrap metadata to the configured location.

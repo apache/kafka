@@ -17,8 +17,6 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
-import org.apache.kafka.metadata.util.BatchFileReader;
-import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -27,9 +25,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
@@ -66,21 +61,6 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
         } else {
             return readFromBinaryFile(binaryBootstrapPath.toString());
         }
-    }
-
-    BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        try (BatchFileReader reader = new BatchFileReader.Builder().
-                setPath(binaryPath).build()) {
-            while (reader.hasNext()) {
-                BatchAndType batchAndType = reader.next();
-                if (!batchAndType.isControl()) {
-                    records.addAll(batchAndType.batch().records());
-                }
-            }
-        }
-        return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
-                "the binary bootstrap metadata file: " + binaryPath);
     }
 
     @Override
