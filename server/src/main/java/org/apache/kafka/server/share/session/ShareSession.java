@@ -93,7 +93,7 @@ public class ShareSession {
         return partitionMap.isEmpty();
     }
 
-    public synchronized String connectionId() {
+    public String connectionId() {
         return connectionId;
     }
 

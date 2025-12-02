@@ -107,7 +107,7 @@ public class ShareSessionCache {
     }
 
     /**
-     * Remove all the share sessions from cache. The method do not notify the share group listener
+     * Remove all the share sessions from cache. The method does not notify the share group listener
      * and expects the caller to handle the cleanup for share partitions.
      */
     public synchronized void removeAllSessions() {
@@ -121,10 +121,28 @@ public class ShareSessionCache {
         return numPartitions;
     }
 
-    public synchronized ShareSession remove(ShareSessionKey key) {
+    /**
+     * Remove an entry from the session cache and notify the share group listener if registered.
+     *
+     * @param key The session key.
+     * @return The removed session, or None if there was no such session.
+     */
+    public synchronized ShareSession removeAndNotifyListener(ShareSessionKey key) {
+        return removeAndMaybeNotifyListener(key, true);
+    }
+
+    /**
+     * Remove an entry from the session cache. Maybe invoke the share group listener if registered
+     * and notifyListener is true.
+     *
+     * @param key The session key.
+     * @param notifyListener Whether to notify the share group listener.
+     * @return The removed session, or None if there was no such session.
+     */
+    public synchronized ShareSession removeAndMaybeNotifyListener(ShareSessionKey key, boolean notifyListener) {
         ShareSession session = get(key);
         if (session != null)
-            return remove(session);
+            return removeAndMaybeNotifyListener(session, notifyListener);
         return null;
     }
 
@@ -148,8 +166,9 @@ public class ShareSessionCache {
             // update the evictions metric.
             evictionsMeter.mark();
             // Try removing session if not already removed. The listener might have removed the session
-            // already.
-            remove(session);
+            // already. Don't notify the share group listener as it should be notified later. Notify
+            // the listener only once per removal.
+            removeAndMaybeNotifyListener(session, false);
         }
         // Notify the share group listener if the group is empty. This should be checked regardless
         // session is evicted by connection disconnect or client's final epoch.
@@ -173,18 +192,22 @@ public class ShareSessionCache {
     }
 
     /**
-     * Remove an entry from the session cache. Invoke the share group listener if registered.
+     * Remove an entry from the session cache. Maybe invoke the share group listener if registered
+     * and notifyListener is true.
      *
      * @param session The session.
+     * @param notifyListener Whether to notify the share group listener.
      * @return The removed session, or None if there was no such session.
      */
-    public synchronized ShareSession remove(ShareSession session) {
+    private synchronized ShareSession removeAndMaybeNotifyListener(ShareSession session, boolean notifyListener) {
         ShareSession removeResult = sessions.remove(session.key());
         if (removeResult != null) {
             numPartitions = numPartitions - session.cachedSize();
             numMembersPerGroup.compute(session.key().groupId(), (k, v) -> v != null ? v - 1 : 0);
             maybeRemoveConnectionFromSession(removeResult.connectionId());
-            checkAndNotifyGroupListener(session.key().groupId());
+            if (notifyListener) {
+                checkAndNotifyGroupListener(session.key().groupId());
+            }
         }
         return removeResult;
     }

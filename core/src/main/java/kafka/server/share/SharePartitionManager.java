@@ -360,7 +360,7 @@ public class SharePartitionManager implements AutoCloseable {
             groupId, memberId);
         // Remove the share session from the cache.
         ShareSessionKey key = shareSessionKey(groupId, memberId);
-        if (cache.remove(key) == null) {
+        if (cache.removeAndNotifyListener(key) == null) {
             log.error("Share session error for {}: no such share session found", key);
             return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
         } else {
@@ -377,7 +377,12 @@ public class SharePartitionManager implements AutoCloseable {
             SharePartitionKey sharePartitionKey = sharePartitionKey(groupId, topicIdPartition);
             SharePartition sharePartition = partitionCache.get(sharePartitionKey);
             if (sharePartition == null) {
-                log.error("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
+                // During release session, if share group becomes empty i.e. no members then onGroupEmpty
+                // listener callback will remove the share partition from cache. So it is possible that
+                // the share partition is not found here. Hence, just log it at debug level.
+                log.debug("No share partition found for groupId {} topicPartition {} while releasing acquired topic partitions", groupId, topicIdPartition);
+                // Complete the future with UNKNOWN_TOPIC_OR_PARTITION, the result is ignored while
+                // releasing the session and should not fail the release session request.
                 futuresMap.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
             } else {
                 CompletableFuture<Throwable> future = new CompletableFuture<>();
@@ -478,7 +483,11 @@ public class SharePartitionManager implements AutoCloseable {
                     log.error("Acknowledge data present in Initial Fetch Request for group {} member {}", groupId, memberId);
                     throw Errors.INVALID_REQUEST.exception();
                 }
-                if (cache.remove(key) != null) {
+                // Try removing the existing session if any. Do not notify the listener as another
+                // session will be created immediately after. Incase there is a single member share group,
+                // then re-creation of session should not trigger onGroupEmpty which will remove the
+                // share partitions from cache.
+                if (cache.removeAndMaybeNotifyListener(key, false) != null) {
                     log.debug("Removed share session with key {}", key);
                 }
                 ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new

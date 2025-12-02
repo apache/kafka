@@ -1283,7 +1283,7 @@ public class SharePartitionManagerTest {
         ShareSessionCache cache = mock(ShareSessionCache.class);
         ShareSession shareSession = mock(ShareSession.class);
         when(cache.get(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
-        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
+        when(cache.removeAndNotifyListener(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
 
         ImplicitLinkedHashCollection<CachedSharePartition> partitionMap = new ImplicitLinkedHashCollection<>(3);
         partitionMap.add(new CachedSharePartition(tp1));
@@ -1389,7 +1389,7 @@ public class SharePartitionManagerTest {
         ShareSessionCache cache = mock(ShareSessionCache.class);
         ShareSession shareSession = mock(ShareSession.class);
         when(cache.get(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
-        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
+        when(cache.removeAndNotifyListener(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
         when(shareSession.partitionMap()).thenReturn(new ImplicitLinkedHashCollection<>());
 
         sharePartitionManager = SharePartitionManagerBuilder.builder()
@@ -1412,7 +1412,7 @@ public class SharePartitionManagerTest {
         // Null share session in get response so empty topic partitions should be returned.
         when(cache.get(new ShareSessionKey(groupId, memberId))).thenReturn(null);
         // Make the response not null for remove so can further check for the return value from topic partitions.
-        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(mock(ShareSession.class));
+        when(cache.removeAndNotifyListener(new ShareSessionKey(groupId, memberId))).thenReturn(mock(ShareSession.class));
 
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withCache(cache)
@@ -1926,7 +1926,7 @@ public class SharePartitionManagerTest {
 
         ShareSessionCache cache = mock(ShareSessionCache.class);
         ShareSession shareSession = mock(ShareSession.class);
-        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
+        when(cache.removeAndNotifyListener(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
 
         // mocked share partitions sp1 and sp2 can be acquired once there is a release acquired records on session close request for it.
         doAnswer(invocation -> {
@@ -2030,7 +2030,7 @@ public class SharePartitionManagerTest {
 
         ShareSessionCache cache = mock(ShareSessionCache.class);
         ShareSession shareSession = mock(ShareSession.class);
-        when(cache.remove(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
+        when(cache.removeAndNotifyListener(new ShareSessionKey(groupId, memberId))).thenReturn(shareSession);
 
         // mocked share partitions sp1, sp2 and sp3 can be acquired once there is a release acquired records on session close for it.
         doAnswer(invocation -> {
@@ -3009,7 +3009,7 @@ public class SharePartitionManagerTest {
         SharePartition sp0 = mock(SharePartition.class);
 
         ShareSessionCache cache = new ShareSessionCache(10);
-        cache.maybeCreateSession(groupId, memberId1, new ImplicitLinkedHashCollection<>(), CONNECTION_ID);
+        ShareSessionKey key = cache.maybeCreateSession(groupId, memberId1, new ImplicitLinkedHashCollection<>(), CONNECTION_ID);
 
         SharePartitionCache partitionCache = spy(new SharePartitionCache());
         partitionCache.computeIfAbsent(new SharePartitionKey(groupId, tp0), k -> sp0);
@@ -3032,11 +3032,13 @@ public class SharePartitionManagerTest {
         Mockito.verify(mockReplicaManager, times(1)).removeListener(any(), any());
         Mockito.verify(partitionCache, times(0)).topicIdPartitionsForGroup(groupId);
 
-        // Invoke listeners by simulating connection disconnect for member. As the group is empty,
-        // hence onGroupEmpty method should be invoked and should complete without any exception.
+        // The invocation of connection disconnect listener after the cache is already empty should
+        // not trigger any additional on group empty calls.
         cache.connectionDisconnectListener().onDisconnect(CONNECTION_ID);
-        // Verify that the listener is called for the group.
-        Mockito.verify(partitionCache, times(1)).topicIdPartitionsForGroup(groupId);
+        // The invocation of connection disconnect listener should not have any effect as the cache is already empty.
+        // The share version toggle cleared the cache and is responsible to fence the share partitions.
+        // Hence, no additional on group empty calls should be made.
+        Mockito.verify(partitionCache, times(0)).topicIdPartitionsForGroup(groupId);
     }
 
     private Timer systemTimerReaper() {
