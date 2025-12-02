@@ -145,6 +145,10 @@ public class MeteredTimestampedKeyValueStoreTest {
         metered.init(context, metered);
     }
 
+    private void preInit() {
+        metered.preInit(context);
+    }
+
     @Test
     public void shouldDelegateInit() {
         setUp();
@@ -157,6 +161,15 @@ public class MeteredTimestampedKeyValueStoreTest {
         );
         doNothing().when(inner).init(context, outer);
         outer.init(context, outer);
+    }
+
+    @Test
+    public void shouldCloseOnPreInitPhase() {
+        setUpWithoutContext();
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        doNothing().when(inner).close();
+        metered.preInit(context);
+        metered.close();
     }
 
     @Test

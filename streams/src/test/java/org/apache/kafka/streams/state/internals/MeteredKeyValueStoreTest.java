@@ -376,6 +376,17 @@ public class MeteredKeyValueStoreTest {
     }
 
     @Test
+    public void shouldCloseOnPreInitPhase() {
+        setUpWithoutContext();
+        metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
+        doNothing().when(inner).close();
+        metered.preInit(context);
+
+        assertThat(storeMetrics(), empty());
+        metered.close();
+    }
+
+    @Test
     public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
         setUp();
         doThrow(new RuntimeException("Oops!")).when(inner).close();

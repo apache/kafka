@@ -242,6 +242,14 @@ public class MeteredVersionedKeyValueStoreTest {
     }
 
     @Test
+    public void shouldCloseOnPreInitPhase() {
+        store = newMeteredStore(inner);
+        store.preInit(context);
+        store.close();
+        verify(inner).close();
+    }
+
+    @Test
     public void shouldRemoveMetricsOnCloseEvenIfInnerThrows() {
         doThrow(new RuntimeException("uh oh")).when(inner).close();
         assertThat(storeMetrics(), not(empty()));
