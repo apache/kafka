@@ -2225,7 +2225,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) throws ExecutionException, InterruptedException {
         throwIfNotActive();
 
-        CompletableFuture.allOf(
+        var futures = new ArrayList<CompletableFuture<Void>>();
+
+        // Handle the partition deletion for committed offsets.
+        futures.addAll(
             FutureUtils.mapExceptionally(
                 runtime.scheduleWriteAllOperation(
                     "on-partition-deleted",
@@ -2238,37 +2241,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     );
                     return null;
                 }
-            ).toArray(new CompletableFuture<?>[0])
-        ).get();
+            )
+        );
 
-        // At this point the metadata will not have been updated
-        // with the deleted topics. However, we must guard against it.
-        if (metadataImage == null || metadataImage.equals(CoordinatorMetadataImage.EMPTY)) {
-            return;
+        // Handle the topic deletion for share state.
+        if (metadataImage != null) {
+            var topicIds = topicPartitions.stream()
+                .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
+                .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
+                .collect(Collectors.toSet());
+
+            if (!topicIds.isEmpty()) {
+                futures.addAll(
+                    FutureUtils.mapExceptionally(
+                        runtime.scheduleWriteAllOperation(
+                            "maybe-cleanup-share-group-state",
+                            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                            coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                        ),
+                        exception -> {
+                            log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                            return null;
+                        }
+                    )
+                );
+            }
         }
 
-        Set<Uuid> topicIds = topicPartitions.stream()
-            .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
-            .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
-            .collect(Collectors.toSet());
-
-        if (topicIds.isEmpty()) {
-            return;
-        }
-
-        CompletableFuture.allOf(
-            FutureUtils.mapExceptionally(
-                runtime.scheduleWriteAllOperation(
-                    "maybe-cleanup-share-group-state",
-                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                    coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
-                ),
-                exception -> {
-                    log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
-                    return null;
-                }
-            ).toArray(new CompletableFuture<?>[0])
-        ).get();
+        // Wait on the results.
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]));
     }
 
     /**
