@@ -2313,7 +2313,6 @@ public class StreamThreadTest {
         TestUtils.waitForCondition(
             () -> mockRestoreConsumer.assignment().isEmpty(),
             "Never get the assignment");
-        
     }
 
     @ParameterizedTest
