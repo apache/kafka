@@ -3009,7 +3009,7 @@ public class SharePartitionManagerTest {
         SharePartition sp0 = mock(SharePartition.class);
 
         ShareSessionCache cache = new ShareSessionCache(10);
-        ShareSessionKey key = cache.maybeCreateSession(groupId, memberId1, new ImplicitLinkedHashCollection<>(), CONNECTION_ID);
+        cache.maybeCreateSession(groupId, memberId1, new ImplicitLinkedHashCollection<>(), CONNECTION_ID);
 
         SharePartitionCache partitionCache = spy(new SharePartitionCache());
         partitionCache.computeIfAbsent(new SharePartitionKey(groupId, tp0), k -> sp0);
