@@ -21011,18 +21011,15 @@ public class GroupMetadataManagerTest {
     }
     
     @Test
-    public void testConsumerGroupMemberJoinsWithNonEmptyRegexToEmptyRegex() {
+    public void testConsumerGroupMemberClearsRegex() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
-        Uuid barTopicId = Uuid.randomUuid();
-        String barTopicName = "bar";
 
         CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(fooTopicId, fooTopicName, 6)
-            .addTopic(barTopicId, barTopicName, 3)
             .buildCoordinatorMetadataImage(12345L);
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
