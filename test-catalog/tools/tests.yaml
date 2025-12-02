@@ -230,10 +230,13 @@ org.apache.kafka.tools.EndToEndLatencyTest:
 org.apache.kafka.tools.FeatureCommandTest:
 - testDescribeWithKRaft
 - testDescribeWithKRaftAndBootstrapControllers
+- testDescribeWithUnstableApiVersions
+- testDescribeWithUnstableFeatureVersions
 - testDowngradeMetadataVersionWithKRaft
 - testDowngradeType
 - testDowngradeWithReleaseVersion
 - testHandleDescribe
+- testHandleDescribeWithNegativeNodeId
 - testHandleDisable
 - testHandleDisableDryRun
 - testHandleDowngrade

@@ -306,6 +306,8 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testDescribeConsumerGroupsWithAuthorizedOperationsOmitted
 - testDescribeFeaturesFailure
 - testDescribeFeaturesSuccess
+- testDescribeFeaturesWithNodeFailure
+- testDescribeFeaturesWithNodeSuccess
 - testDescribeGroupsWithBothUnsupportedApis
 - testDescribeLogDirs
 - testDescribeLogDirsOfflineDir
