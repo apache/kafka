@@ -27,29 +27,26 @@ import org.apache.kafka.common.metrics.stats.WindowedCount;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class OffsetCommitMetricsManager {
+public class OffsetCommitMetricsManager extends AbstractConsumerMetricsManager {
     final MetricName commitLatencyAvg;
     final MetricName commitLatencyMax;
     final MetricName commitRate;
     final MetricName commitTotal;
     private final Sensor commitSensor;
 
+    @SuppressWarnings({"this-escape"})
     public OffsetCommitMetricsManager(Metrics metrics) {
-        final String metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
-        commitSensor = metrics.sensor("commit-latency");
-        commitLatencyAvg = metrics.metricName("commit-latency-avg",
-            metricGroupName,
+        super(metrics, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+        commitSensor = sensor("commit-latency");
+        commitLatencyAvg = metricName("commit-latency-avg",
             "The average time taken for a commit request");
         commitSensor.add(commitLatencyAvg, new Avg());
-        commitLatencyMax = metrics.metricName("commit-latency-max",
-            metricGroupName,
+        commitLatencyMax = metricName("commit-latency-max",
             "The max time taken for a commit request");
         commitSensor.add(commitLatencyMax, new Max());
-        commitRate = metrics.metricName("commit-rate",
-            metricGroupName,
+        commitRate = metricName("commit-rate",
             "The number of commit calls per second");
-        commitTotal = metrics.metricName("commit-total",
-            metricGroupName,
+        commitTotal = metricName("commit-total",
             "The total number of commit calls");
         commitSensor.add(new Meter(new WindowedCount(),
             commitRate,

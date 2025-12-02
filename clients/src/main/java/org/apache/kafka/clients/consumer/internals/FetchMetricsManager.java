@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
@@ -35,9 +36,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
  * It keeps an internal ID of the assigned set of partitions which is updated to ensure the set of metrics it
  * records matches up with the topic-partitions in use.
  */
-public class FetchMetricsManager {
+public class FetchMetricsManager extends AbstractConsumerMetricsManager {
 
-    private final Metrics metrics;
     private final FetchMetricsRegistry metricsRegistry;
     private final Sensor throttleTime;
     private final Sensor bytesFetched;
@@ -49,32 +49,33 @@ public class FetchMetricsManager {
     private int assignmentId = 0;
     private Set<TopicPartition> assignedPartitions = Collections.emptySet();
 
+    @SuppressWarnings({"this-escape"})
     public FetchMetricsManager(Metrics metrics, FetchMetricsRegistry metricsRegistry) {
-        this.metrics = metrics;
+        super(metrics, metricsRegistry.groupName());
         this.metricsRegistry = metricsRegistry;
 
-        this.throttleTime = new SensorBuilder(metrics, "fetch-throttle-time")
+        this.throttleTime = sensorBuilder("fetch-throttle-time")
                 .withAvg(metricsRegistry.fetchThrottleTimeAvg)
                 .withMax(metricsRegistry.fetchThrottleTimeMax)
                 .build();
-        this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
+        this.bytesFetched = sensorBuilder("bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)
                 .withMeter(metricsRegistry.bytesConsumedRate, metricsRegistry.bytesConsumedTotal)
                 .build();
-        this.recordsFetched = new SensorBuilder(metrics, "records-fetched")
+        this.recordsFetched = sensorBuilder("records-fetched")
                 .withAvg(metricsRegistry.recordsPerRequestAvg)
                 .withMeter(metricsRegistry.recordsConsumedRate, metricsRegistry.recordsConsumedTotal)
                 .build();
-        this.fetchLatency = new SensorBuilder(metrics, "fetch-latency")
+        this.fetchLatency = sensorBuilder("fetch-latency")
                 .withAvg(metricsRegistry.fetchLatencyAvg)
                 .withMax(metricsRegistry.fetchLatencyMax)
                 .withMeter(new WindowedCount(), metricsRegistry.fetchRequestRate, metricsRegistry.fetchRequestTotal)
                 .build();
-        this.recordsLag = new SensorBuilder(metrics, "records-lag")
+        this.recordsLag = sensorBuilder("records-lag")
                 .withMax(metricsRegistry.recordsLagMax)
                 .build();
-        this.recordsLead = new SensorBuilder(metrics, "records-lead")
+        this.recordsLead = sensorBuilder("records-lead")
                 .withMin(metricsRegistry.recordsLeadMin)
                 .build();
     }
@@ -87,7 +88,7 @@ public class FetchMetricsManager {
         fetchLatency.record(requestLatencyMs);
         if (!node.isEmpty()) {
             String nodeTimeName = "node-" + node + ".latency";
-            Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
+            Sensor nodeRequestTime = getSensor(nodeTimeName);
             if (nodeRequestTime != null)
                 nodeRequestTime.record(requestLatencyMs);
         }
@@ -105,7 +106,7 @@ public class FetchMetricsManager {
         String name = topicBytesFetchedMetricName(topic);
         maybeRecordDeprecatedBytesFetched(name, topic, bytes);
 
-        Sensor bytesFetched = new SensorBuilder(metrics, name, () -> Map.of("topic", topic))
+        Sensor bytesFetched = sensorBuilder(name, () -> Map.of("topic", topic))
             .withAvg(metricsRegistry.topicFetchSizeAvg)
             .withMax(metricsRegistry.topicFetchSizeMax)
             .withMeter(metricsRegistry.topicBytesConsumedRate, metricsRegistry.topicBytesConsumedTotal)
@@ -117,7 +118,7 @@ public class FetchMetricsManager {
         String name = topicRecordsFetchedMetricName(topic);
         maybeRecordDeprecatedRecordsFetched(name, topic, records);
 
-        Sensor recordsFetched = new SensorBuilder(metrics, name, () -> Map.of("topic", topic))
+        Sensor recordsFetched = sensorBuilder(name, () -> Map.of("topic", topic))
             .withAvg(metricsRegistry.topicRecordsPerRequestAvg)
             .withMeter(metricsRegistry.topicRecordsConsumedRate, metricsRegistry.topicRecordsConsumedTotal)
             .build();
@@ -130,7 +131,7 @@ public class FetchMetricsManager {
         String name = partitionRecordsLagMetricName(tp);
         maybeRecordDeprecatedPartitionLag(name, tp, lag);
 
-        Sensor recordsLag = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
+        Sensor recordsLag = sensorBuilder(name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
             .withValue(metricsRegistry.partitionRecordsLag)
             .withMax(metricsRegistry.partitionRecordsLagMax)
             .withAvg(metricsRegistry.partitionRecordsLagAvg)
@@ -145,7 +146,7 @@ public class FetchMetricsManager {
         String name = partitionRecordsLeadMetricName(tp);
         maybeRecordDeprecatedPartitionLead(name, tp, lead);
 
-        Sensor recordsLead = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
+        Sensor recordsLead = sensorBuilder(name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
             .withValue(metricsRegistry.partitionRecordsLead)
             .withMin(metricsRegistry.partitionRecordsLeadMin)
             .withAvg(metricsRegistry.partitionRecordsLeadAvg)
@@ -169,13 +170,13 @@ public class FetchMetricsManager {
 
             for (TopicPartition tp : this.assignedPartitions) {
                 if (!newAssignedPartitions.contains(tp)) {
-                    metrics.removeSensor(partitionRecordsLagMetricName(tp));
-                    metrics.removeSensor(partitionRecordsLeadMetricName(tp));
-                    metrics.removeMetric(partitionPreferredReadReplicaMetricName(tp));
+                    removeSensor(partitionRecordsLagMetricName(tp));
+                    removeSensor(partitionRecordsLeadMetricName(tp));
+                    removeMetric(partitionPreferredReadReplicaMetricName(tp));
                     // Remove deprecated metrics.
-                    metrics.removeSensor(deprecatedMetricName(partitionRecordsLagMetricName(tp)));
-                    metrics.removeSensor(deprecatedMetricName(partitionRecordsLeadMetricName(tp)));
-                    metrics.removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
+                    removeSensor(deprecatedMetricName(partitionRecordsLagMetricName(tp)));
+                    removeSensor(deprecatedMetricName(partitionRecordsLeadMetricName(tp)));
+                    removeMetric(deprecatedPartitionPreferredReadReplicaMetricName(tp));
                 }
             }
 
@@ -184,7 +185,7 @@ public class FetchMetricsManager {
                     maybeRecordDeprecatedPreferredReadReplica(tp, subscription);
 
                     MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
-                    metrics.addMetricIfAbsent(
+                    addMetricIfAbsent(
                         metricName,
                         null,
                         (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
@@ -200,7 +201,7 @@ public class FetchMetricsManager {
     @Deprecated // To be removed in Kafka 5.0 release.
     private void maybeRecordDeprecatedBytesFetched(String name, String topic, int bytes) {
         if (shouldReportDeprecatedMetric(topic)) {
-            Sensor deprecatedBytesFetched = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicTags(topic))
+            Sensor deprecatedBytesFetched = sensorBuilder(deprecatedMetricName(name), () -> topicTags(topic))
                 .withAvg(metricsRegistry.topicFetchSizeAvg)
                 .withMax(metricsRegistry.topicFetchSizeMax)
                 .withMeter(metricsRegistry.topicBytesConsumedRate, metricsRegistry.topicBytesConsumedTotal)
@@ -212,7 +213,7 @@ public class FetchMetricsManager {
     @Deprecated // To be removed in Kafka 5.0 release.
     private void maybeRecordDeprecatedRecordsFetched(String name, String topic, int records) {
         if (shouldReportDeprecatedMetric(topic)) {
-            Sensor deprecatedRecordsFetched = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicTags(topic))
+            Sensor deprecatedRecordsFetched = sensorBuilder(deprecatedMetricName(name), () -> topicTags(topic))
                 .withAvg(metricsRegistry.topicRecordsPerRequestAvg)
                 .withMeter(metricsRegistry.topicRecordsConsumedRate, metricsRegistry.topicRecordsConsumedTotal)
                 .build();
@@ -223,7 +224,7 @@ public class FetchMetricsManager {
     @Deprecated // To be removed in Kafka 5.0 release.
     private void maybeRecordDeprecatedPartitionLag(String name, TopicPartition tp, long lag) {
         if (shouldReportDeprecatedMetric(tp.topic())) {
-            Sensor deprecatedRecordsLag = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicPartitionTags(tp))
+            Sensor deprecatedRecordsLag = sensorBuilder(deprecatedMetricName(name), () -> topicPartitionTags(tp))
                 .withValue(metricsRegistry.partitionRecordsLag)
                 .withMax(metricsRegistry.partitionRecordsLagMax)
                 .withAvg(metricsRegistry.partitionRecordsLagAvg)
@@ -236,7 +237,7 @@ public class FetchMetricsManager {
     @Deprecated // To be removed in Kafka 5.0 release.
     private void maybeRecordDeprecatedPartitionLead(String name, TopicPartition tp, double lead) {
         if (shouldReportDeprecatedMetric(tp.topic())) {
-            Sensor deprecatedRecordsLead = new SensorBuilder(metrics, deprecatedMetricName(name), () -> topicPartitionTags(tp))
+            Sensor deprecatedRecordsLead = sensorBuilder(deprecatedMetricName(name), () -> topicPartitionTags(tp))
                 .withValue(metricsRegistry.partitionRecordsLead)
                 .withMin(metricsRegistry.partitionRecordsLeadMin)
                 .withAvg(metricsRegistry.partitionRecordsLeadAvg)
@@ -250,7 +251,7 @@ public class FetchMetricsManager {
     private void maybeRecordDeprecatedPreferredReadReplica(TopicPartition tp, SubscriptionState subscription) {
         if (shouldReportDeprecatedMetric(tp.topic())) {
             MetricName metricName = deprecatedPartitionPreferredReadReplicaMetricName(tp);
-            metrics.addMetricIfAbsent(
+            addMetricIfAbsent(
                 metricName,
                 null,
                 (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
@@ -284,13 +285,13 @@ public class FetchMetricsManager {
 
     private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
         Map<String, String> metricTags = mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition())));
-        return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        return metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
     @Deprecated
     private MetricName deprecatedPartitionPreferredReadReplicaMetricName(TopicPartition tp) {
         Map<String, String> metricTags = topicPartitionTags(tp);
-        return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        return metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
     @Deprecated

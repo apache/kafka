@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 
-class ConsumerRebalanceMetricsManagerTest {
+class ConsumerRebalanceMetricsManagerTest extends AbstractConsumerMetricsManagerTest {
 
     private Time time;
     private Metrics metrics;
@@ -66,6 +66,12 @@ class ConsumerRebalanceMetricsManagerTest {
     @AfterEach
     public void tearDown() {
         metrics.close();
+    }
+
+    @Override
+    protected AbstractConsumerMetricsManager metricsManager(Metrics metrics, String groupDescription) {
+        SubscriptionState subscriptionState = new SubscriptionState(mock(LogContext.class), AutoOffsetResetStrategy.EARLIEST);
+        return new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
     }
 
     @Test

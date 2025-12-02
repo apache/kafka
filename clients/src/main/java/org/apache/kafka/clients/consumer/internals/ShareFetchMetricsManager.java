@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
-import java.io.IOException;
-import java.util.Arrays;
-
-public class ShareFetchMetricsManager implements AutoCloseable {
-    private final Metrics metrics;
+public class ShareFetchMetricsManager extends AbstractConsumerMetricsManager {
     private final Sensor throttleTime;
     private final Sensor bytesFetched;
     private final Sensor recordsFetched;
@@ -32,35 +29,35 @@ public class ShareFetchMetricsManager implements AutoCloseable {
     private final Sensor sentAcknowledgements;
     private final Sensor failedAcknowledgements;
 
+    @SuppressWarnings({"this-escape"})
     public ShareFetchMetricsManager(Metrics metrics, ShareFetchMetricsRegistry metricsRegistry) {
-        this.metrics = metrics;
-
-        this.bytesFetched = new SensorBuilder(metrics, "bytes-fetched")
+        super(metrics, metricsRegistry.groupName());
+        this.bytesFetched = sensorBuilder("bytes-fetched")
                 .withAvg(metricsRegistry.fetchSizeAvg)
                 .withMax(metricsRegistry.fetchSizeMax)
                 .withMeter(metricsRegistry.bytesFetchedRate, metricsRegistry.bytesFetchedTotal)
                 .build();
-        this.recordsFetched = new SensorBuilder(metrics, "records-fetched")
+        this.recordsFetched = sensorBuilder("records-fetched")
                 .withAvg(metricsRegistry.recordsPerRequestAvg)
                 .withMax(metricsRegistry.recordsPerRequestMax)
                 .withMeter(metricsRegistry.recordsFetchedRate, metricsRegistry.recordsFetchedTotal)
                 .build();
 
-        this.sentAcknowledgements = new SensorBuilder(metrics, "sent-acknowledgements")
+        this.sentAcknowledgements = sensorBuilder("sent-acknowledgements")
                 .withMeter(metricsRegistry.acknowledgementSendRate, metricsRegistry.acknowledgementSendTotal)
                 .build();
 
-        this.failedAcknowledgements = new SensorBuilder(metrics, "failed-acknowledgements")
+        this.failedAcknowledgements = sensorBuilder("failed-acknowledgements")
                 .withMeter(metricsRegistry.acknowledgementErrorRate, metricsRegistry.acknowledgementErrorTotal)
                 .build();
 
-        this.fetchLatency = new SensorBuilder(metrics, "fetch-latency")
+        this.fetchLatency = sensorBuilder("fetch-latency")
                 .withAvg(metricsRegistry.fetchLatencyAvg)
                 .withMax(metricsRegistry.fetchLatencyMax)
                 .withMeter(new WindowedCount(), metricsRegistry.fetchRequestRate, metricsRegistry.fetchRequestTotal)
                 .build();
 
-        this.throttleTime = new SensorBuilder(metrics, "fetch-throttle-time")
+        this.throttleTime = sensorBuilder("fetch-throttle-time")
                 .withAvg(metricsRegistry.fetchThrottleTimeAvg)
                 .withMax(metricsRegistry.fetchThrottleTimeMax)
                 .build();
@@ -74,7 +71,7 @@ public class ShareFetchMetricsManager implements AutoCloseable {
         fetchLatency.record(requestLatencyMs);
         if (!node.isEmpty()) {
             String nodeTimeName = "node-" + node + ".latency";
-            Sensor nodeRequestTime = metrics.getSensor(nodeTimeName);
+            Sensor nodeRequestTime = getSensor(nodeTimeName);
             if (nodeRequestTime != null)
                 nodeRequestTime.record(requestLatencyMs);
         }
@@ -94,17 +91,5 @@ public class ShareFetchMetricsManager implements AutoCloseable {
 
     void recordFailedAcknowledgements(int acknowledgements) {
         failedAcknowledgements.record(acknowledgements);
-    }
-
-    @Override
-    public void close() throws IOException {
-        Arrays.asList(
-            throttleTime.name(),
-            bytesFetched.name(),
-            recordsFetched.name(),
-            fetchLatency.name(),
-            sentAcknowledgements.name(),
-            failedAcknowledgements.name()
-        ).forEach(metrics::removeSensor);
     }
 }
