@@ -174,27 +174,21 @@ class StreamsUpgradeTest(Test):
         self.stop_and_await()
 
     @cluster(num_nodes=6)
-    @matrix(from_version=[str(LATEST_3_2), str(DEV_VERSION)],  upgrade=[True, False], metadata_quorum=[quorum.combined_kraft])
-    def test_upgrade_downgrade_state_updater(self, from_version, upgrade, metadata_quorum):
+    @matrix(from_version=[str(LATEST_3_7)], metadata_quorum=[quorum.combined_kraft])
+    def test_upgrade_downgrade_state_updater(self, from_version, metadata_quorum):
         """
-        Starts 3 KafkaStreams instances, and enables / disables state restoration
-        for the instances in a rolling bounce.
-
-        Once same-thread state restoration is removed from the code, this test
-        should use different versions of the code.
+        Starts 3 KafkaStreams instances with a version before 3.8 where state updater
+        is disabled, and upgrades to DEV_VERSION where state updater is always enabled
+        (config removed) in a rolling bounce.
         """
         to_version=str(DEV_VERSION)
 
-        if upgrade:
-            extra_properties_first = { '__state.updater.enabled__': 'false' }
-            first_version = from_version
-            extra_properties_second = { '__state.updater.enabled__': 'true' }
-            second_version = to_version
-        else:
-            extra_properties_first = { '__state.updater.enabled__': 'true' }
-            first_version = to_version
-            extra_properties_second = { '__state.updater.enabled__': 'false' }
-            second_version = from_version
+        # start with pre-3.8 version with state updater explicitly disabled
+        extra_properties_first = { '__state.updater.enabled__': 'false' }
+        first_version = from_version
+        # upgrade to DEV_VERSION where state updater is always enabled (config removed)
+        extra_properties_second = {}
+        second_version = to_version
 
         self.set_up_services()
 
