@@ -620,4 +620,210 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
     </Match>
 
+    <Match>
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.8.
+        These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
+         -->
+        <Or>
+            <Class name="org.apache.kafka.clients.producer.MockProducer"/>
+            <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
+            <Class name="org.apache.kafka.common.utils.ChunkedBytesStream"/>
+            <Class name="org.apache.kafka.connect.file.FileStreamSourceTask"/>
+            <Class name="org.apache.kafka.connect.runtime.WorkerSinkTask"/>
+            <Class name="org.apache.kafka.server.AssignmentsManager"/>
+            <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
+            <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
+            <Class name="org.apache.kafka.streams.state.internals.ThreadCache"/>
+            <Class name="org.apache.kafka.storage.internals.log.AbstractIndex"/>
+        </Or>
+        <Bug pattern="AT_NONATOMIC_OPERATIONS_ON_SHARED_VARIABLE"/>
+    </Match>
+
+    <Match>
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.8.
+        These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
+         -->
+        <Or>
+            <Class name="kafka.common.ZkNodeChangeNotificationListener"/>
+            <Class name="kafka.coordinator.transaction.TransactionMetadata"/>
+            <Class name="kafka.server.CachedPartition"/>
+            <Class name="kafka.server.ControllerRegistrationManager"/>
+            <Class name="kafka.server.FetchSession"/>
+            <Class name="kafka.tools.MirrorMaker$"/>
+            <Class name="kafka.tools.MirrorMaker$MirrorMakerThread"/>
+            <Class name="kafka.zk.KafkaZkClient"/>
+            <Class name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator"/>
+            <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
+            <Class name="org.apache.kafka.clients.producer.internals.RecordAccumulator"/>
+            <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>
+            <Class name="org.apache.kafka.connect.runtime.WorkerSinkTask"/>
+            <Class name="org.apache.kafka.image.publisher.SnapshotGenerator"/>
+            <Class name="org.apache.kafka.image.publisher.SnapshotGenerator$Builder"/>
+            <Class name="org.apache.kafka.metadata.util.SnapshotFileReader"/>
+            <Class name="org.apache.kafka.server.log.remote.metadata.storage.ConsumerTask"/>
+            <Class name="org.apache.kafka.server.util.timer.TimingWheel"/>
+            <Class name="org.apache.kafka.storage.internals.log.LogSegment"/>
+            <Class name="org.apache.kafka.storage.internals.log.ProducerStateManager"/>
+            <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater"/>
+            <Class name="org.apache.kafka.streams.processor.internals.DefaultStateUpdater$StateUpdaterThread"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
+            <Class name="org.apache.kafka.streams.state.internals.AbstractDualSchemaRocksDBSegmentedBytesStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.InMemorySessionStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
+            <Class name="org.apache.kafka.streams.state.internals.InMemoryWindowStore"/>
+            <Class name="org.apache.kafka.tools.ConsumerPerformance$ConsumerPerfRebListener"/>
+            <Class name="org.apache.kafka.trogdor.agent.WorkerManager$ShutdownManager"/>
+            <Class name="org.apache.kafka.trogdor.workload.ConnectionStressWorker"/>
+        </Or>
+        <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.8.
+        These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
+         -->
+        <Or>
+            <Class name="kafka.cluster.Partition"/>
+            <Class name="kafka.coordinator.group.GroupMetadata"/>
+            <Class name="kafka.coordinator.transaction.TransactionMetadata"/>
+            <Class name="kafka.network.Acceptor"/>
+            <Class name="kafka.network.Processor"/>
+            <Class name="kafka.security.authorizer.AclAuthorizer"/>
+            <Class name="kafka.server.BrokerLifecycleManager"/>
+            <Class name="kafka.server.BrokerServer"/>
+            <Class name="kafka.server.CachedPartition"/>
+            <Class name="kafka.server.ControllerRegistrationManager"/>
+            <Class name="kafka.server.FetchSession"/>
+            <Class name="kafka.server.KafkaConfig"/>
+            <Class name="kafka.server.KafkaServer"/>
+            <Class name="kafka.server.NodeToControllerRequestThread"/>
+            <Class name="kafka.server.metadata.AclPublisher"/>
+            <Class name="kafka.server.metadata.BrokerMetadataPublisher"/>
+            <Class name="kafka.server.metadata.DelegationTokenPublisher"/>
+            <Class name="kafka.tools.MirrorMaker$"/>
+            <Class name="kafka.zookeeper.ZooKeeperClient"/>
+            <Class name="org.apache.kafka.clients.consumer.MockConsumer"/>
+            <Class name="org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer"/>
+            <Class name="org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer"/>
+            <Class name="org.apache.kafka.clients.consumer.internals.ConsumerCoordinator"/>
+            <Class name="org.apache.kafka.clients.consumer.internals.ShareConsumeRequestManager"/>
+            <Class name="org.apache.kafka.clients.producer.MockProducer"/>
+            <Class name="org.apache.kafka.clients.producer.internals.ProducerBatch"/>
+            <Class name="org.apache.kafka.clients.producer.internals.TransactionManager"/>
+            <Class name="org.apache.kafka.clients.producer.internals.TransactionManager$TxnRequestHandler"/>
+            <Class name="org.apache.kafka.common.network.Selector"/>
+            <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
+            <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>
+            <Class name="org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler"/>
+            <Class name="org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks"/>
+            <Class name="org.apache.kafka.common.utils.ChunkedBytesStream"/>
+            <Class name="org.apache.kafka.common.utils.Shell"/>
+            <Class name="org.apache.kafka.connect.file.FileStreamSourceTask"/>
+            <Class name="org.apache.kafka.connect.runtime.AbstractWorkerSourceTask"/>
+            <Class name="org.apache.kafka.connect.runtime.ExactlyOnceWorkerSourceTask"/>
+            <Class name="org.apache.kafka.connect.runtime.WorkerSinkTask"/>
+            <Class name="org.apache.kafka.connect.runtime.distributed.DistributedHerder"/>
+            <Class name="org.apache.kafka.connect.runtime.distributed.WorkerCoordinator"/>
+            <Class name="org.apache.kafka.connect.runtime.distributed.WorkerGroupMember"/>
+            <Class name="org.apache.kafka.connect.util.KafkaBasedLog"/>
+            <Class name="org.apache.kafka.controller.QuorumController"/>
+            <Class name="org.apache.kafka.image.publisher.SnapshotGenerator$Builder"/>
+            <Class name="org.apache.kafka.queue.KafkaEventQueue"/>
+            <Class name="org.apache.kafka.server.AssignmentsManager"/>
+            <Class name="org.apache.kafka.server.log.remote.metadata.storage.ConsumerTask"/>
+            <Class name="org.apache.kafka.storage.internals.log.LogSegment"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamThread"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor"/>
+            <Class name="org.apache.kafka.streams.processor.internals.StreamsProducer"/>
+            <Class name="org.apache.kafka.streams.processor.internals.TaskManager"/>
+            <Class name="org.apache.kafka.streams.state.internals.AbstractRocksDBSegmentedBytesStore"/>
+            <Class name="org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueChangeBuffer"/>
+            <Class name="org.apache.kafka.streams.state.internals.RocksDBStore"/>
+        </Or>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+
+    <Match>
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.8.
+        These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
+         -->
+    <Or>
+        <Class name="kafka.controller.AdminClientTriggered"/>
+        <Class name="kafka.controller.AutoPreferredReplicaLeaderElection"/>
+        <Class name="kafka.controller.AutoTriggered"/>
+        <Class name="kafka.controller.BrokerChange"/>
+        <Class name="kafka.controller.ControlledShutdownPartitionLeaderElectionStrategy"/>
+        <Class name="kafka.controller.ControllerChange"/>
+        <Class name="kafka.controller.Expire"/>
+        <Class name="kafka.controller.IsrChangeNotification"/>
+        <Class name="kafka.controller.LogDirEventNotification"/>
+        <Class name="kafka.controller.NewPartition"/>
+        <Class name="kafka.controller.NewReplica"/>
+        <Class name="kafka.controller.NonExistentPartition"/>
+        <Class name="kafka.controller.NonExistentReplica"/>
+        <Class name="kafka.controller.OfflinePartition"/>
+        <Class name="kafka.controller.OfflineReplica"/>
+        <Class name="kafka.controller.OnlinePartition"/>
+        <Class name="kafka.controller.OnlineReplica"/>
+        <Class name="kafka.controller.PreferredReplicaPartitionLeaderElectionStrategy"/>
+        <Class name="kafka.controller.ReassignPartitionLeaderElectionStrategy"/>
+        <Class name="kafka.controller.Reelect"/>
+        <Class name="kafka.controller.RegisterBrokerAndReelect"/>
+        <Class name="kafka.controller.ReplicaDeletionIneligible"/>
+        <Class name="kafka.controller.ReplicaDeletionStarted"/>
+        <Class name="kafka.controller.ReplicaDeletionSuccessful"/>
+        <Class name="kafka.controller.ShutdownEventThread"/>
+        <Class name="kafka.controller.Startup"/>
+        <Class name="kafka.controller.TopicChange"/>
+        <Class name="kafka.controller.TopicDeletion"/>
+        <Class name="kafka.controller.UncleanLeaderElectionEnable"/>
+        <Class name="kafka.controller.ZkPartitionReassignment"/>
+        <Class name="kafka.controller.ZkTriggered"/>
+        <Class name="kafka.coordinator.group.CompletingRebalance"/>
+        <Class name="kafka.coordinator.group.Dead"/>
+        <Class name="kafka.coordinator.group.Empty"/>
+        <Class name="kafka.coordinator.group.PreparingRebalance"/>
+        <Class name="kafka.coordinator.group.Stable"/>
+        <Class name="kafka.coordinator.transaction.CompleteAbort"/>
+        <Class name="kafka.coordinator.transaction.CompleteCommit"/>
+        <Class name="kafka.coordinator.transaction.Dead"/>
+        <Class name="kafka.coordinator.transaction.Empty"/>
+        <Class name="kafka.coordinator.transaction.Ongoing"/>
+        <Class name="kafka.coordinator.transaction.PrepareAbort"/>
+        <Class name="kafka.coordinator.transaction.PrepareCommit"/>
+        <Class name="kafka.coordinator.transaction.PrepareEpochFence"/>
+        <Class name="kafka.log.LogCleaningAborted"/>
+        <Class name="kafka.log.LogCleaningInProgress"/>
+        <Class name="kafka.server.Fetching"/>
+        <Class name="kafka.server.Truncating"/>
+        <Class name="kafka.server.addPartition"/>
+        <Class name="kafka.server.defaultError"/>
+        <Class name="kafka.server.genericError"/>
+        <Class name="kafka.server.metadata.DefaultClientIdEntity"/>
+        <Class name="kafka.server.metadata.DefaultIpEntity"/>
+        <Class name="kafka.server.metadata.DefaultUserDefaultClientIdEntity"/>
+        <Class name="kafka.server.metadata.DefaultUserEntity"/>
+        <Class name="kafka.zk.ExtendedAclChangeStore"/>
+        <Class name="kafka.zk.LiteralAclChangeStore"/>
+        <Class name="org.apache.kafka.connect.runtime.SinkConnectorConfig"/>
+        <Class name="org.apache.kafka.connect.runtime.SourceConnectorConfig"/>
+    </Or>
+    <Bug pattern="HSM_HIDING_METHOD"/>
+    </Match>
+
+    <Match>
+        <!-- New warning type added when we upgraded from spotbugs 4.8.6 to 4.9.8.
+        These are possibly real bugs, and have not been evaluated, they were just bulk excluded to unblock upgrading Spotbugs.
+         -->
+        <Or>
+            <Class name="org.apache.kafka.common.security.ssl.SslFactory$SslEngineValidator"/>
+            <Class name="org.apache.kafka.server.authorizer.Authorizer"/>
+        </Or>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
 </FindBugsFilter>
