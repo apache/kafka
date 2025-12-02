@@ -16326,7 +16326,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -16411,7 +16412,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17056,7 +17058,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17176,7 +17179,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17315,7 +17319,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
 
             result.response().data()
         );
@@ -17379,7 +17384,8 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
-                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17441,7 +17447,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17456,7 +17463,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(2)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -17572,7 +17580,8 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setPartitionsByUserEndpoint(null)
-                .setEndpointInformationEpoch(0),
+                .setEndpointInformationEpoch(0)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17600,7 +17609,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -17708,7 +17718,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17749,7 +17760,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17794,7 +17806,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17827,7 +17840,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17866,7 +17880,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17895,7 +17910,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17921,7 +17937,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology2)
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17951,7 +17968,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17993,7 +18011,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18039,7 +18058,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology2)
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18249,7 +18269,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18378,7 +18399,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18604,7 +18626,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18642,7 +18665,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18670,7 +18694,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18701,7 +18726,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(0),
+                .setEndpointInformationEpoch(0)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18765,7 +18791,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18803,7 +18830,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18830,7 +18858,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19012,7 +19041,8 @@ public class GroupMetadataManagerTest {
                                         .setPartitions(List.of(0, 1))))
                         .setStandbyTasks(List.of())
                         .setWarmupTasks(List.of())
-                        .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions)),
+                        .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
+                        .setStatus(List.of()),
                 result.response().data()
         );
 
@@ -19188,7 +19218,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
