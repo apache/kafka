@@ -57,7 +57,7 @@ public abstract class BufferSupplier implements AutoCloseable {
      * Return the provided buffer to be reused by a subsequent call to `get`.
      */
     public abstract void release(ByteBuffer buffer);
-    
+
     /**
      * Release all resources associated with this supplier.
      */
@@ -120,4 +120,5 @@ public abstract class BufferSupplier implements AutoCloseable {
             cachedBuffer = null;
         }
     }
+
 }

@@ -44,4 +44,5 @@ public class BufferSupplierTest {
         assertEquals(2048, increased.capacity());
         assertEquals(0, increased.position());
     }
+
 }

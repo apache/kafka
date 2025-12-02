@@ -619,7 +619,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         /**
          * The cached buffer size.
          */
-        long cachedBufferSize;
+        AtomicLong cachedBufferSize;
 
         /**
          * Constructor.
@@ -648,6 +648,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 defaultWriteTimeout
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
+            this.cachedBufferSize = new AtomicLong(0);
         }
 
         /**
@@ -784,12 +785,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
             if (currentBatch.builder.buffer().capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.builder.buffer());
-                cachedBufferSize = currentBatch.builder.buffer().capacity();
+                cachedBufferSize.set(currentBatch.builder.buffer().capacity());
             } else if (currentBatch.buffer.capacity() <= maxBufferSize) {
                 bufferSupplier.release(currentBatch.buffer);
-                cachedBufferSize = currentBatch.buffer.capacity();
+                cachedBufferSize.set(currentBatch.buffer.capacity());
             } else {
                 runtimeMetrics.recordAppendBufferDiscarded();
+                cachedBufferSize.set(0L);
             }
 
             currentBatch = null;
@@ -2145,7 +2147,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.executorService = executorService;
         this.appendMaxBufferSizeSupplier = appendMaxBufferSizeSupplier;
         this.runtimeMetrics.registerAppendBufferSizeGauge(
-            () -> coordinators.values().stream().mapToLong(c -> c.cachedBufferSize).sum()
+            () -> coordinators.values().stream().mapToLong(c -> c.cachedBufferSize.get()).sum()
         );
     }
 
