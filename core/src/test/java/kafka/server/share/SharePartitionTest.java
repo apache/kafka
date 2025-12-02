@@ -10741,7 +10741,7 @@ public class SharePartitionTest {
     /**
      * Test validates the scenario where the partition has been re-initialized with a moved start offset.
      * In this case, the acquire logic should respect the new start offset and not allow acquiring
-     * records post the new start offset. For the test, simulate a scenario where the log batch is 0-99
+     * records before the new start offset. For the test, simulate a scenario where the log batch is 0-99
      * offsets, but post re-initialization, the start offset is moved to 5 hence share partition should
      * have 5-99 offsets in AVAILABLE state in the cache. Post acquire and acknowledge of 5-14 offsets,
      * the start offset is moved to 15. Next acquire on the same log batch should only allow acquiring
