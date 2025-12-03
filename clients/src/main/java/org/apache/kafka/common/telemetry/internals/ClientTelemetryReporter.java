@@ -20,6 +20,8 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -41,7 +43,6 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Collections;
@@ -527,13 +528,13 @@ public class ClientTelemetryReporter implements MetricsReporter {
         @Override
         public void handleFailedGetTelemetrySubscriptionsRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the get telemetry network API request", maybeFatalException);
-            handleFailedRequest(maybeFatalException != null);
+            handleFailedRequest(maybeFatalException);
         }
 
         @Override
         public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
             log.debug("The broker generated an error for the push telemetry network API request", maybeFatalException);
-            handleFailedRequest(maybeFatalException != null);
+            handleFailedRequest(maybeFatalException);
         }
 
         @Override
@@ -627,6 +628,12 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
         }
 
+        private boolean isRetryable(final KafkaException maybeFatalException) {
+            return maybeFatalException == null ||
+                (maybeFatalException instanceof RetriableException) ||
+                (maybeFatalException.getCause() != null && maybeFatalException.getCause() instanceof RetriableException);
+        }
+
         private Optional<Builder<?>> createSubscriptionRequest(ClientTelemetrySubscription localSubscription) {
             /*
              If we've previously retrieved a subscription, it will contain the client instance ID
@@ -718,8 +725,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             ByteBuffer compressedPayload;
             try {
                 compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
-            } catch (IOException e) {
-                log.info("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
+            } catch (Throwable e) {
+                log.debug("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
                 compressedPayload = ByteBuffer.wrap(payload.toByteArray());
                 compressionType = CompressionType.NONE;
             }
@@ -828,7 +835,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
         }
 
-        private void handleFailedRequest(boolean shouldWait) {
+        private void handleFailedRequest(KafkaException maybeFatalException) {
             final long nowMs = time.milliseconds();
             lock.writeLock().lock();
             try {
@@ -846,10 +853,12 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  again. We may disconnect from the broker and connect to a broker that supports client
                  telemetry.
                 */
-                if (shouldWait) {
+                if (isRetryable(maybeFatalException)) {
                     updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, nowMs);
                 } else {
-                    log.warn("Received unrecoverable error from broker, disabling telemetry");
+                    if (!(maybeFatalException instanceof UnsupportedVersionException)) {
+                        log.warn("Received unrecoverable error from broker, disabling telemetry");
+                    }
                     updateErrorResult(Integer.MAX_VALUE, nowMs);
                 }
 

@@ -199,7 +199,8 @@ allprojects {
           libs.scalaReflect,
           // Workaround before `commons-validator` has new release. See KAFKA-19359.
           libs.commonsBeanutils,
-          libs.jacksonAnnotations
+          libs.jacksonAnnotations,
+          libs.commonsLang
         )
       }
     }

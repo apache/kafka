@@ -201,6 +201,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Close this record set
      */
     public void close() throws IOException {
+        if (!channel.isOpen()) {
+            return;
+        }
+
         flush();
         trim();
         channel.close();

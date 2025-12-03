@@ -763,10 +763,7 @@ public class LogSegment implements Closeable {
     public void close() throws IOException {
         if (maxTimestampAndOffsetSoFar != TimestampOffset.UNKNOWN)
             Utils.swallow(LOGGER, Level.WARN, "maybeAppend", () -> timeIndex().maybeAppend(maxTimestampSoFar(), shallowOffsetOfMaxTimestampSoFar(), true));
-        Utils.closeQuietly(lazyOffsetIndex, "offsetIndex", LOGGER);
-        Utils.closeQuietly(lazyTimeIndex, "timeIndex", LOGGER);
-        Utils.closeQuietly(log, "log", LOGGER);
-        Utils.closeQuietly(txnIndex, "txnIndex", LOGGER);
+        Utils.closeAll(lazyOffsetIndex, lazyTimeIndex, log, txnIndex);
     }
 
     /**

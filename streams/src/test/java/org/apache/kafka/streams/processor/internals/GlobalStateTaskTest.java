@@ -254,6 +254,10 @@ public class GlobalStateTaskTest {
         globalStateTask.initialize();
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9000L, "foo".getBytes(), "foo".getBytes()));
         time.sleep(flushInterval); // flush interval elapsed
+
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
@@ -269,6 +273,10 @@ public class GlobalStateTaskTest {
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 10000L, "foo".getBytes(), "foo".getBytes()));
 
         time.sleep(flushInterval / 2);
+
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
@@ -288,6 +296,10 @@ public class GlobalStateTaskTest {
 
         // 10000 records received since last flush => do not flush
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9999L, "foo".getBytes(), "foo".getBytes()));
+
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
@@ -332,5 +344,26 @@ public class GlobalStateTaskTest {
         assertTrue(stateMgr.baseDir().exists());
         globalStateTask.close(true);
         assertFalse(stateMgr.baseDir().exists());
+    }
+
+    @Test
+    public void shouldCheckpointDuringInitialization() {
+        globalStateTask.initialize();
+
+        assertTrue(stateMgr.checkpointWritten);
+        assertTrue(stateMgr.flushed);
+    }
+
+    @Test
+    public void shouldCheckpointDuringClose() throws Exception {
+        globalStateTask.initialize();
+
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
+        globalStateTask.close(false);
+
+        assertTrue(stateMgr.checkpointWritten);
+        assertTrue(stateMgr.flushed);
     }
 }

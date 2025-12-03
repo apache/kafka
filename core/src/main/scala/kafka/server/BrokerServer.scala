@@ -634,7 +634,8 @@ class BrokerServer(
         time,
         replicaManager,
         serde,
-        config.groupCoordinatorConfig.offsetsLoadBufferSize
+        config.groupCoordinatorConfig.offsetsLoadBufferSize,
+        CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
       )
       val writer = new CoordinatorPartitionWriter(
         replicaManager
@@ -673,7 +674,8 @@ class BrokerServer(
         time,
         replicaManager,
         serde,
-        config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
+        config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize(),
+        CoordinatorLoaderImpl.DEFAULT_COMMIT_INTERVAL_OFFSETS
       )
       val writer = new CoordinatorPartitionWriter(
         replicaManager

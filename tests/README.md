@@ -49,12 +49,13 @@ TC_PATHS="tests/kafkatest/tests/streams/streams_upgrade_test.py::StreamsUpgradeT
 ```
 * Run tests with a specific image name
 ```
-image_name="ducker-ak-openjdk:17-buster" bash tests/docker/run_tests.sh
+image_name="ducker-ak-openjdk:17" bash tests/docker/run_tests.sh
 ```
 * Run tests with a different JVM
 ```
-bash tests/docker/ducker-ak up -j 'openjdk:17-buster'; tests/docker/run_tests.sh
+bash tests/docker/ducker-ak up -j '<JDK_IMAGE>'; tests/docker/run_tests.sh
 ```
+  You can customize the OpenJDK base image using the `-j` or `--jdk` parameter, otherwise a default value will be used.
 * Remove ducker-ak containers
 ```
 bash tests/docker/ducker-ak down -f

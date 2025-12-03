@@ -1235,7 +1235,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             ProcessorToStateConnectorNode<>(
             name,
             new ProcessorParameters<>(processorSupplier, name),
-            stateStoreNames);
+            stateStoreNames
+        );
+        if (builder.processProcessValueFixEnabled()) {
+            processNode.keyChangingOperation(true);
+            processNode.setValueChangingOperation(true);
+        }
 
         builder.addGraphNode(graphNode, processNode);
 
@@ -1280,7 +1285,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final ProcessorToStateConnectorNode<? super K, ? super V> processNode = new ProcessorToStateConnectorNode<>(
             name,
             new ProcessorParameters<>(processorSupplier, name),
-            stateStoreNames);
+            stateStoreNames
+        );
+        if (builder.processProcessValueFixEnabled()) {
+            processNode.setValueChangingOperation(true);
+        }
 
         builder.addGraphNode(graphNode, processNode);
         // cannot inherit value serde

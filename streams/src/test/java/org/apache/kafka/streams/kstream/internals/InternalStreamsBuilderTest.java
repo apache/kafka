@@ -81,7 +81,7 @@ public class InternalStreamsBuilderTest {
 
     private static final String APP_ID = "app-id";
 
-    private final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
+    private final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder(), false);
     private final ConsumedInternal<String, String> consumed = new ConsumedInternal<>(Consumed.with(null, null));
     private final String storePrefix = "prefix-";
     private final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(Materialized.as("test-store"), builder, storePrefix);
@@ -93,7 +93,7 @@ public class InternalStreamsBuilderTest {
         assertEquals("Y-0000000001", builder.newProcessorName("Y-"));
         assertEquals("Z-0000000002", builder.newProcessorName("Z-"));
 
-        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
+        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder(), false);
 
         assertEquals("X-0000000000", newBuilder.newProcessorName("X-"));
         assertEquals("Y-0000000001", newBuilder.newProcessorName("Y-"));
@@ -106,7 +106,7 @@ public class InternalStreamsBuilderTest {
         assertEquals("Y-STATE-STORE-0000000001", builder.newStoreName("Y-"));
         assertEquals("Z-STATE-STORE-0000000002", builder.newStoreName("Z-"));
 
-        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
+        final InternalStreamsBuilder newBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder(), false);
 
         assertEquals("X-STATE-STORE-0000000000", newBuilder.newStoreName("X-"));
         assertEquals("Y-STATE-STORE-0000000001", newBuilder.newStoreName("Y-"));

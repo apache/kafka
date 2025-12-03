@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
 import java.io.File;
@@ -105,8 +106,7 @@ public class LogSegments implements Closeable {
      */
     @Override
     public void close() throws IOException {
-        for (LogSegment s : values())
-            s.close();
+        Utils.closeAll(values().toArray(new LogSegment[0]));
     }
 
     /**

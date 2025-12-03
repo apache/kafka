@@ -225,7 +225,6 @@ public class OffsetIndexTest {
         idx.forceUnmap();
         // mmap should be null after unmap causing lookup to throw a NPE
         assertThrows(NullPointerException.class, () -> idx.lookup(1));
-        assertThrows(NullPointerException.class, idx::close);
     }
 
     @Test
