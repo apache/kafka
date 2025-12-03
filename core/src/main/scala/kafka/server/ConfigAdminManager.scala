@@ -112,39 +112,33 @@ class ConfigAdminManager(nodeId: Int,
     })
     request.resources().forEach(resource => {
       if (!results.containsKey(resource)) {
-        val resourceType = ConfigResource.Type.forId(resource.resourceType())
-        val configResource = new ConfigResource(resourceType, resource.resourceName())
-        try {
-          if (containsDuplicates(resource.configs().asScala.map(_.name()))) {
-            throw new InvalidRequestException("Error due to duplicate config keys")
-          }
-          validateNullValue(resource)
-          validateUnknownConfigTypeError(configResource, resource)
-          resourceType match {
-            case BROKER_LOGGER =>
-              runtimeLoggerManager.applyChangesForResource(
-                authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
-                request.validateOnly(),
-                resource)
-              results.put(resource, ApiError.NONE)
-            case BROKER =>
-              // The resource name must be either blank (if setting a cluster config) or
-              // the ID of this specific broker.
-              if (configResource.name().nonEmpty) {
-                validateResourceNameIsCurrentNodeId(resource.resourceName())
-              }
-              validateBrokerConfigChange(resource, configResource)
-            case TOPIC | CLIENT_METRICS | GROUP =>
-            // Nothing to do.
-            case _ =>
-              // no-op: since we already handled UNKNOWN resource types above
-          }
-        } catch {
-          case t: Throwable =>
+        processConfigResource(
+          resource,
+          () => {
+            runtimeLoggerManager.applyChangesForResource(
+              authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
+              request.validateOnly(),
+              resource)
+            results.put(resource, ApiError.NONE)
+          },
+          configResource => {
+            // The resource name must be either blank (if setting a cluster config) or
+            // the ID of this specific broker.
+            if (configResource.name().nonEmpty) {
+              validateResourceNameIsCurrentNodeId(resource.resourceName())
+            }
+            validateBrokerConfigChange(resource, configResource)
+          },
+          _ => {
+            // Nothing to do for TOPIC | CLIENT_METRICS | GROUP type in Broker.
+            // and UNKNOWN type is already handled in validateUnknownConfigTypeError.
+          },
+          (configResource, t) => {
             val err = ApiError.fromThrowable(t)
             error(s"Error preprocessing incrementalAlterConfigs request on $configResource", t)
             results.put(resource, err)
-        }
+          }
+        )
       }
     })
     results
@@ -440,6 +434,31 @@ object ConfigAdminManager {
           val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
       }
+    }
+  }
+
+  def processConfigResource(
+    resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
+    onBrokerLogger: () => Unit,
+    onBroker: ConfigResource => Unit,
+    onOtherTypes: ConfigResource => Unit,
+    onError: (ConfigResource, Throwable) => Unit
+  ): Unit = {
+    val resourceType = ConfigResource.Type.forId(resource.resourceType())
+    val configResource = new ConfigResource(resourceType, resource.resourceName())
+    try {
+      if (containsDuplicates(resource.configs().asScala.map(_.name()))) {
+        throw new InvalidRequestException("Error due to duplicate config keys")
+      }
+      validateNullValue(resource)
+      validateUnknownConfigTypeError(configResource, resource)
+      resourceType match {
+        case BROKER_LOGGER => onBrokerLogger()
+        case BROKER => onBroker(configResource)
+        case _ => onOtherTypes(configResource)
+      }
+    } catch {
+      case t: Throwable => onError(configResource, t)
     }
   }
 

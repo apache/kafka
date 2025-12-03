@@ -721,12 +721,9 @@ class ControllerApis(
       util.Map[String, Entry[AlterConfigOp.OpType, String]]]()
     val brokerLoggerResponses = new util.ArrayList[AlterConfigsResourceResponse](1)
     alterConfigsRequest.data.resources.forEach { resource =>
-      try {
-        ConfigAdminManager.validateNullValue(resource)
-        val configResource = new ConfigResource(
-          ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
-        ConfigAdminManager.validateUnknownConfigTypeError(configResource, resource)
-        if (configResource.`type`().equals(ConfigResource.Type.BROKER_LOGGER)) {
+      ConfigAdminManager.processConfigResource(
+        resource,
+        onBrokerLogger = () => {
           val apiError = try {
             runtimeLoggerManager.applyChangesForResource(
               authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
@@ -736,37 +733,28 @@ class ControllerApis(
           } catch {
             case t: Throwable => ApiError.fromThrowable(t)
           }
-          brokerLoggerResponses.add(new AlterConfigsResourceResponse().
-            setResourceName(resource.resourceName()).
-            setResourceType(resource.resourceType()).
-            setErrorCode(apiError.error().code()).
-            setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
-        } else if (!duplicateResources.contains(configResource)) {
-          val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
-          resource.configs.forEach { config =>
-            altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-              AlterConfigOp.OpType.forId(config.configOperation), config.value))
-          }
-          if (configChanges.put(configResource, altersByName) != null) {
-            duplicateResources.add(configResource)
-            configChanges.remove(configResource)
-            response.responses().add(new AlterConfigsResourceResponse().
-              setErrorCode(INVALID_REQUEST.code()).
-              setErrorMessage("Duplicate resource.").
-              setResourceName(resource.resourceName()).
-              setResourceType(resource.resourceType()))
-          }
-        }
-      } catch {
-        case t: Throwable =>
+          brokerLoggerResponses.add(new AlterConfigsResourceResponse()
+            .setResourceName(resource.resourceName())
+            .setResourceType(resource.resourceType())
+            .setErrorCode(apiError.error().code())
+            .setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
+        },
+        configResource => {
+          addConfigChangesOrHandleDuplicate(configResource, resource, duplicateResources, configChanges, response)
+        },
+        configResource => {
+          addConfigChangesOrHandleDuplicate(configResource, resource, duplicateResources, configChanges, response)
+        },
+        onError = (_, t) => {
           val err = ApiError.fromThrowable(t)
           error(s"Error on processing incrementalAlterConfigs request on ${resource.resourceName()}", t)
-          response.responses().add(new AlterConfigsResourceResponse().
-            setErrorCode(err.error().code()).
-            setErrorMessage(err.messageWithFallback()).
-            setResourceName(resource.resourceName()).
-            setResourceType(resource.resourceType()))
-      }
+          response.responses().add(new AlterConfigsResourceResponse()
+            .setErrorCode(err.error().code())
+            .setErrorMessage(err.messageWithFallback())
+            .setResourceName(resource.resourceName())
+            .setResourceType(resource.resourceType()))
+        }
+      )
     }
     val iterator = configChanges.keySet().iterator()
     while (iterator.hasNext) {
@@ -797,6 +785,32 @@ class ControllerApis(
             new IncrementalAlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
         }
       }
+  }
+
+  private def addConfigChangesOrHandleDuplicate(
+    configResource: ConfigResource,
+    resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
+    duplicateResources: util.HashSet[ConfigResource],
+    configChanges: util.HashMap[ConfigResource, util.Map[String, Entry[AlterConfigOp.OpType, String]]],
+    response: IncrementalAlterConfigsResponseData
+  ): Unit = {
+    if (!duplicateResources.contains(configResource)) {
+      val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+      resource.configs.forEach { config =>
+        altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+          AlterConfigOp.OpType.forId(config.configOperation), config.value))
+      }
+
+      if (configChanges.put(configResource, altersByName) != null) {
+        duplicateResources.add(configResource)
+        configChanges.remove(configResource)
+        response.responses().add(new AlterConfigsResourceResponse()
+          .setErrorCode(INVALID_REQUEST.code())
+          .setErrorMessage("Duplicate resource.")
+          .setResourceName(resource.resourceName())
+          .setResourceType(resource.resourceType()))
+      }
+    }
   }
 
   private def handleCreatePartitions(request: RequestChannel.Request): CompletableFuture[Unit] = {

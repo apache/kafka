@@ -652,7 +652,7 @@ class ControllerApisTest {
         setResourceName("3").
         setResourceType(ConfigResource.Type.BROKER.id()),
       new AlterConfigsResourceResponse().
-        setErrorCode(UNSUPPORTED_VERSION.code()).
+        setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Unknown resource type 124.").
         setResourceName("foo").
         setResourceType(124.toByte),
