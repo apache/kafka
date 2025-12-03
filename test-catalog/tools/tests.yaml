@@ -843,6 +843,7 @@ org.apache.kafka.tools.consumer.group.ShareGroupCommandTest:
 - testDescribeNonexistentGroup
 - testDescribeOffsetsOfAllExistingGroups
 - testDescribeOffsetsOfExistingGroup
+- testDescribeOffsetsOfExistingGroupWithNoOffsetInfo
 - testDescribeOffsetsOfExistingGroupWithNulls
 - testDescribeStateOfExistingGroup
 - testDescribeStatesOfAllExistingGroups
