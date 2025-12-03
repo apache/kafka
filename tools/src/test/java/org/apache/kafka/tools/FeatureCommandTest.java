@@ -54,20 +54,20 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-                "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.3-IV3\t", outputWithoutEpoch(features.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(6)));
+        assertEquals("Feature: eligible.leader.replicas.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(0)));
+        assertEquals("Feature: group.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(1)));
+        assertEquals("Feature: kraft.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(2)));
+        assertEquals("Feature: metadata.version\t\tSupportedMinVersion: 3.3-IV3\t\t" +
+                "SupportedMaxVersion: 4.3-IV0\t\tFinalizedVersionLevel: 3.3-IV3\t\t", outputWithoutEpoch(features.get(3)));
+        assertEquals("Feature: share.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(4)));
+        assertEquals("Feature: streams.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(5)));
+        assertEquals("Feature: transaction.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 2\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(6)));
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -80,20 +80,20 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-                "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(6)));
+        assertEquals("Feature: eligible.leader.replicas.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(0)));
+        assertEquals("Feature: group.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(1)));
+        assertEquals("Feature: kraft.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(2)));
+        assertEquals("Feature: metadata.version\t\tSupportedMinVersion: 3.3-IV3\t\t" +
+                "SupportedMaxVersion: 4.3-IV0\t\tFinalizedVersionLevel: 3.7-IV0\t\t", outputWithoutEpoch(features.get(3)));
+        assertEquals("Feature: share.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(4)));
+        assertEquals("Feature: streams.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(5)));
+        assertEquals("Feature: transaction.version\t\tSupportedMinVersion: 0\t\t" +
+                "SupportedMaxVersion: 2\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(6)));
     }
 
     @ClusterTest(
@@ -390,8 +390,8 @@ public class FeatureCommandTest {
                 throw new RuntimeException(e);
             }
         });
-        assertEquals(format("Feature: foo.bar\tSupportedMinVersion: 0\tSupportedMaxVersion: 10\tFinalizedVersionLevel: 5\tEpoch: 123%n" +
-            "Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\tSupportedMaxVersion: 3.5-IV0\tFinalizedVersionLevel: 3.4-IV0\tEpoch: 123"), describeResult);
+        assertEquals(format("Feature: foo.bar\t\tSupportedMinVersion: 0\t\tSupportedMaxVersion: 10\t\tFinalizedVersionLevel: 5\t\tEpoch: 123%n" +
+            "Feature: metadata.version\t\tSupportedMinVersion: 3.3-IV3\t\tSupportedMaxVersion: 3.5-IV0\t\tFinalizedVersionLevel: 3.4-IV0\t\tEpoch: 123"), describeResult);
     }
 
     @Test
