@@ -789,11 +789,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val known = new util.ArrayList[ListOffsetsTopic]()
       val unknown = new util.ArrayList[ListOffsetsTopicResponse]()
       offsetRequest.topics.asScala.foreach { topic =>
-        val topicName = if (topic.topicId() != null && topic.topicId() != Uuid.ZERO_UUID) {
-          metadataCache.getTopicName(topic.topicId()).orElse(null)
-        } else {
-          topic.name()
-        }
+        val topicName = metadataCache.getTopicName(topic.topicId()).orElse(null)
 
         if (topicName == null) {
           // Topic ID cannot be resolved to a name
