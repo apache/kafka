@@ -128,13 +128,13 @@ public class ShareSessionCache {
     }
 
     /**
-     * Maybe remove the session and notify listeners. This is called when the connection is disconnected
-     * for the client. The session may have already been removed by the client as part of final epoch,
-     * hence check if the session is still present in the cache.
+     * Maybe remove the session and notify member leave listener. This is called when the connection
+     * is disconnected for the client. The session may have already been removed by the client as part
+     * of final epoch, hence check if the session is still present in the cache.
      *
      * @param key The share session key.
      */
-    private void maybeRemoveAndNotifyListeners(ShareSessionKey key) {
+    private void maybeRemoveAndNotifyListenersOnMemberLeave(ShareSessionKey key) {
         ShareSession session;
         synchronized (this) {
             session = get(key);
@@ -242,7 +242,7 @@ public class ShareSessionCache {
      *
      * @param groupId The share group id.
      */
-    private void checkAndNotifyGroupListeners(String groupId) {
+    private void checkAndNotifyListenersOnGroupEmpty(String groupId) {
         boolean notify = false;
         synchronized (this) {
             int numMembers = numMembersPerGroup.getOrDefault(groupId, 0);
@@ -287,11 +287,11 @@ public class ShareSessionCache {
                     // Try removing session and notify listeners. The session might already be removed
                     // as part of final epoch from client, so we need to check if the session is still
                     // present in the cache.
-                    maybeRemoveAndNotifyListeners(sessionKeyAndState.shareSessionKey());
+                    maybeRemoveAndNotifyListenersOnMemberLeave(sessionKeyAndState.shareSessionKey());
                 }
                 // Notify the share group listener if the group is empty. This should be checked regardless
                 // session is evicted by connection disconnect or client's final epoch.
-                checkAndNotifyGroupListeners(sessionKeyAndState.shareSessionKey().groupId());
+                checkAndNotifyListenersOnGroupEmpty(sessionKeyAndState.shareSessionKey().groupId());
             }
         }
     }
