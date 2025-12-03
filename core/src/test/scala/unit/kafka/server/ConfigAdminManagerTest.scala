@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util
 import java.util.Collections
-
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
@@ -39,7 +38,8 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, NONE}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.metadata.MockConfigRepository
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{Assertions, Test}
 import org.slf4j.LoggerFactory
 
@@ -418,5 +418,102 @@ class ConfigAdminManagerTest {
     assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "foo")))
     assertFalse(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz")))
     assertTrue(ConfigAdminManager.containsDuplicates(Seq("foo", "bar", "baz", "foo")))
+  }
+
+  @Test
+  def testProcessConfigResourceWithNulls(): Unit = {
+    val brokerLogger2 = brokerLogger2Incremental()
+    new IncrementalAlterConfigsRequestData()
+      .setResources(new IAlterConfigsResourceCollection(
+        util.List.of(brokerLogger2).iterator())
+      ).resources().forEach(resource => {
+        val invalidRequestException = assertThrows(classOf[InvalidRequestException],
+          () => ConfigAdminManager.processConfigResource(
+            resource,
+            () => {},
+            _ => {},
+            _ => {},
+            (_, t) => {
+              throw t
+            })
+        )
+        assertEquals(s"Null value not supported for : ${logger.getName}", invalidRequestException.getMessage)
+      })
+  }
+
+  @Test
+  def testProcessConfigResourceWithUnknownConfigType(): Unit = {
+    val config = new IAlterableConfig().setName(logger.getName)
+      .setValue("INFO")
+      .setConfigOperation(OpType.SET.id())
+    new IncrementalAlterConfigsRequestData()
+      .setResources(new IAlterConfigsResourceCollection(
+        util.List.of(new IAlterConfigsResource()
+          .setResourceName("1")
+          .setResourceType(UNKNOWN.id())
+          .setConfigs(new IAlterableConfigCollection(
+            util.List.of(config).iterator()))).iterator()))
+      .resources().forEach(resource => {
+        val invalidRequestException = assertThrows(classOf[InvalidRequestException],
+          () => ConfigAdminManager.processConfigResource(
+            resource,
+            () => {},
+            _ => {},
+            _ => {},
+            (_, t) => {
+              throw t
+            })
+        )
+        assertEquals(s"Unknown resource type ${UNKNOWN.id()}.", invalidRequestException.getMessage)
+      })
+  }
+
+  @Test
+  def testProcessConfigResourceWithDuplicates(): Unit = {
+    val config = new IAlterableConfig().setName(logger.getName)
+      .setValue("INFO")
+      .setConfigOperation(OpType.SET.id())
+    val config1 = new IAlterableConfig().setName(logger.getName)
+      .setValue("ERROR")
+      .setConfigOperation(OpType.SET.id())
+    new IncrementalAlterConfigsRequestData()
+      .setResources(new IAlterConfigsResourceCollection(
+        util.List.of(new IAlterConfigsResource()
+          .setResourceName("1")
+          .setResourceType(BROKER_LOGGER.id)
+          .setConfigs(new IAlterableConfigCollection(
+            util.List.of(config, config1).iterator()))).iterator()))
+      .resources().forEach(resource => {
+        val invalidRequestException = assertThrows(classOf[InvalidRequestException],
+          () => ConfigAdminManager.processConfigResource(
+            resource,
+            () => {},
+            _ => {},
+            _ => {},
+            (_, t) => {
+              throw t
+            })
+        )
+        assertEquals("Error due to duplicate config keys", invalidRequestException.getMessage)
+      })
+  }
+
+  @Test
+  def testProcessConfigResource(): Unit = {
+    val brokerLogger1 = brokerLogger1Incremental()
+    new IncrementalAlterConfigsRequestData()
+      .setResources(new IAlterConfigsResourceCollection(
+        util.List.of(brokerLogger1).iterator())
+      ).resources().forEach(resource => {
+        val processConfigResource: Executable = () => ConfigAdminManager.processConfigResource(
+          resource,
+          () => {},
+          _ => {},
+          _ => {},
+          (_, t) => {
+            throw t
+          })
+        assertDoesNotThrow(processConfigResource)
+      })
   }
 }
