@@ -723,21 +723,16 @@ class ControllerApis(
     alterConfigsRequest.data.resources.forEach { resource =>
       ConfigAdminManager.processConfigResource(
         resource,
-        onBrokerLogger = () => {
-          val apiError = try {
-            runtimeLoggerManager.applyChangesForResource(
-              authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
-              alterConfigsRequest.data().validateOnly(),
-              resource)
-            ApiError.NONE
-          } catch {
-            case t: Throwable => ApiError.fromThrowable(t)
-          }
+        () => {
+          runtimeLoggerManager.applyChangesForResource(
+            authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
+            alterConfigsRequest.data().validateOnly(),
+            resource)
           brokerLoggerResponses.add(new AlterConfigsResourceResponse()
             .setResourceName(resource.resourceName())
             .setResourceType(resource.resourceType())
-            .setErrorCode(apiError.error().code())
-            .setErrorMessage(if (apiError.isFailure) apiError.messageWithFallback() else null))
+            .setErrorCode(ApiError.NONE.error().code())
+            .setErrorMessage(null))
         },
         configResource => {
           addConfigChangesOrHandleDuplicate(configResource, resource, duplicateResources, configChanges, response)
@@ -745,7 +740,7 @@ class ControllerApis(
         configResource => {
           addConfigChangesOrHandleDuplicate(configResource, resource, duplicateResources, configChanges, response)
         },
-        onError = (_, t) => {
+        (_, t) => {
           val err = ApiError.fromThrowable(t)
           error(s"Error on processing incrementalAlterConfigs request on ${resource.resourceName()}", t)
           response.responses().add(new AlterConfigsResourceResponse()

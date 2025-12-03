@@ -130,7 +130,7 @@ class ConfigAdminManager(nodeId: Int,
             validateBrokerConfigChange(resource, configResource)
           },
           _ => {
-            // Nothing to do for TOPIC | CLIENT_METRICS | GROUP type in Broker.
+            // Nothing to do for TOPIC, CLIENT_METRICS or GROUP type in Broker,
             // and UNKNOWN type is already handled in validateUnknownConfigTypeError.
           },
           (configResource, t) => {
@@ -462,7 +462,7 @@ object ConfigAdminManager {
     }
   }
 
-  def validateNullValue(
+  private def validateNullValue(
     resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
   ): Unit = {
     val nullUpdates = new util.ArrayList[String]()
@@ -479,7 +479,7 @@ object ConfigAdminManager {
     }
   }
 
-  def validateUnknownConfigTypeError(
+  private def validateUnknownConfigTypeError(
     configResource: ConfigResource,
     resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
   ): Unit = {
