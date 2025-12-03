@@ -176,8 +176,8 @@
     </li>
     <li>
         The <code>controller.quorum.auto.join.enable</code> has been added to <code>QuorumConfig</code>, enabling KRaft controllers to automatically join the cluster's voter set,
-        and defaults to false. There is an issue which is KRaft voter auto join will add a removed voter immediately,
-        please see <a href="https://issues.apache.org/jira/browse/KAFKA-19850">KAFKA-19850</a>
+        and defaults to false. If the configuration is set to true the controller must be shutdown before removing the
+        controller from the voter set to avoid the removed controller to automatically join again.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/nyH1D">KIP-853</a>.
     </li>
     <li>
