@@ -908,6 +908,8 @@ org.apache.kafka.coordinator.group.modern.AssignmentTest:
 - testEquals
 - testFromTargetAssignmentRecord
 - testPartitionsCannotBeNull
+org.apache.kafka.coordinator.group.modern.MemberAssignmentImplTest:
+- testPartitionsMutable
 org.apache.kafka.coordinator.group.modern.SubscribedTopicMetadataTest:
 - testEquals
 - testMetadataImageCannotBeNull
