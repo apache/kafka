@@ -281,8 +281,8 @@ public class ShareSessionCache {
         @Override
         public void onDisconnect(String connectionId) {
             SessionKeyAndState sessionKeyAndState = maybeRemoveConnectionFromSession(connectionId);
-            // If the session is not stale, try removing the session and notify listeners.
             if (sessionKeyAndState != null) {
+                // If the session is not stale, try removing the session and notify listeners.
                 if (!sessionKeyAndState.stale()) {
                     // Try removing session and notify listeners. The session might already be removed
                     // as part of final epoch from client, so we need to check if the session is still
