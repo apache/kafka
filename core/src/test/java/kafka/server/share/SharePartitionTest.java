@@ -96,7 +96,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
@@ -1366,7 +1365,7 @@ public class SharePartitionTest {
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(15, 18, 3));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(19, 19, 1));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(23, 25, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecords(26, 27, 2));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(26, 27, 2));
 
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
         assertEquals(28, sharePartition.nextFetchOffset());
@@ -1698,7 +1697,7 @@ public class SharePartitionTest {
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(15, 18, 3));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(19, 19, 1));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(23, 25, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecords(26, 27, 2));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(26, 27, 2));
 
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
         assertEquals(28, sharePartition.nextFetchOffset());
@@ -2387,7 +2386,7 @@ public class SharePartitionTest {
 
         // Validate 1 batch is fetched, with 5 records till end of batch, last available batch should
         // not be acquired
-        assertArrayEquals(expectedAcquiredRecords(15, 19, 2).toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(15, 19, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(30, sharePartition.nextFetchOffset());
 
         // Release last offset of the acquired batch. Only 1 record should be released and later acquired.
@@ -3204,7 +3203,7 @@ public class SharePartitionTest {
         // Send the same fetch request batch again but only 2 offsets should come as acquired.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition, records, 2);
 
-        assertArrayEquals(expectedAcquiredRecords(12, 13, 2).toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(12, 13, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
         assertEquals(0, sharePartition.deliveryCompleteCount());
     }
@@ -3288,7 +3287,7 @@ public class SharePartitionTest {
         // Send next batch from offset 12, only 3 records should be acquired.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 3);
 
-        assertArrayEquals(expectedAcquiredRecords(12, 14, 2).toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(12, 14, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(15, sharePartition.nextFetchOffset());
 
         // Though record2 batch exists to acquire but send batch record3, it should be acquired but
@@ -3302,7 +3301,7 @@ public class SharePartitionTest {
         MemoryRecords subsetRecords = memoryRecords(17, 2);
         acquiredRecordsList = fetchAcquiredRecords(sharePartition, subsetRecords, 2);
 
-        assertArrayEquals(expectedAcquiredRecords(17, 18, 2).toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(17, 18, 2).toArray(), acquiredRecordsList.toArray());
         // Next fetch offset should not move.
         assertEquals(15, sharePartition.nextFetchOffset());
 
@@ -3320,7 +3319,7 @@ public class SharePartitionTest {
         acquiredRecordsList = fetchAcquiredRecords(sharePartition, records2, 3);
 
         // Offset 15,16 and 19 should be acquired.
-        List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(15, 16, 2);
+        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(15, 16, 2));
         expectedAcquiredRecords.addAll(expectedAcquiredRecords(19, 19, 2));
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
         // Next fetch offset should not move.
@@ -3441,11 +3440,7 @@ public class SharePartitionTest {
         // The gap from 11 to 20 will be acquired. Since the next batch is AVAILABLE, and we records fetched from replica manager
         // overlap with the next batch, some records from the next batch will also be acquired
         List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(11, 20, 1));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(21, 21, 3));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(22, 22, 3));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(23, 23, 3));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(24, 24, 3));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(25, 25, 3));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(21, 25, 3));
         assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
@@ -3546,11 +3541,7 @@ public class SharePartitionTest {
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(41, 50, 2));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(51, 60, 1));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(71, 80, 1));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(81, 81, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(82, 82, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(83, 83, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(84, 84, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(85, 85, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(81, 85, 2));
         assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
@@ -5773,11 +5764,8 @@ public class SharePartitionTest {
             fetchPartitionData(records),
             FETCH_ISOLATION_HWM), 15);
 
-        List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(16, 16, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(17, 17, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(18, 18, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(19, 19, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(20, 20, 2));
+        // As divided in 2 batches hence merge shall not happen here for all batches.
+        List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(16, 20, 2));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(21, 30, 2));
         assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
 
@@ -10447,13 +10435,7 @@ public class SharePartitionTest {
             5);
 
         // Should acquire the subset of records in InflightBatch which are still available.
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(5, 5, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(6, 6, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(7, 7, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(8, 8, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(9, 9, 1));
-
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(5, 9, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(10, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(0, sharePartition.cachedState().get(0L).firstOffset());
@@ -10637,12 +10619,7 @@ public class SharePartitionTest {
         // 2. 15-20 (new records)
         assertEquals(1, sharePartition.cachedState().size());
         List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(10, 10, 2));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(15, 15, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(16, 16, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(17, 17, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(18, 18, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(19, 19, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(20, 20, 1));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(15, 20, 1));
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
 
         // Check cached state.
@@ -10696,8 +10673,7 @@ public class SharePartitionTest {
             FETCH_ISOLATION_HWM),
             3);
 
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(0, 2, 1));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(0, 2, 1).toArray(), acquiredRecordsList.toArray());
         assertEquals(3, sharePartition.nextFetchOffset());
 
         // Add records from 0-9 offsets, 3-5 should be acquired and 0-2 should be ignored.
@@ -10712,8 +10688,7 @@ public class SharePartitionTest {
             FETCH_ISOLATION_HWM),
             3);
 
-        expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(3, 3, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(4, 4, 1));
+        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(3, 4, 1));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(5, 5, 1));
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
         assertEquals(6, sharePartition.nextFetchOffset());
@@ -10786,7 +10761,7 @@ public class SharePartitionTest {
                 FETCH_ISOLATION_HWM),
             10);
 
-        assertArrayEquals(expectedAcquiredRecords(5, 14, 2).toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(5, 14, 2).toArray(), acquiredRecordsList.toArray());
 
         assertEquals(15, sharePartition.nextFetchOffset());
         assertEquals(5L, sharePartition.startOffset());
@@ -10831,7 +10806,7 @@ public class SharePartitionTest {
                 FETCH_ISOLATION_HWM),
             10);
 
-        assertArrayEquals(expectedAcquiredRecords(15, 24, 2).toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(15, 24, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(25, sharePartition.nextFetchOffset());
         assertEquals(15L, sharePartition.startOffset());
         assertEquals(1, sharePartition.cachedState().size());
@@ -10899,9 +10874,7 @@ public class SharePartitionTest {
             FETCH_ISOLATION_HWM),
             2);
 
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(1, 1, 1));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(2, 2, 1));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(1, 2, 1).toArray(), acquiredRecordsList.toArray());
 
         // Ack only 1 record
         ackResult = sharePartition.acknowledge(
@@ -10947,9 +10920,7 @@ public class SharePartitionTest {
             FETCH_ISOLATION_HWM),
             2);
 
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(10, 10, 2));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(11, 11, 2));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(10, 11, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(12, sharePartition.nextFetchOffset());
 
         // Check cached state.
@@ -11046,9 +11017,7 @@ public class SharePartitionTest {
             FETCH_ISOLATION_HWM),
             2);
         // delivery count increased to 2
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(0, 0, 2));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(1, 1, 2));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(0, 1, 2).toArray(), acquiredRecordsList.toArray());
 
         // Ack offset at 1 and let the other offset to expire again.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
@@ -11334,9 +11303,7 @@ public class SharePartitionTest {
             fetchPartitionData(records),
             FETCH_ISOLATION_HWM),
             2);
-        List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(10, 10, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(11, 11, 2));
-        assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(10, 11, 2).toArray(), acquiredRecordsList.toArray());
         assertEquals(12, sharePartition.nextFetchOffset());
 
         // Member-3 acquires records in batch_optimized mode.
@@ -11354,11 +11321,8 @@ public class SharePartitionTest {
         // 1. 12-14 (released offsets)
         // 2. 21-22 (released offsets)
         // 3. 30-44 (new offsets)
-        expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(12, 12, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(13, 13, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(14, 14, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(21, 21, 2));
-        expectedAcquiredRecord.addAll(expectedAcquiredRecord(22, 22, 2));
+        List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(12, 14, 2));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(21, 22, 2));
         expectedAcquiredRecord.addAll(expectedAcquiredRecord(30, 44, 1));
         assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
         assertEquals(45, sharePartition.nextFetchOffset());
@@ -11600,9 +11564,7 @@ public class SharePartitionTest {
                 FETCH_ISOLATION_HWM),
             2);
 
-        expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(26, 26, 4));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(27, 27, 4));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(26, 27, 4).toArray(), acquiredRecordsList.toArray());
     }
 
     @Test
@@ -11653,9 +11615,7 @@ public class SharePartitionTest {
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             10);
-        final List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(15, 15, 5));
-        IntStream.range(1, 10).forEach(i -> expectedAcquiredRecords.addAll(expectedAcquiredRecord(15 + i, 15 + i, 5)));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(15, 24, 5).toArray(), acquiredRecordsList.toArray());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS + 1);
@@ -11670,14 +11630,11 @@ public class SharePartitionTest {
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             5);
-        final List<AcquiredRecords> expectedAcquiredRecords2 = new ArrayList<>(expectedAcquiredRecord(15, 15, 6));
-        IntStream.range(1, 5).forEach(i -> expectedAcquiredRecords2.addAll(expectedAcquiredRecord(15 + i, 15 + i, 6)));
-        assertArrayEquals(expectedAcquiredRecords2.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(15, 19, 6).toArray(), acquiredRecordsList.toArray());
 
         // Allowing acquisition lock to expire.
         mockTimer.advanceClock(DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS + 1);
 
-        List<AcquiredRecords> expectedLastAttemptAcquiredRecords;
         // Last delivery attempt, records are delivered individually.
         for (int i = 0; i < 5; i++) {
             acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -11689,8 +11646,7 @@ public class SharePartitionTest {
                     fetchPartitionData(records),
                     FETCH_ISOLATION_HWM),
                 1);
-            expectedLastAttemptAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(15 + i, 15 + i, 7));
-            assertArrayEquals(expectedLastAttemptAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+            assertArrayEquals(expectedAcquiredRecord(15 + i, 15 + i, 7).toArray(), acquiredRecordsList.toArray());
         }
 
         // The record at offset 20 has a delivery count of 5 and is a subject to be throttled;
@@ -11704,9 +11660,7 @@ public class SharePartitionTest {
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             5);
-        final List<AcquiredRecords> expectedAcquiredRecords3 = new ArrayList<>(expectedAcquiredRecord(20, 20, 6));
-        IntStream.range(1, 5).forEach(i -> expectedAcquiredRecords3.addAll(expectedAcquiredRecord(20 + i, 20 + i, 6)));
-        assertArrayEquals(expectedAcquiredRecords3.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(20, 24, 6).toArray(), acquiredRecordsList.toArray());
 
         // The record at offset 25 has a delivery count of 4 and is a subject to be throttled;
         // First acquisition attempt fails: batch size should be ~1/2 of original, 20 -> 10
@@ -11719,9 +11673,7 @@ public class SharePartitionTest {
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             10);
-        final List<AcquiredRecords> expectedAcquiredRecords4 = new ArrayList<>(expectedAcquiredRecord(25, 25, 5));
-        IntStream.range(1, 10).forEach(i -> expectedAcquiredRecords4.addAll(expectedAcquiredRecord(25 + i, 25 + i, 5)));
-        assertArrayEquals(expectedAcquiredRecords4.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(25, 34, 5).toArray(), acquiredRecordsList.toArray());
     }
 
     @Test
@@ -11813,9 +11765,7 @@ public class SharePartitionTest {
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             2);
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(15, 15, 4));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(16, 16, 4));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(15, 16, 4).toArray(), acquiredRecordsList.toArray());
 
         // The record at offset 17 should ba delivered alone.
         acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
@@ -11827,8 +11777,7 @@ public class SharePartitionTest {
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             1);
-        expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(17, 17, 5));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(17, 17, 5).toArray(), acquiredRecordsList.toArray());
     }
 
     @Test
@@ -11920,11 +11869,7 @@ public class SharePartitionTest {
                 fetchPartitionData(records),
                 FETCH_ISOLATION_HWM),
             4);
-        List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(16, 16, 3));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(17, 17, 3));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(18, 18, 3));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(19, 19, 3));
-        assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
+        assertArrayEquals(expectedAcquiredRecord(16, 19, 3).toArray(), acquiredRecordsList.toArray());
     }
 
     @Test
@@ -12035,8 +11980,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> expectedAcquiredRecords = new ArrayList<>(expectedAcquiredRecord(30, 34, 3));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(35, 35, 3));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(38, 38, 3));
-        expectedAcquiredRecords.addAll(expectedAcquiredRecord(39, 39, 3));
+        expectedAcquiredRecords.addAll(expectedAcquiredRecord(38, 39, 3));
         expectedAcquiredRecords.addAll(expectedAcquiredRecord(45, 49, 2));
 
         assertArrayEquals(expectedAcquiredRecords.toArray(), acquiredRecordsList.toArray());
