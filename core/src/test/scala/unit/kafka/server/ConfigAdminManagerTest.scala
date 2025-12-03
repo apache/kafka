@@ -393,7 +393,7 @@ class ConfigAdminManagerTest {
     val manager = newConfigAdminManager(1)
     val unknown = unknownIncremental()
     assertEquals(Collections.singletonMap(unknown,
-      new ApiError(INVALID_REQUEST, "Unknown resource type 0")),
+      new ApiError(INVALID_REQUEST, "Unknown resource type 0.")),
         manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
           unknown).iterator())),
