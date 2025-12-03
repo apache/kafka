@@ -29,6 +29,8 @@ import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,6 +62,18 @@ public class OptimizedUniformAssignmentBuilderTest {
     private final String memberA = "A";
     private final String memberB = "B";
     private final String memberC = "C";
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAssignmentReuse(boolean rackAware) {
+        CommonAssignorTests.testAssignmentReuse(assignor, HOMOGENEOUS, rackAware);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testReassignmentStickiness(boolean rackAware) {
+        CommonAssignorTests.testReassignmentStickiness(assignor, HOMOGENEOUS, rackAware);
+    }
 
     @Test
     public void testOneMemberNoTopicSubscription() {
@@ -556,72 +570,6 @@ public class OptimizedUniformAssignmentBuilderTest {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             new KRaftCoordinatorMetadataImage(metadataImage)
         );
-
-        GroupAssignment computedAssignment = assignor.assign(
-            groupSpec,
-            subscribedTopicMetadata
-        );
-
-        assertAssignment(expectedAssignment, computedAssignment);
-        checkValidityAndBalance(members, computedAssignment);
-    }
-
-    @Test
-    public void testReassignmentStickinessWhenAlreadyBalanced() {
-        MetadataImage metadataImage = new MetadataImageBuilder()
-            .addTopic(topic1Uuid, topic1Name, 5)
-            .build();
-
-        // A TreeMap ensures that memberA is first in the iteration order.
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
-
-        // Two members must have extra partitions. In the previous assignment, they were members A
-        // and C.
-        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            Set.of(topic1Uuid),
-            new Assignment(mkAssignment(
-                mkTopicAssignment(topic1Uuid, 0, 3)
-            ))
-        ));
-
-        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
-                mkTopicAssignment(topic1Uuid, 1)
-            ))
-        ));
-
-        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            Set.of(topic1Uuid, topic2Uuid),
-            new Assignment(mkAssignment(
-                mkTopicAssignment(topic1Uuid, 2, 4)
-            ))
-        ));
-
-        // Members A and C should keep their partitions.
-        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-        expectedAssignment.put(memberA, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 3)
-        ));
-        expectedAssignment.put(memberB, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1)
-        ));
-        expectedAssignment.put(memberC, mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2, 4)
-        ));
-
-        GroupSpec groupSpec = new GroupSpecImpl(
-            members,
-            HOMOGENEOUS,
-            invertedTargetAssignment(members)
-        );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(new KRaftCoordinatorMetadataImage(metadataImage));
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
