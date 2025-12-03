@@ -3370,7 +3370,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session for client id ${request.header.clientId} succeeded, response: $releaseAcquiredRecordsData")
                 }
               )
           }
@@ -3594,7 +3594,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session for client id ${request.header.clientId} succeeded, response: $releaseAcquiredRecordsData")
                 }
               }
           }
