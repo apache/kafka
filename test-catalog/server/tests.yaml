@@ -254,6 +254,7 @@ org.apache.kafka.server.share.session.ShareSessionCacheTest:
 - testResizeCachedSessions
 - testShareGroupListenerEvents
 - testShareGroupListenerEventsMultipleGroups
+- testShareGroupListenerEventsOnStaleSession
 - testShareSessionCache
 org.apache.kafka.server.share.session.ShareSessionKeyTest:
 - testConstructorThrowsExceptionWhenBothGroupIdAndMemberIdIsNull
