@@ -1029,12 +1029,30 @@ public class RecordAccumulator {
     /**
      * Deallocate the record batch
      */
-    public void deallocate(ProducerBatch batch) {
+    private void deallocateBatch(ProducerBatch batch, boolean deallocateWithoutReuse) {
         incomplete.remove(batch);
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
-        if (!batch.isSplitBatch())
-            free.deallocate(batch.buffer(), batch.initialCapacity());
+        if (!batch.isSplitBatch()) {
+            if (deallocateWithoutReuse)
+                free.deallocateWithoutReuse(batch.buffer(), batch.initialCapacity());
+            else
+                free.deallocate(batch.buffer(), batch.initialCapacity());
+        }
+    }
+
+    /**
+     * Deallocate the record batch
+     */
+    public void deallocate(ProducerBatch batch) {
+        deallocateBatch(batch, false);
+    }
+
+    /**
+     * Deallocate the record batch but do not reuse memory in the BufferPool
+     */
+    public void deallocateWithoutReuse(ProducerBatch batch) {
+        deallocateBatch(batch, true);
     }
 
     /**
@@ -1132,7 +1150,7 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            deallocate(batch);
+            deallocateWithoutReuse(batch);
         }
     }
 
@@ -1152,7 +1170,7 @@ public class RecordAccumulator {
             }
             if (aborted) {
                 batch.abort(reason);
-                deallocate(batch);
+                deallocateWithoutReuse(batch);
             }
         }
     }

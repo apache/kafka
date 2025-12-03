@@ -174,6 +174,11 @@ public class Sender implements Runnable {
         this.accumulator.deallocate(batch);
     }
 
+    private void maybeRemoveAndDeallocateBatchWithoutReuse(ProducerBatch batch) {
+        maybeRemoveFromInflightBatches(batch);
+        this.accumulator.deallocateWithoutReuse(batch);
+    }
+
     /**
      *  Get the in-flight batches that has reached delivery timeout.
      */
@@ -832,7 +837,10 @@ public class Sender implements Runnable {
                     log.debug("Encountered error when transaction manager was handling a failed batch", e);
                 }
             }
-            maybeRemoveAndDeallocateBatch(batch);
+            // Fix for KAFKA-19012
+            // The pooled ByteBuffer associated with this batch might still be in use by the network client so we
+            // cannot allow it to be reused.
+            maybeRemoveAndDeallocateBatchWithoutReuse(batch);
         }
     }
 

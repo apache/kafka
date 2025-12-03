@@ -407,4 +407,40 @@ public class BufferPoolTest {
         pool.deallocate(buffer);
     }
 
+    /**
+     * Test that buffers are reused by the pool when they are a poolable size
+     */
+    @Test
+    public void testBufferReuse() throws Exception {
+        int poolableSize = 100;
+        long totalMemory = 100;
+        BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
+
+        ByteBuffer b1 = pool.allocate(poolableSize, maxBlockTimeMs);
+        pool.deallocate(b1);
+        ByteBuffer b2 = pool.allocate(poolableSize, maxBlockTimeMs);
+
+        int randomInt = 93748523;
+        b1.putInt(randomInt);
+        assertEquals(randomInt, b2.getInt(0), "Buffers should share the same underlying memory, we wrote via b1 and read b2");
+    }
+
+    /**
+     * Test that buffers are not reused when calling deallocateWithoutReuse
+     */
+    @Test
+    public void testDeallocateWithoutReuse() throws Exception {
+        int poolableSize = 100;
+        long totalMemory = 100;
+        BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
+
+        ByteBuffer b1 = pool.allocate(poolableSize, maxBlockTimeMs);
+        pool.deallocateWithoutReuse(b1, poolableSize);
+        ByteBuffer b2 = pool.allocate(poolableSize, maxBlockTimeMs);
+
+        int randomInt = 93748523;
+        b1.putInt(randomInt);
+        assertNotEquals(randomInt, b2.getInt(0), "Buffers should not share the same underlying memory, writing via b1 should not propagate to b2");
+    }
+
 }

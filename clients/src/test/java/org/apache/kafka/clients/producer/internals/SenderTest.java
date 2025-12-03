@@ -127,6 +127,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -3588,6 +3589,44 @@ public class SenderTest {
         }
     }
 
+    @Test
+    public void testNoBufferReuseWhenBatchHasTimeoutErrors() throws Exception {
+        long totalSize = 1024 * 1024;
+        try (Metrics m = new Metrics()) {
+            BufferPool pool = new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics");
+
+            // Allocate and store a poolable buffer, then return it to the pool so the Sender can pick it up
+            ByteBuffer buffer = pool.allocate(batchSize, 0);
+            pool.deallocate(buffer);
+
+            setupWithTransactionState(null, false, pool);
+            StringBuilder sb = new StringBuilder();
+            // Make a value the right size so that RecordAccumulator calls BufferPool.allocate with the batchSize so it's pooled
+            for (int i = 0; i < 16290; i++) {
+                sb.append("a");
+            }
+            String largeValue = sb.toString();
+            appendToAccumulator(tp0, 0L, "key", largeValue);
+            sender.runOnce();  // connect
+            sender.runOnce();  // send produce request
+
+            assertEquals(1, client.inFlightRequestCount());
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+
+            ProducerBatch batch = sender.inFlightBatches(tp0).get(0);
+            // Validate the backing array of the buffer is the same as the pooled one from the start
+            assertSame(buffer.array(), batch.records().buffer().array(), "Sender should have allocated the same buffer we created");
+
+            time.sleep(DELIVERY_TIMEOUT_MS + 100);
+            sender.runOnce();
+
+            ByteBuffer newBuffer = pool.allocate(batchSize, 0);
+
+            // TEST buffer should not be reused
+            assertNotSame(buffer.array(), newBuffer.array(), "Buffer should not be reused");
+        }
+    }
+
 
     private void verifyErrorMessage(ProduceResponse response, String expectedMessage) throws Exception {
         Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
@@ -3644,6 +3683,17 @@ public class SenderTest {
             }
             allocatedBuffers.remove(buffer);
             super.deallocate(buffer, size);
+        }
+
+        @Override
+        public void deallocateWithoutReuse(ByteBuffer buffer, int size) {
+            if (!allocatedBuffers.containsKey(buffer)) {
+                throw new IllegalStateException("Deallocating a buffer that is not allocated");
+            }
+            allocatedBuffers.remove(buffer);
+            ByteBuffer newBuffer = ByteBuffer.allocate(size);
+            allocatedBuffers.put(newBuffer, Boolean.TRUE);
+            deallocate(newBuffer, size);
         }
 
         public boolean allMatch() {

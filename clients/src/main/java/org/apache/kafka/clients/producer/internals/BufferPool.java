@@ -274,6 +274,17 @@ public class BufferPool {
         }
     }
 
+    /**
+     * buffer is passed in only for use in tests
+     */
+    public void deallocateWithoutReuse(ByteBuffer buffer, int size) {
+        // We pass in a fresh buffer to be deallocated (added back to the pool if it is a poolable size)
+        // This is slightly inefficient if it's not a poolable size, but those tend to be small and
+        // this code is not hit often anyway
+        // This is useful if we're not 100% sure the buffer is not in use, which happens in some error cases
+        deallocate(ByteBuffer.allocate(size));
+    }
+
     public void deallocate(ByteBuffer buffer) {
         if (buffer != null)
             deallocate(buffer, buffer.capacity());
