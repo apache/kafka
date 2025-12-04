@@ -118,6 +118,8 @@ public class StreamsResetter {
             + "*** Warning! This tool makes irreversible changes to your application. It is strongly recommended that "
             + "you run this once with \"--dry-run\" to preview your changes before making them.\n\n";
 
+    private static final int MAX_REMOVE_MEMBERS_FROM_CONSUMER_GROUP_RETRIES = 3;
+
     private final List<String> allTopics = new LinkedList<>();
 
     public static void main(final String[] args) {
@@ -203,15 +205,15 @@ public class StreamsResetter {
                                 + " You can use option '--force' to remove active members from the group.");
                     }
                 }
-                return;
+                break;
             } catch (ExecutionException ee) {
                 // If the group ID is not found, this is not an error case
                 if (ee.getCause() instanceof GroupIdNotFoundException) {
-                    return;
+                    break;
                 }
                 // if a member is unknown, it may mean that it left the group itself. Retrying to confirm.
                 if (ee.getCause() instanceof KafkaException ke && ke.getCause() instanceof UnknownMemberIdException) {
-                    if (retries++ < 3) {
+                    if (retries++ < MAX_REMOVE_MEMBERS_FROM_CONSUMER_GROUP_RETRIES) {
                         continue;
                     }
                 }

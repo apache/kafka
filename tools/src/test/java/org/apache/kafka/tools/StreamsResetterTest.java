@@ -330,6 +330,24 @@ public class StreamsResetterTest {
     }
 
     @Test
+    public void shouldFailAfterTooManyRetries() throws Exception {
+        final String groupId = "groupId";
+
+        final Admin adminClient = mock(Admin.class);
+        final ConsumerGroupDescription consumerGroupDescription = mock(ConsumerGroupDescription.class);
+
+        when(adminClient.describeConsumerGroups(eq(Set.of(groupId)), any()))
+                .thenReturn(new DescribeConsumerGroupsResult(Map.of(groupId, KafkaFutureImpl.completedFuture(consumerGroupDescription))));
+        when(adminClient.removeMembersFromConsumerGroup(eq(groupId), any()))
+                .thenReturn(new RemoveMembersFromConsumerGroupResult(KafkaFutureImpl.completedFuture(Map.of(new LeaveGroupRequestData.MemberIdentity(), Errors.UNKNOWN_MEMBER_ID)), Set.of()));
+        when(consumerGroupDescription.members()).thenReturn(List.of(mock(MemberDescription.class)));
+
+        assertThrows(ExecutionException.class, () -> streamsResetter.maybeDeleteActiveConsumers(groupId, adminClient, true));
+
+        verify(adminClient, times(4)).removeMembersFromConsumerGroup(eq(groupId), any());
+    }
+
+    @Test
     public void shouldFailIfThereAreMembersAndNotForce() throws Exception {
         final String groupId = "groupId";
 

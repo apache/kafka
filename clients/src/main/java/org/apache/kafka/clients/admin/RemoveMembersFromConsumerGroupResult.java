@@ -36,7 +36,7 @@ public class RemoveMembersFromConsumerGroupResult {
     private final Set<MemberToRemove> memberInfos;
 
     public RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
-                                         Set<MemberToRemove> memberInfos) {
+                                                Set<MemberToRemove> memberInfos) {
         this.future = future;
         this.memberInfos = memberInfos;
     }
