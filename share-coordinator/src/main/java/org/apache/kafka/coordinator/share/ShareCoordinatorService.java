@@ -45,16 +45,17 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSupplier;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
-import org.apache.kafka.image.FeaturesImage;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -69,6 +70,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
@@ -82,7 +84,7 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ShareCoordinatorService implements ShareCoordinator {
     private final ShareCoordinatorConfig config;
     private final Logger log;
@@ -302,7 +304,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
-                runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
+                runtime.activeCoordinators().forEach(tp -> futures.add(performRecordPruning(tp)));
 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
                     .whenComplete((res, exp) -> {
@@ -1099,10 +1101,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public void onNewMetadataImage(CoordinatorMetadataImage newImage, FeaturesImage newFeaturesImage, CoordinatorMetadataDelta delta) {
+    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
         throwIfNotActive();
-        this.runtime.onNewMetadataImage(newImage, delta);
-        boolean enabled = isShareGroupsEnabled(newFeaturesImage);
+        this.runtime.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(Objects.requireNonNull(delta, "delta must be provided")),
+            new KRaftCoordinatorMetadataImage(Objects.requireNonNull(newImage, "newImage must be provided"))
+        );
+        boolean enabled = isShareGroupsEnabled(newImage);
         // enabled    shouldRunJob         result (XOR)
         // 0            0               no op on flag, do not call jobs
         // 0            1               disable flag, do not call jobs                      => action
@@ -1130,9 +1135,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
         }
     }
 
-    private boolean isShareGroupsEnabled(FeaturesImage image) {
+    private boolean isShareGroupsEnabled(MetadataImage image) {
         return shareGroupConfigEnabledSupplier.get() || ShareVersion.fromFeatureLevel(
-            image.finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
+            image.features().finalizedVersions().getOrDefault(ShareVersion.FEATURE_NAME, (short) 0)
         ).supportsShareGroups();
     }
 

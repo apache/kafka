@@ -1999,7 +1999,7 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
-    public void testOnNewMetadataImage() {
+    public void testOnMetadataUpdate() {
         TopicPartition tp0 = new TopicPartition("__consumer_offsets", 0);
         TopicPartition tp1 = new TopicPartition("__consumer_offsets", 1);
 
@@ -2061,10 +2061,10 @@ public class CoordinatorRuntimeTest {
         // Publish a new image.
         CoordinatorMetadataDelta delta = new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY));
         CoordinatorMetadataImage newImage = CoordinatorMetadataImage.EMPTY;
-        runtime.onNewMetadataImage(newImage, delta);
+        runtime.onMetadataUpdate(delta, newImage);
 
         // Coordinator 0 should be notified about it.
-        verify(coordinator0).onNewMetadataImage(newImage, delta);
+        verify(coordinator0).onMetadataUpdate(delta, newImage);
 
         // Coordinator 1 is loaded. It should get the current image
         // that is the new image.

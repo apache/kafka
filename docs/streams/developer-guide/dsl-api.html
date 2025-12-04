@@ -3462,10 +3462,11 @@ grouped
                 <p>The Processor API now serves as a unified replacement for all these methods. It simplifies the API surface
                     while maintaining support for both stateless and stateful operations.</p>
 
-                <p><b>CAUTION:</b> If you are using <code>KStream.transformValues()</code> and you have the "merge repartition topics"
+                <p><b>CAUTION:</b> If you are using <code>KStream.transformValues()</code> or <code>KStream.flatTransformValues()</code>
+                    and you have the "merge repartition topics"
                     optimization enabled, rewriting your program to <code>KStream.processValues()</code> might not be safe due to
                     <a href="https://issues.apache.org/jira/browse/KAFKA-19668">KAFKA-19668</a>. For this case, you should not upgrade
-                    to Kafka Streams 4.0.0 or 4.1.0, but use Kafka Streams 4.0.1 instead, which contains a fix.
+                    to Kafka Streams 4.0.0 or 4.1.0, but use Kafka Streams 4.0.1 or 4.1.1 instead, which contain a fix.
                     Note, that the fix is not enabled by default for backward compatibility reasons, and you would need to
                     enable the fix by setting config <code>__enable.process.processValue.fix__ = true</code> and pass it
                     into <code>StreamsBuilder()</code> constructor.</p>
@@ -3680,6 +3681,8 @@ final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new Streams
     }
 }</code></pre>
                 <h5 id="cumulative-discounts-for-a-loyalty-program-removal">Cumulative Discounts for a Loyalty Program</h5>
+                <p>Below, methods <code>applyDiscountWithTransform</code> and <code>applyDiscountWithProcess</code> show how you can
+                    migrate from <code>transform</code> to <code>process</code>.</p>
                 <pre class="line-numbers"><code class="language-java">public class CumulativeDiscountsForALoyaltyProgramExample {
     private static final double DISCOUNT_THRESHOLD = 100.0;
     private static final String CUSTOMER_SPENDING_STORE = &quot;customer-spending-store&quot;;

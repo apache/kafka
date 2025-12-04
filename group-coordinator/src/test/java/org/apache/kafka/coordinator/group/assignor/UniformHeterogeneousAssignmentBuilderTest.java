@@ -30,6 +30,8 @@ import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -87,6 +89,18 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         public Collection<String> memberIds() {
             return orderedMembers;
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAssignmentReuse(boolean rackAware) {
+        CommonAssignorTests.testAssignmentReuse(assignor, HETEROGENEOUS, rackAware);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testReassignmentStickiness(boolean rackAware) {
+        CommonAssignorTests.testReassignmentStickiness(assignor, HETEROGENEOUS, rackAware);
     }
 
     @Test
