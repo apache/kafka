@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
@@ -70,6 +71,24 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             if (version < oldestAllowedVersion() || version > latestAllowedVersion())
                 throw new UnsupportedVersionException("Cannot build " + this + " with version " + version);
 
+            if (version <= 4) {
+                for (OffsetForLeaderEpochRequestData.OffsetForLeaderTopic topic : data.topics()) {
+                    if (topic.topic() == null || topic.topic().isEmpty()) {
+                        throw new UnsupportedVersionException("The broker offsets for leader api version " +
+                                version + " does require usage of topic names.");
+                    }
+                }
+            }
+
+            if (version >= 5) {
+                for (OffsetForLeaderEpochRequestData.OffsetForLeaderTopic topic : data.topics()) {
+                    if (topic.topicId() == null || topic.topicId() == Uuid.ZERO_UUID) {
+                        throw new UnsupportedVersionException("The broker offsets for leader api version " +
+                                version + " does require usage of topic ids.");
+                    }
+                }
+            }
+
             return new OffsetsForLeaderEpochRequest(data, version);
         }
 
@@ -93,6 +112,10 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         return data.replicaId();
     }
 
+    public static boolean useTopicIds(short version) {
+        return version >= 5;
+    }
+
     public static OffsetsForLeaderEpochRequest parse(Readable readable, short version) {
         return new OffsetsForLeaderEpochRequest(new OffsetForLeaderEpochRequestData(readable, version), version);
     }
@@ -104,7 +127,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         OffsetForLeaderEpochResponseData responseData = new OffsetForLeaderEpochResponseData();
         data.topics().forEach(topic -> {
             OffsetForLeaderTopicResult topicData = new OffsetForLeaderTopicResult()
-                .setTopic(topic.topic());
+                .setTopic(topic.topic()).setTopicId(topic.topicId());
             topic.partitions().forEach(partition ->
                 topicData.partitions().add(new EpochEndOffset()
                     .setPartition(partition.partition())

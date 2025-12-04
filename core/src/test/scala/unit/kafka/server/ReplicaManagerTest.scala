@@ -6047,6 +6047,150 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testLastOffsetForLeaderEpochWithTopicId(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
+    try {
+      val topicId = Uuid.randomUuid()
+      val tp = new TopicPartition(topic, 0)
+      val replicas = util.Arrays.asList[Integer](0, 1, 2)
+
+      // Mock metadataCache to return topic name for topicId
+      when(replicaManager.metadataCache.getTopicName(topicId)).thenReturn(util.Optional.of(topic))
+
+      // Add topic to metadata cache
+      val delta = createLeaderDelta(topicId, tp, leaderId = 0, replicas = replicas, isr = replicas)
+      val image = imageFromTopics(delta.apply())
+      replicaManager.applyDelta(delta, image)
+
+      // Create partition
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
+      replicaManager.createPartition(tp).createLogIfNotExists(
+        isNew = false,
+        isFutureReplica = false,
+        offsetCheckpoints = offsetCheckpoints,
+        Some(topicId)
+      )
+
+      // Build request using topicId (version 5+ scenario)
+      import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
+      val requestedEpochInfo = Seq(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+          .setTopicId(topicId)
+          .setPartitions(util.Arrays.asList(
+            new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+              .setPartition(0)
+              .setLeaderEpoch(0)
+          ))
+      )
+
+      val response = replicaManager.lastOffsetForLeaderEpoch(requestedEpochInfo)
+
+      assertEquals(1, response.size)
+      val topicResult = response.head
+      assertEquals(topic, topicResult.topic)
+      assertEquals(topicId, topicResult.topicId)
+      assertEquals(1, topicResult.partitions.size)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testLastOffsetForLeaderEpochWithTopicName(): Unit = {
+    import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
+    try {
+      val topicId = Uuid.randomUuid()
+      val tp = new TopicPartition(topic, 0)
+      val replicas = util.Arrays.asList[Integer](0, 1, 2)
+
+      // Add topic to metadata cache
+      val delta = createLeaderDelta(topicId, tp, leaderId = 0, replicas = replicas, isr = replicas)
+      val image = imageFromTopics(delta.apply())
+      replicaManager.applyDelta(delta, image)
+
+      // Create partition
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
+      replicaManager.createPartition(tp).createLogIfNotExists(
+        isNew = false,
+        isFutureReplica = false,
+        offsetCheckpoints = offsetCheckpoints,
+        Some(topicId)
+      )
+
+      // Build request using topic name (version 4 and below scenario)
+      val requestedEpochInfo = Seq(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+          .setTopic(topic)
+          .setPartitions(util.Arrays.asList(
+            new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+              .setPartition(0)
+              .setLeaderEpoch(0)
+          ))
+      )
+
+      val response = replicaManager.lastOffsetForLeaderEpoch(requestedEpochInfo)
+
+      assertEquals(1, response.size)
+      val topicResult = response.head
+      assertEquals(topic, topicResult.topic)
+      assertEquals(1, topicResult.partitions.size)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testLastOffsetForLeaderEpochResolvesTopicIdToName(): Unit = {
+    import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
+    try {
+      val topicId = Uuid.randomUuid()
+      val topicName = "test-topic"
+      val tp = new TopicPartition(topicName, 0)
+      val replicas = util.Arrays.asList[Integer](0, 1, 2)
+
+      // Mock metadataCache to return topic name for topicId
+      when(replicaManager.metadataCache.getTopicName(topicId)).thenReturn(util.Optional.of(topicName))
+
+      // Add topic to metadata cache with specific name
+      val delta = createLeaderDelta(topicId, tp, leaderId = 0, replicas = replicas, isr = replicas)
+      val image = imageFromTopics(delta.apply())
+      replicaManager.applyDelta(delta, image)
+
+      // Create partition
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
+      replicaManager.createPartition(tp).createLogIfNotExists(
+        isNew = false,
+        isFutureReplica = false,
+        offsetCheckpoints = offsetCheckpoints,
+        Some(topicId)
+      )
+
+      // Build request with topicId only (no topic name)
+      val requestedEpochInfo = Seq(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+          .setTopicId(topicId)
+          .setPartitions(util.Arrays.asList(
+            new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+              .setPartition(0)
+              .setLeaderEpoch(0)
+          ))
+      )
+
+      val response = replicaManager.lastOffsetForLeaderEpoch(requestedEpochInfo)
+
+      assertEquals(1, response.size)
+      val topicResult = response.head
+      // Verify that topicId was resolved to the correct topic name
+      assertEquals(topicName, topicResult.topic)
+      assertEquals(topicId, topicResult.topicId)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def readFromLogWithOffsetOutOfRange(tp: TopicPartition): Seq[(TopicIdPartition, LogReadResult)] = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true)
     try {

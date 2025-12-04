@@ -2117,13 +2117,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetForLeaderEpoch = request.body[OffsetsForLeaderEpochRequest]
     val topics = offsetForLeaderEpoch.data.topics.asScala.toSeq
 
+    // Separate topics with unknown topic IDs when using version 5+
+    val (knownTopics, unknownTopicIdTopics) = if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
+      topics.partition { offsetForLeaderTopic =>
+        metadataCache.getTopicName(offsetForLeaderTopic.topicId).isPresent
+      }
+    } else {
+      (topics, Seq.empty[OffsetForLeaderTopic])
+    }
+
     // The OffsetsForLeaderEpoch API was initially only used for inter-broker communication and required
     // cluster permission. With KIP-320, the consumer now also uses this API to check for log truncation
     // following a leader change, so we also allow topic describe permission.
     val (authorizedTopics, unauthorizedTopics) =
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME, logIfDenied = false))
-        (topics, Seq.empty[OffsetForLeaderTopic])
-      else authHelper.partitionSeqByAuthorized(request.context, DESCRIBE, TOPIC, topics)(_.topic)
+        (knownTopics, Seq.empty[OffsetForLeaderTopic])
+      else authHelper.partitionSeqByAuthorized(request.context, DESCRIBE, TOPIC, knownTopics) { offsetForLeaderTopic =>
+        // Resolve topic name from topicId if needed for authorization
+        if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
+          metadataCache.getTopicName(offsetForLeaderTopic.topicId).get()
+        } else {
+          offsetForLeaderTopic.topic
+        }
+      }
 
     val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedTopics)
     val endOffsetsForUnauthorizedPartitions = unauthorizedTopics.map { offsetForLeaderTopic =>
@@ -2133,13 +2149,34 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
       }
 
+      // Resolve topic name from topicId if needed
+      val topicName = if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
+        metadataCache.getTopicName(offsetForLeaderTopic.topicId).get()
+      } else {
+        offsetForLeaderTopic.topic
+      }
+
       new OffsetForLeaderTopicResult()
-        .setTopic(offsetForLeaderTopic.topic)
+        .setTopic(topicName)
+        .setTopicId(offsetForLeaderTopic.topicId)
+        .setPartitions(partitions.toList.asJava)
+    }
+
+    val endOffsetsForUnknownTopicIdTopics = unknownTopicIdTopics.map { offsetForLeaderTopic =>
+      val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
+        new EpochEndOffset()
+          .setPartition(offsetForLeaderPartition.partition)
+          .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+      }
+
+      new OffsetForLeaderTopicResult()
+        .setTopic("")
+        .setTopicId(offsetForLeaderTopic.topicId)
         .setPartitions(partitions.toList.asJava)
     }
 
     val endOffsetsForAllTopics = new OffsetForLeaderTopicResultCollection(
-      (endOffsetsForAuthorizedPartitions ++ endOffsetsForUnauthorizedPartitions).asJava.iterator
+      (endOffsetsForAuthorizedPartitions ++ endOffsetsForUnauthorizedPartitions ++ endOffsetsForUnknownTopicIdTopics).asJava.iterator
     )
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>

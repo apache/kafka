@@ -26,15 +26,19 @@
   // Version 3 is the same as version 2.
   //
   // Version 4 enables flexible versions.
-  "validVersions": "2-4",
+  //
+  // Version 5 replaces topic names with topic IDs (KIP-516). May return UNKNOWN_TOPIC_ID error code.
+  "validVersions": "2-5",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Topics", "type": "[]OffsetForLeaderTopicResult", "versions": "0+",
       "about": "Each topic we fetched offsets for.", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
-        "mapKey": true, "about": "The topic name." },
+      { "name": "Topic", "type": "string", "versions": "0-4", "entityType": "topicName",
+        "mapKey": true, "ignorable": true, "about": "The topic name." },
+      { "name": "TopicId", "type": "uuid", "versions": "5+", "ignorable": true,
+        "about": "The unique topic ID."},
       { "name": "Partitions", "type": "[]EpochEndOffset", "versions": "0+",
         "about": "Each partition in the topic we fetched offsets for.", "fields": [
         { "name": "ErrorCode", "type": "int16", "versions": "0+",

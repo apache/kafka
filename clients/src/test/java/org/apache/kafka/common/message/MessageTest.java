@@ -378,36 +378,24 @@ public final class MessageTest {
         testAllMessageRoundTripsBeforeVersion((short) 1, responseWithGroupInstanceId, expectedResponse);
     }
 
-    @Test
-    public void testOffsetForLeaderEpochVersions() throws Exception {
-        // Version 2 adds optional current leader epoch
-        OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataNoCurrentEpoch =
-                new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
-                        .setPartition(0)
-                        .setLeaderEpoch(3);
-        OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataWithCurrentEpoch =
-                new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FOR_LEADER_EPOCH)
+    public void testOffsetForLeaderEpochVersions(short version) throws Exception {
+        OffsetForLeaderEpochRequestData request = new OffsetForLeaderEpochRequestData()
+            .setReplicaId(version >= 3 ? 5 : -2);
+        request.topics().add(
+            new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+                .setTopicId(version >= 5 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                .setTopic(version < 5 ? "foo" : "")
+                .setPartitions(singletonList(
+                    new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
                         .setPartition(0)
                         .setLeaderEpoch(3)
-                        .setCurrentLeaderEpoch(5);
-        OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
-        data.topics().add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
-                .setTopic("foo")
-                .setPartitions(singletonList(partitionDataNoCurrentEpoch)));
+                        .setCurrentLeaderEpoch(version >= 2 ? 5 : -1)
+                ))
+        );
 
-        testAllMessageRoundTrips(data);
-        short lowestVersion = ApiKeys.OFFSET_FOR_LEADER_EPOCH.oldestVersion();
-        testAllMessageRoundTripsBetweenVersions(lowestVersion, (short) 2, partitionDataWithCurrentEpoch, partitionDataNoCurrentEpoch);
-        testAllMessageRoundTripsFromVersion((short) 2, partitionDataWithCurrentEpoch);
-
-        // Version 3 adds the optional replica Id field
-        testAllMessageRoundTripsFromVersion((short) 3, new OffsetForLeaderEpochRequestData().setReplicaId(5));
-        testAllMessageRoundTripsBeforeVersion((short) 3,
-                new OffsetForLeaderEpochRequestData().setReplicaId(5),
-                new OffsetForLeaderEpochRequestData());
-        testAllMessageRoundTripsBeforeVersion((short) 3,
-                new OffsetForLeaderEpochRequestData().setReplicaId(5),
-                new OffsetForLeaderEpochRequestData().setReplicaId(-2));
+        testMessageRoundTrip(version, request, request);
     }
 
     @ParameterizedTest

@@ -57,6 +57,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsParti
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData
 import org.apache.kafka.common.message.ShareFetchRequestData.{AcknowledgementBatch, ForgottenTopic}
 import org.apache.kafka.common.message.ShareFetchResponseData.{AcquiredRecords, PartitionData, ShareFetchableTopicResponse}
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
@@ -14562,6 +14563,233 @@ class KafkaApisTest extends Logging {
     val responseData = response.data()
 
     assertEquals(Errors.INVALID_REQUEST.code, responseData.errorCode)
+  }
+
+  @Test
+  def testHandleOffsetForLeaderEpochWithUnknownTopicId(): Unit = {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    val topic1Id = Uuid.randomUuid()
+    val topic2Id = Uuid.randomUuid()
+    val unknownTopicId = Uuid.randomUuid()
+
+    // Add only topic1 and topic2 to metadata cache
+    addTopicToMetadataCache(topic1, numPartitions = 2, topicId = topic1Id)
+    addTopicToMetadataCache(topic2, numPartitions = 1, topicId = topic2Id)
+
+    // Create request with version 5 (uses topicIds)
+    val epochs = new OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection()
+    epochs.add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+      .setTopicId(topic1Id)
+      .setPartitions(util.List.of(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+          .setPartition(0)
+          .setLeaderEpoch(1)
+      )))
+    epochs.add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+      .setTopicId(unknownTopicId)
+      .setPartitions(util.List.of(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+          .setPartition(0)
+          .setLeaderEpoch(1)
+      )))
+
+    val request = buildRequest(OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build())
+
+    // Mock replica manager to return successful response for topic1
+    when(replicaManager.lastOffsetForLeaderEpoch(any())).thenAnswer { invocation =>
+      val topics = invocation.getArgument[Seq[OffsetForLeaderEpochRequestData.OffsetForLeaderTopic]](0)
+      topics.map { topic =>
+        new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+          .setTopic(topic1)
+          .setTopicId(topic.topicId)
+          .setPartitions(util.List.of(
+            new OffsetForLeaderEpochResponseData.EpochEndOffset()
+              .setPartition(0)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(1)
+              .setEndOffset(100)
+          ))
+      }
+    }
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[OffsetsForLeaderEpochResponse](request)
+    val responseData = response.data
+
+    assertEquals(2, responseData.topics.size)
+
+    // Find topic1 (known) in the response
+    val topic1Response = responseData.topics.asScala.iterator.find(_.topicId == topic1Id).get
+    assertEquals("", topic1Response.topic)
+    assertEquals(topic1Id, topic1Response.topicId)
+    assertEquals(1, topic1Response.partitions.size)
+    assertEquals(Errors.NONE.code, topic1Response.partitions.get(0).errorCode)
+    assertEquals(100, topic1Response.partitions.get(0).endOffset)
+
+    // Find the unknown topic in the response
+    val unknownTopicResponse = responseData.topics.asScala.iterator.find(_.topicId == unknownTopicId).get
+    assertEquals("", unknownTopicResponse.topic)
+    assertEquals(unknownTopicId, unknownTopicResponse.topicId)
+    assertEquals(1, unknownTopicResponse.partitions.size)
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, unknownTopicResponse.partitions.get(0).errorCode)
+    assertEquals(0, unknownTopicResponse.partitions.get(0).partition)
+  }
+
+  @Test
+  def testHandleOffsetForLeaderEpochWithTopicAuthorization(): Unit = {
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    val topic1Id = Uuid.randomUuid()
+    val topic2Id = Uuid.randomUuid()
+
+    // Add topics to metadata cache
+    addTopicToMetadataCache(topic1, numPartitions = 2, topicId = topic1Id)
+    addTopicToMetadataCache(topic2, numPartitions = 1, topicId = topic2Id)
+
+    // Create authorizer that denies topic2
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any(), any())).thenAnswer { invocation =>
+      val actions = invocation.getArgument[util.List[Action]](1)
+      actions.asScala.map { action =>
+        action.operation match {
+          case AclOperation.CLUSTER_ACTION =>
+            AuthorizationResult.DENIED
+          case _ if action.resourcePattern.name == topic2 =>
+            AuthorizationResult.DENIED
+          case _ =>
+            AuthorizationResult.ALLOWED
+        }
+      }.asJava
+    }
+
+    // Create request with version 5 (uses topicIds)
+    val epochs = new OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection()
+    epochs.add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+      .setTopicId(topic1Id)
+      .setPartitions(util.List.of(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+          .setPartition(0)
+          .setLeaderEpoch(1)
+      )))
+    epochs.add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+      .setTopicId(topic2Id)
+      .setPartitions(util.List.of(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+          .setPartition(0)
+          .setLeaderEpoch(1)
+      )))
+
+    val request = buildRequest(OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build())
+
+    // Mock replica manager to return successful response for authorized topics
+    // Note: Only topic1 should be passed to replicaManager (topic2 is unauthorized)
+    when(replicaManager.lastOffsetForLeaderEpoch(any())).thenAnswer { invocation =>
+      val topics = invocation.getArgument[Seq[OffsetForLeaderEpochRequestData.OffsetForLeaderTopic]](0)
+      topics.map { topic =>
+        // ReplicaManager would normally resolve topicId to topic name
+        val topicName = if (topic.topicId == topic1Id) topic1 else if (topic.topicId == topic2Id) topic2 else ""
+        new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+          .setTopic(topicName)
+          .setTopicId(topic.topicId)
+          .setPartitions(util.List.of(
+            new OffsetForLeaderEpochResponseData.EpochEndOffset()
+              .setPartition(0)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(1)
+              .setEndOffset(100)
+          ))
+      }
+    }
+
+    kafkaApis = createKafkaApis(authorizer = Option(authorizer))
+    kafkaApis.handle(request, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[OffsetsForLeaderEpochResponse](request)
+    val responseData = response.data
+
+    assertEquals(2, responseData.topics.size)
+
+    // Find topic1 (authorized) in the response
+    val topic1Response = responseData.topics.asScala.iterator.find(_.topicId == topic1Id).get
+    assertEquals("", topic1Response.topic)
+    assertEquals(Errors.NONE.code, topic1Response.partitions.get(0).errorCode)
+
+    // Find topic2 (unauthorized) in the response
+    val topic2Response = responseData.topics.asScala.iterator.find(_.topicId == topic2Id).get
+    // Topic name should be resolved from metadata cache
+    assertEquals("", topic2Response.topic)
+    assertEquals(topic2Id, topic2Response.topicId)
+    assertEquals(1, topic2Response.partitions.size)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, topic2Response.partitions.get(0).errorCode)
+    assertEquals(0, topic2Response.partitions.get(0).partition)
+  }
+
+  @Test
+  def testHandleOffsetForLeaderEpochWithClusterAuthorization(): Unit = {
+    val topic1 = "topic1"
+    val topic1Id = Uuid.randomUuid()
+
+    // Add topic to metadata cache
+    addTopicToMetadataCache(topic1, numPartitions = 2, topicId = topic1Id)
+
+    // Create authorizer that allows CLUSTER_ACTION
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any(), any())).thenAnswer { invocation =>
+      val actions = invocation.getArgument[util.List[Action]](1)
+      actions.asScala.map { action =>
+        if (action.operation == AclOperation.CLUSTER_ACTION)
+          AuthorizationResult.ALLOWED
+        else
+          AuthorizationResult.DENIED
+      }.asJava
+    }
+
+    // Create request with version 5 (uses topicIds)
+    val epochs = new OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection()
+    epochs.add(new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+      .setTopicId(topic1Id)
+      .setPartitions(util.List.of(
+        new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+          .setPartition(0)
+          .setLeaderEpoch(1)
+      )))
+
+    val request = buildRequest(OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build())
+
+    // Mock replica manager to return successful response
+    when(replicaManager.lastOffsetForLeaderEpoch(any())).thenAnswer { invocation =>
+      val topics = invocation.getArgument[Seq[OffsetForLeaderEpochRequestData.OffsetForLeaderTopic]](0)
+      topics.map { topic =>
+        new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+          .setTopic(topic1)
+          .setTopicId(topic.topicId)
+          .setPartitions(util.List.of(
+            new OffsetForLeaderEpochResponseData.EpochEndOffset()
+              .setPartition(0)
+              .setErrorCode(Errors.NONE.code)
+              .setLeaderEpoch(1)
+              .setEndOffset(100)
+          ))
+      }
+    }
+
+    kafkaApis = createKafkaApis(authorizer = Option(authorizer))
+    kafkaApis.handle(request, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[OffsetsForLeaderEpochResponse](request)
+    val responseData = response.data
+
+    // With CLUSTER_ACTION permission, all topics should be authorized even if topic DESCRIBE is denied
+    assertEquals(1, responseData.topics.size)
+    val topic1Response = responseData.topics.asScala.iterator.next()
+    assertEquals("", topic1Response.topic)
+    assertEquals(topic1Id, topic1Response.topicId)
+    // The error code should not be TOPIC_AUTHORIZATION_FAILED since cluster action is allowed
+    assertEquals(Errors.NONE.code, topic1Response.partitions.get(0).errorCode)
+    assertEquals(100, topic1Response.partitions.get(0).endOffset)
   }
 
   def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,

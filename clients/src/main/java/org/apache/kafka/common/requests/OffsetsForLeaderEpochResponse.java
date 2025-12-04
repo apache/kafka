@@ -63,6 +63,10 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         return errorCounts;
     }
 
+    public static boolean useTopicIds(short version) {
+        return version >= 5;
+    }
+
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }

@@ -2269,8 +2269,15 @@ class ReplicaManager(val config: KafkaConfig,
     requestedEpochInfo: Seq[OffsetForLeaderTopic]
   ): Seq[OffsetForLeaderTopicResult] = {
     requestedEpochInfo.map { offsetForLeaderTopic =>
+      // Resolve topic name from topicId if needed
+      val topicName = if (offsetForLeaderTopic.topicId != null && offsetForLeaderTopic.topicId != Uuid.ZERO_UUID) {
+        metadataCache.getTopicName(offsetForLeaderTopic.topicId).get()
+      } else {
+        offsetForLeaderTopic.topic
+      }
+
       val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
-        val tp = new TopicPartition(offsetForLeaderTopic.topic, offsetForLeaderPartition.partition)
+        val tp = new TopicPartition(topicName, offsetForLeaderPartition.partition)
         getPartition(tp) match {
           case HostedPartition.Online(partition) =>
             val currentLeaderEpochOpt =
@@ -2302,7 +2309,8 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       new OffsetForLeaderTopicResult()
-        .setTopic(offsetForLeaderTopic.topic)
+        .setTopic(topicName)
+        .setTopicId(offsetForLeaderTopic.topicId)
         .setPartitions(partitions.toList.asJava)
     }
   }
