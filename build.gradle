@@ -168,6 +168,7 @@ ext {
 allprojects {
 
   repositories {
+    mavenLocal()
     mavenCentral()
   }
 
@@ -1430,6 +1431,7 @@ project(':metadata') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':raft')
+    implementation libs.commonsNet
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics

@@ -693,4 +693,153 @@ public class StandardAuthorizerTest {
         // StandardAuthorizer has 4 metrics
         assertEquals(5, metrics.metrics().size());
     }
+
+    @Test
+    public void testHostMatchesCidrIpv4() {
+        // Test IPv4 CIDR matching
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.100", "192.168.1.0/24"));
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "192.168.1.0/24"));
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.254", "192.168.1.0/24"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.2.1", "192.168.1.0/24"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("10.0.0.1", "192.168.1.0/24"));
+
+        // Test /32 - single host
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "192.168.1.1/32"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.2", "192.168.1.1/32"));
+
+        // Test /16
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("10.20.1.1", "10.20.0.0/16"));
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("10.20.255.255", "10.20.0.0/16"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("10.21.0.1", "10.20.0.0/16"));
+    }
+
+    @Test
+    public void testHostMatchesCidrIpv6() {
+        // Test IPv6 CIDR matching
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8::1", "2001:db8::/32"));
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8:ffff:ffff:ffff:ffff:ffff:ffff", "2001:db8::/32"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db9::1", "2001:db8::/32"));
+
+        // Test /64
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8:1234:5678::1", "2001:db8:1234:5678::/64"));
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("2001:db8:1234:5678:abcd:ef01:2345:6789", "2001:db8:1234:5678::/64"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("2001:db8:1234:5679::1", "2001:db8:1234:5678::/64"));
+
+        // Test /128 - single host
+        assertTrue(StandardAuthorizerData.hostMatchesCidr("::1", "::1/128"));
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("::2", "::1/128"));
+    }
+
+    @Test
+    public void testHostMatchesCidrInvalidPatterns() {
+        // Not CIDR notation (no /)
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "192.168.1.1"));
+
+        // Null pattern
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", null));
+
+        // Invalid CIDR notation
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "invalid/24"));
+
+        // Wildcard should not be treated as CIDR
+        assertFalse(StandardAuthorizerData.hostMatchesCidr("192.168.1.1", "*"));
+    }
+
+    @Test
+    public void testAclWithCidrHost() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        // Create an ACL with CIDR notation for host (192.168.1.0/24 = 192.168.1.0 - 192.168.1.255)
+        StandardAcl cidrAcl = new StandardAcl(
+            TOPIC,
+            "test-topic",
+            LITERAL,
+            "User:bob",
+            "192.168.1.0/24",
+            READ,
+            ALLOW);
+        StandardAclWithId aclWithId = withId(cidrAcl);
+        authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+
+        // Test every IP in the /24 range (192.168.1.0 - 192.168.1.255)
+        for (int i = 0; i <= 255; i++) {
+            String ip = "192.168.1." + i;
+            assertEquals(List.of(ALLOWED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be allowed within 192.168.1.0/24");
+        }
+
+        // Test IPs just outside the range boundaries
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(
+                new MockAuthorizableRequestContext.Builder()
+                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                    .setClientAddress(InetAddress.getByName("192.168.0.255"))
+                    .build(),
+                List.of(newAction(READ, TOPIC, "test-topic"))),
+            "IP 192.168.0.255 should be denied (just before range)");
+
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(
+                new MockAuthorizableRequestContext.Builder()
+                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                    .setClientAddress(InetAddress.getByName("192.168.2.0"))
+                    .build(),
+                List.of(newAction(READ, TOPIC, "test-topic"))),
+            "IP 192.168.2.0 should be denied (just after range)");
+    }
+
+    @Test
+    public void testAclWithIpv6CidrHost() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        // Create an ACL with IPv6 CIDR notation for host (2001:db8::/120 = last 8 bits variable)
+        // This gives us 2001:db8::0 - 2001:db8::ff (256 addresses, similar to IPv4 /24)
+        StandardAcl cidrAcl = new StandardAcl(
+            TOPIC,
+            "test-topic",
+            LITERAL,
+            "User:bob",
+            "2001:db8::/120",
+            READ,
+            ALLOW);
+        StandardAclWithId aclWithId = withId(cidrAcl);
+        authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+
+        for (int i = 0; i <= 255; i++) {
+            String ip = "2001:db8::" + Integer.toHexString(i);
+            assertEquals(List.of(ALLOWED),
+                authorizer.authorize(
+                    new MockAuthorizableRequestContext.Builder()
+                        .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                        .setClientAddress(InetAddress.getByName(ip))
+                        .build(),
+                    List.of(newAction(READ, TOPIC, "test-topic"))),
+                "IP " + ip + " should be allowed within 2001:db8::/120");
+        }
+
+        // Test IPs just outside the range boundaries
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(
+                new MockAuthorizableRequestContext.Builder()
+                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                    .setClientAddress(InetAddress.getByName("2001:db8::100"))
+                    .build(),
+                List.of(newAction(READ, TOPIC, "test-topic"))),
+            "IP 2001:db8::100 should be denied (just after range)");
+
+        assertEquals(List.of(DENIED),
+            authorizer.authorize(
+                new MockAuthorizableRequestContext.Builder()
+                    .setPrincipal(new KafkaPrincipal(USER_TYPE, "bob"))
+                    .setClientAddress(InetAddress.getByName("2001:db7::1"))
+                    .build(),
+                List.of(newAction(READ, TOPIC, "test-topic"))),
+            "IP 2001:db7::1 should be denied (different prefix)");
+    }
 }

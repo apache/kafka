@@ -159,6 +159,7 @@ libs += [
   bndlib:"biz.aQute.bnd:biz.aQute.bndlib:$versions.bndlib",
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   classgraph: "io.github.classgraph:classgraph:$versions.classgraph",
+  commonsNet: "commons-net:commons-net:$versions.commonsNet",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jacksonAnnotations",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
