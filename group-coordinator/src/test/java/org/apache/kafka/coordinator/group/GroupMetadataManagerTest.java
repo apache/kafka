@@ -20870,8 +20870,7 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRecords, result.records());
     }
-
-
+    
     @Test
     public void testConsumerMemberWithRegexReplacedByClassicMemberWithSameSubscription() {
         String groupId = "fooup";
