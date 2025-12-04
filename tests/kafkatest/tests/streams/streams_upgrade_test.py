@@ -24,7 +24,7 @@ from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmo
 from kafkatest.tests.streams.utils import extract_generation_from_logs, extract_generation_id
 from kafkatest.version import LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
     LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, \
-    LATEST_4_0, LATEST_4_1, DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_4_0, LATEST_4_1, LATEST_4_2, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 # broker 0.10.1 and 0.10.2 do not support headers, as required by suppress() (since v2.2.1)
@@ -174,21 +174,32 @@ class StreamsUpgradeTest(Test):
         self.stop_and_await()
 
     @cluster(num_nodes=6)
-    @matrix(from_version=[str(LATEST_3_7)], metadata_quorum=[quorum.combined_kraft])
+    @matrix(from_version=[str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2)],
+            upgrade=[True, False],
+            metadata_quorum=[quorum.combined_kraft])
     def test_upgrade_downgrade_state_updater(self, from_version, metadata_quorum):
         """
-        Starts 3 KafkaStreams instances with a version before 3.8 where state updater
-        is disabled, and upgrades to DEV_VERSION where state updater is always enabled
-        (config removed) in a rolling bounce.
+        Starts 3 KafkaStreams instances, and tests upgrade/downgrade state restoration
+        for the instances in a rolling bounce.
+
+        For versions before 3.8, state updater did not exist (always disabled).
+        For versions 3.8 to 4.2, state updater can be disabled via config.
+        For DEV_VERSION (4.3+), state updater is always enabled (config removed).
         """
         to_version=str(DEV_VERSION)
 
-        # start with pre-3.8 version with state updater explicitly disabled
-        extra_properties_first = { '__state.updater.enabled__': 'false' }
-        first_version = from_version
-        # upgrade to DEV_VERSION where state updater is always enabled (config removed)
-        extra_properties_second = {}
-        second_version = to_version
+        if upgrade:
+            # state updater disabled to always enabled
+            extra_properties_first = {'__state.updater.enabled__': 'false'}
+            first_version = from_version
+            extra_properties_second = {}  # config is removed
+            second_version = to_version
+        else:
+            # state updater always enabled to disabled
+            extra_properties_first = {}  # config is removed
+            first_version = to_version
+            extra_properties_second = {'__state.updater.enabled__': 'false'}
+            second_version = from_version
 
         self.set_up_services()
 
