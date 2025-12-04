@@ -551,6 +551,8 @@ subprojects {
     }
   }
 
+  // Do not run this task with Java 8. It will use an older version of Mockito,
+  // which depends on an older Byte Buddy version that does not support Java 25.
   task testWithJava25(type: Test, dependsOn: compileJava) {
     description = 'Run tests using Java 25 toolchain'
 
