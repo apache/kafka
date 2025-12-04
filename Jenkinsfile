@@ -214,7 +214,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doTest(env, 'testJava25')
+            doTest(env, 'testWithJava25')
             echo 'Skipping Kafka Streams archetype test for Java 25'
           }
         }
