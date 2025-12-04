@@ -3149,6 +3149,8 @@ public class GroupMetadataManager {
                     // by bumping the group epoch.
                     bumpGroupEpoch = group.resolvedRegularExpression(newSubscribedTopicRegex).isPresent();
                 }
+            } else if (isNotEmpty(oldSubscribedTopicRegex)) {
+                bumpGroupEpoch = true;
             }
         }
 
