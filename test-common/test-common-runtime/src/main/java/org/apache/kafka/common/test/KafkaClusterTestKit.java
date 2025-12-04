@@ -478,6 +478,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
+            formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
 
             for (Feature feature : Feature.PRODUCTION_FEATURES) {
                 String featureName = feature.featureName();
@@ -488,12 +489,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 short level = nodes.bootstrapMetadata().featureLevel(featureName);
                 formatter.setFeatureLevel(featureName, level);
             }
-            
-            if (writeMetadataDirectory) {
-                formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
-            } else {
-                formatter.setMetadataLogDirectory(Optional.empty());
-            }
+
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";
             if (standalone) {
