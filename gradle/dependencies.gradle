@@ -78,9 +78,6 @@ else
 
 if (JavaVersion.current().isJava8())
   versions["spotbugs"] = "4.8.6"
-else
-  versions["spotbugs"] = "4.9.8"
-
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
