@@ -35,7 +35,7 @@ public class RemoveMembersFromConsumerGroupResult {
     private final KafkaFuture<Map<MemberIdentity, Errors>> future;
     private final Set<MemberToRemove> memberInfos;
 
-    RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
+    public RemoveMembersFromConsumerGroupResult(KafkaFuture<Map<MemberIdentity, Errors>> future,
                                          Set<MemberToRemove> memberInfos) {
         this.future = future;
         this.memberInfos = memberInfos;
