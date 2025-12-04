@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareSessionCacheTest {
 
@@ -47,11 +48,11 @@ public class ShareSessionCacheTest {
     public void testShareSessionCache() throws InterruptedException {
         ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
-        ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(10), "conn-1");
-        ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(20), "conn-2");
-        ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(30), "conn-3");
-        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(40), "conn-4"));
-        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(5), "conn-5"));
+        ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(10), "conn-1");
+        ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(20), "conn-2");
+        ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(30), "conn-3");
+        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(40), "conn-4"));
+        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(5), "conn-5"));
         assertShareCacheContains(cache, List.of(key1, key2, key3));
 
         assertMetricsValues(3, 60, 0, cache);
@@ -62,7 +63,7 @@ public class ShareSessionCacheTest {
         ShareSessionCache cache = new ShareSessionCache(2);
         assertEquals(0, cache.size());
         assertEquals(0, cache.totalPartitions());
-        ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(2), "conn-1");
+        ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(2), "conn-1");
         assertNotNull(key1);
         assertShareCacheContains(cache, List.of(key1));
         ShareSession session1 = cache.get(key1);
@@ -72,7 +73,7 @@ public class ShareSessionCacheTest {
 
         assertMetricsValues(1, 2, 0, cache);
 
-        ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(4), "conn-2");
+        ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(4), "conn-2");
         assertNotNull(key2);
         assertShareCacheContains(cache, List.of(key1, key2));
         ShareSession session2 = cache.get(key2);
@@ -83,7 +84,7 @@ public class ShareSessionCacheTest {
 
         assertMetricsValues(2, 6, 0, cache);
 
-        ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(5), "conn-3");
+        ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(5), "conn-3");
         assertNull(key3);
         assertShareCacheContains(cache, List.of(key1, key2));
         assertEquals(6, cache.totalPartitions());
@@ -115,15 +116,15 @@ public class ShareSessionCacheTest {
     public void testRemoveConnection() throws InterruptedException {
         ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
-        ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(1), "conn-1");
-        ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(2), "conn-2");
-        ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(3), "conn-3");
+        ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
+        ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(2), "conn-2");
+        ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(3), "conn-3");
 
         assertMetricsValues(3, 6, 0, cache);
 
         // Since cache size is now equal to max entries allowed(3), no new session can be created.
-        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(40), "conn-4"));
-        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(5), "conn-5"));
+        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(40), "conn-4"));
+        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(5), "conn-5"));
         assertShareCacheContains(cache, List.of(key1, key2, key3));
 
         assertMetricsValues(3, 6, 0, cache);
@@ -135,7 +136,7 @@ public class ShareSessionCacheTest {
         assertMetricsValues(2, 5, 1, cache);
 
         // Since one client got disconnected, we can add another one now
-        ShareSessionKey key4 = cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(4), "conn-6");
+        ShareSessionKey key4 = cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(4), "conn-6");
         assertShareCacheContains(cache, List.of(key2, key3, key4));
 
         assertMetricsValues(3, 9, 1, cache);
@@ -146,9 +147,9 @@ public class ShareSessionCacheTest {
         ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
         assertEquals(0, cache.totalPartitions());
-        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(10), "conn-1");
-        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(20), "conn-2");
-        cache.maybeCreateSession("grp", Uuid.randomUuid(), mockedSharePartitionMap(30), "conn-3");
+        cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(10), "conn-1");
+        cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(20), "conn-2");
+        cache.maybeCreateSession("grp", Uuid.randomUuid().toString(), mockedSharePartitionMap(30), "conn-3");
         assertEquals(3, cache.size());
         assertEquals(60, cache.totalPartitions());
         cache.removeAllSessions();
@@ -163,8 +164,8 @@ public class ShareSessionCacheTest {
         cache.registerShareGroupListener(mockListener);
 
         String groupId = "grp";
-        Uuid memberId1 = Uuid.randomUuid();
-        Uuid memberId2 = Uuid.randomUuid();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
         ShareSessionKey key1 = cache.maybeCreateSession(groupId, memberId1, mockedSharePartitionMap(1), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession(groupId, memberId2, mockedSharePartitionMap(1), "conn-2");
 
@@ -177,6 +178,10 @@ public class ShareSessionCacheTest {
         // Remove session and verify listener are not called as connection disconnect listener didn't
         // remove the session.
         cache.remove(key1);
+        // Session should be marked stale only for memberId1.
+        assertTrue(cache.connectionSessionKeyAndState("conn-1").stale());
+        assertFalse(cache.connectionSessionKeyAndState("conn-2").stale());
+
         Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
         Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId);
         // Verify member count is updated
@@ -184,6 +189,8 @@ public class ShareSessionCacheTest {
 
         // Re-create session for memberId1.
         cache.maybeCreateSession(groupId, memberId1, mockedSharePartitionMap(1), "conn-1");
+        // Session should not be stale now.
+        assertFalse(cache.connectionSessionKeyAndState("conn-1").stale());
         assertEquals(2, cache.numMembers(groupId));
 
         // Simulate connection disconnect for memberId1.
@@ -211,8 +218,8 @@ public class ShareSessionCacheTest {
 
         String groupId1 = "grp1";
         String groupId2 = "grp2";
-        Uuid memberId1 = Uuid.randomUuid();
-        Uuid memberId2 = Uuid.randomUuid();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
         ShareSessionKey key1 = cache.maybeCreateSession(groupId1, memberId1, mockedSharePartitionMap(1), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession(groupId2, memberId2, mockedSharePartitionMap(1), "conn-2");
 
@@ -236,12 +243,44 @@ public class ShareSessionCacheTest {
     }
 
     @Test
+    public void testShareGroupListenerEventsOnStaleSession() {
+        ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.registerShareGroupListener(mockListener);
+
+        String groupId = "grp";
+        String memberId1 = Uuid.randomUuid().toString();
+        ShareSessionKey key1 = cache.maybeCreateSession(groupId, memberId1, mockedSharePartitionMap(1), "conn-1");
+
+        // Verify member count is tracked
+        assertEquals(1, cache.size());
+        assertNotNull(cache.get(key1));
+        assertEquals(1, cache.numMembers(groupId));
+
+        // Remove session and verify listener are not called as connection disconnect listener didn't
+        // remove the session.
+        cache.remove(key1);
+        // Session should be marked stale only for memberId1.
+        assertTrue(cache.connectionSessionKeyAndState("conn-1").stale());
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
+        Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId);
+        // Verify member count is updated
+        assertEquals(0, cache.numMembers(groupId));
+
+        // Simulate connection disconnect for memberId1.
+        cache.connectionDisconnectListener().onDisconnect("conn-1");
+        // Verify only group empty event is triggered. Member leave event should not be triggered
+        // as session was already removed and marked stale.
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
+        Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(groupId);
+    }
+
+    @Test
     public void testNoShareGroupListenerRegistered() {
         ShareSessionCache cache = new ShareSessionCache(3);
 
         String groupId = "grp";
-        Uuid memberId = Uuid.randomUuid();
-        ShareSessionKey key = cache.maybeCreateSession(groupId, memberId, mockedSharePartitionMap(1), "conn-1");
+        ShareSessionKey key = cache.maybeCreateSession(groupId, Uuid.randomUuid().toString(), mockedSharePartitionMap(1), "conn-1");
 
         // Verify member count is still tracked even without listener
         assertEquals(1, cache.numMembers(groupId));

@@ -241,6 +241,11 @@ public class KafkaStreams implements AutoCloseable {
      *     Any state except NOT_RUNNING, PENDING_ERROR or ERROR can go to PENDING_SHUTDOWN (whenever close is called)
      *   </li>
      *   <li>
+     *     PENDING_SHUTDOWN and PENDING_ERROR are transitory states where the Streams application gracefully closes
+     *     its existing resources before transitioning into their corresponding terminal states. These states are
+     *     not recoverable, and only a restart would get an application back to the RUNNING state.
+     *   </li>
+     *   <li>
      *     Of special importance: If the global stream thread dies, or all stream threads die (or both) then
      *     the instance will be in the ERROR state. The user will not need to close it.
      *   </li>
@@ -469,11 +474,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
                 processStreamThread(thread -> thread.setUncaughtExceptionHandler((t, e) -> { }
                 ));
-
-                if (globalStreamThread != null) {
-                    globalStreamThread.setUncaughtExceptionHandler((t, e) -> { }
-                    );
-                }
             } else {
                 throw new IllegalStateException("Can only set UncaughtExceptionHandler before calling start(). " +
                     "Current state is: " + state);
@@ -987,7 +987,6 @@ public class KafkaStreams implements AutoCloseable {
         streamsMetrics = new StreamsMetricsImpl(
             metrics,
             clientId,
-            processId.toString(),
             time
         );
 
@@ -996,8 +995,8 @@ public class KafkaStreams implements AutoCloseable {
         ClientMetrics.addApplicationIdMetric(streamsMetrics, applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         ClientMetrics.addTopologyDescriptionMetric(streamsMetrics, (metricsConfig, now) -> this.topologyMetadata.topologyDescriptionString());
         ClientMetrics.addStateMetric(streamsMetrics, (metricsConfig, now) -> state.name());
-        ClientMetrics.addClientStateTelemetryMetric(streamsMetrics, (metricsConfig, now) -> state.ordinal());
-        ClientMetrics.addClientRecordingLevelMetric(streamsMetrics, calculateMetricsRecordingLevel());
+        ClientMetrics.addClientStateTelemetryMetric(processId.toString(), applicationId, streamsMetrics, (metricsConfig, now) -> state.ordinal());
+        ClientMetrics.addClientRecordingLevelMetric(processId.toString(), streamsMetrics, calculateMetricsRecordingLevel());
         threads = Collections.synchronizedList(new LinkedList<>());
         ClientMetrics.addNumAliveStreamThreadMetric(streamsMetrics, (metricsConfig, now) -> numLiveStreamThreads());
 
@@ -1523,7 +1522,8 @@ public class KafkaStreams implements AutoCloseable {
         }, clientId + "-CloseThread");
     }
 
-    private boolean close(final Optional<Long> timeout, final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
+    // visible for testing
+    boolean close(final Optional<Long> timeout, final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         final long timeoutMs;
         if (timeout.isPresent()) {
             timeoutMs = timeout.get();
@@ -1635,8 +1635,9 @@ public class KafkaStreams implements AutoCloseable {
     public synchronized boolean close(final org.apache.kafka.streams.CloseOptions options) throws IllegalArgumentException {
         Objects.requireNonNull(options, "options cannot be null");
         final CloseOptionsInternal optionsInternal = new CloseOptionsInternal(options);
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(optionsInternal.timeout(), "timeout");
-        final long timeoutMs = validateMillisecondDuration(optionsInternal.timeout().get(), msgPrefix);
+        final Duration timeout = optionsInternal.timeout().orElseGet(() -> Duration.ofMillis(Long.MAX_VALUE));
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
+        final long timeoutMs = validateMillisecondDuration(timeout, msgPrefix);
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }

@@ -47,6 +47,7 @@ import java.util.Set;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -140,11 +141,14 @@ public class SmokeTestDriverIntegrationTest {
             throw new AssertionError("Test called halt(). code:" + statusCode + " message:" + message);
         });
         int numClientsCreated = 0;
+        int numDataRecordsProcessed = 0;
+        final int numKeys = 10;
+        final int maxRecordsPerKey = 1000;
 
         IntegrationTestUtils.cleanStateBeforeTest(cluster, SmokeTestDriver.topics());
 
         final String bootstrapServers = cluster.bootstrapServers();
-        final Driver driver = new Driver(bootstrapServers, 10, 1000);
+        final Driver driver = new Driver(bootstrapServers, numKeys, maxRecordsPerKey);
         driver.start();
         System.out.println("started driver");
 
@@ -183,6 +187,7 @@ public class SmokeTestDriverIntegrationTest {
                     assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
+                numDataRecordsProcessed += client.totalDataRecordsProcessed();
             }
         }
 
@@ -201,6 +206,7 @@ public class SmokeTestDriverIntegrationTest {
                     assertFalse(client.error(), "The streams application seems to have crashed.");
                     Thread.sleep(100);
                 }
+                numDataRecordsProcessed += client.totalDataRecordsProcessed();
             }
         }
 
@@ -210,5 +216,16 @@ public class SmokeTestDriverIntegrationTest {
             throw new AssertionError(driver.exception());
         }
         assertTrue(driver.result().passed(), driver.result().result());
+
+        // The one extra record is a record that the driver produces to flush suppress
+        final int expectedRecords = numKeys * maxRecordsPerKey + 1;
+
+        // We check that we did no have to reprocess any records, which would indicate a bug since everything
+        // runs locally in this test.
+        assertEquals(expectedRecords, numDataRecordsProcessed,
+            String.format("It seems we had to reprocess records, expected %d records, processed %d records.",
+                expectedRecords,
+                numDataRecordsProcessed)
+        );
     }
 }

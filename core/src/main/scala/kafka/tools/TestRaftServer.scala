@@ -23,7 +23,7 @@ import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDe
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.SocketServer
 import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager}
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, KafkaRequestHandlerPoolFactory}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -67,6 +67,7 @@ class TestRaftServer(
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
   private val threadNamePrefix = "test-raft"
+  private val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
 
   var socketServer: SocketServer = _
   var credentialProvider: CredentialProvider = _
@@ -125,13 +126,13 @@ class TestRaftServer(
       apiVersionManager
     )
 
-    dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(
+    dataPlaneRequestHandlerPool = requestHandlerPoolFactory.createPool(
       config.brokerId,
       socketServer.dataPlaneRequestChannel,
       requestHandler,
       time,
       config.numIoThreads,
-      "RequestHandlerAvgIdlePercent"
+      "broker"
     )
 
     workloadGenerator.start()

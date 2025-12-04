@@ -78,7 +78,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
@@ -444,12 +443,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble(), true)));
+                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble())));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 BrokerServer broker = entry.getValue();
-                futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble(),
-                    !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()))));
+                if (!nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id())) {
+                    futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble())));
+                }
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -463,21 +463,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     private void formatNode(
-        MetaPropertiesEnsemble ensemble,
-        boolean writeMetadataDirectory
+        MetaPropertiesEnsemble ensemble
     ) {
         try {
             final var nodeId = ensemble.nodeId().getAsInt();
             Formatter formatter = new Formatter();
             formatter.setNodeId(nodeId);
             formatter.setClusterId(ensemble.clusterId().get());
-            if (writeMetadataDirectory) {
-                formatter.setDirectories(ensemble.logDirProps().keySet());
-            } else {
-                formatter.setDirectories(ensemble.logDirProps().keySet().stream().
-                    filter(d -> !ensemble.metadataLogDir().get().equals(d)).
-                    collect(Collectors.toSet()));
-            }
+            formatter.setDirectories(ensemble.logDirProps().keySet());
             if (formatter.directories().isEmpty()) {
                 return;
             }

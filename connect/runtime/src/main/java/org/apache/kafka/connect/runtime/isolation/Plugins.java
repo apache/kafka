@@ -279,19 +279,13 @@ public class Plugins {
         return delegatingLoader;
     }
 
-    // kept for compatibility
-    public ClassLoader connectorLoader(String connectorClassOrAlias) {
-        return delegatingLoader.loader(connectorClassOrAlias);
+    public ClassLoader connectorLoader(String connectorClassOrAlias, VersionRange range) {
+        return delegatingLoader.connectorLoader(connectorClassOrAlias, range);
     }
 
-    public ClassLoader pluginLoader(String classOrAlias, VersionRange range) {
-        return delegatingLoader.loader(classOrAlias, range);
+    public ClassLoader pluginLoader(String classOrAlias, VersionRange range, ClassLoader connectorLoader) {
+        return delegatingLoader.pluginLoader(classOrAlias, range, connectorLoader);
     }
-
-    public ClassLoader pluginLoader(String classOrAlias) {
-        return delegatingLoader.loader(classOrAlias);
-    }
-
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Set<PluginDesc<Connector>> connectors() {
@@ -363,19 +357,14 @@ public class Plugins {
         return plugins;
     }
 
-    public Object newPlugin(String classOrAlias) throws ClassNotFoundException {
-        Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class);
-        return newPlugin(klass);
-    }
-
     public Object newPlugin(String classOrAlias, VersionRange range) throws VersionedPluginLoadingException, ClassNotFoundException {
         Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class, range);
         return newPlugin(klass);
     }
 
     public Object newPlugin(String classOrAlias, VersionRange range, ClassLoader sourceLoader) throws ClassNotFoundException {
-        if (range == null && sourceLoader instanceof PluginClassLoader) {
-            return newPlugin(sourceLoader.loadClass(classOrAlias));
+        if (sourceLoader instanceof PluginClassLoader) {
+            return newPlugin(pluginLoader(classOrAlias, range, sourceLoader).loadClass(classOrAlias));
         }
         return newPlugin(classOrAlias, range);
     }

@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.time.Duration
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CloseOptions, Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 
@@ -239,7 +239,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   def createStreamsGroup[K, V](configOverrides: Properties = new Properties,
                                configsToRemove: List[String] = List(),
-                               inputTopic: String,
+                               inputTopics: Set[String],
+                               changelogTopics: Set[String] = Set(),
                                streamsGroupId: String): AsyncKafkaConsumer[K, V] = {
     val props = new Properties()
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
@@ -255,10 +256,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       Optional.empty(),
       util.Map.of(
         "subtopology-0", new StreamsRebalanceData.Subtopology(
-          util.Set.of(inputTopic),
+          inputTopics.asJava,
           util.Set.of(),
           util.Map.of(),
-          util.Map.of(inputTopic + "-store-changelog", new StreamsRebalanceData.TopicInfo(Optional.of(1), Optional.empty(), util.Map.of())),
+          changelogTopics.map(c => (c, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.empty(), util.Map.of()))).toMap.asJava,
           util.Set.of()
         )),
       Map.empty[String, String].asJava
@@ -270,7 +271,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       configOverrides = props,
       streamsRebalanceData = streamsRebalanceData
     )
-    consumer.subscribe(util.Set.of(inputTopic),
+    consumer.subscribe(inputTopics.asJava,
       new StreamsRebalanceListener {
         override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
         override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
@@ -306,13 +307,14 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     try {
+      val closeOptions = CloseOptions.timeout(Duration.ZERO)
       producers.foreach(_.close(Duration.ZERO))
       consumers.foreach(_.wakeup())
-      consumers.foreach(_.close(Duration.ZERO))
+      consumers.foreach(_.close(closeOptions))
       shareConsumers.foreach(_.wakeup())
       shareConsumers.foreach(_.close(Duration.ZERO))
       streamsConsumers.foreach(_.wakeup())
-      streamsConsumers.foreach(_.close(Duration.ZERO))
+      streamsConsumers.foreach(_.close(closeOptions))
       adminClients.foreach(_.close(Duration.ZERO))
 
       producers.clear()

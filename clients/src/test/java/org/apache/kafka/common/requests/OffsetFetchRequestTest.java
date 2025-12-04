@@ -55,7 +55,7 @@ public class OffsetFetchRequestTest {
                             .setPartitionIndexes(List.of(0, 1, 2))
                     ))
             ));
-        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false, true);
+        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false);
 
         if (version < 8) {
             assertThrows(OffsetFetchRequest.NoBatchedOffsetFetchRequestException.class, () -> builder.build(version));
@@ -80,7 +80,6 @@ public class OffsetFetchRequestTest {
                                 .setPartitionIndexes(List.of(0, 1, 2))
                         ))
                 )),
-            true,
             true
         );
 
@@ -105,7 +104,7 @@ public class OffsetFetchRequestTest {
                             .setPartitionIndexes(List.of(0, 1, 2))
                     ))
             ));
-        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false, true);
+        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false);
 
         if (version < 8) {
             var expectedRequest = new OffsetFetchRequestData()
@@ -130,7 +129,7 @@ public class OffsetFetchRequestTest {
                     .setGroupId("grp1")
                     .setTopics(null)
             ));
-        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false, true);
+        var builder = OffsetFetchRequest.Builder.forTopicIdsOrNames(data, false);
 
         if (version < 2) {
             assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
@@ -159,8 +158,7 @@ public class OffsetFetchRequestTest {
                                 .setPartitionIndexes(List.of(0, 1))
                         ))
                 )),
-            false,
-            true
+            false
         ).build(version);
 
         if (version < 2) {
@@ -217,8 +215,7 @@ public class OffsetFetchRequestTest {
                                 .setPartitionIndexes(List.of(0, 1, 2))
                         ))
                 )),
-            false,
-            true
+            false
         ).build(version);
 
         if (version < 8) {
@@ -247,8 +244,7 @@ public class OffsetFetchRequestTest {
                         .setGroupId("grp1")
                         .setTopics(null)
                 )),
-            false,
-            true
+            false
         ).build(version);
 
         if (version < 8) {
