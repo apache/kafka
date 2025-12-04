@@ -215,7 +215,7 @@ pipeline {
           }
           steps {
             doTest(env, 'testWithJava25')
-            echo 'Skipping Kafka Streams archetype test for Java 25'
+            echo 'Skipping Validation and Kafka Streams archetype test for Java 25'
           }
         }
       }
