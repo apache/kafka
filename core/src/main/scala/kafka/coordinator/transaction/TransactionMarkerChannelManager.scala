@@ -38,6 +38,7 @@ import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
+import java.util.Optional
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.javaapi.OptionConverters
@@ -98,7 +99,8 @@ object TransactionMarkerChannelManager {
       false,
       new ApiVersions,
       logContext,
-      MetadataRecoveryStrategy.NONE
+      MetadataRecoveryStrategy.NONE,
+      Optional.empty
     )
 
     new TransactionMarkerChannelManager(config,

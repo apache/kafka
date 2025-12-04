@@ -41,6 +41,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -219,6 +220,7 @@ public final class ClientUtils {
                                                     ClientTelemetrySender clientTelemetrySender) {
         ChannelBuilder channelBuilder = null;
         Selector selector = null;
+        NetworkClient.BootstrapConfiguration bootstrapConfiguration = null;
 
         try {
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
@@ -228,6 +230,12 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
+            bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+                time,
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+            );
             return new NetworkClient(metadataUpdater,
                     metadata,
                     selector,
@@ -248,7 +256,8 @@ public final class ClientUtils {
                     hostResolver,
                     clientTelemetrySender,
                     config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
-                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
+                    MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
+                    Optional.of(bootstrapConfiguration)
             );
         } catch (Throwable t) {
             closeQuietly(selector, "Selector");

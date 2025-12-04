@@ -57,6 +57,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -198,7 +199,8 @@ public class BrokerApiVersionsCommand {
                     true,
                     new ApiVersions(),
                     logContext,
-                    MetadataRecoveryStrategy.NONE);
+                    MetadataRecoveryStrategy.NONE,
+                    Optional.empty());
             ConsumerNetworkClient highLevelClient = new ConsumerNetworkClient(
                     logContext,
                     networkClient,

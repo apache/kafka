@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -176,6 +177,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -417,6 +420,11 @@ public class KafkaAdminClient extends AdminClient {
     private Uuid clientInstanceId;
 
     /**
+     * Addresses for the admin client to bootstrap
+     */
+    private static AdminBootstrapAddresses adminAddresses;
+
+    /**
      * Get or create a list value from a map.
      *
      * @param map The map to get or create the element from.
@@ -523,6 +531,10 @@ public class KafkaAdminClient extends AdminClient {
     ) {
         Metrics metrics = null;
         NetworkClient networkClient = null;
+        NetworkClient.BootstrapConfiguration bootstrapConfiguration;
+        ChannelBuilder channelBuilder;
+        Selector selector;
+        List<String> bootstrapAddresses = new ArrayList<>();
         Time time = Time.SYSTEM;
         String clientId = generateClientId(config);
         ApiVersions apiVersions = new ApiVersions();
@@ -532,12 +544,11 @@ public class KafkaAdminClient extends AdminClient {
         try {
             // Since we only request node information, it's safe to pass true for allowAutoTopicCreation (and it
             // simplifies communication with older brokers)
-            AdminBootstrapAddresses adminAddresses = AdminBootstrapAddresses.fromConfig(config);
+            adminAddresses = AdminBootstrapAddresses.fromConfig(config);
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
                 adminAddresses.usingBootstrapControllers());
-            metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
@@ -549,20 +560,45 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-            networkClient = ClientUtils.createNetworkClient(config,
-                clientId,
+            adminAddresses.addresses().forEach(inetSocketAddress ->
+                bootstrapAddresses.add(inetSocketAddress.getHostString() + ":" + inetSocketAddress.getPort()));
+            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+            selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                 metrics,
-                "admin-client",
-                logContext,
-                apiVersions,
                 time,
-                1,
-                (int) TimeUnit.HOURS.toMillis(1),
+                "admin-client",
+                channelBuilder,
+                logContext);
+            bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+                time,
+                bootstrapAddresses,
+                ClientDnsLookup.forConfig(config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)),
+                2 * 60 * 1000
+            );
+            networkClient = new NetworkClient(metadataManager.updater(),
                 null,
-                metadataManager.updater(),
+                selector,
+                clientId,
+                1,
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
+                config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                config.getInt(CommonClientConfigs.SEND_BUFFER_CONFIG),
+                config.getInt(CommonClientConfigs.RECEIVE_BUFFER_CONFIG),
+                config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                time,
+                true,
+                apiVersions,
+                null,
+                logContext,
                 (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
                 null,
-                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+                config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
+                MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
+                Optional.of(bootstrapConfiguration)
+            );
+
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
                 timeoutProcessorFactory, logContext, clientTelemetryReporter);
         } catch (Throwable exc) {

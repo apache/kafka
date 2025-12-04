@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -179,7 +180,8 @@ public class ConnectionStressWorker implements TaskWorker {
                             false,
                             new ApiVersions(),
                             logContext,
-                            MetadataRecoveryStrategy.NONE)) {
+                            MetadataRecoveryStrategy.NONE,
+                            Optional.empty())) {
                             NetworkClientUtils.awaitReady(client, targetNode, Time.SYSTEM, 500);
                         }
                     }

@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Map;
+import java.util.Optional;
 
 public class NetworkUtils {
 
@@ -85,7 +86,8 @@ public class NetworkUtils {
             true,
             new ApiVersions(),
             logContext,
-            MetadataRecoveryStrategy.NONE
+            MetadataRecoveryStrategy.NONE,
+            Optional.empty()
         );
     }
 }

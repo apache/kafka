@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -146,6 +147,16 @@ public class AdminMetadataManager {
         @Override
         public void rebootstrap(long now) {
             AdminMetadataManager.this.rebootstrap(now);
+        }
+
+        @Override
+        public boolean isBootstrapped() {
+            return false;
+        }
+
+        @Override
+        public void bootstrap(List<InetSocketAddress> addresses) {
+            // do nothing
         }
 
         @Override

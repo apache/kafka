@@ -28,6 +28,7 @@ import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.server.network.BrokerEndPoint
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
@@ -95,7 +96,8 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       false,
       new ApiVersions,
       logContext,
-      MetadataRecoveryStrategy.NONE
+      MetadataRecoveryStrategy.NONE,
+      Optional.empty
     )
     (networkClient, reconfigurableChannelBuilder)
   }

@@ -20,7 +20,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
+import java.util.{Optional, OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
@@ -253,7 +253,8 @@ class KafkaRaftManager[T](
       discoverBrokerVersions,
       apiVersions,
       logContext,
-      MetadataRecoveryStrategy.NONE
+      MetadataRecoveryStrategy.NONE,
+      Optional.empty
     )
 
     (controllerListenerName, networkClient)
