@@ -17,11 +17,10 @@
  *
  */
 
-def doValidation(javaToolChainVersion = null) {
-  def javaVersionParam = javaToolChainVersion ? "-PjavaToolChainVersion=${javaToolChainVersion}" : ""
+def doValidation() {
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
   sh """
-    ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION ${javaVersionParam} clean check -x test \
+    ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean check -x test \
         --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
   """
 }
@@ -30,10 +29,8 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, javaToolChainVersion = null, target = "test") {
-  def javaVersionParam = javaToolChainVersion ? "-PjavaToolChainVersion=${javaToolChainVersion}" : ""
-
-  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${javaVersionParam} ${target} \
+def doTest(env, target = "test") {
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
@@ -184,7 +181,7 @@ pipeline {
           }
         }
 
-        stage('JDK 25 and Scala 2.13') {
+        stage('JDK 23 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_23_latest'
@@ -197,9 +194,9 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            doValidation(25)
-            doTest(env, 25)
-            echo 'Skipping Kafka Streams archetype test for Java 25'
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 23'
           }
         }
       }
