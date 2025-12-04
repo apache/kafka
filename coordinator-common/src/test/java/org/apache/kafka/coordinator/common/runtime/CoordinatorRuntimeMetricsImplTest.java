@@ -31,8 +31,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.APPEND_BUFFER_SIZE_METRIC_NAME;
-import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.BATCH_BUFFER_CACHE_SIZE_METRIC_NAME;
+import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.BATCH_FLUSH_TIME_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.BATCH_LINGER_TIME_METRIC_NAME;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl.EVENT_PROCESSING_TIME_METRIC_NAME;
@@ -58,8 +58,8 @@ public class CoordinatorRuntimeMetricsImplTest {
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "loading"),
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "active"),
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "failed"),
-            kafkaMetricName(metrics, APPEND_BUFFER_SIZE_METRIC_NAME),
-            kafkaMetricName(metrics, APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME),
+            kafkaMetricName(metrics, BATCH_BUFFER_CACHE_SIZE_METRIC_NAME),
+            kafkaMetricName(metrics, BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME),
             kafkaMetricName(metrics, "event-queue-size"),
             kafkaMetricName(metrics, "partition-load-time-max"),
             kafkaMetricName(metrics, "partition-load-time-avg"),
@@ -94,7 +94,7 @@ public class CoordinatorRuntimeMetricsImplTest {
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP)) {
             runtimeMetrics.registerEventQueueSizeGauge(() -> 0);
-            runtimeMetrics.registerAppendBufferSizeGauge(() -> 0L);
+            runtimeMetrics.registerBufferCacheSizeGauge(() -> 0L);
             expectedMetrics.forEach(metricName -> assertTrue(metrics.metrics().containsKey(metricName)));
         }
 
@@ -244,51 +244,51 @@ public class CoordinatorRuntimeMetricsImplTest {
     }
 
     @Test
-    public void testAppendBufferSize() {
+    public void testBatchBufferCacheSize() {
         Metrics metrics = new Metrics();
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP)) {
-            runtimeMetrics.registerAppendBufferSizeGauge(() -> 5L);
-            assertMetricGauge(metrics, kafkaMetricName(metrics, APPEND_BUFFER_SIZE_METRIC_NAME), 5);
+            runtimeMetrics.registerBufferCacheSizeGauge(() -> 5L);
+            assertMetricGauge(metrics, kafkaMetricName(metrics, BATCH_BUFFER_CACHE_SIZE_METRIC_NAME), 5);
         }
     }
 
     @Test
-    public void testAppendBufferSizeMetricsGroupIsolation() {
+    public void testBatchBufferCacheSizeMetricsGroupIsolation() {
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP);
             CoordinatorRuntimeMetricsImpl otherRuntimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, OTHER_METRICS_GROUP)) {
-            runtimeMetrics.registerAppendBufferSizeGauge(() -> 5L);
-            otherRuntimeMetrics.registerAppendBufferSizeGauge(() -> 1L);
+            runtimeMetrics.registerBufferCacheSizeGauge(() -> 5L);
+            otherRuntimeMetrics.registerBufferCacheSizeGauge(() -> 1L);
 
-            assertMetricGauge(metrics, kafkaMetricName(metrics, APPEND_BUFFER_SIZE_METRIC_NAME), 5);
-            assertMetricGauge(metrics, otherGroupKafkaMetricName(metrics, APPEND_BUFFER_SIZE_METRIC_NAME), 1);
+            assertMetricGauge(metrics, kafkaMetricName(metrics, BATCH_BUFFER_CACHE_SIZE_METRIC_NAME), 5);
+            assertMetricGauge(metrics, otherGroupKafkaMetricName(metrics, BATCH_BUFFER_CACHE_SIZE_METRIC_NAME), 1);
         }
     }
 
     @Test
-    public void testAppendBufferSkipCacheCount() {
+    public void testBatchBufferCacheDiscardCount() {
         Metrics metrics = new Metrics();
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP)) {
-            runtimeMetrics.recordAppendBufferDiscarded();
-            assertMetricGauge(metrics, kafkaMetricName(metrics, APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME), 1);
+            runtimeMetrics.recordBufferCacheDiscarded();
+            assertMetricGauge(metrics, kafkaMetricName(metrics, BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME), 1);
         }
     }
 
     @Test
-    public void testAppendBufferSkipCacheCountMetricsGroupIsolation() {
+    public void testBatchBufferCacheDiscardCountMetricsGroupIsolation() {
         Time time = new MockTime();
         Metrics metrics = new Metrics(time);
 
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP);
             CoordinatorRuntimeMetricsImpl otherRuntimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, OTHER_METRICS_GROUP)) {
-            runtimeMetrics.recordAppendBufferDiscarded();
+            runtimeMetrics.recordBufferCacheDiscarded();
 
-            assertMetricGauge(metrics, kafkaMetricName(metrics, APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME), 1);
-            assertMetricGauge(metrics, otherGroupKafkaMetricName(metrics, APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME), 0);
+            assertMetricGauge(metrics, kafkaMetricName(metrics, BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME), 1);
+            assertMetricGauge(metrics, otherGroupKafkaMetricName(metrics, BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME), 0);
         }
     }
 

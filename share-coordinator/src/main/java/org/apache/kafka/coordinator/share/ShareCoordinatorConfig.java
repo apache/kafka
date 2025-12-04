@@ -84,14 +84,14 @@ public class ShareCoordinatorConfig {
     public static final int COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DEFAULT = 5 * 60 * 1000; // 5 minutes
     public static final String COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DOC = "The duration in milliseconds that the share coordinator will wait between force snapshotting share partitions which are not being updated.";
 
-    public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "share.coordinator.append.max.buffer.size";
-    public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
-    public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The maximum buffer size that the ShareCoordinator will retain for reuse. " +
+    public static final String CACHED_BUFFER_MAX_BYTES_CONFIG = "share.coordinator.cached.buffer.max.bytes";
+    public static final int CACHED_BUFFER_MAX_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final String CACHED_BUFFER_MAX_BYTES_DOC = "The maximum buffer size that the ShareCoordinator will retain for reuse. " +
         "Note: Setting this larger than the maximum message size is not recommended. In this case, every write buffer will be eligible " +
         "for recycling, which renders this configuration ineffective as a size limit.";
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-        APPEND_MAX_BUFFER_SIZE_CONFIG
+        CACHED_BUFFER_MAX_BYTES_CONFIG
     );
     
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
@@ -107,7 +107,8 @@ public class ShareCoordinatorConfig {
         .define(WRITE_TIMEOUT_MS_CONFIG, INT, WRITE_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, WRITE_TIMEOUT_MS_DOC)
         .defineInternal(STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG, INT, STATE_TOPIC_PRUNE_INTERVAL_MS_DEFAULT, atLeast(1), LOW, STATE_TOPIC_PRUNE_INTERVAL_MS_DOC)
         .defineInternal(COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG, INT, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DEFAULT, atLeast(1), LOW, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DOC)
-        .define(APPEND_MAX_BUFFER_SIZE_CONFIG, INT, APPEND_MAX_BUFFER_SIZE_DEFAULT, atLeast(512 * 1024), MEDIUM, APPEND_MAX_BUFFER_SIZE_DOC);
+        .define(CACHED_BUFFER_MAX_BYTES_CONFIG, INT, CACHED_BUFFER_MAX_BYTES_DEFAULT, atLeast(512 * 1024), MEDIUM,
+            CACHED_BUFFER_MAX_BYTES_DOC);
 
     private final int stateTopicNumPartitions;
     private final short stateTopicReplicationFactor;
@@ -204,8 +205,8 @@ public class ShareCoordinatorConfig {
      *
      * Note: On hot paths, frequent calls to this method may cause performance bottlenecks due to synchronization overhead.
      */
-    public int shareCoordinatorAppendMaxBufferSize() {
-        return config.getInt(APPEND_MAX_BUFFER_SIZE_CONFIG);
+    public int shareCoordinatorCachedBufferMaxBytes() {
+        return config.getInt(CACHED_BUFFER_MAX_BYTES_CONFIG);
     }
 
     private void validate() {

@@ -70,14 +70,14 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     public static final String BATCH_FLUSH_TIME_METRIC_NAME = "batch-flush-time-ms";
 
     /**
-     * The coordinator append buffer size metric name.
+     * The cached buffer size metric name.
      */
-    public static final String APPEND_BUFFER_SIZE_METRIC_NAME = "coordinator-append-buffer-size-bytes";
+    public static final String BATCH_BUFFER_CACHE_SIZE_METRIC_NAME = "batch-buffer-cache-size-bytes";
 
     /**
-     * The coordinator append buffer skip cache count metric name.
+     * The buffer skip cache count metric name.
      */
-    public static final String APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME = "coordinator-append-buffer-skip-cache-count";
+    public static final String BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME = "batch-buffer-cache-discard-count";
 
     /**
      * Metric to count the number of partitions in Loading state.
@@ -103,15 +103,15 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     private final MetricName eventQueueSize;
 
     /**
-     * Metric to count the size of the coordinator append buffer.
+     * Metric to count the size of the cached buffer.
      */
-    private final MetricName appendBufferSize;
+    private final MetricName bufferCacheSize;
 
     /**
      * Metric to count the number of over-sized append buffers that were discarded.
      */
-    private final MetricName appendBufferSkipCacheCount;
-    private final AtomicLong appendBufferSkipCacheCounter = new AtomicLong(0);
+    private final MetricName bufferCacheDiscardCount;
+    private final AtomicLong bufferCacheDiscardCounter = new AtomicLong(0);
 
     /**
      * The Kafka metrics registry.
@@ -177,17 +177,17 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
 
         this.eventQueueSize = kafkaMetricName("event-queue-size", "The event accumulator queue size.");
 
-        this.appendBufferSize = kafkaMetricName(
-            APPEND_BUFFER_SIZE_METRIC_NAME,
+        this.bufferCacheSize = kafkaMetricName(
+            BATCH_BUFFER_CACHE_SIZE_METRIC_NAME,
             "The current total size in bytes of the append buffers being held in the coordinator's cache."
         );
 
-        this.appendBufferSkipCacheCount = kafkaMetricName(
-            APPEND_BUFFER_SKIP_CACHE_COUNT_METRIC_NAME,
+        this.bufferCacheDiscardCount = kafkaMetricName(
+            BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME,
             "The count of over-sized append buffers that were discarded instead of being cached upon release."
         );
         
-        metrics.addMetric(appendBufferSkipCacheCount, (Gauge<Long>) (config, now) -> appendBufferSkipCacheCounter.get());
+        metrics.addMetric(bufferCacheDiscardCount, (Gauge<Long>) (config, now) -> bufferCacheDiscardCounter.get());
         metrics.addMetric(numPartitionsLoading, (Gauge<Long>) (config, now) -> numPartitionsLoadingCounter.get());
         metrics.addMetric(numPartitionsActive, (Gauge<Long>) (config, now) -> numPartitionsActiveCounter.get());
         metrics.addMetric(numPartitionsFailed, (Gauge<Long>) (config, now) -> numPartitionsFailedCounter.get());
@@ -285,8 +285,8 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
             numPartitionsActive,
             numPartitionsFailed,
             eventQueueSize,
-            appendBufferSize,
-            appendBufferSkipCacheCount
+            bufferCacheSize,
+            bufferCacheDiscardCount
         ).forEach(metrics::removeMetric);
 
         metrics.removeSensor(partitionLoadSensor.name());
@@ -376,12 +376,12 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     }
 
     @Override
-    public void registerAppendBufferSizeGauge(Supplier<Long> sizeSupplier) {
-        metrics.addMetric(appendBufferSize, (Gauge<Long>) (config, now) -> sizeSupplier.get());
+    public void registerBufferCacheSizeGauge(Supplier<Long> bufferCacheSizeSupplier) {
+        metrics.addMetric(bufferCacheSize, (Gauge<Long>) (config, now) -> bufferCacheSizeSupplier.get());
     }
 
     @Override
-    public void recordAppendBufferDiscarded() {
-        appendBufferSkipCacheCounter.incrementAndGet();
+    public void recordBufferCacheDiscarded() {
+        bufferCacheDiscardCounter.incrementAndGet();
     }
 }

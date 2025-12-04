@@ -120,7 +120,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Compression compression;
         private OptionalInt appendLingerMs;
         private ExecutorService executorService;
-        private Supplier<Integer> appendMaxBufferSizeSupplier;
+        private Supplier<Integer> cachedBufferMaxBytesSupplier;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -197,8 +197,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withMaxBufferSizeSupplier(Supplier<Integer> maxBufferSizeSupplier) {
-            this.appendMaxBufferSizeSupplier = maxBufferSizeSupplier;
+        public Builder<S, U> withCachedBufferMaxBytesSupplier(Supplier<Integer> cachedBufferMaxBytesSupplier) {
+            this.cachedBufferMaxBytesSupplier = cachedBufferMaxBytesSupplier;
             return this;
         }
 
@@ -234,8 +234,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("AppendLinger must be empty or >= 0");
             if (executorService == null)
                 throw new IllegalArgumentException("ExecutorService must be set.");
-            if (appendMaxBufferSizeSupplier == null)
-                throw new IllegalArgumentException("Append max buffer size supplier must be set.");
+            if (cachedBufferMaxBytesSupplier == null)
+                throw new IllegalArgumentException("Cached buffer max bytes supplier must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -253,7 +253,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 compression,
                 appendLingerMs,
                 executorService,
-                appendMaxBufferSizeSupplier
+                cachedBufferMaxBytesSupplier
             );
         }
     }
@@ -606,6 +606,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         BufferSupplier bufferSupplier;
 
         /**
+         * The cached buffer size.
+         */
+        AtomicLong cachedBufferSize;
+
+        /**
          * The current (or pending) batch.
          */
         CoordinatorBatch currentBatch;
@@ -615,11 +620,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * Only valid for the lifetime of the CoordinatorContext. The first batch has an epoch of 1.
          */
         int batchEpoch;
-
-        /**
-         * The cached buffer size.
-         */
-        AtomicLong cachedBufferSize;
 
         /**
          * Constructor.
@@ -780,17 +780,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             // Cancel the linger timeout.
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
-            // Release the buffer only if it is not larger than the max buffer size.
-            int maxBufferSize = appendMaxBufferSizeSupplier.get();
+            // Release the buffer only if it is not larger than the cachedBufferMaxBytes.
+            int cachedBufferMaxBytes = cachedBufferMaxBytesSupplier.get();
 
-            if (currentBatch.builder.buffer().capacity() <= maxBufferSize) {
+            if (currentBatch.builder.buffer().capacity() <= cachedBufferMaxBytes) {
                 bufferSupplier.release(currentBatch.builder.buffer());
                 cachedBufferSize.set(currentBatch.builder.buffer().capacity());
-            } else if (currentBatch.buffer.capacity() <= maxBufferSize) {
+            } else if (currentBatch.buffer.capacity() <= cachedBufferMaxBytes) {
                 bufferSupplier.release(currentBatch.buffer);
                 cachedBufferSize.set(currentBatch.buffer.capacity());
+                // If the builder expands the buffer beyond the cachedBufferMaxBytes, that should also increment the discard counter.
+                runtimeMetrics.recordBufferCacheDiscarded();
             } else {
-                runtimeMetrics.recordAppendBufferDiscarded();
+                runtimeMetrics.recordBufferCacheDiscarded();
                 cachedBufferSize.set(0L);
             }
 
@@ -2078,7 +2080,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The maximum buffer size that the coordinator can cache.
      */
-    private final Supplier<Integer> appendMaxBufferSizeSupplier;
+    private final Supplier<Integer> cachedBufferMaxBytesSupplier;
 
     /**
      * Atomic boolean indicating whether the runtime is running.
@@ -2108,7 +2110,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param compression                       The compression codec.
      * @param appendLingerMs                    The append linger time in ms.
      * @param executorService                   The executor service.
-     * @param appendMaxBufferSizeSupplier       The append max buffer size supplier.
+     * @param cachedBufferMaxBytesSupplier      The cached buffer max bytes supplier.
      */
     @SuppressWarnings("checkstyle:ParameterNumber")
     private CoordinatorRuntime(
@@ -2127,7 +2129,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Compression compression,
         OptionalInt appendLingerMs,
         ExecutorService executorService,
-        Supplier<Integer> appendMaxBufferSizeSupplier
+        Supplier<Integer> cachedBufferMaxBytesSupplier
     ) {
         this.logPrefix = logPrefix;
         this.log = logContext.logger(CoordinatorRuntime.class);
@@ -2145,8 +2147,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.compression = compression;
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
-        this.appendMaxBufferSizeSupplier = appendMaxBufferSizeSupplier;
-        this.runtimeMetrics.registerAppendBufferSizeGauge(
+        this.cachedBufferMaxBytesSupplier = cachedBufferMaxBytesSupplier;
+        this.runtimeMetrics.registerBufferCacheSizeGauge(
             () -> coordinators.values().stream().mapToLong(c -> c.cachedBufferSize.get()).sum()
         );
     }

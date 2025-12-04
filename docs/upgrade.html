@@ -26,8 +26,7 @@
 <h5><a id="upgrade_430_notable" href="#upgrade_430_notable">Notable changes in 4.3.0</a></h5>
 <ul>
     <li>
-        Two new configs have been introduced:
-        <code>group.coordinator.append.max.buffer.size</code> in <code>GroupCoordinatorConfig</code> and <code>share.coordinator.append.max.buffer.size</code> in <code>ShareCoordinatorConfig</code>.
+        Two new configs have been introduced: <code>group.coordinator.cached.buffer.max.bytes</code> and <code>share.coordinator.cached.buffer.max.bytes</code>.
         They allow the respective coordinators to set the maximum buffer size retained for reuse.
         For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/hA5JFg">KIP-1196</a>.
     </li>

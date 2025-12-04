@@ -111,9 +111,9 @@ public class GroupCoordinatorConfig {
     public static final CompressionType OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT = CompressionType.NONE;
     public static final String OFFSETS_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits.";
 
-    public static final String APPEND_MAX_BUFFER_SIZE_CONFIG = "group.coordinator.append.max.buffer.size";
-    public static final int APPEND_MAX_BUFFER_SIZE_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
-    public static final String APPEND_MAX_BUFFER_SIZE_DOC = "The maximum buffer size that the GroupCoordinator will retain for reuse. " +
+    public static final String CACHED_BUFFER_MAX_BYTES_CONFIG = "group.coordinator.cached.buffer.max.bytes";
+    public static final int CACHED_BUFFER_MAX_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final String CACHED_BUFFER_MAX_BYTES_DOC = "The maximum buffer size that the GroupCoordinator will retain for reuse. " +
         "Note: Setting this larger than the maximum message size is not recommended. In this case, every write buffer will be eligible " +
         "for recycling, which renders this configuration ineffective as a size limit.";
 
@@ -309,7 +309,7 @@ public class GroupCoordinatorConfig {
     public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-        APPEND_MAX_BUFFER_SIZE_CONFIG
+        CACHED_BUFFER_MAX_BYTES_CONFIG
     );
     
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
@@ -324,7 +324,8 @@ public class GroupCoordinatorConfig {
         .define(OFFSETS_TOPIC_PARTITIONS_CONFIG, INT, OFFSETS_TOPIC_PARTITIONS_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_PARTITIONS_DOC)
         .define(OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, INT, OFFSETS_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_SEGMENT_BYTES_DOC)
         .define(OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, INT, (int) OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT.id, HIGH, OFFSETS_TOPIC_COMPRESSION_CODEC_DOC)
-        .define(APPEND_MAX_BUFFER_SIZE_CONFIG, INT, APPEND_MAX_BUFFER_SIZE_DEFAULT, atLeast(512 * 1024), MEDIUM, APPEND_MAX_BUFFER_SIZE_DOC)
+        .define(CACHED_BUFFER_MAX_BYTES_CONFIG, INT, CACHED_BUFFER_MAX_BYTES_DEFAULT, atLeast(512 * 1024), MEDIUM,
+            CACHED_BUFFER_MAX_BYTES_DOC)
 
         // Offset configs
         .define(OFFSET_METADATA_MAX_SIZE_CONFIG, INT, OFFSET_METADATA_MAX_SIZE_DEFAULT, HIGH, OFFSET_METADATA_MAX_SIZE_DOC)
@@ -729,8 +730,8 @@ public class GroupCoordinatorConfig {
      *
      * Note: On hot paths, frequent calls to this method may cause performance bottlenecks due to synchronization overhead.
      */
-    public int appendMaxBufferSize() {
-        return config.getInt(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG);
+    public int cachedBufferMaxBytes() {
+        return config.getInt(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG);
     }
 
     /**

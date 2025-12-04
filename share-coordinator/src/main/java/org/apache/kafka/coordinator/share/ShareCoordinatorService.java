@@ -206,7 +206,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     .withCompression(Compression.of(config.shareCoordinatorStateTopicCompressionType()).build())
                     .withAppendLingerMs(config.shareCoordinatorAppendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
-                    .withMaxBufferSizeSupplier(config::shareCoordinatorAppendMaxBufferSize)
+                    .withCachedBufferMaxBytesSupplier(config::shareCoordinatorCachedBufferMaxBytes)
                     .build();
 
             return new ShareCoordinatorService(

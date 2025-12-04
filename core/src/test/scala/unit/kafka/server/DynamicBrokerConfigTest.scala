@@ -1109,20 +1109,20 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testCoordinatorConfigBufferSizeUpdates(): Unit = {
+  def testCoordinatorCachedBufferMaxBytesUpdates(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
-    origProps.put(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "2097152")
-    origProps.put(ShareCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "3145728")
+    origProps.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "2097152")
+    origProps.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "3145728")
     val ctx = new DynamicLogConfigContext(origProps)
-    assertEquals(2 * 1024 * 1024, ctx.config.groupCoordinatorConfig.appendMaxBufferSize())
-    assertEquals(3 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorAppendMaxBufferSize())
+    assertEquals(2 * 1024 * 1024, ctx.config.groupCoordinatorConfig.cachedBufferMaxBytes())
+    assertEquals(3 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
 
     val props = new Properties()
-    props.put(GroupCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "4194304")
-    props.put(ShareCoordinatorConfig.APPEND_MAX_BUFFER_SIZE_CONFIG, "5242880")
+    props.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "4194304")
+    props.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "5242880")
     ctx.config.dynamicConfig.updateDefaultConfig(props)
-    assertEquals(4 * 1024 * 1024, ctx.config.groupCoordinatorConfig.appendMaxBufferSize())
-    assertEquals(5 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorAppendMaxBufferSize())
+    assertEquals(4 * 1024 * 1024, ctx.config.groupCoordinatorConfig.cachedBufferMaxBytes())
+    assertEquals(5 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
   }
 }
 
