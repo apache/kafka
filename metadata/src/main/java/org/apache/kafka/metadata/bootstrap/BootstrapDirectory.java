@@ -29,9 +29,6 @@ import java.util.List;
  * Abstraction for reading controller bootstrap metadata from disk.
  */
 public interface BootstrapDirectory {
-    String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
-
-    String BINARY_BOOTSTRAP_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint";
 
     /**
      * Read the bootstrap metadata from the configured location.

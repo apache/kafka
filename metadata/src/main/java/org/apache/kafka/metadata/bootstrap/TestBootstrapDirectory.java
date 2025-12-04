@@ -30,6 +30,8 @@ import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PAR
  * Test-only implementation that reads bootstrap metadata from the metadata partition snapshot.
  */
 public class TestBootstrapDirectory implements BootstrapDirectory {
+    private static final String BINARY_BOOTSTRAP_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint";
+    
     private final String directoryPath;
 
     public TestBootstrapDirectory(String directoryPath) {

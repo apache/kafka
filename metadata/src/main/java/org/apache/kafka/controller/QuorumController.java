@@ -101,8 +101,8 @@ import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.bootstrap.LegacyBootstrapDirectory;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.util.RecordRedactor;
@@ -1025,10 +1025,10 @@ public final class QuorumController implements Controller {
                         List<ApiMessageAndVersion> messages = batch.records();
                         // KIP-1170: The 0-0.checkpoint can contain metadata records. If it does, they should be considered the bootstrap metadata for the cluster.
                         if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID) && !messages.isEmpty()) {
-                            if (bootstrapMetadata.source().contains(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+                            if (bootstrapMetadata.source().contains(LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
                                 log.warn("{} with metadata records exists alongside {}",
-                                    BootstrapDirectory.BINARY_BOOTSTRAP_CHECKPOINT_FILENAME,
-                                    BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME);
+                                    Snapshots.filenameFromSnapshotId(reader.snapshotId()) + ".checkpoint",
+                                    LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME);
                             }
                             bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
                         } else {

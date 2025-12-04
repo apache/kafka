@@ -44,7 +44,7 @@ import org.apache.kafka.coordinator.share.generated.{CoordinatorRecordJsonConver
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordJsonConverters => TransactionCoordinatorRecordJsonConverters}
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
+import org.apache.kafka.metadata.bootstrap.LegacyBootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
@@ -271,7 +271,7 @@ object DumpLogSegments {
       val startOffset = file.getName.split("\\.")(0).toLong
       println(s"Log starting offset: $startOffset")
     } else if (file.getName.endsWith(Snapshots.SUFFIX)) {
-      if (file.getName == BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME) {
+      if (file.getName == LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME) {
         println("KRaft bootstrap snapshot")
       } else {
         val path = Snapshots.parse(file.toPath).get()

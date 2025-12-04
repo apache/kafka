@@ -29,6 +29,8 @@ import java.util.Objects;
  * Reads bootstrap metadata from the legacy {@code bootstrap.checkpoint} file.
  */
 public class LegacyBootstrapDirectory implements BootstrapDirectory {
+    public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
+
     private final String directoryPath;
 
     public LegacyBootstrapDirectory(String directoryPath) {
