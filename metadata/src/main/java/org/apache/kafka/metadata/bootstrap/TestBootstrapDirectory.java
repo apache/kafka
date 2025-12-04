@@ -17,7 +17,6 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
-
 import java.io.FileNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
