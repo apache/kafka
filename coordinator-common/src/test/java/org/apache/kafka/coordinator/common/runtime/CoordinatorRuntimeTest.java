@@ -1556,7 +1556,6 @@ public class CoordinatorRuntimeTest {
     public void testScheduleTransactionCompletionWhenReplayFails() {
         MockTimer timer = new MockTimer();
         MockPartitionWriter writer = new MockPartitionWriter();
-
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
@@ -2076,7 +2075,6 @@ public class CoordinatorRuntimeTest {
     @Test
     public void testScheduleTimer() throws InterruptedException {
         MockTimer timer = new MockTimer();
-
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
