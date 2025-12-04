@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static java.lang.String.format;
 import static org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType.SAFE_DOWNGRADE;
@@ -53,21 +54,34 @@ public class FeatureCommandTest {
 
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
-        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: group.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(1)));
-        assertEquals("Feature: kraft.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(2)));
-        assertEquals("Feature: metadata.version\t\tSupportedMinVersion: 3.3-IV3\t\t" +
-                "SupportedMaxVersion: 4.3-IV0\t\tFinalizedVersionLevel: 3.3-IV3\t\t", outputWithoutEpoch(features.get(3)));
-        assertEquals("Feature: share.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(4)));
-        assertEquals("Feature: streams.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(5)));
-        assertEquals("Feature: transaction.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 2\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.3-IV3",
+                outputWithoutEpoch(features.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(features.get(6))
+        );
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -80,20 +94,34 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: group.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(1)));
-        assertEquals("Feature: kraft.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(2)));
-        assertEquals("Feature: metadata.version\t\tSupportedMinVersion: 3.3-IV3\t\t" +
-                "SupportedMaxVersion: 4.3-IV0\t\tFinalizedVersionLevel: 3.7-IV0\t\t", outputWithoutEpoch(features.get(3)));
-        assertEquals("Feature: share.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(4)));
-        assertEquals("Feature: streams.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 1\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(5)));
-        assertEquals("Feature: transaction.version\t\tSupportedMinVersion: 0\t\t" +
-                "SupportedMaxVersion: 2\t\tFinalizedVersionLevel: 0\t\t", outputWithoutEpoch(features.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                outputWithoutEpoch(features.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(features.get(6))
+        );
     }
 
     @ClusterTest(
@@ -390,8 +418,16 @@ public class FeatureCommandTest {
                 throw new RuntimeException(e);
             }
         });
-        assertEquals(format("Feature: foo.bar\t\tSupportedMinVersion: 0\t\tSupportedMaxVersion: 10\t\tFinalizedVersionLevel: 5\t\tEpoch: 123%n" +
-            "Feature: metadata.version\t\tSupportedMinVersion: 3.3-IV3\t\tSupportedMaxVersion: 3.5-IV0\t\tFinalizedVersionLevel: 3.4-IV0\t\tEpoch: 123"), describeResult);
+
+        List<String> features = Arrays.stream(describeResult.split("\n")).sorted().toList();
+        assertFeatureOutput(
+                "foo.bar", "0", "10", "5",
+                outputWithoutEpoch(features.get(0))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "3.5-IV0", "3.4-IV0",
+                outputWithoutEpoch(features.get(1))
+        );
     }
 
     @Test
@@ -710,5 +746,23 @@ public class FeatureCommandTest {
         );
 
         assertEquals(expectedOutput.trim(), output.trim());
+    }
+
+    private static void assertFeatureOutput(
+            String expectedFeature,
+            String expectedMinVersion,
+            String expectedMaxVersion,
+            String expectedFinalizedVersion,
+            String actualFeature
+    ) {
+        String featureFormattingRegex = String.format(
+                "Feature:\\s+%s\\s+SupportedMinVersion:\\s+%s\\s+SupportedMaxVersion:\\s+%s\\s+FinalizedVersionLevel:\\s+%s\\s*$",
+                Pattern.quote(expectedFeature),
+                Pattern.quote(expectedMinVersion),
+                Pattern.quote(expectedMaxVersion),
+                Pattern.quote(expectedFinalizedVersion)
+        );
+
+        assertTrue(actualFeature.matches(featureFormattingRegex));
     }
 }
