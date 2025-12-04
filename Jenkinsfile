@@ -199,6 +199,25 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 23'
           }
         }
+        stage('JDK 25 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            // Use JDK 21 instead of JDK 25 because Gradle 8 cannot run on JDK 25.
+            // While running Gradle with JDK 21, we use Gradle's Java toolchain feature to build and test with JDK 25.
+            jdk 'jdk_21_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doTest(env, 'testJava25')
+            echo 'Skipping Kafka Streams archetype test for Java 25'
+          }
+        }
       }
     }
   }

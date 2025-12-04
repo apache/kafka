@@ -53,9 +53,6 @@ plugins {
 ext {
   gradleVersion = versions.gradle
   minJavaVersion = 8
-  javaToolChainVersion = project.hasProperty('javaToolChainVersion')
-          ? project.property('javaToolChainVersion').toString().toInteger()
-          : JavaVersion.current().majorVersion.toInteger()
   buildVersionFileName = "kafka-version.properties"
 
   defaultMaxHeapSize = "2g"
@@ -251,7 +248,7 @@ if (repo != null) {
 } else {
   rat.enabled = false
 }
-println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java $javaToolChainVersion and Scala ${versions.scala}")
+println("Starting build with version $version (commit id ${commitId == null ? "null" : commitId.take(8)}) using Gradle $gradleVersion, Java ${JavaVersion.current()} and Scala ${versions.scala}")
 println("Build properties: maxParallelForks=$maxTestForks, maxScalacThreads=$maxScalacThreads, maxTestRetries=$userMaxTestRetries")
 
 subprojects {
@@ -317,9 +314,6 @@ subprojects {
   }
 
   java {
-    toolchain {
-      languageVersion = JavaLanguageVersion.of(javaToolChainVersion)
-    }
     // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
     // `-target` incorrectly if this is unset
     sourceCompatibility = minJavaVersion
@@ -548,6 +542,39 @@ subprojects {
 
     useJUnitPlatform {
       excludeTags "integration"
+      includeEngines 'junit-jupiter'
+    }
+
+    retry {
+      maxRetries = userMaxTestRetries
+      maxFailures = userMaxTestRetryFailures
+    }
+  }
+
+  task testWithJava25(type: Test, dependsOn: compileJava) {
+    description = 'Run tests using Java 25 toolchain'
+
+    javaLauncher = javaToolchains.launcherFor {
+      languageVersion = JavaLanguageVersion.of(25)
+    }
+
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures
+    maxHeapSize = defaultMaxHeapSize
+    jvmArgs = defaultJvmArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    exclude testsToExclude
+
+    useJUnitPlatform {
       includeEngines 'junit-jupiter'
     }
 
