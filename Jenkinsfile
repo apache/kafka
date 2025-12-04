@@ -202,8 +202,8 @@ pipeline {
         stage('JDK 25 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
-            // Use JDK 21 instead of JDK 25 because Gradle 8 cannot run on JDK 25.
-            // While running Gradle with JDK 21, we use Gradle's Java toolchain feature to build and test with JDK 25.
+            // Use JDK 21 because Gradle 8 cannot run on JDK 25.
+            // JDK 25 is used only for tests via task testWithJava25 and does not affect the validation and build.
             jdk 'jdk_21_latest'
           }
           options {
