@@ -308,6 +308,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testConsumerGroupHeartbeatWithPreparingRebalanceClassicGroup
 - testConsumerGroupHeartbeatWithStableClassicGroup
 - testConsumerGroupMaybeDelete
+- testConsumerGroupMemberClearsRegex
 - testConsumerGroupMemberEpochValidation
 - testConsumerGroupMemberEpochValidationForStaticMember
 - testConsumerGroupMemberJoinRefreshesExpiredRegexes
@@ -760,12 +761,13 @@ org.apache.kafka.coordinator.group.assignor.GroupSpecImplTest:
 - testMemberSubscription
 - testSubscriptionType
 org.apache.kafka.coordinator.group.assignor.OptimizedUniformAssignmentBuilderTest:
+- testAssignmentReuse
 - testFirstAssignmentNumMembersGreaterThanTotalNumPartitions
 - testFirstAssignmentTwoMembersTwoTopicsNoMemberRacks
 - testOneMemberNoTopicSubscription
 - testOneMemberSubscribedToNonexistentTopic
 - testReassignmentForTwoMembersTwoTopicsGivenUnbalancedPrevAssignment
-- testReassignmentStickinessWhenAlreadyBalanced
+- testReassignmentStickiness
 - testReassignmentWhenOneMemberAddedAfterInitialAssignmentWithTwoMembersTwoTopics
 - testReassignmentWhenOneMemberRemovedAfterInitialAssignmentWithThreeMembersTwoTopics
 - testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics
@@ -779,6 +781,7 @@ org.apache.kafka.coordinator.group.assignor.RangeAssignorTest:
 - testOneMemberNoTopic
 - testOneMemberSubscribedToNonExistentTopic
 - testReassignmentNumMembersGreaterThanNumPartitionsWhenOneMemberAdded
+- testReassignmentStickiness
 - testReassignmentWhenMultipleSubscriptionsRemovedAfterInitialAssignmentWithThreeMembersTwoTopics
 - testReassignmentWhenOneMemberAddedAfterInitialAssignmentWithTwoMembersTwoTopics
 - testReassignmentWhenOneMemberAddedAndOnePartitionAfterInitialAssignmentWithTwoMembersTwoTopics
@@ -817,10 +820,12 @@ org.apache.kafka.coordinator.group.assignor.SimpleAssignorTest:
 - testIncrementalAssignmentIncreasingMembersHomogeneous
 - testName
 org.apache.kafka.coordinator.group.assignor.UniformHeterogeneousAssignmentBuilderTest:
+- testAssignmentReuse
 - testFirstAssignmentNumMembersGreaterThanTotalNumPartitions
 - testFirstAssignmentTwoMembersTwoTopics
 - testFirstAssignmentWithTwoMembersIncludingOneWithoutSubscriptions
 - testReassignmentForTwoMembersThreeTopicsGivenUnbalancedPrevAssignment
+- testReassignmentStickiness
 - testReassignmentWhenOneMemberAddedAndPartitionsAddedTwoMembersTwoTopics
 - testReassignmentWhenOneMemberRemovedAfterInitialAssignmentWithThreeMembersThreeTopics
 - testReassignmentWhenOneSubscriptionRemovedAfterInitialAssignmentWithTwoMembersTwoTopics
@@ -908,6 +913,7 @@ org.apache.kafka.coordinator.group.modern.AssignmentTest:
 - testEquals
 - testFromTargetAssignmentRecord
 - testPartitionsCannotBeNull
+- testPartitionsImmutable
 org.apache.kafka.coordinator.group.modern.MemberAssignmentImplTest:
 - testPartitionsMutable
 org.apache.kafka.coordinator.group.modern.SubscribedTopicMetadataTest:
