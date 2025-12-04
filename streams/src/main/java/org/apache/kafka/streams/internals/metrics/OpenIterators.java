@@ -16,11 +16,7 @@
  */
 package org.apache.kafka.streams.internals.metrics;
 
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.MeteredIterator;
-import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Comparator;
 import java.util.Iterator;
@@ -29,43 +25,24 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class OpenIterators {
-    private final TaskId taskId;
-    private final String metricsScope;
-    private final String name;
-    private final StreamsMetricsImpl streamsMetrics;
 
     private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
     private final AtomicLong oldestStartTimestamp = new AtomicLong();
 
-    private MetricName metricName;
-
-    public OpenIterators(final TaskId taskId,
-                         final String metricsScope,
-                         final String name,
-                         final StreamsMetricsImpl streamsMetrics) {
-        this.taskId = taskId;
-        this.metricsScope = metricsScope;
-        this.name = name;
-        this.streamsMetrics = streamsMetrics;
-    }
+    public OpenIterators() { }
 
     public void add(final MeteredIterator iterator) {
         openIterators.add(iterator);
-        updateOldestStartTimestamp();
-
-        if (openIterators.size() == 1) {
-            metricName = StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name, streamsMetrics,
-                (config, now) -> oldestStartTimestamp.get()
-            );
-        }
+        updateOldestStartTimestamp();                                                                   
     }
 
     public void remove(final MeteredIterator iterator) {
-        if (openIterators.size() == 1) {
-            streamsMetrics.removeStoreLevelMetric(metricName);
-        }
         openIterators.remove(iterator);
         updateOldestStartTimestamp();
+    }
+
+    public long oldestStartTimestamp() {
+        return oldestStartTimestamp.get();
     }
 
     public long sum() {
@@ -76,6 +53,8 @@ public class OpenIterators {
         final Iterator<MeteredIterator> openIteratorsIterator = openIterators.iterator();
         if (openIteratorsIterator.hasNext()) {
             oldestStartTimestamp.set(openIteratorsIterator.next().startTimestamp());
+        } else {
+            oldestStartTimestamp.set(0);
         }
     }
 }

@@ -17,57 +17,56 @@
 package org.apache.kafka.streams.internals.metrics;
 
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.MeteredIterator;
+import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
+@SuppressWarnings("unchecked")
 public class OpenIteratorsTest {
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
+    final ArgumentCaptor<Gauge<Long>> gaugeCaptor = ArgumentCaptor.forClass(Gauge.class);
+    final OpenIterators openIterators = new OpenIterators();
+
+    @BeforeEach
+    public void setUp() {
+        StateStoreMetrics.addOldestOpenIteratorGauge("taskId", "metricsScope", "name", streamsMetrics,
+            (config, now) -> openIterators.oldestStartTimestamp());
+        verify(streamsMetrics).addStoreLevelMutableMetric(any(), any(), any(), any(), any(), any(), gaugeCaptor.capture());
+    }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCalculateOldestStartTimestampCorrectly() {
-        final OpenIterators openIterators = new OpenIterators(new TaskId(0, 0), "scope", "name", streamsMetrics);
+        final Gauge<Long> gauge = gaugeCaptor.getValue();
 
         final MeteredIterator meteredIterator1 = () -> 5;
         final MeteredIterator meteredIterator2 = () -> 2;
         final MeteredIterator meteredIterator3 = () -> 6;
 
         openIterators.add(meteredIterator1);
-        final ArgumentCaptor<Gauge<Long>> gaugeCaptor = ArgumentCaptor.forClass(Gauge.class);
-        verify(streamsMetrics).addStoreLevelMutableMetric(any(), any(), any(), any(), any(), any(), gaugeCaptor.capture());
-        final Gauge<Long> gauge = gaugeCaptor.getValue();
         assertThat(gauge.value(null, 0), is(5L));
-        reset(streamsMetrics);
 
         openIterators.add(meteredIterator2);
-        verify(streamsMetrics, never()).addStoreLevelMutableMetric(any(), any(), any(), any(), any(), any(), gaugeCaptor.capture());
         assertThat(gauge.value(null, 0), is(2L));
 
         openIterators.remove(meteredIterator2);
-        verify(streamsMetrics, never()).removeStoreLevelMetric(any());
         assertThat(gauge.value(null, 0), is(5L));
 
         openIterators.remove(meteredIterator1);
-        verify(streamsMetrics).removeStoreLevelMetric(any());
-        assertThat(gauge.value(null, 0), is(5L));
+        assertThat(gauge.value(null, 0), is(0L));
 
         openIterators.add(meteredIterator3);
-        verify(streamsMetrics).addStoreLevelMutableMetric(any(), any(), any(), any(), any(), any(), gaugeCaptor.capture());
-        assertThat(gaugeCaptor.getValue(), not(gauge));
-        assertThat(gaugeCaptor.getValue().value(null, 0), is(6L));
+        assertThat(gauge.value(null, 0), is(6L));
     }
 }

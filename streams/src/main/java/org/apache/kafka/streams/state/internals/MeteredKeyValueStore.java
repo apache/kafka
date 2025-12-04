@@ -149,7 +149,9 @@ public class MeteredKeyValueStore<K, V>
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> openIterators.sum());
-        openIterators = new OpenIterators(taskId, metricsScope, name(), streamsMetrics);
+        openIterators = new OpenIterators();
+        StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+            (config, now) -> openIterators.oldestStartTimestamp());
     }
 
     @Override
