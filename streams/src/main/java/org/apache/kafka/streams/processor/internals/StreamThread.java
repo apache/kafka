@@ -458,7 +458,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final DefaultTaskManager schedulingTaskManager =
             maybeCreateSchedulingTaskManager(processingThreadsEnabled, topologyMetadata, time, threadId, tasks);
         final StateUpdater stateUpdater =
-            maybeCreateStateUpdater(
+            createStateUpdater(
                 streamsMetrics,
                 config,
                 restoreConsumer,
@@ -632,7 +632,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return null;
     }
 
-    private static StateUpdater maybeCreateStateUpdater(final StreamsMetricsImpl streamsMetrics,
+    private static StateUpdater createStateUpdater(final StreamsMetricsImpl streamsMetrics,
                                                         final StreamsConfig streamsConfig,
                                                         final Consumer<byte[], byte[]> restoreConsumer,
                                                         final ChangelogReader changelogReader,
@@ -1178,7 +1178,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
-        if (state == State.RUNNING || isStartingRunningOrPartitionAssigned()) {
+        if (isStartingRunningOrPartitionAssigned()) {
 
             taskManager.updateLags();
 
