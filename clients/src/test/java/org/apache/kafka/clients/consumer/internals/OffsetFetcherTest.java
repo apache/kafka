@@ -1598,7 +1598,7 @@ public class OffsetFetcherTest {
 
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         data.topics().add(new OffsetForLeaderTopicResult()
-            .setTopic(topicPartition.topic())
+            .setTopic(topicPartition.topic()).setTopicId(topicId)
             .setPartitions(Collections.singletonList(new EpochEndOffset()
                 .setPartition(topicPartition.partition())
                 .setErrorCode(Errors.NONE.code())

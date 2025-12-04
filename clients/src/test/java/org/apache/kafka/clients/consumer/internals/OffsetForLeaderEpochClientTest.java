@@ -19,7 +19,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
@@ -45,6 +47,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class OffsetForLeaderEpochClientTest {
 
     private final TopicPartition tp0 = new TopicPartition("topic", 0);
+    private final Uuid uuid0 = Uuid.randomUuid();
+    private final TopicIdPartition tip0 = new TopicIdPartition(uuid0, tp0);
     private ConsumerNetworkClient consumerClient;
     private MockClient client;
 
@@ -72,7 +76,7 @@ public class OffsetForLeaderEpochClientTest {
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+                offsetClient.sendAsyncRequest(Node.noNode(), toTopicIdPartitionMap(positionMap));
 
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(
             new OffsetForLeaderEpochResponseData());
@@ -92,18 +96,18 @@ public class OffsetForLeaderEpochClientTest {
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+                offsetClient.sendAsyncRequest(Node.noNode(), toTopicIdPartitionMap(positionMap));
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
-            tp0, Errors.NONE, 1, 10L));
+            tip0, Errors.NONE, 1, 10L));
         consumerClient.pollNoWakeup();
 
         OffsetsForLeaderEpochUtils.OffsetForEpochResult result = future.value();
         assertTrue(result.partitionsToRetry().isEmpty());
-        assertTrue(result.endOffsets().containsKey(tp0));
-        assertEquals(result.endOffsets().get(tp0).errorCode(), Errors.NONE.code());
-        assertEquals(1, result.endOffsets().get(tp0).leaderEpoch());
-        assertEquals(10L, result.endOffsets().get(tp0).endOffset());
+        assertTrue(result.endOffsets().containsKey(tip0));
+        assertEquals(result.endOffsets().get(tip0).errorCode(), Errors.NONE.code());
+        assertEquals(1, result.endOffsets().get(tip0).leaderEpoch());
+        assertEquals(10L, result.endOffsets().get(tip0).endOffset());
     }
 
     @Test
@@ -114,10 +118,10 @@ public class OffsetForLeaderEpochClientTest {
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+                offsetClient.sendAsyncRequest(Node.noNode(), toTopicIdPartitionMap(positionMap));
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
-            tp0, Errors.TOPIC_AUTHORIZATION_FAILED, -1, -1));
+            tip0, Errors.TOPIC_AUTHORIZATION_FAILED, -1, -1));
         consumerClient.pollNoWakeup();
 
         assertTrue(future.failed());
@@ -133,16 +137,26 @@ public class OffsetForLeaderEpochClientTest {
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+                offsetClient.sendAsyncRequest(Node.noNode(), toTopicIdPartitionMap(positionMap));
 
         client.prepareResponse(prepareOffsetForLeaderEpochResponse(
-            tp0, Errors.LEADER_NOT_AVAILABLE, -1, -1));
+            tip0, Errors.LEADER_NOT_AVAILABLE, -1, -1));
         consumerClient.pollNoWakeup();
 
         assertFalse(future.failed());
         OffsetsForLeaderEpochUtils.OffsetForEpochResult result = future.value();
         assertTrue(result.partitionsToRetry().contains(tp0));
-        assertFalse(result.endOffsets().containsKey(tp0));
+        assertTrue(result.endOffsets().isEmpty());
+    }
+
+    private Map<TopicIdPartition, SubscriptionState.FetchPosition> toTopicIdPartitionMap(
+            Map<TopicPartition, SubscriptionState.FetchPosition> positions) {
+        Map<TopicIdPartition, SubscriptionState.FetchPosition> result = new HashMap<>();
+        positions.forEach((tp, position) -> {
+            TopicIdPartition tip = new TopicIdPartition(uuid0, tp);
+            result.put(tip, position);
+        });
+        return result;
     }
 
     private OffsetsForLeaderEpochClient newOffsetClient() {
@@ -162,13 +176,13 @@ public class OffsetForLeaderEpochClientTest {
     }
 
     private static OffsetsForLeaderEpochResponse prepareOffsetForLeaderEpochResponse(
-            TopicPartition tp, Errors error, int leaderEpoch, long endOffset) {
+            TopicIdPartition tip, Errors error, int leaderEpoch, long endOffset) {
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         OffsetForLeaderTopicResult topic = new OffsetForLeaderTopicResult()
-            .setTopic(tp.topic());
+            .setTopic(tip.topic()).setTopicId(tip.topicId());
         data.topics().add(topic);
         topic.partitions().add(new EpochEndOffset()
-            .setPartition(tp.partition())
+            .setPartition(tip.partition())
             .setErrorCode(error.code())
             .setLeaderEpoch(leaderEpoch)
             .setEndOffset(endOffset));

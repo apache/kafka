@@ -28,7 +28,9 @@ import org.apache.kafka.clients.consumer.internals.OffsetsForLeaderEpochUtils.Of
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.FetchPosition;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -271,8 +273,23 @@ public class OffsetFetcher {
 
             subscriptions.setNextAllowedRetry(fetchPositions.keySet(), nextResetTimeMs);
 
+            // Convert TopicPartition to TopicIdPartition
+            Map<TopicIdPartition, FetchPosition> fetchPositionsWithId = new HashMap<>();
+            Map<String, Uuid> topicIds = metadata.topicIds();
+            fetchPositions.forEach((tp, position) -> {
+                Uuid topicId = topicIds.get(tp.topic());
+                if (topicId != null) {
+                    TopicIdPartition tip = new TopicIdPartition(topicId, tp);
+                    fetchPositionsWithId.put(tip, position);
+                } else {
+                    // Topic ID not available yet, skip this partition for now
+                    // The metadata will be refreshed and we'll retry
+                    log.debug("Skipping offset validation for partition {} because topic ID is not available in metadata", tp);
+                }
+            });
+
             RequestFuture<OffsetForEpochResult> future =
-                    offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositions);
+                    offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositionsWithId);
 
             future.addListener(new RequestFutureListener<>() {
                 @Override

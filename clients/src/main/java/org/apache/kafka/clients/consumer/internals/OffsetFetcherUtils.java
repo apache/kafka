@@ -327,7 +327,8 @@ class OffsetFetcherUtils {
         // that partition's offset.
         // In addition, check whether the returned offset and epoch are valid. If not, then we should reset
         // its offset if reset policy is configured, or throw out of range exception.
-        offsetsResult.endOffsets().forEach((topicPartition, respEndOffset) -> {
+        offsetsResult.endOffsets().forEach((topicIdPartition, respEndOffset) -> {
+            TopicPartition topicPartition = topicIdPartition.topicPartition();
             SubscriptionState.FetchPosition requestPosition = fetchPositions.get(topicPartition);
             Optional<SubscriptionState.LogTruncation> truncationOpt =
                     subscriptionState.maybeCompleteValidation(topicPartition, requestPosition,

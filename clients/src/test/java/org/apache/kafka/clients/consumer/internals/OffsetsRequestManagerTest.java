@@ -27,6 +27,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
@@ -92,6 +93,7 @@ public class OffsetsRequestManagerTest {
     private ApiVersions apiVersions;
     private final CommitRequestManager commitRequestManager = mock(CommitRequestManager.class);
     private static final String TEST_TOPIC = "t1";
+    private static final Uuid TEST_TOPIC_ID = Uuid.randomUuid();
     private static final TopicPartition TEST_PARTITION_1 = new TopicPartition(TEST_TOPIC, 1);
     private static final TopicPartition TEST_PARTITION_2 = new TopicPartition(TEST_TOPIC, 2);
     private static final Node LEADER_1 = new Node(0, "host1", 9092);
@@ -843,6 +845,8 @@ public class OffsetsRequestManagerTest {
         when(subscriptionState.positionOrNull(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();
         when(apiVersions.get(leader.idString())).thenReturn(nodeApiVersions);
+        // Mock topicIds for OffsetsForLeaderEpoch requests
+        when(metadata.topicIds()).thenReturn(Map.of(TEST_TOPIC, TEST_TOPIC_ID));
     }
 
     private void testResetPositionsSuccessWithLeaderEpoch(Metadata.LeaderAndEpoch leaderAndEpoch) {

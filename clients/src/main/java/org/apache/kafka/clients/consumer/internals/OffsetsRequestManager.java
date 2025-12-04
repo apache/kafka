@@ -30,7 +30,9 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -783,8 +785,23 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             final Node node,
             final Map<TopicPartition, SubscriptionState.FetchPosition> fetchPositions,
             List<NetworkClientDelegate.UnsentRequest> unsentRequests) {
+        // Convert TopicPartition to TopicIdPartition
+        Map<TopicIdPartition, SubscriptionState.FetchPosition> fetchPositionsWithId = new HashMap<>();
+        Map<String, Uuid> topicIds = metadata.topicIds();
+        fetchPositions.forEach((tp, position) -> {
+            Uuid topicId = topicIds.get(tp.topic());
+            if (topicId != null) {
+                TopicIdPartition tip = new TopicIdPartition(topicId, tp.partition(), tp.topic());
+                fetchPositionsWithId.put(tip, position);
+            } else {
+                // Topic ID not available yet, skip this partition for now
+                // The metadata will be refreshed and we'll retry
+                log.debug("Skipping offset validation for partition {} because topic ID is not available in metadata", tp);
+            }
+        });
+
         AbstractRequest.Builder<OffsetsForLeaderEpochRequest> builder =
-                OffsetsForLeaderEpochUtils.prepareRequest(fetchPositions);
+                OffsetsForLeaderEpochUtils.prepareRequest(fetchPositionsWithId);
 
         log.debug("Creating OffsetsForLeaderEpoch request request {} to broker {}", builder, node);
 
@@ -805,7 +822,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 log.trace("Received OffsetsForLeaderEpoch response {} from broker {}", offsetsForLeaderEpochResponse, node);
                 try {
                     OffsetsForLeaderEpochUtils.OffsetForEpochResult listOffsetResult =
-                            OffsetsForLeaderEpochUtils.handleResponse(fetchPositions, offsetsForLeaderEpochResponse);
+                            OffsetsForLeaderEpochUtils.handleResponse(fetchPositionsWithId, offsetsForLeaderEpochResponse);
                     result.complete(listOffsetResult);
                 } catch (RuntimeException e) {
                     result.completeExceptionally(e);
