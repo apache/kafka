@@ -1416,7 +1416,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             // try to fetch some records with zero poll millis to unblock
             // other useful work while waiting for the join response
             records = pollRequests(Duration.ZERO);
-        } else if (state == State.RUNNING || state == State.STARTING || (state == State.PARTITIONS_ASSIGNED)) {
+        } else if (state == State.RUNNING || state == State.STARTING || state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);

@@ -734,7 +734,7 @@ public class TaskManager {
             final Map.Entry<TaskId, Set<TopicPartition>> entry = iter.next();
             final TaskId taskId = entry.getKey();
             final boolean taskIsOwned = tasks.allTaskIds().contains(taskId)
-                || (stateUpdater.tasks().stream().anyMatch(task -> task.id() == taskId));
+                || (stateUpdater.tasks().stream().anyMatch(task -> task.id().equals(taskId)));
             if (taskId.topologyName() != null && !taskIsOwned && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 log.info("Cannot create the assigned task {} since it's topology name cannot be recognized, will put it " +
                         "aside as pending for now and create later when topology metadata gets refreshed", taskId);
@@ -1720,8 +1720,8 @@ public class TaskManager {
     }
 
     /**
-     * Returns tasks owned by the stream thread. With state updater disabled, these are all tasks. With
-     * state updater enabled, this does not return any tasks currently owned by the state updater.
+     * Returns tasks owned by the stream thread.
+     * This does not return any tasks currently owned by the state updater.
      *
      */
     Map<TaskId, Task> allRunningTasks() {
@@ -1762,7 +1762,6 @@ public class TaskManager {
             activeRunningTaskStream(),
             stateUpdater.tasks().stream().filter(Task::isActive)
         );
-
     }
 
     private Stream<Task> activeRunningTaskStream() {
@@ -1783,7 +1782,6 @@ public class TaskManager {
             stateUpdater.standbyTasks().stream(),
             standbyTasksInTaskRegistry
         );
-
     }
     // For testing only.
     int commitAll() {

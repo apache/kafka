@@ -177,7 +177,7 @@ class StreamsUpgradeTest(Test):
     @matrix(from_version=[str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2)],
             upgrade=[True, False],
             metadata_quorum=[quorum.combined_kraft])
-    def test_upgrade_downgrade_state_updater(self, from_version, metadata_quorum):
+    def test_upgrade_downgrade_state_updater(self, from_version, upgrade, metadata_quorum):
         """
         Starts 3 KafkaStreams instances, and tests upgrade/downgrade state restoration
         for the instances in a rolling bounce.

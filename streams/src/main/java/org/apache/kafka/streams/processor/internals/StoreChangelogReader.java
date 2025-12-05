@@ -486,8 +486,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private ConsumerRecords<byte[], byte[]> pollRecordsFromRestoreConsumer(final Map<TaskId, Task> tasks,
                                                                            final Set<TopicPartition> restoringChangelogs) {
-        // If we are updating only standby tasks, and are not using a separate thread, we should
-        // use a non-blocking poll to unblock the processing as soon as possible.
         final ConsumerRecords<byte[], byte[]> polledRecords;
 
         try {
