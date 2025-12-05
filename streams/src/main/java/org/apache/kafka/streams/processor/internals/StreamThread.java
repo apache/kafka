@@ -1023,6 +1023,10 @@ public class StreamThread extends Thread implements ProcessingThread {
                     );
                 }
             }
+
+            if (mainConsumerInstanceIdFuture.isDone() && producerInstanceIdFuture.isDone()) {
+                fetchDeadlineClientInstanceId = -1L;
+            }
         }
     }
 
