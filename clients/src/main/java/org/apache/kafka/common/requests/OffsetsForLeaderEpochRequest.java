@@ -36,12 +36,6 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
      */
     public static final int CONSUMER_REPLICA_ID = -1;
 
-    /**
-     * Sentinel replica_id which indicates either a debug consumer or a replica which is using
-     * an old version of the protocol.
-     */
-    public static final int DEBUGGING_REPLICA_ID = -2;
-
     private final OffsetForLeaderEpochRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<OffsetsForLeaderEpochRequest> {

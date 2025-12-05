@@ -71,6 +71,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generate
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getBrokerMetadata;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForPartitions;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForTopics;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaToLogDir;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyInterBrokerThrottle;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyLogDirThrottle;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyTopicThrottles;
@@ -436,29 +437,50 @@ public class ReassignPartitionsUnitTest {
 
     @Test
     public void testCurrentPartitionReplicaAssignmentToString() throws Exception {
-        Map<TopicPartition, List<Integer>> proposedParts = new HashMap<>();
+        try (MockAdminClient adminClient = new MockAdminClient.Builder()
+                .numBrokers(6)
+                .brokerLogDirs(List.of(
+                    List.of("/tmp/broker0/logs"),
+                    List.of("/tmp/broker1/logs"),
+                    List.of("/tmp/broker2/logs"),
+                    List.of("/tmp/broker3/logs"),
+                    List.of("/tmp/broker4/logs"),
+                    List.of("/tmp/broker5/logs")
+                ))
+                .build()
+        ) {
 
-        proposedParts.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
-        proposedParts.put(new TopicPartition("bar", 0), List.of(7, 8, 9));
+            List<Node> brokers = adminClient.brokers();
+            adminClient.addTopic(false, "foo", List.of(
+                new TopicPartitionInfo(1, brokers.get(1),
+                    List.of(brokers.get(1), brokers.get(2), brokers.get(3)),
+                    List.of(brokers.get(1), brokers.get(2), brokers.get(3)))
+            ), Map.of());
 
-        Map<TopicPartition, List<Integer>> currentParts = new HashMap<>();
+            adminClient.addTopic(false, "bar", List.of(
+                new TopicPartitionInfo(0, brokers.get(4),
+                    List.of(brokers.get(4), brokers.get(5)),
+                    List.of(brokers.get(4), brokers.get(5)))
+            ), Map.of());
 
-        currentParts.put(new TopicPartition("foo", 0), List.of(1, 2, 3));
-        currentParts.put(new TopicPartition("foo", 1), List.of(4, 5, 6));
-        currentParts.put(new TopicPartition("bar", 0), List.of(7, 8));
-        currentParts.put(new TopicPartition("baz", 0), List.of(10, 11, 12));
+            Map<TopicPartition, List<Integer>> proposedParts = new HashMap<>();
+            proposedParts.put(new TopicPartition("foo", 1), List.of(0, 1, 2));
+            proposedParts.put(new TopicPartition("bar", 0), List.of(3, 4, 5));
 
-        assertEquals(String.join(System.lineSeparator(),
-            "Current partition replica assignment",
-            "",
-            "{\"version\":1,\"partitions\":" +
-                "[{\"topic\":\"bar\",\"partition\":0,\"replicas\":[7,8],\"log_dirs\":[\"any\",\"any\"]}," +
-                "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[4,5,6],\"log_dirs\":[\"any\",\"any\",\"any\"]}]" +
-                "}",
-            "",
-            "Save this to use as the --reassignment-json-file option during rollback"),
-            currentPartitionReplicaAssignmentToString(proposedParts, currentParts)
-        );
+            Map<TopicPartition, List<Integer>> currentParts = new HashMap<>();
+            currentParts.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
+            currentParts.put(new TopicPartition("bar", 0), List.of(4, 5));
+
+            assertEquals(String.join(System.lineSeparator(),
+                "Current partition replica assignment",
+                "",
+                "{\"version\":1,\"partitions\":[{\"topic\":\"bar\",\"partition\":0,\"replicas\":[4,5],\"log_dirs\":[\"/tmp/broker4/logs\",\"/tmp/broker4/logs\"]}," +
+                    "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}]}",
+                "",
+                "Save this to use as the --reassignment-json-file option during rollback"),
+                currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts)
+            );
+        }
     }
 
     @Test
@@ -763,6 +785,40 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Unexpected character",
                 assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM, false)).getMessage());
+        }
+    }
+
+    @Test
+    public void testGetReplicaToLogDir() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder()
+                .numBrokers(4)
+                .brokerLogDirs(List.of(
+                    List.of("/tmp/broker0/logs0"),
+                    List.of("/tmp/broker1/logs0"),
+                    List.of("/tmp/broker2/logs0"),
+                    List.of("/tmp/broker3/logs0")
+                )).build()
+        ) {
+            addTopics(adminClient);
+
+            Map<TopicPartition, List<Integer>> topicPartitionToReplicas = Map.of(
+                new TopicPartition("foo", 0), List.of(0, 1, 2),
+                new TopicPartition("foo", 1), List.of(1, 2, 3),
+                new TopicPartition("bar", 0), List.of(2, 3, 0)
+            );
+
+            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, topicPartitionToReplicas);
+
+            assertFalse(result.isEmpty());
+            assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 0)));
+            assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 1)));
+            assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 2)));
+            assertEquals("/tmp/broker1/logs0", result.get(new TopicPartitionReplica("foo", 1, 1)));
+            assertEquals("/tmp/broker1/logs0", result.get(new TopicPartitionReplica("foo", 1, 2)));
+            assertEquals("/tmp/broker1/logs0", result.get(new TopicPartitionReplica("foo", 1, 3)));
+            assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 0)));
+            assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 2)));
+            assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 3)));
         }
     }
 }

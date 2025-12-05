@@ -49,7 +49,8 @@ public class ConsumerGroupDescription {
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
@@ -62,7 +63,8 @@ public class ConsumerGroupDescription {
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
@@ -76,7 +78,8 @@ public class ConsumerGroupDescription {
     /**
      * @deprecated Since 4.0. Use {@link #ConsumerGroupDescription(String, boolean, Collection, String, GroupType, GroupState, Node, Set, Optional, Optional)} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
@@ -182,7 +185,8 @@ public class ConsumerGroupDescription {
      * The consumer group state, or UNKNOWN if the state is too new for us to parse.
      * @deprecated Since 4.0. Use {@link #groupState()} instead.
      */
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.0", forRemoval = true)
     public ConsumerGroupState state() {
         return ConsumerGroupState.parse(groupState.toString());
     }
@@ -204,7 +208,7 @@ public class ConsumerGroupDescription {
     /**
      * authorizedOperations for this group, or null if that information is not known.
      */
-    public  Set<AclOperation> authorizedOperations() {
+    public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;
     }
 

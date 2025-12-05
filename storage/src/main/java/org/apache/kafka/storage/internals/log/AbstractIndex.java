@@ -301,8 +301,12 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /**
-     * Get offset relative to base offset of this index
-     * @throws IndexOffsetOverflowException
+     * Gets the offset relative to the {@code baseOffset} of this index.
+     *
+     * @param offset the absolute offset to be converted into a relative offset from {@code baseOffset}
+     * @return the relative offset as an {@code int}
+     * @throws IndexOffsetOverflowException if the input offset is lesser than the base offset
+     *                                      or if the relative offset exceeds {@link Integer#MAX_VALUE}
      */
     public int relativeOffset(long offset) {
         OptionalInt relativeOffset = toRelative(offset);

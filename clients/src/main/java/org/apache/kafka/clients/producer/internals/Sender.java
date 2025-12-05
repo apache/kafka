@@ -376,7 +376,8 @@ public class Sender implements Runnable {
             log.trace("Expired {} batches in accumulator", expiredBatches.size());
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
-                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
+                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation. " 
+                + "The request has not been sent, or no server response has been received yet.";
             failBatch(expiredBatch, new TimeoutException(errorMessage), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.
@@ -569,7 +570,7 @@ public class Sender implements Runnable {
                             p.errorMessage(),
                             p.currentLeader());
 
-                    // Version 13 drop topic name and add support to topic id.
+                    // Version 13 drops topic name, and supports topic id.
                     // We need to find batch based on topic id and partition index only as
                     // topic name in the response will be empty.
                     // For older versions, topic id is zero, and we will find the batch based on the topic name.

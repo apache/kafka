@@ -17,7 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
@@ -54,7 +56,13 @@ public class DefaultJwtValidator implements JwtValidator {
         if (verificationKeyResolver.isPresent()) {
             delegate = new BrokerJwtValidator(verificationKeyResolver.get());
         } else {
-            delegate = new ClientJwtValidator();
+            ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+
+            if (cu.containsKey(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL)) {
+                delegate = new BrokerJwtValidator();
+            } else {
+                delegate = new ClientJwtValidator();
+            }
         }
 
         delegate.configure(configs, saslMechanism, jaasConfigEntries);

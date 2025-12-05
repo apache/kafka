@@ -129,14 +129,7 @@ class PartitionReassignmentReplicas {
         );
     }
 
-    static class CompletedReassignment {
-        final List<Integer> replicas;
-        final List<Integer> isr;
-
-        public CompletedReassignment(List<Integer> replicas, List<Integer> isr) {
-            this.replicas = replicas;
-            this.isr = isr;
-        }
+    record CompletedReassignment(List<Integer> replicas, List<Integer> isr) {
     }
 
     List<Integer> originalReplicas() {

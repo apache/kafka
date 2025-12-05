@@ -28,6 +28,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class RLMQuotaMetricsTest {
     private final MockTime time = new MockTime();
@@ -48,5 +50,25 @@ public class RLMQuotaMetricsTest {
         // If the sensor has been removed, we should get a new one.
         Sensor newSensor = rlmQuotaMetrics.sensor();
         assertNotEquals(sensor, newSensor);
+    }
+
+    @Test
+    public void testClose() {
+        RLMQuotaMetrics quotaMetrics = new RLMQuotaMetrics(metrics, "metric", "group", "this is %s", 5);
+
+        // Register the sensor
+        quotaMetrics.sensor();
+        var avg = metrics.metricName("metric" + "-avg", "group", "this is average");
+
+        // Verify that metrics are created
+        var result = metrics.metric(avg);
+        assertNotNull(result);
+        assertEquals(result.metricName().description(), avg.description());
+
+        // Close the quotaMetrics instance
+        quotaMetrics.close();
+
+        // After closing, the metrics should be removed
+        assertNull(metrics.metric(avg));
     }
 }

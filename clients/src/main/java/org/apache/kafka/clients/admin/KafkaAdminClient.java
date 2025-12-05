@@ -2334,7 +2334,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         // First, we need to retrieve the node info.
-        DescribeClusterResult clusterResult = describeCluster();
+        DescribeClusterResult clusterResult = describeCluster(new DescribeClusterOptions().timeoutMs(options.timeoutMs()));
         clusterResult.nodes().whenComplete(
             (nodes, exception) -> {
                 if (exception != null) {
@@ -2494,8 +2494,7 @@ public class KafkaAdminClient extends AdminClient {
                     DescribeClusterResponse response = (DescribeClusterResponse) abstractResponse;
                     Errors error = Errors.forCode(response.data().errorCode());
                     if (error != Errors.NONE) {
-                        ApiError apiError = new ApiError(error, response.data().errorMessage());
-                        handleFailure(apiError.exception());
+                        handleFailure(error.exception(response.data().errorMessage()));
                         return;
                     }
 
@@ -2691,10 +2690,9 @@ public class KafkaAdminClient extends AdminClient {
                         } else {
                             List<FilterResult> filterResults = new ArrayList<>();
                             for (DeleteAclsMatchingAcl matchingAcl : filterResult.matchingAcls()) {
-                                ApiError aclError = new ApiError(Errors.forCode(matchingAcl.errorCode()),
-                                    matchingAcl.errorMessage());
+                                Errors aclError = Errors.forCode(matchingAcl.errorCode());
                                 AclBinding aclBinding = DeleteAclsResponse.aclBinding(matchingAcl);
-                                filterResults.add(new FilterResult(aclBinding, aclError.exception()));
+                                filterResults.add(new FilterResult(aclBinding, aclError.exception(matchingAcl.errorMessage())));
                             }
                             future.complete(new FilterResults(filterResults));
                         }
@@ -3582,6 +3580,7 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    @SuppressWarnings("removal")
     @Deprecated
     private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;
@@ -3816,7 +3815,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
                                                              final ListShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, SharePartitionOffsetInfo>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
         ListShareGroupOffsetsHandler handler = new ListShareGroupOffsetsHandler(groupSpecs, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListShareGroupOffsetsResult(future.all());
@@ -3995,7 +3994,7 @@ public class KafkaAdminClient extends AdminClient {
                             for (ReassignablePartitionResponse partition : topicResponse.partitions()) {
                                 errors.put(
                                     new TopicPartition(topicName, partition.partitionIndex()),
-                                    new ApiError(topLevelError, response.data().errorMessage()).exception()
+                                    topLevelError.exception(response.data().errorMessage())
                                 );
                                 receivedResponsesCount += 1;
                             }
@@ -4035,7 +4034,7 @@ public class KafkaAdminClient extends AdminClient {
                         if (partitionError == Errors.NONE) {
                             errors.put(tp, null);
                         } else {
-                            errors.put(tp, new ApiError(partitionError, partResponse.errorMessage()).exception());
+                            errors.put(tp, partitionError.exception(partResponse.errorMessage()));
                         }
                         receivedResponsesCount += 1;
                     }
@@ -4111,7 +4110,7 @@ public class KafkaAdminClient extends AdminClient {
                         handleNotControllerError(error);
                         break;
                     default:
-                        partitionReassignmentsFuture.completeExceptionally(new ApiError(error, response.data().errorMessage()).exception());
+                        partitionReassignmentsFuture.completeExceptionally(error.exception(response.data().errorMessage()));
                         break;
                 }
                 Map<TopicPartition, PartitionReassignment> reassignmentMap = new HashMap<>();
@@ -4520,8 +4519,10 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
+        final NodeProvider nodeProvider = options.nodeId().isPresent() ?
+            new ConstantNodeIdProvider(options.nodeId().getAsInt(), true) : new LeastLoadedBrokerOrActiveKController();
         final Call call = new Call(
-            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), new LeastLoadedBrokerOrActiveKController()) {
+            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
                 final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
@@ -4993,14 +4994,11 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 handleNotControllerError(response);
                 AddRaftVoterResponse addResponse = (AddRaftVoterResponse) response;
-                if (addResponse.data().errorCode() != Errors.NONE.code()) {
-                    ApiError error = new ApiError(
-                        addResponse.data().errorCode(),
-                        addResponse.data().errorMessage());
-                    future.completeExceptionally(error.exception());
-                } else {
+                Errors error = Errors.forCode(addResponse.data().errorCode());
+                if (error != Errors.NONE)
+                    future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
+                else
                     future.complete(null);
-                }
             }
 
             @Override
@@ -5038,14 +5036,11 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 handleNotControllerError(response);
                 RemoveRaftVoterResponse addResponse = (RemoveRaftVoterResponse) response;
-                if (addResponse.data().errorCode() != Errors.NONE.code()) {
-                    ApiError error = new ApiError(
-                        addResponse.data().errorCode(),
-                        addResponse.data().errorMessage());
-                    future.completeExceptionally(error.exception());
-                } else {
+                Errors error = Errors.forCode(addResponse.data().errorCode());
+                if (error != Errors.NONE)
+                    future.completeExceptionally(error.exception(addResponse.data().errorMessage()));
+                else
                     future.complete(null);
-                }
             }
 
             @Override
@@ -5154,6 +5149,8 @@ public class KafkaAdminClient extends AdminClient {
             return ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP;
         } else if (offsetSpec instanceof OffsetSpec.LatestTieredSpec) {
             return ListOffsetsRequest.LATEST_TIERED_TIMESTAMP;
+        } else if (offsetSpec instanceof OffsetSpec.EarliestPendingUploadSpec) {
+            return ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP;
         }
         return ListOffsetsRequest.LATEST_TIMESTAMP;
     }

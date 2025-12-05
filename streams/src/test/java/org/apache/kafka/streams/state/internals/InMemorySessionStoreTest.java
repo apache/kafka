@@ -47,7 +47,7 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         // Advance stream time to expire the first three record
         sessionStore.put(new Windowed<>("aa", new SessionWindow(100, 2 * RETENTION_PERIOD)), 4L);
 
-        assertEquals(valuesToSet(iterator), Set.of(1L, 2L, 3L, 4L));
+        assertEquals(Set.of(1L, 2L, 3L, 4L), valuesToSet(iterator));
         assertFalse(iterator.hasNext());
 
         iterator.close();

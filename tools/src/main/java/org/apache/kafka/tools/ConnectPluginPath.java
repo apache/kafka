@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -68,6 +70,8 @@ public class ConnectPluginPath {
     };
     public static final String NO_ALIAS = "N/A";
 
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     public static void main(String[] args) {
         Exit.exit(mainNoExit(args, System.out, System.err));
     }
@@ -82,7 +86,7 @@ public class ConnectPluginPath {
         } catch (ArgumentParserException e) {
             parser.handleError(e);
             return 1;
-        } catch (TerseException e) {
+        } catch (TerseException | ConfigException e) {
             err.println(e.getMessage());
             return 2;
         } catch (Throwable e) {
@@ -162,6 +166,9 @@ public class ConnectPluginPath {
         if (rawLocations.isEmpty() && rawPluginPaths.isEmpty() && rawWorkerConfigs.isEmpty()) {
             throw new ArgumentParserException("Must specify at least one --plugin-location, --plugin-path, or --worker-config", parser);
         }
+        for (String pluginPath : rawPluginPaths) {
+            validatePluginPath(pluginPath, "--plugin-path");
+        }
         Set<Path> pluginLocations = new LinkedHashSet<>();
         for (String rawWorkerConfig : rawWorkerConfigs) {
             Properties properties;
@@ -172,6 +179,7 @@ public class ConnectPluginPath {
             }
             String pluginPath = properties.getProperty(WorkerConfig.PLUGIN_PATH_CONFIG);
             if (pluginPath != null) {
+                validatePluginPath(pluginPath, WorkerConfig.PLUGIN_PATH_CONFIG);
                 rawPluginPaths.add(pluginPath);
             }
         }
@@ -192,26 +200,27 @@ public class ConnectPluginPath {
         return pluginLocations;
     }
 
+    private static void validatePluginPath(String pluginPath, String configName) throws ConfigException {
+        String trimmed = pluginPath.trim();
+        if (trimmed.isEmpty()) {
+            throw new ConfigException("'" + configName + "' must not be empty.");
+        }
+
+        String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(trimmed, -1);
+
+        for (String path : pluginPathElements) {
+            if (path.isEmpty()) {
+                throw new ConfigException("'" + configName + "' values must not be empty.");
+            }
+        }
+    }
+
     enum Command {
         LIST, SYNC_MANIFESTS
     }
 
-    private static class Config {
-        private final Command command;
-        private final Set<Path> locations;
-        private final boolean dryRun;
-        private final boolean keepNotFound;
-        private final PrintStream out;
-        private final PrintStream err;
-
-        private Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out, PrintStream err) {
-            this.command = command;
-            this.locations = locations;
-            this.dryRun = dryRun;
-            this.keepNotFound = keepNotFound;
-            this.out = out;
-            this.err = err;
-        }
+    private record Config(Command command, Set<Path> locations, boolean dryRun, boolean keepNotFound, PrintStream out,
+                          PrintStream err) {
 
         @Override
         public String toString() {
@@ -262,16 +271,9 @@ public class ConnectPluginPath {
      * <p>This is unique to the (source, class, type) tuple, and contains additional pre-computed information
      * that pertains to this specific plugin.
      */
-    private static class Row {
-        private final ManifestWorkspace.SourceWorkspace<?> workspace;
-        private final String className;
-        private final PluginType type;
-        private final String version;
-        private final List<String> aliases;
-        private final boolean loadable;
-        private final boolean hasManifest;
-
-        public Row(ManifestWorkspace.SourceWorkspace<?> workspace, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
+    private record Row(ManifestWorkspace.SourceWorkspace<?> workspace, String className, PluginType type,
+                       String version, List<String> aliases, boolean loadable, boolean hasManifest) {
+        private Row(ManifestWorkspace.SourceWorkspace<?> workspace, String className, PluginType type, String version, List<String> aliases, boolean loadable, boolean hasManifest) {
             this.workspace = Objects.requireNonNull(workspace, "workspace must be non-null");
             this.className = Objects.requireNonNull(className, "className must be non-null");
             this.version = Objects.requireNonNull(version, "version must be non-null");
@@ -279,10 +281,6 @@ public class ConnectPluginPath {
             this.aliases = Objects.requireNonNull(aliases, "aliases must be non-null");
             this.loadable = loadable;
             this.hasManifest = hasManifest;
-        }
-
-        private boolean loadable() {
-            return loadable;
         }
 
         private boolean compatible() {

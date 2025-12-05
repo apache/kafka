@@ -110,7 +110,7 @@ public class MeteredVersionedKeyValueStoreTest {
     @BeforeEach
     public void setUp() {
         when(inner.name()).thenReturn(STORE_NAME);
-        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", "processId", mockTime));
+        when(context.metrics()).thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.taskId()).thenReturn(TASK_ID);
 
@@ -181,13 +181,6 @@ public class MeteredVersionedKeyValueStoreTest {
 
         verify(keySerializer).serialize(changelogTopicName, KEY);
         verify(valueSerializer).serialize(changelogTopicName, VALUE);
-    }
-
-    @Test
-    public void shouldRecordMetricsOnInit() {
-        // init is called in setUp(). it suffices to verify one restore metric since all restore
-        // metrics are recorded by the same sensor, and the sensor is tested elsewhere.
-        assertThat((Double) getMetric("restore-rate").metricValue(), greaterThan(0.0));
     }
 
     @Test

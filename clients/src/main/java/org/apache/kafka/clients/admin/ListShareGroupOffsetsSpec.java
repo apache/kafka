@@ -14,11 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
@@ -26,10 +24,7 @@ import java.util.Objects;
 
 /**
  * Specification of share group offsets to list using {@link Admin#listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)}.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListShareGroupOffsetsSpec {
 
     private Collection<TopicPartition> topicPartitions;
@@ -37,7 +32,7 @@ public class ListShareGroupOffsetsSpec {
     /**
      * Set the topic partitions whose offsets are to be listed for a share group.
      *
-     * @param topicPartitions List of topic partitions to include
+     * @param topicPartitions List of topic partitions to include, or {@code null} to include all topic partitions.
      */
     public ListShareGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;

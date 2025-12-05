@@ -248,6 +248,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
 
+    private static final String INIT_TXN_TIMEOUT_MSG = "InitTransactions timed out — " +
+            "did not complete coordinator discovery or " +
+            "receive the InitProducerId response within max.block.ms.";
+
+    private static final String SEND_OFFSETS_TIMEOUT_MSG =
+            "SendOffsetsToTransaction timed out – did not reach the coordinator or " +
+                    "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
+    private static final String COMMIT_TXN_TIMEOUT_MSG =
+            "CommitTransaction timed out – did not complete EndTxn with the transaction coordinator within max.block.ms";
+    private static final String ABORT_TXN_TIMEOUT_MSG =
+            "AbortTransaction timed out – did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
+    
     private final String clientId;
     // Visible for testing
     final Metrics metrics;
@@ -672,7 +684,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions(keepPreparedTxn);
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, INIT_TXN_TIMEOUT_MSG);
         producerMetrics.recordInit(time.nanoseconds() - now);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
     }
@@ -761,7 +773,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long start = time.nanoseconds();
             TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
             sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
             producerMetrics.recordSendOffsets(time.nanoseconds() - start);
         }
     }
@@ -847,7 +859,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, COMMIT_TXN_TIMEOUT_MSG);
         producerMetrics.recordCommitTxn(time.nanoseconds() - commitStart);
     }
 
@@ -882,7 +894,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, ABORT_TXN_TIMEOUT_MSG);
         producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
     }
 
@@ -937,8 +949,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * once the record has been stored in the buffer of records waiting to be sent.
      * This allows sending many records in parallel without blocking to wait for the response after each one.
      * Can block for the following cases: 1) For the first record being sent to 
-     * the cluster by this client for the given topic. In this case it will block for up to {@code max.block.ms} milliseconds if 
-     * Kafka cluster is unreachable; 2) Allocating a buffer if buffer pool doesn't have any free buffers.
+     * the cluster by this client for the given topic. In this case it will block for up to {@code max.block.ms} milliseconds 
+     * while waiting for topic's metadata if Kafka cluster is unreachable; 2) Allocating a buffer if buffer pool doesn't
+     * have any free buffers.
+     * <p>
+     * <b>Reducing first-send latency:</b> You can reduce the latency of the first send by preloading the metadata
+     * with {@link #partitionsFor(String)}. However, be aware that metadata cache will be cleared to free up resources after
+     * {@code metadata.max.idle.ms} of inactivity, so subsequent sends after a long idle period will still
+     * experience delays.
      * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If the producer is configured with acks = 0, the {@link RecordMetadata}
@@ -1027,15 +1045,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
      * to parallelize processing.
      *
-     * @param record The record to send
+     * @param record   The record to send
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
-     *        indicates no callback)
-     *
-     * @throws IllegalStateException if a transactional.id has been configured and no transaction has been started, or
-     *                               when send is invoked after producer has been closed.
-     * @throws InterruptException If the thread is interrupted while blocked
+     *                 indicates no callback)
+     * @throws IllegalStateException  if a transactional.id has been configured and no transaction has been started, or
+     *                                when send is invoked after producer has been closed.
+     * @throws TimeoutException       if the topic or the partition specified in the record cannot be found in metadata within {@code max.block.ms}
+     * @throws InterruptException     If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
-     * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
+     * @throws KafkaException         If a Kafka related error occurs that does not belong to the public API exceptions.
+     * @see #partitionsFor(String)
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
@@ -1335,11 +1354,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Get the partition metadata for the given topic. This can be used for custom partitioning.
+     * <p/>
+     * This will attempt to refresh metadata until it finds the topic in it, or the configured {@link ProducerConfig#MAX_BLOCK_MS_CONFIG} expires.
+     *
      * @throws AuthenticationException if authentication fails. See the exception for more details
-     * @throws AuthorizationException if not authorized to the specified topic. See the exception for more details
-     * @throws InterruptException if the thread is interrupted while blocked
-     * @throws TimeoutException if metadata could not be refreshed within {@code max.block.ms}
-     * @throws KafkaException for all Kafka-related exceptions, including the case where this method is called after producer close
+     * @throws AuthorizationException  if not authorized to the specified topic. See the exception for more details
+     * @throws InterruptException      if the thread is interrupted while blocked
+     * @throws TimeoutException        if the topic cannot be found in metadata within {@code max.block.ms}
+     * @throws KafkaException          for all Kafka-related exceptions, including the case where this method is called after producer close
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {

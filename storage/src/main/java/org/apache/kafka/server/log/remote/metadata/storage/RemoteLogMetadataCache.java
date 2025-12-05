@@ -34,6 +34,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class provides an in-memory cache of remote log segment metadata. This maintains the lineage of segments
@@ -114,6 +115,10 @@ public class RemoteLogMetadataCache {
 
     boolean isInitialized() {
         return initializedLatch.getCount() == 0;
+    }
+
+    boolean awaitInitialized(long timeout, TimeUnit unit) throws InterruptedException {
+        return initializedLatch.await(timeout, unit);
     }
 
     /**
@@ -271,7 +276,7 @@ public class RemoteLogMetadataCache {
     /**
      * Returns all the segments stored in this cache.
      *
-     * @return
+     * @return Iterator over all RemoteLogSegmentMetadata instances in the cache
      */
     Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments() {
         // Return all the segments including unreferenced metadata.

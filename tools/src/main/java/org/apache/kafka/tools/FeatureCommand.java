@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeFeaturesOptions;
 import org.apache.kafka.clients.admin.FeatureMetadata;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
@@ -46,7 +47,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static net.sourceforge.argparse4j.impl.Arguments.append;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -105,7 +105,7 @@ public class FeatureCommand {
         try (Admin adminClient = Admin.create(properties)) {
             switch (command) {
                 case "describe":
-                    handleDescribe(adminClient);
+                    handleDescribe(namespace, adminClient);
                     break;
                 case "upgrade":
                     handleUpgrade(namespace, adminClient);
@@ -129,8 +129,12 @@ public class FeatureCommand {
     }
 
     private static void addDescribeParser(Subparsers subparsers) {
-        subparsers.addParser("describe")
+        Subparser describeParser = subparsers.addParser("describe")
                 .help("Describes the current active feature flags.");
+        describeParser.addArgument("--node-id")
+            .type(Integer.class)
+            .help("The node id to which the requests should be sent. If not specified, the requests will be sent to an arbitrary controller/broker.")
+            .action(store());
     }
 
     private static void addUpgradeParser(Subparsers subparsers) {
@@ -154,7 +158,7 @@ public class FeatureCommand {
 
     private static void addDowngradeParser(Subparsers subparsers) {
         Subparser downgradeParser = subparsers.addParser("downgrade")
-                .help("Upgrade one or more feature flags.");
+                .help("Downgrade one or more feature flags.");
         downgradeParser.addArgument("--metadata")
                 .help("DEPRECATED -- The level to which we should downgrade the metadata. For example, 3.3-IV0.")
                 .action(store());
@@ -224,8 +228,16 @@ public class FeatureCommand {
         return String.valueOf(level);
     }
 
-    static void handleDescribe(Admin adminClient) throws ExecutionException, InterruptedException {
-        FeatureMetadata featureMetadata = adminClient.describeFeatures().featureMetadata().get();
+    static void handleDescribe(Namespace namespace, Admin adminClient) throws ExecutionException, InterruptedException {
+        DescribeFeaturesOptions describeFeaturesOptions = new DescribeFeaturesOptions();
+        if (namespace.getInt("node_id") != null) {
+            int nodeId = namespace.getInt("node_id");
+            if (nodeId < 0) {
+                throw new IllegalArgumentException("Invalid node id " + nodeId + ": must be non-negative.");
+            }
+            describeFeaturesOptions = describeFeaturesOptions.nodeId(namespace.getInt("node_id"));
+        }
+        FeatureMetadata featureMetadata = adminClient.describeFeatures(describeFeaturesOptions).featureMetadata().get();
         featureMetadata.supportedFeatures().keySet().stream().sorted().forEach(feature -> {
             short finalizedLevel = (featureMetadata.finalizedFeatures().get(feature) == null) ? 0 : featureMetadata.finalizedFeatures().get(feature).maxVersionLevel();
             SupportedVersionRange range = featureMetadata.supportedFeatures().get(feature);
@@ -236,13 +248,6 @@ public class FeatureCommand {
                     levelToString(feature, finalizedLevel),
                     (featureMetadata.finalizedFeaturesEpoch().isPresent()) ? featureMetadata.finalizedFeaturesEpoch().get().toString() : "-");
         });
-    }
-
-    static String metadataVersionsToString(MetadataVersion first, MetadataVersion last) {
-        List<MetadataVersion> versions = List.of(MetadataVersion.VERSIONS).subList(first.ordinal(), last.ordinal() + 1);
-        return versions.stream()
-                .map(String::valueOf)
-                .collect(Collectors.joining(", "));
     }
 
     static void handleUpgrade(Namespace namespace, Admin adminClient) throws TerseException {
@@ -292,12 +297,10 @@ public class FeatureCommand {
 
         if (releaseVersion != null) {
             try {
-                metadataVersion = MetadataVersion.fromVersionString(releaseVersion);
+                metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true);
                 updates.put(metadataVersion.featureName(), new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             } catch (Throwable e) {
-                throw new TerseException("Unknown metadata.version " + releaseVersion +
-                        ". Supported metadata.version are " + metadataVersionsToString(
-                        MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
+                throw new TerseException(e.getMessage());
             }
             try {
                 for (Feature feature : Feature.PRODUCTION_FEATURES) {
@@ -315,11 +318,9 @@ public class FeatureCommand {
             if (metadata != null) {
                 System.out.println(" `metadata` flag is deprecated and may be removed in a future release.");
                 try {
-                    metadataVersion = MetadataVersion.fromVersionString(metadata);
+                    metadataVersion = MetadataVersion.fromVersionString(metadata, true);
                 } catch (Throwable e) {
-                    throw new TerseException("Unknown metadata.version " + metadata +
-                            ". Supported metadata.version are " + metadataVersionsToString(
-                            MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
+                    throw new TerseException(e.getMessage());
                 }
                 updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             }
@@ -361,7 +362,7 @@ public class FeatureCommand {
             .orElseGet(() -> MetadataVersion.latestProduction().version());
 
         try {
-            MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion);
+            MetadataVersion version = MetadataVersion.fromVersionString(releaseVersion, true);
 
             short metadataVersionLevel = version.featureLevel();
             System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion);
@@ -371,9 +372,7 @@ public class FeatureCommand {
                 System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
             }
         } catch (IllegalArgumentException e) {
-            throw new TerseException("Unknown release version '" + releaseVersion + "'." +
-                " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-                " to " + MetadataVersion.latestTesting().version());
+            throw new TerseException(e.getMessage());
         }
     }
 
