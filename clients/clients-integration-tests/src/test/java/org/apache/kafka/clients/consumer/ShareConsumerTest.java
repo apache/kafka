@@ -3492,7 +3492,11 @@ public class ShareConsumerTest {
         try (Producer<byte[], byte[]> producer = createProducer();
             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                 "group1",
-                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+                Map.of(
+                    ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT,
+                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 512
+                )
+            )
         ) {
             // Produce records in complete power of 2 to fully test the throttling behavior.
             int producedMessageCount = 512;

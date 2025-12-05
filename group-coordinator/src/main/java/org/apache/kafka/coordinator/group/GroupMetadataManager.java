@@ -2153,9 +2153,7 @@ public class GroupMetadataManager {
                 )
         ));
 
-        if (!returnedStatus.isEmpty()) {
-            response.setStatus(returnedStatus);
-        }
+        response.setStatus(returnedStatus);
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
     }
 
@@ -4215,7 +4213,8 @@ public class GroupMetadataManager {
         }
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch);
+            .setMemberEpoch(memberEpoch)
+            .setStatus(List.of());
 
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
