@@ -123,6 +123,7 @@ public class CoordinatorRuntimeMetricsImplTest {
         Set<MetricName> metricNames;
         try (CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP)) {
             runtimeMetrics.registerEventQueueSizeGauge(() -> 0);
+            runtimeMetrics.registerBufferCacheSizeGauge(() -> 0L);
 
             ArgumentCaptor<String> sensorCaptor = ArgumentCaptor.forClass(String.class);
             verify(metrics, atLeastOnce()).sensor(sensorCaptor.capture());
@@ -143,6 +144,7 @@ public class CoordinatorRuntimeMetricsImplTest {
         Set<MetricName> otherMetricNames;
         try (CoordinatorRuntimeMetricsImpl otherRuntimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, OTHER_METRICS_GROUP)) {
             otherRuntimeMetrics.registerEventQueueSizeGauge(() -> 0);
+            otherRuntimeMetrics.registerBufferCacheSizeGauge(() -> 0L);
 
             ArgumentCaptor<String> sensorCaptor = ArgumentCaptor.forClass(String.class);
             verify(metrics, atLeastOnce()).sensor(sensorCaptor.capture());
@@ -189,7 +191,6 @@ public class CoordinatorRuntimeMetricsImplTest {
             assertMetricGauge(metrics, kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "failed"), 6);
         }
     }
-
 
     @Test
     public void testPartitionLoadSensorMetrics() {
