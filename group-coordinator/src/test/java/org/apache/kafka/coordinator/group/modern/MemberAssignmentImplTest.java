@@ -30,7 +30,7 @@ public class MemberAssignmentImplTest {
 
     @Test
     public void testPartitionsMutable() {
-        // We depend on the the map inside MemberAssignmentImpl remaining mutable in the server-side
+        // We depend on the map inside MemberAssignmentImpl remaining mutable in the server-side
         // assignors, otherwise we end up deep copying the map unnecessarily.
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
