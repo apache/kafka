@@ -53,7 +53,7 @@
     { "name": "TaskOffsetIntervalMs", "type": "int32", "versions": "0+",
       "about": "The interval in which the task changelog offsets on a client are updated on the broker. The offsets are sent with the next heartbeat after this time has passed." },
 
-    { "name": "Status", "type":  "[]Status", "versions":  "0+",  "nullableVersions": "0+", "default": "null",
+    { "name": "Status", "type":  "[]Status", "versions":  "0+",  "nullableVersions": "0+",
       "about": "Indicate zero or more status for the group." },
 
     // The streams app knows which partitions to fetch from given this information
