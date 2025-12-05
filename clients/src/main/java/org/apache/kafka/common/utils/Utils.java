@@ -1278,25 +1278,51 @@ public final class Utils {
      * end of the stream has been reached.
      *
      * @param inputStream       Input stream to read from
-     * @param destinationBuffer The buffer into which bytes are to be transferred (it must be backed by an array)
+     * @param destinationBuffer The buffer into which bytes are to be transferred (can be heap or direct buffer)
      * @return number of byte read from the input stream
      * @throws IOException If an I/O error occurs
+     * @throws IllegalArgumentException if buffer is read-only or unsupported buffer type
      */
     public static int readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
-        if (!destinationBuffer.hasArray())
-            throw new IllegalArgumentException("destinationBuffer must be backed by an array");
-        int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
-        byte[] array = destinationBuffer.array();
+        if (destinationBuffer.isReadOnly()) {
+            throw new IllegalArgumentException("Cannot read into read-only ByteBuffer (destinationBuffer must be writable)");
+        }
+
         int length = destinationBuffer.remaining();
-        int totalBytesRead = 0;
-        do {
-            int bytesRead = inputStream.read(array, initialOffset + totalBytesRead, length - totalBytesRead);
-            if (bytesRead == -1)
-                break;
-            totalBytesRead += bytesRead;
-        } while (length > totalBytesRead);
-        destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
-        return totalBytesRead;
+
+        if (destinationBuffer.isDirect()) {
+            int totalBytesRead = 0;
+            byte[] tempBuffer = new byte[Math.min(8192, length)];
+            while (totalBytesRead < length) {
+                int toRead = Math.min(tempBuffer.length, length - totalBytesRead);
+                int bytesRead = inputStream.read(tempBuffer, 0, toRead);
+                if (bytesRead == -1) {
+                    break;
+                }
+                destinationBuffer.put(tempBuffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+            }
+            return totalBytesRead;
+        } else if (destinationBuffer.hasArray()) {
+            int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
+            byte[] array = destinationBuffer.array();
+            int totalBytesRead = 0;
+            do {
+                int bytesRead = inputStream.read(array, initialOffset + totalBytesRead, length - totalBytesRead);
+                if (bytesRead == -1) {
+                    break;
+                }
+                totalBytesRead += bytesRead;
+            } while (length > totalBytesRead);
+            destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
+            return totalBytesRead;
+        } else {
+            throw new IllegalArgumentException(
+                "Unsupported ByteBuffer type. Buffer must be either direct (isDirect=true) " +
+                "or heap-backed with array access (hasArray=true). Current buffer: isDirect=" +
+                destinationBuffer.isDirect() + ", hasArray=" + destinationBuffer.hasArray() +
+                ", isReadOnly=" + destinationBuffer.isReadOnly());
+        }
     }
 
     public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {

@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ChildFirstClassLoader;
 import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.DirectBufferPool;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
@@ -190,6 +191,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     // The endpoint for remote log metadata manager to connect to
     private final Optional<Endpoint> endpoint;
     private final Timer remoteReadTimer;
+    private final DirectBufferPool directBufferPool;
 
     private boolean closed = false;
 
@@ -253,6 +255,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC, rlmCopyThreadPool::getIdlePercent);
         remoteReadTimer = metricsGroup.newTimer(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC,
                 TimeUnit.MILLISECONDS, TimeUnit.SECONDS);
+
+        directBufferPool = new DirectBufferPool(rlmConfig.remoteLogDirectBufferPoolEnabled());
 
         remoteStorageReaderThreadPool = new RemoteStorageThreadPool(
                 REMOTE_LOG_READER_THREAD_NAME_PATTERN,
@@ -637,7 +641,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         try {
             // Search forward for the position of the last offset that is greater than or equal to the startingOffset
             remoteSegInputStream = remoteStorageManagerPlugin.get().fetchLogSegment(rlsMetadata, startPos);
-            RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream);
+            RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream, directBufferPool);
 
             while (true) {
                 RecordBatch batch = remoteLogInputStream.nextBatch();
@@ -1715,7 +1719,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             int updatedFetchSize =
                     remoteStorageFetchInfo.minOneMessage() && firstBatchSize > maxBytes ? firstBatchSize : maxBytes;
 
-            ByteBuffer buffer = ByteBuffer.allocate(updatedFetchSize);
+            ByteBuffer buffer = directBufferPool.allocate(updatedFetchSize);
             int remainingBytes = updatedFetchSize;
 
             firstBatch.writeTo(buffer);
@@ -1728,9 +1732,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             buffer.flip();
 
             startPos = startPos + enrichedRecordBatch.skippedBytes;
+            MemoryRecords records = MemoryRecords.readableRecords(buffer);
+            directBufferPool.registerForAutoRelease(records, buffer);
+
             FetchDataInfo fetchDataInfo = new FetchDataInfo(
                     new LogOffsetMetadata(firstBatch.baseOffset(), remoteLogSegmentMetadata.startOffset(), startPos),
-                    MemoryRecords.readableRecords(buffer));
+                    records);
             if (includeAbortedTxns) {
                 fetchDataInfo = addAbortedTransactions(firstBatch.baseOffset(), remoteLogSegmentMetadata, fetchDataInfo, logOptional.get());
             }
@@ -1744,7 +1751,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
     // for testing
     RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
-        return new RemoteLogInputStream(in);
+        return new RemoteLogInputStream(in, directBufferPool);
     }
 
     // Visible for testing
@@ -2052,6 +2059,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     followerRLMTasks.clear();
 
                     Utils.closeQuietly(indexCache, "RemoteIndexCache");
+                    directBufferPool.close();
                     Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
                     Utils.closeQuietly(remoteStorageManagerPlugin, "remoteStorageManagerPlugin");
                     closed = true;

@@ -200,6 +200,12 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC = "The maximum amount of time the server will wait for the remote list offsets request to complete.";
     public static final long DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS = 30000L;
 
+    public static final String REMOTE_LOG_DIRECT_BUFFER_POOL_ENABLED_PROP = "remote.log.direct.buffer.pool.enabled";
+    public static final String REMOTE_LOG_DIRECT_BUFFER_POOL_ENABLED_DOC = "Enable direct buffer pooling for remote storage reads. " +
+            "Uses weak references to allow GC-driven cleanup. Disabled by default since buffers cannot currently be " +
+            "returned to the pool (passed to MemoryRecords and lost). Enable for future compatibility.";
+    public static final boolean DEFAULT_REMOTE_LOG_DIRECT_BUFFER_POOL_ENABLED = false;
+
     private final AbstractConfig config;
 
     public static ConfigDef configDef() {
@@ -379,7 +385,13 @@ public final class RemoteLogManagerConfig {
                         DEFAULT_REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS,
                         atLeast(1),
                         MEDIUM,
-                        REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC);
+                        REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_DOC)
+                .defineInternal(REMOTE_LOG_DIRECT_BUFFER_POOL_ENABLED_PROP,
+                        BOOLEAN,
+                        DEFAULT_REMOTE_LOG_DIRECT_BUFFER_POOL_ENABLED,
+                        null,
+                        LOW,
+                        REMOTE_LOG_DIRECT_BUFFER_POOL_ENABLED_DOC);
     }
     
     public RemoteLogManagerConfig(AbstractConfig config) {
@@ -547,6 +559,10 @@ public final class RemoteLogManagerConfig {
 
     public long remoteListOffsetsRequestTimeoutMs() {
         return config.getLong(REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP);
+    }
+
+    public boolean remoteLogDirectBufferPoolEnabled() {
+        return config.getBoolean(REMOTE_LOG_DIRECT_BUFFER_POOL_ENABLED_PROP);
     }
 
     public static void main(String[] args) {

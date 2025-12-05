@@ -17,8 +17,10 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.utils.DirectBufferPool;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -28,13 +30,16 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
 import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
 
-public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
+public class RemoteLogInputStream implements LogInputStream<RecordBatch>, Closeable {
     private final InputStream inputStream;
+    private final DirectBufferPool bufferPool;
     // LogHeader buffer up to magic.
     private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(HEADER_SIZE_UP_TO_MAGIC);
+    private ByteBuffer currentBuffer = null;
 
-    public RemoteLogInputStream(InputStream inputStream) {
+    public RemoteLogInputStream(InputStream inputStream, DirectBufferPool bufferPool) {
         this.inputStream = inputStream;
+        this.bufferPool = bufferPool;
     }
 
     @Override
@@ -53,10 +58,17 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
             throw new CorruptRecordException(String.format("Found record size %d smaller than minimum record " +
                                                                    "overhead (%d).", size, LegacyRecord.RECORD_OVERHEAD_V0));
 
+        // Release previous buffer before allocating new one to avoid accumulation
+        if (currentBuffer != null) {
+            bufferPool.release(currentBuffer);
+            currentBuffer = null;
+        }
+
         // Total size is: "LOG_OVERHEAD + the size of the rest of the content"
         int bufferSize = LOG_OVERHEAD + size;
         // buffer contains the complete payload including header and records.
-        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        ByteBuffer buffer = bufferPool.allocate(bufferSize);
+        currentBuffer = buffer;
 
         // write log header into buffer
         buffer.put(logHeaderBuffer);
@@ -75,5 +87,13 @@ public class RemoteLogInputStream implements LogInputStream<RecordBatch> {
             batch = new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(buffer);
 
         return batch;
+    }
+
+    @Override
+    public void close() {
+        if (currentBuffer != null) {
+            bufferPool.release(currentBuffer);
+            currentBuffer = null;
+        }
     }
 }

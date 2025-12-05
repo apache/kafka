@@ -19,8 +19,10 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.utils.DirectBufferPool;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -98,8 +100,9 @@ public class RemoteLogInputStreamTest {
             fileRecords.flush();
         }
 
-        try (FileInputStream is = new FileInputStream(file)) {
-            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is);
+        DirectBufferPool bufferPool = new DirectBufferPool(true);
+        try (FileInputStream is = new FileInputStream(file);
+             RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, bufferPool)) {
 
             RecordBatch firstBatch = logInputStream.nextBatch();
             assertGenericRecordBatchData(args, firstBatch, 0L, 3241324L, firstBatchRecord);
@@ -142,8 +145,9 @@ public class RemoteLogInputStreamTest {
             fileRecords.flush();
         }
 
-        try (FileInputStream is = new FileInputStream(file)) {
-            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is);
+        DirectBufferPool bufferPool = new DirectBufferPool(true);
+        try (FileInputStream is = new FileInputStream(file);
+             RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, bufferPool)) {
 
             RecordBatch firstBatch = logInputStream.nextBatch();
             assertNoProducerData(firstBatch);
@@ -193,8 +197,9 @@ public class RemoteLogInputStreamTest {
             fileRecords.flush();
         }
 
-        try (FileInputStream is = new FileInputStream(file)) {
-            RemoteLogInputStream logInputStream = new RemoteLogInputStream(is);
+        DirectBufferPool bufferPool = new DirectBufferPool(true);
+        try (FileInputStream is = new FileInputStream(file);
+             RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, bufferPool)) {
 
             RecordBatch firstBatch = logInputStream.nextBatch();
             assertProducerData(firstBatch, producerId, producerEpoch, baseSequence, false, firstBatchRecords);
@@ -235,6 +240,38 @@ public class RemoteLogInputStreamTest {
             assertGenericRecordBatchData(args, firstBatch, 0L, 100L, firstBatchRecord);
 
             assertNull(logInputStream.nextBatch());
+        }
+    }
+
+    @Test
+    public void testCloseReleasesBuffersToPool() throws IOException {
+        SimpleRecord record = new SimpleRecord(100L, "key".getBytes(), "value".getBytes());
+
+        File file = tempFile();
+        try (FileRecords fileRecords = FileRecords.open(file)) {
+            fileRecords.append(MemoryRecords.withRecords(MAGIC_VALUE_V2, 0L,
+                    Compression.NONE, CREATE_TIME, record));
+            fileRecords.append(MemoryRecords.withRecords(MAGIC_VALUE_V2, 1L,
+                    Compression.NONE, CREATE_TIME, record));
+            fileRecords.flush();
+        }
+
+        DirectBufferPool bufferPool = new DirectBufferPool(true);
+
+        try (FileInputStream is = new FileInputStream(file);
+             RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, bufferPool)) {
+            logInputStream.nextBatch();
+            logInputStream.nextBatch();
+            assertEquals(2, bufferPool.allocations());
+            assertEquals(1, bufferPool.poolHits());
+        }
+
+        try (FileInputStream is = new FileInputStream(file);
+             RemoteLogInputStream logInputStream = new RemoteLogInputStream(is, bufferPool)) {
+            logInputStream.nextBatch();
+            logInputStream.nextBatch();
+            assertEquals(4, bufferPool.allocations());
+            assertEquals(3, bufferPool.poolHits());
         }
     }
 

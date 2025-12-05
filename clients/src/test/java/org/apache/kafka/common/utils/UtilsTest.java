@@ -1341,4 +1341,134 @@ public class UtilsTest {
             return key.hashCode();
         }
     }
+
+    @Test
+    public void testReadFullyInputStreamWithHeapBuffer() throws IOException {
+        byte[] testData = "Hello, World!".getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocate(testData.length);
+
+        try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(testData)) {
+            int bytesRead = Utils.readFully(inputStream, buffer);
+
+            assertEquals(testData.length, bytesRead, "Should read all bytes");
+            assertEquals(testData.length, buffer.position(), "Buffer position should be at end");
+            assertFalse(buffer.hasRemaining(), "Buffer should be full");
+
+            buffer.flip();
+            byte[] result = new byte[buffer.remaining()];
+            buffer.get(result);
+            assertArrayEquals(testData, result, "Data should match");
+        }
+    }
+
+    @Test
+    public void testReadFullyInputStreamWithDirectBuffer() throws IOException {
+        byte[] testData = "Hello, Direct Buffer!".getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocateDirect(testData.length);
+
+        try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(testData)) {
+            int bytesRead = Utils.readFully(inputStream, buffer);
+
+            assertEquals(testData.length, bytesRead, "Should read all bytes");
+            assertEquals(testData.length, buffer.position(), "Buffer position should be at end");
+            assertFalse(buffer.hasRemaining(), "Buffer should be full");
+            assertTrue(buffer.isDirect(), "Buffer should be direct");
+
+            buffer.flip();
+            byte[] result = new byte[buffer.remaining()];
+            buffer.get(result);
+            assertArrayEquals(testData, result, "Data should match");
+        }
+    }
+
+    @Test
+    public void testReadFullyInputStreamWithLargeDirectBuffer() throws IOException {
+        // Test with buffer larger than 8KB chunk size
+        byte[] testData = new byte[16384]; // 16 KB
+        for (int i = 0; i < testData.length; i++) {
+            testData[i] = (byte) (i % 256);
+        }
+        ByteBuffer buffer = ByteBuffer.allocateDirect(testData.length);
+
+        try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(testData)) {
+            int bytesRead = Utils.readFully(inputStream, buffer);
+
+            assertEquals(testData.length, bytesRead, "Should read all bytes");
+            assertFalse(buffer.hasRemaining(), "Buffer should be full");
+
+            buffer.flip();
+            byte[] result = new byte[buffer.remaining()];
+            buffer.get(result);
+            assertArrayEquals(testData, result, "Data should match");
+        }
+    }
+
+    @Test
+    public void testReadFullyInputStreamWithPartialData() throws IOException {
+        byte[] testData = "Short".getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocateDirect(100); // Buffer larger than data
+
+        try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(testData)) {
+            int bytesRead = Utils.readFully(inputStream, buffer);
+
+            assertEquals(testData.length, bytesRead, "Should read available bytes");
+            assertEquals(testData.length, buffer.position(), "Buffer position should match bytes read");
+            assertTrue(buffer.hasRemaining(), "Buffer should have remaining capacity");
+
+            buffer.flip();
+            byte[] result = new byte[buffer.remaining()];
+            buffer.get(result);
+            assertArrayEquals(testData, result, "Data should match");
+        }
+    }
+
+    @Test
+    public void testReadFullyInputStreamWithReadOnlyBuffer() {
+        byte[] testData = "Test".getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocate(testData.length).asReadOnlyBuffer();
+
+        try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(testData)) {
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> Utils.readFully(inputStream, buffer),
+                "Should throw exception for read-only buffer");
+            assertTrue(exception.getMessage().contains("read-only") || exception.getMessage().contains("writable"),
+                "Exception should mention read-only or writable: " + exception.getMessage());
+        } catch (IOException e) {
+            fail("Should not throw IOException: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testReadFullyInputStreamWithEmptyStream() throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocateDirect(100);
+
+        try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(new byte[0])) {
+            int bytesRead = Utils.readFully(inputStream, buffer);
+
+            assertEquals(0, bytesRead, "Should read zero bytes from empty stream");
+            assertEquals(0, buffer.position(), "Buffer position should remain at 0");
+        }
+    }
+
+    @Test
+    public void testReadFullyInputStreamMultipleChunks() throws IOException {
+        // Test that direct buffer path correctly handles multiple 8KB chunks
+        byte[] testData = new byte[25000]; // More than 3 chunks of 8KB
+        for (int i = 0; i < testData.length; i++) {
+            testData[i] = (byte) (i % 256);
+        }
+        ByteBuffer buffer = ByteBuffer.allocateDirect(testData.length);
+
+        try (java.io.ByteArrayInputStream inputStream = new java.io.ByteArrayInputStream(testData)) {
+            int bytesRead = Utils.readFully(inputStream, buffer);
+
+            assertEquals(testData.length, bytesRead, "Should read all bytes");
+            assertEquals(0, buffer.remaining(), "Buffer should be full");
+
+            buffer.flip();
+            for (int i = 0; i < testData.length; i++) {
+                assertEquals(testData[i], buffer.get(), "Byte at position " + i + " should match");
+            }
+        }
+    }
 }
