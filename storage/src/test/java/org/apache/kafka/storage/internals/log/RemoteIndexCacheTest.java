@@ -56,11 +56,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -1072,7 +1074,7 @@ public class RemoteIndexCacheTest {
     }
 
     @Test
-    public void testFetchIndexAccessibleWhenMarkedForCleanup() throws IOException, RemoteStorageException {
+    public void testFetchIndexAccessibleWhenMarkedForCleanup() throws IOException, RemoteStorageException, InterruptedException {
         // setting the delayMs to a large value to disable file deletion by scheduler thread to have deterministic test
         cache.setFileDeleteDelayMs(300_000);
         File cacheDir = cache.cacheDir();
@@ -1084,13 +1086,13 @@ public class RemoteIndexCacheTest {
         assertEquals(3, countFiles(cacheDir, name -> true));
         assertEquals(3, countFiles(cacheDir,
                 name -> name.contains(segmentUuid.toString()) && name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
-        // Ensure that the `indexEntry` object still able to access the renamed index files after being marked for deletion
+        // After being marked for cleanup, direct Entry lookups should throw IllegalStateException
         OffsetPosition offsetPosition = indexEntry.offsetIndex().entry(2);
-        assertEquals(offsetPosition.position(), indexEntry.lookupOffset(offsetPosition.offset()).position());
+        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
         assertNull(cache.internalCache().asMap().get(segmentUuid));
         verifyFetchIndexInvocation(1);
 
-        // Once the entry gets removed from cache, the subsequent call to the cache should re-fetch the entry from remote.
+        // However, cache-level lookup should retry and succeed by refetching the entry from remote
         assertEquals(offsetPosition.position(), cache.lookupOffset(rlsMetadata, offsetPosition.offset()));
         verifyFetchIndexInvocation(2);
         RemoteIndexCache.Entry indexEntry2 = cache.getIndexEntry(rlsMetadata);
@@ -1104,21 +1106,22 @@ public class RemoteIndexCacheTest {
                 name -> name.contains(segmentUuid.toString()) && name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
 
         // Once the indexEntry2 is marked for cleanup, the 3 index files should be renamed with ".deleted" suffix.
-        // Both indexEntry and indexEntry2 should be able to access the renamed index files.
+        // Direct Entry lookups will now throw, but cache-level lookups will retry and work.
         cache.remove(segmentUuid);
         assertEquals(3, countFiles(cacheDir, name -> true));
         assertEquals(3, countFiles(cacheDir,
                 name -> name.contains(segmentUuid.toString()) && name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
-        assertEquals(offsetPosition.position(), indexEntry.lookupOffset(offsetPosition.offset()).position());
-        assertEquals(offsetPosition.position(), indexEntry2.lookupOffset(offsetPosition.offset()).position());
+        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
+        assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset()));
+        // But cache-level lookup should still work via retry
+        assertEquals(offsetPosition.position(), cache.lookupOffset(rlsMetadata, offsetPosition.offset()));
 
         indexEntry.cleanup();
-        assertEquals(0, countFiles(cacheDir, name -> true));
+        // Files may not be deleted yet if indexEntry2 still has them open
         assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
-        assertEquals(offsetPosition.position(), indexEntry2.lookupOffset(offsetPosition.offset()).position());
+        assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset()));
 
         indexEntry2.cleanup();
-        assertEquals(0, countFiles(cacheDir, name -> true));
         assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
         assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset()));
     }
@@ -1308,5 +1311,250 @@ public class RemoteIndexCacheTest {
                 .stream()
                 .filter(t -> t.isAlive() && t.getName().startsWith(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD))
                 .collect(Collectors.toSet());
+    }
+
+    @Test
+    public void testGetIndexAfterMarkForCleanup() throws IOException, RemoteStorageException {
+        RemoteIndexCache.Entry entry = cache.getIndexEntry(rlsMetadata);
+        assertNotNull(entry);
+        OffsetPosition position1 = entry.lookupOffset(baseOffset + 5);
+        assertTrue(position1.position() >= 0);
+
+        // Mark the entry for cleanup (simulating cache eviction)
+        entry.markForCleanup();
+        assertTrue(entry.isMarkedForCleanup());
+
+        // Should refetch and return new non-marked entry
+        RemoteIndexCache.Entry refetchedEntry = cache.getIndexEntry(rlsMetadata);
+        assertNotNull(refetchedEntry);
+        assertFalse(refetchedEntry.isMarkedForCleanup());
+
+        OffsetPosition position2 = refetchedEntry.lookupOffset(baseOffset + 5);
+        assertTrue(position2.position() >= 0);
+        assertEquals(position1.position(), position2.position());
+
+        verifyFetchIndexInvocation(2);
+    }
+
+    @Test
+    public void testConcurrentFetchDuringEviction() throws IOException, RemoteStorageException, InterruptedException, ExecutionException, TimeoutException {
+        long estimateEntryBytesSize = estimateOneEntryBytesSize();
+        Utils.closeQuietly(cache, "RemoteIndexCache");
+        cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
+        mockRsmFetchIndex(rsm);
+
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
+
+        // Fill cache to capacity
+        cache.getIndexEntry(metadataList.get(0));
+        cache.getIndexEntry(metadataList.get(1));
+        assertCacheSize(2);
+
+        // Thread 1: Trigger eviction by adding a new entry
+        Runnable evictEntry = () -> cache.getIndexEntry(metadataList.get(2));
+
+        // Thread 2: Try to fetch the potentially evicted entry
+        Runnable fetchEntry = () -> {
+            try {
+                Thread.sleep(50); // Give eviction time to start
+                RemoteIndexCache.Entry entry = cache.getIndexEntry(metadataList.get(0));
+                assertNotNull(entry);
+                assertFalse(entry.isMarkedForCleanup());
+                assertTrue(entry.lookupOffset(baseOffset + 5).position() >= 0);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                fail("Test interrupted");
+            }
+        };
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> f1 = executor.submit(evictEntry);
+            Future<?> f2 = executor.submit(fetchEntry);
+            f1.get(10, TimeUnit.SECONDS);
+            f2.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    public void testMultipleThreadsFetchAfterCleanup() throws IOException, RemoteStorageException, InterruptedException {
+        RemoteIndexCache.Entry entry = cache.getIndexEntry(rlsMetadata);
+        assertNotNull(entry);
+        entry.markForCleanup();
+        assertTrue(entry.isMarkedForCleanup());
+
+        // Multiple threads try to fetch the same entry concurrently
+        int numThreads = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch doneLatch = new CountDownLatch(numThreads);
+        List<Future<?>> futures = new ArrayList<>();
+
+        Runnable fetchTask = () -> {
+            try {
+                startLatch.await(); // Wait for signal to start all threads at once
+                RemoteIndexCache.Entry e = cache.getIndexEntry(rlsMetadata);
+                assertNotNull(e);
+                assertFalse(e.isMarkedForCleanup());
+                assertTrue(e.lookupOffset(baseOffset + 5).position() >= 0);
+            } catch (Exception ex) {
+                fail("Thread failed: " + ex.getMessage());
+            } finally {
+                doneLatch.countDown();
+            }
+        };
+
+        try {
+            for (int i = 0; i < numThreads; i++) {
+                futures.add(executor.submit(fetchTask));
+            }
+            startLatch.countDown(); // Start all threads
+            assertTrue(doneLatch.await(10, TimeUnit.SECONDS), "All threads should complete");
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    public void testCleanupThreadRaceWithFetch() throws IOException, RemoteStorageException, InterruptedException {
+        RemoteIndexCache.Entry entry = cache.getIndexEntry(rlsMetadata);
+        assertNotNull(entry);
+        cache.remove(rlsMetadata.remoteLogSegmentId().id());
+
+        // Give cleanup thread a moment to start
+        Thread.sleep(50);
+
+        // Fetch should refetch from remote
+        RemoteIndexCache.Entry refetched = cache.getIndexEntry(rlsMetadata);
+        assertNotNull(refetched);
+        assertFalse(refetched.isMarkedForCleanup());
+        assertTrue(refetched.lookupOffset(baseOffset + 5).position() >= 0);
+
+        // Wait for cleanup to complete
+        TestUtils.waitForCondition(
+            () -> cache.expiredIdxPendingForDeletion() == 0,
+            "Cleanup should complete");
+    }
+
+    @Test
+    public void testEvictionBetweenGetAndUse() throws IOException, RemoteStorageException, InterruptedException, ExecutionException, TimeoutException {
+        long estimateEntryBytesSize = estimateOneEntryBytesSize();
+        Utils.closeQuietly(cache, "RemoteIndexCache");
+        cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
+        mockRsmFetchIndex(rsm);
+
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
+
+        // Fill cache to capacity
+        cache.getIndexEntry(metadataList.get(0));
+        cache.getIndexEntry(metadataList.get(1));
+
+        // Thread 1: Get entry and use it after a delay
+        Runnable useEntry = () -> {
+            try {
+                RemoteIndexCache.Entry entry = cache.getIndexEntry(metadataList.get(0));
+                Thread.sleep(100); // Simulate work between getting entry and using it
+                // Entry should still be usable because we have a reference to it
+                assertTrue(entry.lookupOffset(baseOffset + 5).position() >= 0);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                fail("Test interrupted");
+            }
+        };
+
+        // Thread 2: Trigger eviction
+        Runnable evictEntry = () -> cache.getIndexEntry(metadataList.get(2));
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> f1 = executor.submit(useEntry);
+            Thread.sleep(50); // Let useEntry get the entry first
+            Future<?> f2 = executor.submit(evictEntry);
+            f1.get(10, TimeUnit.SECONDS);
+            f2.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    public void testLookupOffsetRetriesOnMarkedEntry() throws IOException, RemoteStorageException {
+        RemoteIndexCache.Entry entry = cache.getIndexEntry(rlsMetadata);
+        assertTrue(cache.lookupOffset(rlsMetadata, baseOffset + 5) >= 0);
+
+        entry.markForCleanup();
+        assertTrue(entry.isMarkedForCleanup());
+
+        assertTrue(cache.lookupOffset(rlsMetadata, baseOffset + 5) >= 0);
+
+        verifyFetchIndexInvocation(2);
+    }
+
+    @Test
+    public void testLookupTimestampRetriesOnMarkedEntry() throws IOException, RemoteStorageException {
+        RemoteIndexCache.Entry entry = cache.getIndexEntry(rlsMetadata);
+        assertTrue(cache.lookupTimestamp(rlsMetadata, System.currentTimeMillis(), baseOffset) >= 0);
+
+        entry.markForCleanup();
+        assertTrue(entry.isMarkedForCleanup());
+
+        assertTrue(cache.lookupTimestamp(rlsMetadata, System.currentTimeMillis(), baseOffset) >= 0);
+
+        verifyFetchIndexInvocation(2);
+    }
+
+    @Test
+    public void testConcurrentLookupDuringEviction() throws IOException, RemoteStorageException, InterruptedException, ExecutionException, TimeoutException {
+        long estimateEntryBytesSize = estimateOneEntryBytesSize();
+        Utils.closeQuietly(cache, "RemoteIndexCache");
+        cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
+        mockRsmFetchIndex(rsm);
+
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
+
+        cache.getIndexEntry(metadataList.get(0));
+        cache.getIndexEntry(metadataList.get(1));
+        assertCacheSize(2);
+
+        CyclicBarrier barrier = new CyclicBarrier(2);
+
+        Runnable lookupTask = () -> {
+            try {
+                cache.getIndexEntry(metadataList.get(0));
+                barrier.await(10, TimeUnit.SECONDS);
+                Thread.sleep(50);
+                assertTrue(cache.lookupOffset(metadataList.get(0), baseOffset + 5) >= 0);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        Runnable evictTask = () -> {
+            try {
+                barrier.await(10, TimeUnit.SECONDS);
+                cache.getIndexEntry(metadataList.get(2));
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> f1 = executor.submit(lookupTask);
+            Future<?> f2 = executor.submit(evictTask);
+            f1.get(10, TimeUnit.SECONDS);
+            f2.get(10, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
     }
 }

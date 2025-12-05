@@ -345,7 +345,15 @@ public class RemoteIndexCache implements Closeable {
         lock.readLock().lock();
         try {
             throwIfCacheClosed(uuid);
-            return internalCache.get(uuid, k -> createCacheEntry(metadata));
+            Entry entry = internalCache.get(uuid, k -> createCacheEntry(metadata));
+
+            if (entry.isMarkedForCleanup()) {
+                log.debug("Entry for segment {} is marked for cleanup, invalidating and refetching", uuid);
+                internalCache.invalidate(uuid);
+                entry = internalCache.get(uuid, k -> createCacheEntry(metadata));
+            }
+
+            return entry;
         } finally {
             lock.readLock().unlock();
         }
@@ -423,7 +431,16 @@ public class RemoteIndexCache implements Closeable {
     public int lookupOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
         lock.readLock().lock();
         try {
-            return getIndexEntry(remoteLogSegmentMetadata).lookupOffset(offset).position();
+            Entry entry = getIndexEntry(remoteLogSegmentMetadata);
+            try {
+                return entry.lookupOffset(offset).position();
+            } catch (IllegalStateException e) {
+                Uuid segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id();
+                log.debug("Retrying lookupOffset for segment {} after eviction", segmentId);
+                internalCache.invalidate(segmentId);
+                entry = getIndexEntry(remoteLogSegmentMetadata);
+                return entry.lookupOffset(offset).position();
+            }
         } finally {
             lock.readLock().unlock();
         }
@@ -432,7 +449,16 @@ public class RemoteIndexCache implements Closeable {
     public int lookupTimestamp(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long timestamp, long startingOffset) {
         lock.readLock().lock();
         try {
-            return getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset).position();
+            Entry entry = getIndexEntry(remoteLogSegmentMetadata);
+            try {
+                return entry.lookupTimestamp(timestamp, startingOffset).position();
+            } catch (IllegalStateException e) {
+                Uuid segmentId = remoteLogSegmentMetadata.remoteLogSegmentId().id();
+                log.debug("Retrying lookupTimestamp for segment {} after eviction", segmentId);
+                internalCache.invalidate(segmentId);
+                entry = getIndexEntry(remoteLogSegmentMetadata);
+                return entry.lookupTimestamp(timestamp, startingOffset).position();
+            }
         } finally {
             lock.readLock().unlock();
         }
@@ -445,8 +471,8 @@ public class RemoteIndexCache implements Closeable {
         if (!isRemoteIndexCacheClosed.getAndSet(true)) {
             lock.writeLock().lock();
             try {
-                log.info("Close initiated for RemoteIndexCache. Cache stats={}. Cache entries pending delete={}",
-                        internalCache.stats(), expiredIdxPendingForDeletion());
+                log.info("Close initiated for RemoteIndexCache. Cache entries pending delete={}",
+                        expiredIdxPendingForDeletion());
                 cleanerScheduler.shutdown();
                 // Close all the opened indexes to force unload mmap memory. This does not delete the index files from disk.
                 // Note that internal cache does not require explicit cleaning/closing. We don't want to invalidate or cleanup
@@ -528,7 +554,7 @@ public class RemoteIndexCache implements Closeable {
         public OffsetPosition lookupOffset(long targetOffset) {
             entryLock.readLock().lock();
             try {
-                if (cleanStarted)
+                if (markedForCleanup)
                     throw new IllegalStateException("This entry is marked for cleanup");
                 return offsetIndex.lookup(targetOffset);
             } finally {
@@ -539,7 +565,7 @@ public class RemoteIndexCache implements Closeable {
         public OffsetPosition lookupTimestamp(long timestamp, long startingOffset) {
             entryLock.readLock().lock();
             try {
-                if (cleanStarted)
+                if (markedForCleanup)
                     throw new IllegalStateException("This entry is marked for cleanup");
                 TimestampOffset timestampOffset = timeIndex.lookup(timestamp);
                 return offsetIndex.lookup(Math.max(startingOffset, timestampOffset.offset()));
