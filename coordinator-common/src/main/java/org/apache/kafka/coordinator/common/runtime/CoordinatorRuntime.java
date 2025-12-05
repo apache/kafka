@@ -2559,7 +2559,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             // The new image can be applied to the coordinator only if the coordinator
                             // exists and is in the active state.
                             log.debug("Applying new metadata image with version {} to {}.", newImage.version(), tp);
-                            context.coordinator.onNewMetadataImage(newImage, delta);
+                            context.coordinator.onMetadataUpdate(delta, newImage);
                         } else {
                             log.debug("Ignored new metadata image with version {} for {} because the coordinator is not active.",
                                 newImage.version(), tp);

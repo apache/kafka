@@ -591,6 +591,10 @@ com.example.MySinkConnector</code></pre>
 
     <p>You should then verify that your manifests are correct by using the <a href="#connect_plugindiscovery_compatibility">verification steps</a> with a pre-release artifact. If the verification succeeds, you can then release the plugin normally, and operators can upgrade to the compatible version.</p>
 
+    <h4><a id="connect_security" href="#connect_security">Security</a></h4>
+
+    <p>It's important to understand the security concerns inherent to Connect. First, Connect allows running custom plugins. These plugins can run arbitrary code, so you must trust them before installing them in your Connect clusters. By default, the REST API is unsecured and allows anyone that can access it to start and stop connectors. You should only directly expose the REST API to trusted users, otherwise it's easy to gain arbitrary code execution on Connect workers. By default, connectors can also override the configurations of the Kafka clients that Connect uses internally. Since Kafka 4.2.0, it's recommended to set <code>connector.client.config.override.policy</code> to <code>Allowlist</code>, this will be the default from Kafka 5.0.0, and explicitly only allow configurations that you need to override. Keep in mind that configurations that can load classes such as <code>sasl.jaas.config</code> or <code>sasl.login.class</code> should only be allowed if only trusted users can access the REST API as they, by design, enable executing code on the Connect worker.</p>
+
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
 
     <p>This guide describes how developers can write new connectors for Kafka Connect to move data between Kafka and other systems. It briefly reviews a few key concepts and then describes how to create a simple connector.</p>
