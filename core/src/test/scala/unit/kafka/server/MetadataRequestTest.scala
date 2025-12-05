@@ -24,35 +24,37 @@ import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.common.test.api.ClusterTest
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.Test
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
-class MetadataRequestTest extends AbstractMetadataRequestTest {
+class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequestTest(cluster) {
 
-  @BeforeEach
-  override def setUp(testInfo: TestInfo): Unit = {
-    doSetup(testInfo, createOffsetsTopic = false)
-  }
+//  @BeforeEach
+//  override def setUp(testInfo: TestInfo): Unit = {
+//    doSetup(testInfo, createOffsetsTopic = false)
+//  }
 
-  @Test
+  @ClusterTest
   def testClusterIdWithRequestVersion1(): Unit = {
     val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
     val v1ClusterId = v1MetadataResponse.clusterId
     assertNull(v1ClusterId, s"v1 clusterId should be null")
   }
 
-  @Test
+  @ClusterTest
   def testClusterIdIsValid(): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(4.toShort))
     isValidClusterId(metadataResponse.clusterId)
   }
 
-  @Test
+  @ClusterTest
   def testRack(): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(4.toShort))
     // Validate rack matches what's set in generateConfigs() above
@@ -66,8 +68,8 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
     val notInternalTopic = "notInternal"
     // create the topics
-    createTopic(internalTopic, 3, 2)
-    createTopic(notInternalTopic, 3, 2)
+    cluster.createTopic(internalTopic, 3, 2)
+    cluster.createTopic(notInternalTopic, 3, 2)
 
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(4.toShort))
     assertTrue(metadataResponse.errors.isEmpty, "Response should have no errors")

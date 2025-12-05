@@ -21,15 +21,29 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.MetadataRequestData
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs}
+import org.apache.kafka.server.IntegrationTestUtils
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs}
 import org.junit.jupiter.api.Assertions.assertEquals
 
-abstract class AbstractMetadataRequestTest extends BaseRequestTest {
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
-  override def brokerPropertyOverrides(properties: Properties): Unit = {
+abstract class AbstractMetadataRequestTest(cluster: ClusterInstance) {
+
+  protected def brokers: Seq[KafkaBroker] = cluster.brokers().values().asScala.toList
+
+  protected def anySocketServer: SocketServer = {
+    val aliveBrokers = cluster.aliveBrokers()
+    if (aliveBrokers.isEmpty)
+      throw new IllegalStateException("No live broker is available")
+    aliveBrokers.values().asScala.map(_.socketServer).last
+  }
+
+  def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.setProperty(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, "2")
     properties.setProperty(ServerConfigs.BROKER_RACK_CONFIG, s"rack/${properties.getProperty(ServerConfigs.BROKER_ID_CONFIG)}")
@@ -50,7 +64,9 @@ abstract class AbstractMetadataRequestTest extends BaseRequestTest {
   }
 
   protected def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
+    val listener = cluster.clientListener()
+    val port = destination.getOrElse(anySocketServer).boundPort(listener)
+    IntegrationTestUtils.connectAndReceive[MetadataResponse](request, port)
   }
 
   protected def checkAutoCreatedTopic(autoCreatedTopic: String, response: MetadataResponse): Unit = {
