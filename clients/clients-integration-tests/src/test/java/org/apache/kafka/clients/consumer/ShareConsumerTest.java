@@ -2253,7 +2253,7 @@ public class ShareConsumerTest {
 
     @ClusterTest(
         serverProperties = {
-            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2"),
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "3"),
         }
     )
     public void testBehaviorOnDeliveryCountBoundary() {
