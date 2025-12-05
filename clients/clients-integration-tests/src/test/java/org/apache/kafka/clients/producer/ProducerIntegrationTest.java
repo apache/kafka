@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer;
 
+import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -35,7 +37,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.LogContext;
@@ -65,9 +66,8 @@ public class ProducerIntegrationTest {
         }
         try (var consumer = cluster.consumer()) {
             consumer.subscribe(List.of(topic));
-            TestUtils.waitForCondition(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1, 5000, "failed to poll data");
+            TestUtils.waitUntilTrue(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1, () -> "failed to poll data", 5000, 100L);
         }
-
     }
 
 
