@@ -83,9 +83,11 @@ public class RemoteLogReaderTest {
         assertTrue(actualRemoteLogReadResult.fetchDataInfo().isPresent());
         assertEquals(fetchDataInfo, actualRemoteLogReadResult.fetchDataInfo().get());
 
-        // verify the record method on quota manager was called with the expected value
+        // verify the recordWithTopic method on quota manager was called with the expected value
+        ArgumentCaptor<String> topicArg = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Double> recordedArg = ArgumentCaptor.forClass(Double.class);
-        verify(mockQuotaManager, times(1)).record(recordedArg.capture());
+        verify(mockQuotaManager, times(1)).recordWithTopic(topicArg.capture(), recordedArg.capture());
+        assertEquals(TOPIC, topicArg.getValue());
         assertEquals(100, recordedArg.getValue());
 
         // Verify metrics for remote reads are updated correctly
@@ -115,9 +117,11 @@ public class RemoteLogReaderTest {
         assertTrue(actualRemoteLogReadResult.error().isPresent());
         assertFalse(actualRemoteLogReadResult.fetchDataInfo().isPresent());
 
-        // verify the record method on quota manager was called with the expected value
+        // verify the recordWithTopic method on quota manager was called with the expected value
+        ArgumentCaptor<String> topicArg = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Double> recordedArg = ArgumentCaptor.forClass(Double.class);
-        verify(mockQuotaManager, times(1)).record(recordedArg.capture());
+        verify(mockQuotaManager, times(1)).recordWithTopic(topicArg.capture(), recordedArg.capture());
+        assertEquals(TOPIC, topicArg.getValue());
         assertEquals(0, recordedArg.getValue());
 
         // Verify metrics for remote reads are updated correctly

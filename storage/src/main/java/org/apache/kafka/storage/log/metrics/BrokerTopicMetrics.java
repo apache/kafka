@@ -48,6 +48,11 @@ public final class BrokerTopicMetrics {
     public static final String FAILED_SHARE_FETCH_REQUESTS_PER_SEC = "FailedShareFetchRequestsPerSec";
     public static final String TOTAL_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC = "TotalShareAcknowledgementRequestsPerSec";
     public static final String FAILED_SHARE_ACKNOWLEDGEMENTS_REQUESTS_PER_SEC = "FailedShareAcknowledgementRequestsPerSec";
+    // Quota observability metrics
+    public static final String REMOTE_FETCH_QUOTA_BYTES_PER_SEC = "RemoteFetchQuotaBytesPerSec";
+    public static final String REMOTE_FETCH_QUOTA_THROTTLED_PER_SEC = "RemoteFetchQuotaThrottledPerSec";
+    public static final String REMOTE_FETCH_QUOTA_THROTTLE_TIME_MS = "RemoteFetchQuotaThrottleTimeMs";
+    public static final String REMOTE_FETCH_SIZE_BYTES = "RemoteFetchSizeBytes";
     // These following topics are for LogValidator for better debugging on failed records
     public static final String NO_KEY_COMPACTED_TOPIC_RECORDS_PER_SEC = "NoKeyCompactedTopicRecordsPerSec";
     public static final String INVALID_MAGIC_NUMBER_RECORDS_PER_SEC = "InvalidMagicNumberRecordsPerSec";
@@ -60,6 +65,7 @@ public final class BrokerTopicMetrics {
     private final Map<String, String> tags;
     private final Map<String, MeterWrapper> metricTypeMap = new java.util.HashMap<>();
     private final Map<String, GaugeWrapper> metricGaugeTypeMap = new java.util.HashMap<>();
+    private final Map<String, HistogramWrapper> metricHistogramTypeMap = new java.util.HashMap<>();
 
     public BrokerTopicMetrics(boolean remoteStorageEnabled) {
         this(Optional.empty(), remoteStorageEnabled);
@@ -117,19 +123,34 @@ public final class BrokerTopicMetrics {
             metricGaugeTypeMap.put(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName(), new GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName()));
             metricGaugeTypeMap.put(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName(), new GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName()));
             metricGaugeTypeMap.put(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName(), new GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName()));
+
+            // Quota observability metrics
+            metricTypeMap.put(REMOTE_FETCH_QUOTA_BYTES_PER_SEC, new MeterWrapper(REMOTE_FETCH_QUOTA_BYTES_PER_SEC, "bytes"));
+            metricTypeMap.put(REMOTE_FETCH_QUOTA_THROTTLED_PER_SEC, new MeterWrapper(REMOTE_FETCH_QUOTA_THROTTLED_PER_SEC, "requests"));
+            metricHistogramTypeMap.put(REMOTE_FETCH_QUOTA_THROTTLE_TIME_MS, new HistogramWrapper(REMOTE_FETCH_QUOTA_THROTTLE_TIME_MS));
+            metricHistogramTypeMap.put(REMOTE_FETCH_SIZE_BYTES, new HistogramWrapper(REMOTE_FETCH_SIZE_BYTES));
         }
     }
 
     public void closeMetric(String metricName) {
         MeterWrapper mw = metricTypeMap.get(metricName);
-        if (mw != null) mw.close();
+        if (mw != null) {
+            mw.close();
+        }
         GaugeWrapper mg = metricGaugeTypeMap.get(metricName);
-        if (mg != null) mg.close();
+        if (mg != null) {
+            mg.close();
+        }
+        HistogramWrapper hg = metricHistogramTypeMap.get(metricName);
+        if (hg != null) {
+            hg.close();
+        }
     }
 
     public void close() {
         metricTypeMap.values().forEach(MeterWrapper::close);
         metricGaugeTypeMap.values().forEach(GaugeWrapper::close);
+        metricHistogramTypeMap.values().forEach(HistogramWrapper::close);
     }
 
     // used for testing only
@@ -345,6 +366,25 @@ public final class BrokerTopicMetrics {
         return metricTypeMap.get(RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName()).meter();
     }
 
+    // Quota observability metrics
+    public Meter remoteFetchQuotaBytesRate() {
+        MeterWrapper wrapper = metricTypeMap.get(REMOTE_FETCH_QUOTA_BYTES_PER_SEC);
+        return wrapper != null ? wrapper.meter() : null;
+    }
+
+    public Meter remoteFetchQuotaThrottledRate() {
+        MeterWrapper wrapper = metricTypeMap.get(REMOTE_FETCH_QUOTA_THROTTLED_PER_SEC);
+        return wrapper != null ? wrapper.meter() : null;
+    }
+
+    public HistogramWrapper remoteFetchQuotaThrottleTimeMs() {
+        return metricHistogramTypeMap.get(REMOTE_FETCH_QUOTA_THROTTLE_TIME_MS);
+    }
+
+    public HistogramWrapper remoteFetchSizeBytes() {
+        return metricHistogramTypeMap.get(REMOTE_FETCH_SIZE_BYTES);
+    }
+
     private class MeterWrapper {
         private final String metricType;
         private final String eventType;
@@ -423,6 +463,52 @@ public final class BrokerTopicMetrics {
         // metricsGroup uses ConcurrentMap to store gauges, so we don't need to use synchronized block here
         private void newGaugeIfNeed() {
             metricsGroup.newGauge(metricType, () -> metricValues.values().stream().mapToLong(v -> v).sum(), tags);
+        }
+    }
+
+    public class HistogramWrapper {
+        private final String metricType;
+        private volatile com.yammer.metrics.core.Histogram lazyHistogram;
+        private final Lock histogramLock = new ReentrantLock();
+
+        public HistogramWrapper(String metricType) {
+            this.metricType = metricType;
+            if (tags.isEmpty()) {
+                histogram();
+            }
+        }
+
+        public com.yammer.metrics.core.Histogram histogram() {
+            com.yammer.metrics.core.Histogram histogram = lazyHistogram;
+            if (histogram == null) {
+                histogramLock.lock();
+                try {
+                    histogram = lazyHistogram;
+                    if (histogram == null) {
+                        histogram = metricsGroup.newHistogram(metricType, true, tags);
+                        lazyHistogram = histogram;
+                    }
+                } finally {
+                    histogramLock.unlock();
+                }
+            }
+            return histogram;
+        }
+
+        public void update(long value) {
+            histogram().update(value);
+        }
+
+        public void close() {
+            histogramLock.lock();
+            try {
+                if (lazyHistogram != null) {
+                    metricsGroup.removeMetric(metricType, tags);
+                    lazyHistogram = null;
+                }
+            } finally {
+                histogramLock.unlock();
+            }
         }
     }
 }

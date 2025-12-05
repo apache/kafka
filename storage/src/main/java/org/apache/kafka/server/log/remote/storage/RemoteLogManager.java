@@ -337,16 +337,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
     RLMQuotaManager createRLMCopyQuotaManager() {
         return new RLMQuotaManager(copyQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLM_COPY,
-          "Tracking copy byte-rate for Remote Log Manager", time);
+          "Tracking copy byte-rate for Remote Log Manager", time, brokerTopicStats);
     }
 
     RLMQuotaManager createRLMFetchQuotaManager() {
         return new RLMQuotaManager(fetchQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLM_FETCH,
-          "Tracking fetch byte-rate for Remote Log Manager", time);
+          "Tracking fetch byte-rate for Remote Log Manager", time, brokerTopicStats);
     }
 
     public long getFetchThrottleTimeMs() {
         return rlmFetchQuotaManager.getThrottleTimeMs();
+    }
+
+    public long getFetchThrottleTimeMsWithTopic(String topic) {
+        return rlmFetchQuotaManager.getThrottleTimeMsWithTopic(topic);
     }
 
     public Sensor fetchThrottleTimeSensor() {

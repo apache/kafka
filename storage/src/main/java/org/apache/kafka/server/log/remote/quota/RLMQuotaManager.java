@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.quota.QuotaUtils;
 import org.apache.kafka.server.quota.SensorAccess;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,17 +45,23 @@ public class RLMQuotaManager {
     private final QuotaType quotaType;
     private final String description;
     private final Time time;
+    private final BrokerTopicStats brokerTopicStats;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final SensorAccess sensorAccess;
     private Quota quota;
 
     public RLMQuotaManager(RLMQuotaManagerConfig config, Metrics metrics, QuotaType quotaType, String description, Time time) {
+        this(config, metrics, quotaType, description, time, null);
+    }
+
+    public RLMQuotaManager(RLMQuotaManagerConfig config, Metrics metrics, QuotaType quotaType, String description, Time time, BrokerTopicStats brokerTopicStats) {
         this.config = config;
         this.metrics = metrics;
         this.quotaType = quotaType;
         this.description = description;
         this.time = time;
+        this.brokerTopicStats = brokerTopicStats;
 
         this.quota = new Quota(config.quotaBytesPerSecond(), true);
         this.sensorAccess = new SensorAccess(lock, metrics);
@@ -78,19 +85,58 @@ public class RLMQuotaManager {
     }
 
     public long getThrottleTimeMs() {
+        return getThrottleTimeMsWithTopic(null);
+    }
+
+    public long getThrottleTimeMsWithTopic(String topic) {
         Sensor sensorInstance = sensor();
         try {
             sensorInstance.checkQuotas();
         } catch (QuotaViolationException qve) {
+            long throttleTimeMs = QuotaUtils.throttleTime(qve, time.milliseconds());
+
             LOGGER.debug("Quota violated for sensor ({}), metric: ({}), metric-value: ({}), bound: ({})",
                 sensorInstance.name(), qve.metric().metricName(), qve.value(), qve.bound());
-            return QuotaUtils.throttleTime(qve, time.milliseconds());
+
+            // Record throttling metrics if topic provided
+            try {
+                if (brokerTopicStats != null && topic != null) {
+                    var throttledMeter = brokerTopicStats.topicStats(topic).remoteFetchQuotaThrottledRate();
+                    if (throttledMeter != null) {
+                        throttledMeter.mark();
+                    }
+                    var throttleTimeHistogram = brokerTopicStats.topicStats(topic).remoteFetchQuotaThrottleTimeMs();
+                    if (throttleTimeHistogram != null) {
+                        throttleTimeHistogram.update(throttleTimeMs);
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Failed to record throttling metrics for topic {}: {}", topic, e.getMessage());
+            }
+
+            return throttleTimeMs;
         }
         return 0L;
     }
 
     public void record(double value) {
         sensor().record(value, time.milliseconds(), false);
+    }
+
+    /**
+     * Record quota usage with topic context for observability
+     */
+    public void recordWithTopic(String topic, double value) {
+        // Record global quota
+        sensor().record(value, time.milliseconds(), false);
+
+        // Record per-topic quota usage if brokerTopicStats available
+        if (brokerTopicStats != null && value > 0) {
+            var meter = brokerTopicStats.topicStats(topic).remoteFetchQuotaBytesRate();
+            if (meter != null) {
+                meter.mark((long) value);
+            }
+        }
     }
 
     private MetricConfig getQuotaMetricConfig(Quota quota) {

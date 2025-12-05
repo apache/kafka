@@ -60,22 +60,34 @@ public class RemoteLogReader implements Callable<Void> {
     @Override
     public Void call() {
         RemoteLogReadResult result;
+        String topic = fetchInfo.topicIdPartition().topic();
+
         try {
             LOGGER.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicIdPartition());
             FetchDataInfo fetchDataInfo = remoteReadTimer.time(() -> rlm.read(fetchInfo));
-            brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
-            brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+            int fetchedBytes = fetchDataInfo.records.sizeInBytes();
+
+            brokerTopicStats.topicStats(topic).remoteFetchBytesRate().mark(fetchedBytes);
+            brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchedBytes);
+
+            // Record fetch size distribution for quota analysis
+            var fetchSizeHistogram = brokerTopicStats.topicStats(topic).remoteFetchSizeBytes();
+            if (fetchSizeHistogram != null) {
+                fetchSizeHistogram.update(fetchedBytes);
+            }
+
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
         } catch (OffsetOutOfRangeException e) {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         } catch (Exception e) {
-            brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).failedRemoteFetchRequestRate().mark();
+            brokerTopicStats.topicStats(topic).failedRemoteFetchRequestRate().mark();
             brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().mark();
             LOGGER.error("Error occurred while reading the remote data for {}", fetchInfo.topicIdPartition(), e);
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
+
         LOGGER.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicIdPartition());
-        quotaManager.record(result.fetchDataInfo().map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
+        quotaManager.recordWithTopic(topic, result.fetchDataInfo().map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
         callback.accept(result);
         return null;
     }
