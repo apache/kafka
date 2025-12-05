@@ -163,8 +163,6 @@ allprojects {
           libs.nettyTransportNativeEpoll,
           // be explicit about the reload4j version instead of relying on the transitive versions
           libs.reload4j,
-          // Workaround before `commons-validator` has new release. See KAFKA-19359.
-          libs.commonsBeanutils,
           libs.commonsLang
         )
       }
