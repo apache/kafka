@@ -197,8 +197,6 @@ allprojects {
           // ensure we have a single version in the classpath despite transitive dependencies
           libs.scalaLibrary,
           libs.scalaReflect,
-          // Workaround before `commons-validator` has new release. See KAFKA-19359.
-          libs.commonsBeanutils,
           libs.jacksonAnnotations,
           libs.commonsLang
         )
