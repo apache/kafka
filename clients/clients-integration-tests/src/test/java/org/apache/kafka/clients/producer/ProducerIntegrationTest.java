@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -41,51 +39,65 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.junit.jupiter.api.Assertions;
 
 import java.nio.ByteBuffer;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ProducerIntegrationTest {
 
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     })
-    public void testInFlightBatchShouldNotBeCorrupted(ClusterInstance cluster) throws InterruptedException,
-        ExecutionException {
+    public void testInFlightBatchBufferNotReleased(ClusterInstance cluster) throws InterruptedException {
         String topic = "test-topic";
         cluster.createTopic("test-topic", 1, (short) 1);
-        try (var producer = expireProducer(cluster)) {
-            producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes())).get();
-        }
-        try (var consumer = cluster.consumer()) {
-            consumer.subscribe(List.of(topic));
-            TestUtils.waitUntilTrue(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1, () -> "failed to poll data", 5000, 100L);
+
+        AtomicReference<EvilBufferPool> bufferPoolBox = new AtomicReference<>();
+
+        try (var producer = expireProducer(cluster.bootstrapServers(), 5000, 1000, bufferPoolBox)) {
+            producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes()));
+            //  request timeout but delivery not timeout, the buffer should not be released
+            Thread.sleep(2000);
+            Assertions.assertEquals(0, bufferPoolBox.get().deallocateCount);
         }
     }
 
 
-    @SuppressWarnings({"unchecked", "this-escape"})
+    private Producer<byte[], byte[]> expireProducer(String bootstrapServers,
+                                                    int deliveryTimeoutMs,
+                                                    int requestTimeoutMs,
+                                                    AtomicReference<EvilBufferPool> bufferPoolRef) {
+        Map<String, Object> config = Map.of(
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
+            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false,
+            ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs,
+            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs
+        );
+        return new EvilKafkaProducerBuilder(bufferPoolRef).build(config);
+    }
+
     private Producer<byte[], byte[]> expireProducer(ClusterInstance cluster) {
         Map<String, Object> config = Map.of(
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
             ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
-            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false,
-            ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 2000,
-            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1500
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false
         );
-        return new EvilKafkaProducerBuilder().build(config);
+        return new EvilKafkaProducerBuilder(null).build(config);
     }
+
 
     static class EvilKafkaProducerBuilder {
 
+        final AtomicReference<EvilBufferPool> bufferPoolRef;
         Serializer<byte[]> serializer = new ByteArraySerializer();
         ApiVersions apiVersions = new ApiVersions();
         LogContext logContext = new LogContext("[expire Producer test ]");
@@ -98,11 +110,15 @@ public class ProducerIntegrationTest {
         RecordAccumulator accumulator;
         Partitioner partitioner;
         Sender sender;
-        ProducerInterceptors<String, String> interceptors;
+        ProducerInterceptors<byte[], byte[]> interceptors;
 
-        @SuppressWarnings({"unchecked", "this-escape"})
+        EvilKafkaProducerBuilder(AtomicReference<EvilBufferPool> bufferPoolRef) {
+            this.bufferPoolRef = bufferPoolRef == null ? new AtomicReference<>() : bufferPoolRef;
+        }
+
+        @SuppressWarnings("this-escape")
         Producer<byte[], byte[]> build(Map<String, Object> configs) {
-            this.config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, null, null));
+            config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, null, null));
             transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             return new KafkaProducer<>(
@@ -123,27 +139,26 @@ public class ProducerIntegrationTest {
             );
         }
 
-
-        private ProducerInterceptors buildInterceptors() {
-            this.interceptors = new ProducerInterceptors<>(List.of(), metrics);
-            return this.interceptors;
+        private ProducerInterceptors<byte[], byte[]> buildInterceptors() {
+            interceptors = new ProducerInterceptors<>(List.of(), metrics);
+            return interceptors;
         }
 
         private Partitioner buildPartition() {
-            this.partitioner = config.getConfiguredInstance(
+            partitioner = config.getConfiguredInstance(
                 ProducerConfig.PARTITIONER_CLASS_CONFIG,
                 Partitioner.class,
                 Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
-            return this.partitioner;
+            return partitioner;
         }
 
         private Sender buildSender() {
             int maxInflightRequests = config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             int requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-            ProducerMetrics metricsRegistry = new ProducerMetrics(this.metrics);
+            ProducerMetrics metricsRegistry = new ProducerMetrics(metrics);
             Sensor throttleTimeSensor = Sender.throttleTimeSensor(metricsRegistry.senderMetrics);
             KafkaClient client = ClientUtils.createNetworkClient(config,
-                this.metrics,
+                metrics,
                 "producer",
                 logContext,
                 apiVersions,
@@ -154,10 +169,10 @@ public class ProducerIntegrationTest {
                 null);
 
             short acks = Short.parseShort(config.getString(ProducerConfig.ACKS_CONFIG));
-            this.sender = new Sender(logContext,
+            sender = new Sender(logContext,
                 client,
                 metadata,
-                this.accumulator,
+                accumulator,
                 maxInflightRequests == 1,
                 config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                 acks,
@@ -171,21 +186,30 @@ public class ProducerIntegrationTest {
                 protected long sendProducerData(long now) {
                     long result = super.sendProducerData(now);
                     try {
-                        //  Ensure the batch expires.
-                        Thread.sleep(500);
+                        // Ensure the batch expires by sleeping longer than the delivery timeout (800 ms)
+                        // This simulates a scenario where the batch becomes stale and should expire
+                        Thread.sleep(800);
                         return result;
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
                 }
             };
-            return this.sender;
+            return sender;
         }
 
         private RecordAccumulator buildAccumulator() {
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             long retryBackoffMaxMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
             int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
+
+            EvilBufferPool bufferPool = new EvilBufferPool(
+                config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG),
+                batchSize,
+                metrics,
+                Time.SYSTEM,
+                "producer-metrics");
+            this.bufferPoolRef.set(bufferPool);
             Plugin<Partitioner> partitionerPlugin = Plugin.wrapInstance(
                 config.getConfiguredInstance(
                     ProducerConfig.PARTITIONER_CLASS_CONFIG,
@@ -194,8 +218,8 @@ public class ProducerIntegrationTest {
                 metrics,
                 ProducerConfig.PARTITIONER_CLASS_CONFIG);
             boolean enableAdaptivePartitioning = partitionerPlugin.get() == null &&
-                config.getBoolean(ProducerConfig.PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG);
-            this.accumulator = new RecordAccumulator(logContext,
+                config.getBoolean(ProducerConfig.PARTITIONER_ADAPTIVE_PARTITIONING_ENABLE_CONFIG);
+            accumulator = new RecordAccumulator(logContext,
                 batchSize,
                 NoCompression.NONE,
                 (int) Math.min(config.getLong(ProducerConfig.LINGER_MS_CONFIG), Integer.MAX_VALUE),
@@ -210,8 +234,7 @@ public class ProducerIntegrationTest {
                 "producer-metrics",
                 Time.SYSTEM,
                 null,
-                new EvilBufferPool(config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG), batchSize, metrics,
-                    Time.SYSTEM, "producer-metrics"));
+                bufferPool);
             return accumulator;
         }
 
@@ -225,7 +248,7 @@ public class ProducerIntegrationTest {
                 List.of(
                     Plugin.wrapInstance(serializer, metrics, ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).get(),
                     Plugin.wrapInstance(serializer, metrics, ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).get()));
-            this.metadata = new ProducerMetadata(retryBackoffMs,
+            metadata = new ProducerMetadata(retryBackoffMs,
                 retryBackoffMaxMs,
                 config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                 config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
@@ -245,6 +268,8 @@ public class ProducerIntegrationTest {
 
     static class EvilBufferPool extends BufferPool {
 
+        int deallocateCount = 0;
+        
         public EvilBufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
             super(memory, poolableSize, metrics, time, metricGrpName);
         }
@@ -259,6 +284,7 @@ public class ProducerIntegrationTest {
             //  Ensure atomicity using reentrant behavior
             lock.lock();
             try {
+                deallocateCount++;
                 Arrays.fill(buffer.array(), (byte) 0);
                 super.deallocate(buffer, size);
             } finally {

@@ -832,6 +832,7 @@ public class Sender implements Runnable {
         Map<String, Uuid> topicIds = topicIdsForBatches(batches);
 
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
+        long earliestCreatedMs = Long.MAX_VALUE;
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
             MemoryRecords records = batch.records();
@@ -848,6 +849,7 @@ public class Sender implements Runnable {
                     .setIndex(tp.partition())
                     .setRecords(records));
             recordsByPartition.put(tp, batch);
+            earliestCreatedMs = Math.min(earliestCreatedMs, batch.createdMs);
         }
 
         String transactionalId = null;
@@ -872,8 +874,11 @@ public class Sender implements Runnable {
         RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, topicNames, time.milliseconds());
 
         String nodeId = Integer.toString(destination);
+        
+        long deliveryTimeoutMs = accumulator.getDeliveryTimeoutMs() - (now - earliestCreatedMs);
+        int produceTimeoutMs = (int) Math.min(requestTimeoutMs, deliveryTimeoutMs);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
-                requestTimeoutMs, callback);
+            produceTimeoutMs, callback);
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }
