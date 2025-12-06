@@ -54,7 +54,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol, "foo")
 
     for (version <- ApiKeys.OFFSET_COMMIT.oldestVersion to ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)) {
       // Commit offset.

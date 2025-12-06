@@ -80,7 +80,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol, "foo")
 
     // Commit offsets.
     for (partitionId <- 0 to 2) {
@@ -301,7 +301,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol)
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol, "foo")
 
     // Commit offsets.
     for (partitionId <- 0 to 2) {
@@ -420,7 +420,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     List("grp-0", "grp-1", "grp-2").foreach { groupId =>
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
-      val (memberId, memberEpoch) = joinConsumerGroup(groupId, useNewProtocol)
+      val (memberId, memberEpoch) = joinConsumerGroup(groupId, useNewProtocol, "foo")
 
       for (partitionId <- 0 to 2) {
         commitOffset(
@@ -585,7 +585,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId, memberEpoch) = joinConsumerGroup("grp", true)
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", true, "foo")
 
     // Commit offsets.
     for (partitionId <- 0 to 2) {

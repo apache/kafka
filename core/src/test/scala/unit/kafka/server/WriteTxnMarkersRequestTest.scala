@@ -60,7 +60,7 @@ class WriteTxnMarkersRequestTest(cluster:ClusterInstance) extends GroupCoordinat
 
     // Join the consumer group. Note that we don't heartbeat here so we must use
     // a session long enough for the duration of the test.
-    val (memberId: String, memberEpoch: Int) = joinConsumerGroup(groupId, useNewProtocol)
+    val (memberId: String, memberEpoch: Int) = joinConsumerGroup(groupId, useNewProtocol, topic)
     assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, memberId)
     assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, memberEpoch)
 

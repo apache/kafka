@@ -55,7 +55,8 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       // a session long enough for the duration of the test.
       val (memberId, memberEpoch) = joinConsumerGroup(
         groupId = "grp",
-        useNewProtocol = useNewProtocol
+        useNewProtocol = useNewProtocol,
+        topic = "foo"
       )
 
       // Commit offsets.

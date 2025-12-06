@@ -683,22 +683,22 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     (joinGroupResponseData.memberId, joinGroupResponseData.generationId)
   }
 
-  protected def joinConsumerGroupWithNewProtocol(groupId: String, memberId: String = ""): (String, Int) = {
+  protected def joinConsumerGroupWithNewProtocol(groupId: String, memberId: String = "", subscribedTopicNames: List[String]): (String, Int) = {
     val consumerGroupHeartbeatResponseData = consumerGroupHeartbeat(
       groupId = groupId,
       memberId = memberId,
       rebalanceTimeoutMs = 5 * 60 * 1000,
-      subscribedTopicNames = List("foo"),
+      subscribedTopicNames = subscribedTopicNames,
       topicPartitions = List.empty
     )
     (consumerGroupHeartbeatResponseData.memberId, consumerGroupHeartbeatResponseData.memberEpoch)
   }
 
-  protected def joinConsumerGroup(groupId: String, useNewProtocol: Boolean): (String, Int) = {
+  protected def joinConsumerGroup(groupId: String, useNewProtocol: Boolean, topic: String): (String, Int) = {
     if (useNewProtocol) {
       // Note that we heartbeat only once to join the group and assume
       // that the test will complete within the session timeout.
-      joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid().toString)
+      joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid().toString, List(topic))
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.

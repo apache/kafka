@@ -277,7 +277,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
 
     // Consumer member 1 joins the group.
-    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
+    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString, List("foo"))
 
     // Classic member 2 joins the group.
     val joinGroupResponseData = sendJoinRequest(
@@ -415,7 +415,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     val groupId = "grp"
 
     // Consumer member 1 joins the group.
-    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
+    val (memberId1, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString, List("foo"))
 
     // Classic member 2 joins the group.
     val joinGroupResponseData = sendJoinRequest(
@@ -639,7 +639,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     // Create a consumer group by joining a member.
     val groupId = "grp"
-    val (memberId, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString)
+    val (memberId, _) = joinConsumerGroupWithNewProtocol(groupId, Uuid.randomUuid.toString, List("foo"))
 
     // The member leaves the group.
     leaveGroup(

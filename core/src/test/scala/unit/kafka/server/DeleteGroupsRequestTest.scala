@@ -58,7 +58,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     // We test DeleteGroups on empty and non-empty groups. Here we create the non-empty group.
     joinConsumerGroup(
       groupId = "grp-non-empty",
-      useNewProtocol = useNewProtocol
+      useNewProtocol = useNewProtocol,
+      topic = "foo"
     )
 
     for (version <- ApiKeys.DELETE_GROUPS.oldestVersion() to ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)) {
@@ -66,7 +67,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       // a session long enough for the duration of the test.
       val (memberId, memberEpoch) = joinConsumerGroup(
         groupId = "grp",
-        useNewProtocol = useNewProtocol
+        useNewProtocol = useNewProtocol,
+        topic = "foo"
       )
 
       // The member leaves the group so that grp is empty and ready to be deleted.
