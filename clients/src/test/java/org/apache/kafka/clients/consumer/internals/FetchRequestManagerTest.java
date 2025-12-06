@@ -872,7 +872,8 @@ public class FetchRequestManagerTest {
         int partitionLeaderEpoch = 0;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, Compression.NONE, 0L, producerId,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
+                TimestampType.CREATE_TIME, 0L, System.currentTimeMillis(), producerId,
                 producerEpoch, baseSequence);
         builder.append(0L, "key".getBytes(), null);
         builder.close();
@@ -4265,7 +4266,7 @@ public class FetchRequestManagerTest {
         }
 
         @Override
-        protected void checkDisconnects(final long currentTimeMs) {
+        protected void checkDisconnects(final long currentTimeMs, boolean onClose) {
             // any disconnects affecting requests that have already been transmitted will be handled
             // by NetworkClient, so we just need to check whether connections for any of the unsent
             // requests have been disconnected; if they have, then we complete the corresponding future

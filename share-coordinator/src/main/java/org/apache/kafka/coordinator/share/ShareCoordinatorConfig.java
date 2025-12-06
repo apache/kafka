@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
@@ -69,8 +70,9 @@ public class ShareCoordinatorConfig {
     public static final String STATE_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the share-group state topic.";
 
     public static final String APPEND_LINGER_MS_CONFIG = "share.coordinator.append.linger.ms";
-    public static final int APPEND_LINGER_MS_DEFAULT = 5;
-    public static final String APPEND_LINGER_MS_DOC = "The duration in milliseconds that the share coordinator will wait for writes to accumulate before flushing them to disk.";
+    public static final int APPEND_LINGER_MS_DEFAULT = -1;
+    public static final String APPEND_LINGER_MS_DOC = "The duration in milliseconds that the share coordinator will wait for writes to accumulate before flushing them to disk. " +
+        "Set to -1 for an adaptive linger time that minimizes latency based on the workload.";
 
     public static final String STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG = "share.coordinator.state.topic.prune.interval.ms";
     public static final int STATE_TOPIC_PRUNE_INTERVAL_MS_DEFAULT = 5 * 60 * 1000; // 5 minutes
@@ -89,7 +91,7 @@ public class ShareCoordinatorConfig {
         .define(SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG, INT, SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DEFAULT, atLeast(0), MEDIUM, SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC)
         .define(LOAD_BUFFER_SIZE_CONFIG, INT, LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), HIGH, LOAD_BUFFER_SIZE_DOC)
         .define(STATE_TOPIC_COMPRESSION_CODEC_CONFIG, INT, (int) STATE_TOPIC_COMPRESSION_CODEC_DEFAULT.id, HIGH, STATE_TOPIC_COMPRESSION_CODEC_DOC)
-        .define(APPEND_LINGER_MS_CONFIG, INT, APPEND_LINGER_MS_DEFAULT, atLeast(0), MEDIUM, APPEND_LINGER_MS_DOC)
+        .define(APPEND_LINGER_MS_CONFIG, INT, APPEND_LINGER_MS_DEFAULT, atLeast(-1), MEDIUM, APPEND_LINGER_MS_DOC)
         .define(WRITE_TIMEOUT_MS_CONFIG, INT, WRITE_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, WRITE_TIMEOUT_MS_DOC)
         .defineInternal(STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG, INT, STATE_TOPIC_PRUNE_INTERVAL_MS_DEFAULT, atLeast(1), LOW, STATE_TOPIC_PRUNE_INTERVAL_MS_DOC)
         .defineInternal(COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG, INT, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DEFAULT, atLeast(1), LOW, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DOC);
@@ -157,8 +159,16 @@ public class ShareCoordinatorConfig {
         return loadBufferSize;
     }
 
-    public int shareCoordinatorAppendLingerMs() {
-        return appendLingerMs;
+    /**
+     * The duration in milliseconds that the coordinator will wait for writes to
+     * accumulate before flushing them to disk. {@code OptionalInt.empty()} indicates
+     * an adaptive linger time based on the workload.
+     */
+    public OptionalInt shareCoordinatorAppendLingerMs() {
+        if (appendLingerMs == -1) {
+            return OptionalInt.empty();
+        }
+        return OptionalInt.of(appendLingerMs);
     }
 
     public CompressionType shareCoordinatorStateTopicCompressionType() {

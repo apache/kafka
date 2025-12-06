@@ -33,6 +33,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository, PartitionRegistration}
 import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.partition.{AlterPartitionListener, CommittedPartitionState, PendingShrinkIsr}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
@@ -455,8 +456,8 @@ class PartitionLockTest extends Logging {
     LogOffsetsListener.NO_OP_OFFSETS_LISTENER) {
 
     override def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, origin: AppendOrigin,
-                                requestLocal: RequestLocal, verificationGuard: VerificationGuard): LogAppendInfo = {
-      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, requestLocal, verificationGuard)
+                                requestLocal: RequestLocal, verificationGuard: VerificationGuard, transactionVersion: Short): LogAppendInfo = {
+      val appendInfo = super.appendAsLeader(records, leaderEpoch, origin, requestLocal, verificationGuard, transactionVersion)
       appendSemaphore.acquire()
       appendInfo
     }

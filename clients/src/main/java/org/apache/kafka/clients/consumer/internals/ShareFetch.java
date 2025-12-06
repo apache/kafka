@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * {@link ShareFetch} represents the records fetched from the broker to be returned to the consumer
@@ -41,13 +42,17 @@ import java.util.Objects;
  */
 public class ShareFetch<K, V> {
     private final Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches;
+    private Optional<Integer> acquisitionLockTimeoutMs;
+    private Optional<Integer> acquisitionLockTimeoutMsRenewed;
 
     public static <K, V> ShareFetch<K, V> empty() {
-        return new ShareFetch<>(new HashMap<>());
+        return new ShareFetch<>(new HashMap<>(), Optional.empty());
     }
 
-    private ShareFetch(Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches) {
+    private ShareFetch(Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches, Optional<Integer> acquisitionLockTimeoutMs) {
         this.batches = batches;
+        this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
+        this.acquisitionLockTimeoutMsRenewed = Optional.empty();
     }
 
     /**
@@ -66,6 +71,9 @@ public class ShareFetch<K, V> {
             // This case shouldn't usually happen because we only send one fetch at a time per partition,
             // but it might conceivably happen in some rare cases (such as partition leader changes).
             currentBatch.merge(batch);
+        }
+        if (batch.getAcquisitionLockTimeoutMs().isPresent()) {
+            acquisitionLockTimeoutMs = batch.getAcquisitionLockTimeoutMs();
         }
     }
 
@@ -89,7 +97,9 @@ public class ShareFetch<K, V> {
                 Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry = iterator.next();
                 ShareInFlightBatch<K, V> batch = entry.getValue();
                 if (batch.isEmpty()) {
-                    iterator.remove();
+                    if (!batch.hasRenewals()) {
+                        iterator.remove();
+                    }
                 } else {
                     numRecords += batch.numRecords();
                 }
@@ -104,6 +114,40 @@ public class ShareFetch<K, V> {
      */
     public boolean isEmpty() {
         return numRecords() == 0;
+    }
+
+    /**
+     * @return The most up-to-date value of acquisition lock timeout, if available
+     */
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return acquisitionLockTimeoutMs;
+    }
+
+    /**
+     * @return {@code true} if this fetch contains records being renewed
+     */
+    public boolean hasRenewals() {
+        boolean hasRenewals = false;
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            if (entry.getValue().hasRenewals()) {
+                hasRenewals = true;
+                break;
+            }
+        }
+        return hasRenewals;
+    }
+
+    /**
+     * Take any renewed records and move them back into in-flight state.
+     */
+    public void takeRenewedRecords() {
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            entry.getValue().takeRenewals();
+        }
+        // Any acquisition lock timeout updated by renewal is applied as the renewed records are move back to in-flight
+        if (acquisitionLockTimeoutMsRenewed.isPresent()) {
+            acquisitionLockTimeoutMs = acquisitionLockTimeoutMsRenewed;
+        }
     }
 
     /**
@@ -124,7 +168,9 @@ public class ShareFetch<K, V> {
     }
 
     /**
-     * Acknowledge a single record by its topic, partition and offset in the current batch.
+     * Acknowledge a single record which experienced an exception during its delivery by its topic, partition
+     * and offset in the current batch. This method is specifically for overriding the default acknowledge
+     * type for records whose delivery failed.
      *
      * @param topic     The topic of the record to acknowledge
      * @param partition The partition of the record
@@ -157,6 +203,23 @@ public class ShareFetch<K, V> {
     }
 
     /**
+     * Checks whether all in-flight records have been acknowledged. This is required for explicit
+     * acknowledgement mode.
+     *
+     * @return Whether all in-flight records have been acknowledged
+     */
+    public boolean checkAllInFlightAreAcknowledged() {
+        boolean allInFlightAreAcknowledged = true;
+        for (Map.Entry<TopicIdPartition, ShareInFlightBatch<K, V>> entry : batches.entrySet()) {
+            if (!entry.getValue().checkAllInFlightAreAcknowledged()) {
+                allInFlightAreAcknowledged = false;
+                break;
+            }
+        }
+        return allInFlightAreAcknowledged;
+    }
+
+    /**
      * Removes all acknowledged records from the in-flight records and returns the map of acknowledgements
      * to send. If some records were not acknowledged, the in-flight records will not be empty after this
      * method.
@@ -172,5 +235,24 @@ public class ShareFetch<K, V> {
                 acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
         return acknowledgementMap;
+    }
+
+    /**
+     * Handles completed renew acknowledgements by returning successfully renewed records
+     * to the set of in-flight records.
+     *
+     * @param acknowledgementsMap      Map from topic-partition to acknowledgements for
+     *                                 completed renew acknowledgements
+     * @param acquisitionLockTimeoutMs Optional updated acquisition lock timeout
+     *
+     * @return The number of records renewed
+     */
+    public int renew(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, Optional<Integer> acquisitionLockTimeoutMs) {
+        int recordsRenewed = 0;
+        for (Map.Entry<TopicIdPartition, Acknowledgements> entry : acknowledgementsMap.entrySet()) {
+            recordsRenewed += batches.get(entry.getKey()).renew(entry.getValue());
+        }
+        acquisitionLockTimeoutMsRenewed = acquisitionLockTimeoutMs;
+        return recordsRenewed;
     }
 }

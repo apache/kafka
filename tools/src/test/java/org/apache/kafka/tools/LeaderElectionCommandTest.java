@@ -124,8 +124,8 @@ public class LeaderElectionCommandTest {
             mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
             // verify that properties provided to admin client are the overridden properties
             final Properties actualProps = argumentCaptor.getValue();
-            assertEquals(actualProps.get(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG), requestTimeoutMs);
-            assertEquals(actualProps.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG), defaultApiTimeoutMs);
+            assertEquals(requestTimeoutMs, actualProps.get(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG));
+            assertEquals(defaultApiTimeoutMs, actualProps.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
         }
     }
 
@@ -278,7 +278,8 @@ public class LeaderElectionCommandTest {
             assertEquals(0, LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
                     "--election-type", "preferred",
-                    "--all-topic-partitions"
+                    "--topic", topic,
+                    "--partition", Integer.toString(partition)
             ));
 
             TestUtils.assertLeader(client, topicPartition, broker2);

@@ -87,6 +87,16 @@ public class ListGroupsOptionsTest {
     }
 
     @Test
+    public void testConsumerGroupStates() {
+        ListGroupsOptions options = new ListGroupsOptions();
+        assertTrue(options.groupStates().isEmpty());
+
+        Set<GroupState> groupStates = GroupState.groupStatesForType(GroupType.CONSUMER);
+        options = new ListGroupsOptions().inGroupStates(groupStates);
+        assertEquals(groupStates, options.groupStates());
+    }
+
+    @Test
     public void testProtocolTypes() {
         ListGroupsOptions options = new ListGroupsOptions();
         assertTrue(options.protocolTypes().isEmpty());
