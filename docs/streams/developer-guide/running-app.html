@@ -128,7 +128,9 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                       example, if your application reads from a single topic that has ten partitions, then you can run up to ten instances
                       of your applications. You can run further instances, but these will be idle.</p>
                   <p>The number of topic partitions is the upper limit for the parallelism of your Kafka Streams application and for the
-                      number of running instances of your application.</p>
+                      number of running instances of your application. If your application reads from multiple topics, see
+                      <a class="reference internal" href="../architecture.html#streams_architecture_subtopology"><span class="std std-ref">Increasing Parallelism with Multiple Input Topics</span></a>
+                      for how to maximize parallelism.</p>
                   <p>To achieve balanced workload processing across application instances and to prevent processing hotpots, you should
                       distribute data and processing workloads:</p>
                   <ul class="simple">

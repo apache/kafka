@@ -73,6 +73,41 @@
         work.
     </p>
 
+    <h4 class="anchor-heading"><a id="streams_architecture_subtopology" class="anchor-link"></a><a href="#streams_architecture_subtopology">Increasing Parallelism with Multiple Input Topics</a></h4>
+
+    <p>
+        When your application reads from multiple input topics, the way you structure your topology has a significant impact on parallelism.
+        If you use <code>builder.stream(Arrays.asList("topic-a", "topic-b", "topic-c"))</code> or a regex pattern to subscribe to multiple topics,
+        Kafka Streams creates a single sub-topology for all these topics. In this case, the maximum number of tasks is determined by the
+        <b>maximum</b> number of partitions across all the input topics, not the sum. This means that data from all topics with the same
+        partition number will be funneled through a single task.
+    </p>
+
+    <p>
+        For example, if topic-a has 5 partitions, topic-b has 3 partitions, and topic-c has 4 partitions, subscribing to all three topics
+        in a single <code>stream()</code> call will result in only 5 tasks. All records from partition-0 of topic-a, topic-b, and topic-c
+        will be processed by the same task.
+    </p>
+
+    <p>
+        To achieve independent parallelism per topic, you can structure your topology to create separate sub-topologies by processing
+        each topic individually:
+    </p>
+
+    <pre class="line-numbers"><code class="language-java">List&lt;String&gt; topics = Arrays.asList("topic-a", "topic-b", "topic-c");
+
+for (String topic : topics) {
+    KStream&lt;String, String&gt; input = builder.stream(topic);
+    input.filter(...).map(...).to("output-topic");
+}</code></pre>
+
+    <p>
+        With this approach, each input topic gets its own sub-topology and its own independent set of tasks.
+        The total number of tasks becomes the <b>sum</b> of partitions across all topics (5 + 3 + 4 = 12 in the above example),
+        allowing for greater parallelism. Each topic's data is processed independently, which can significantly improve throughput
+        when you have multiple input topics with substantial data volumes.
+    </p>
+
     <p>
         It is important to understand that Kafka Streams is not a resource manager, but a library that "runs" anywhere its stream processing application runs.
         Multiple instances of the application are executed either on the same machine, or spread across multiple machines and tasks can be distributed automatically
