@@ -38,16 +38,17 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
+import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.DescribeClusterRequest;
 import org.apache.kafka.common.requests.DescribeClusterResponse;
-import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -62,6 +63,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -71,8 +74,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import joptsimple.OptionSpec;
-
-import static org.apache.kafka.clients.admin.KafkaAdminClient.parseDescribeClusterResponse;
 
 public class BrokerApiVersionsCommand {
     public static void main(String... args) {
@@ -312,21 +313,13 @@ public class BrokerApiVersionsCommand {
 
         private List<Node> findAllBrokers() {
             List<Node> nodes;
-            if (usingBootstrapController) {
-                DescribeClusterResponse response = (DescribeClusterResponse) sendAnyNode(new DescribeClusterRequest.Builder(
-                        new DescribeClusterRequestData()
-                        .setIncludeClusterAuthorizedOperations(false)
-                        .setEndpointType(EndpointType.CONTROLLER.id())));
-                Cluster cluster = parseDescribeClusterResponse(response.data());
-                adminMetadataUpder.updateCluster(cluster);
-                nodes = cluster.nodes();
-            } else {
-                MetadataResponse response = (MetadataResponse) sendAnyNode(MetadataRequest.Builder.allTopics());
-                if (!response.errors().isEmpty()) {
-                    LOGGER.debug("Metadata request contained errors: {}", response.errors());
-                }
-                nodes = response.buildCluster().nodes();
-            }
+            DescribeClusterResponse response = (DescribeClusterResponse) sendAnyNode(new DescribeClusterRequest.Builder(
+                    new DescribeClusterRequestData()
+                    .setIncludeClusterAuthorizedOperations(false)
+                    .setEndpointType(usingBootstrapController ? EndpointType.CONTROLLER.id() : EndpointType.BROKER.id())));
+            Cluster cluster = parseDescribeClusterResponse(response.data());
+            adminMetadataUpder.updateCluster(cluster);
+            nodes = cluster.nodes();
 
             awaitConnectAllBroker(nodes, time.milliseconds());
             return nodes;
@@ -344,6 +337,29 @@ public class BrokerApiVersionsCommand {
         public void close() {
             client.close();
         }
+    }
+
+    private static Cluster parseDescribeClusterResponse(DescribeClusterResponseData response) {
+        ApiError apiError = new ApiError(response.errorCode(), response.errorMessage());
+        if (apiError.isFailure()) {
+            throw apiError.exception();
+        }
+
+        List<Node> nodes = new ArrayList<>();
+        Node controllerNode = null;
+        for (DescribeClusterResponseData.DescribeClusterBroker node : response.brokers()) {
+            Node newNode = new Node(node.brokerId(), node.host(), node.port(), node.rack());
+            nodes.add(newNode);
+            if (node.brokerId() == response.controllerId()) {
+                controllerNode = newNode;
+            }
+        }
+        return new Cluster(response.clusterId(),
+                nodes,
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                controllerNode);
     }
 
     private static class AdminMetadataUpder implements MetadataUpdater {

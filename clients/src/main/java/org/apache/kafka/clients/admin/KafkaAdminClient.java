@@ -1692,7 +1692,7 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    public static Cluster parseDescribeClusterResponse(DescribeClusterResponseData response) {
+    static Cluster parseDescribeClusterResponse(DescribeClusterResponseData response) {
         ApiError apiError = new ApiError(response.errorCode(), response.errorMessage());
         if (apiError.isFailure()) {
             throw apiError.exception();
