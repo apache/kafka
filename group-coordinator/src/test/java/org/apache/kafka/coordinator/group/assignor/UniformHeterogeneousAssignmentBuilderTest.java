@@ -22,7 +22,6 @@ import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
@@ -33,10 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -63,33 +59,6 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     private final String memberA = "A";
     private final String memberB = "B";
     private final String memberC = "C";
-
-    /**
-     * A GroupSpec implementation that returns members in sorted order, so that assignor output is
-     * deterministic.
-     */
-    private static class TestGroupSpecImpl extends GroupSpecImpl {
-        private final List<String> orderedMembers;
-
-        public TestGroupSpecImpl(
-            Map<String, MemberSubscriptionAndAssignmentImpl> members,
-            SubscriptionType subscriptionType,
-            Map<Uuid, Map<Integer, String>> invertedMemberAssignment
-        ) {
-            super(members, subscriptionType, invertedMemberAssignment);
-
-            this.orderedMembers = new ArrayList<>(members.keySet());
-            this.orderedMembers.sort(null);
-        }
-
-        /**
-         * {@inheritDoc}
-         */
-        @Override
-        public Collection<String> memberIds() {
-            return orderedMembers;
-        }
-    }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
@@ -126,7 +95,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Map.of()
@@ -163,7 +132,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Map.of()
@@ -197,7 +166,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Map.of()
@@ -253,7 +222,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Map.of()
@@ -322,7 +291,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             ))
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -386,7 +355,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             ))
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -451,7 +420,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -511,7 +480,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         // Member C was removed
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -567,7 +536,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             ))
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -626,7 +595,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -675,7 +644,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             Assignment.EMPTY
         ));
 
-        GroupSpec groupSpec = new TestGroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Map.of()
