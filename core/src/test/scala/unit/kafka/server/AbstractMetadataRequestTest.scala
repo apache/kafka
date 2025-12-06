@@ -21,7 +21,6 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.MetadataRequestData
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.common.test.ClusterInstance
@@ -30,7 +29,8 @@ import org.apache.kafka.server.IntegrationTestUtils
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs}
 import org.junit.jupiter.api.Assertions.assertEquals
 
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import java.util
+import scala.jdk.CollectionConverters.{CollectionHasAsScala, MapHasAsJava, SeqHasAsJava}
 
 abstract class AbstractMetadataRequestTest(cluster: ClusterInstance) {
 
@@ -67,6 +67,12 @@ abstract class AbstractMetadataRequestTest(cluster: ClusterInstance) {
     val listener = cluster.clientListener()
     val port = destination.getOrElse(anySocketServer).boundPort(listener)
     IntegrationTestUtils.connectAndReceive[MetadataResponse](request, port)
+  }
+
+  protected def getJavaReplicaAssignment(replicaAssignment: Map[Int, Iterable[Int]]): util.Map[Integer, util.List[Integer]] = {
+    replicaAssignment.map{ case (k, v) =>
+      Integer.valueOf(k) -> v.map(Integer.valueOf).toList.asJava
+    }.asJava
   }
 
   protected def checkAutoCreatedTopic(autoCreatedTopic: String, response: MetadataResponse): Unit = {

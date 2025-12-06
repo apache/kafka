@@ -25,21 +25,28 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT, Type.CO_KRAFT),
+  brokers = 3,
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "5"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack/0"),
+    new ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack/1"),
+    new ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack/2")
+  )
+)
 class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequestTest(cluster) {
-
-//  @BeforeEach
-//  override def setUp(testInfo: TestInfo): Unit = {
-//    doSetup(testInfo, createOffsetsTopic = false)
-//  }
 
   @ClusterTest
   def testClusterIdWithRequestVersion1(): Unit = {
@@ -54,14 +61,7 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     isValidClusterId(metadataResponse.clusterId)
   }
 
-  @ClusterTest(
-    brokers = 3,
-    serverProperties = {
-      @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack/0"),
-      @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack/1"),
-      @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack/2"),
-    }
-  )
+  @ClusterTest
   def testRack(): Unit = {
     val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(4.toShort))
     // Validate rack matches what's set in generateConfigs() above
@@ -109,7 +109,7 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     val topic3 = "t3"
     val topic4 = "t4"
     val topic5 = "t5"
-    cluster.createTopic(topic1)
+    cluster.createTopic(topic1, 1, 1)
 
     val response1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true).build())
     assertNull(response1.errors.get(topic1))
@@ -129,7 +129,7 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response3.errors.get(topic5))
   }
 
-  @Test
+  @ClusterTest(brokers = 3, serverProperties = Array(new ClusterConfigProperty(key = ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, value = "3")))
   def testAutoCreateTopicWithInvalidReplicationFactor(): Unit = {
     // Shutdown all but one broker so that the number of brokers is less than the default replication factor
     brokers.tail.foreach(_.shutdown())
@@ -144,11 +144,11 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     assertEquals(0, topicMetadata.partitionMetadata.size)
   }
 
-  @Test
+  @ClusterTest
   def testAllTopicsRequest(): Unit = {
     // create some topics
-    createTopic("t1", 3, 2)
-    createTopic("t2", 3, 2)
+    cluster.createTopic("t1", 3, 2)
+    cluster.createTopic("t2", 3, 2)
 
     // v0, Empty list represents all topics
     val metadataResponseV0 = sendMetadataRequest(new MetadataRequest(requestData(List(), allowAutoTopicCreation = true), 0.toShort))
@@ -161,13 +161,13 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     assertEquals(2, metadataResponseV1.topicMetadata.size(), "V1 Response should have 2 (all) topics")
   }
 
-  @Test
+  @ClusterTest
   def testTopicIdsInResponse(): Unit = {
-    val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
+    val replicaAssignment = getJavaReplicaAssignment(Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1)))
     val topic1 = "topic1"
     val topic2 = "topic2"
-    createTopicWithAssignment(topic1, replicaAssignment)
-    createTopicWithAssignment(topic2, replicaAssignment)
+    cluster.createTopicWithAssignment(topic1, replicaAssignment)
+    cluster.createTopicWithAssignment(topic2, replicaAssignment)
 
     // if version < 9, return ZERO_UUID in MetadataResponse
     val resp1 = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic2).asJava, true, 0, 9).build(), Some(anySocketServer))
@@ -190,10 +190,11 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
   /**
     * Preferred replica should be the first item in the replicas list
     */
-  @Test
+  @ClusterTest
   def testPreferredReplica(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
-    createTopicWithAssignment("t1", replicaAssignment)
+    val javaReplicaAssignment = getJavaReplicaAssignment(replicaAssignment)
+    cluster.createTopicWithAssignment("t1", javaReplicaAssignment)
     // Test metadata on two different brokers to ensure that metadata propagation works correctly
     val responses = Seq(0, 1).map(index =>
       sendMetadataRequest(new MetadataRequest.Builder(Seq("t1").asJava, true).build(),
@@ -213,13 +214,13 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     }
   }
 
-  @Test
+  @ClusterTest
   def testReplicaDownResponse(): Unit = {
     val replicaDownTopic = "replicaDown"
-    val replicaCount = 3
+    val replicaCount = 3.toShort
 
     // create a topic with 3 replicas
-    createTopic(replicaDownTopic, 1, replicaCount)
+    cluster.createTopic(replicaDownTopic, 1, replicaCount)
 
     // Kill a replica node that is not the leader
     val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true).build())
@@ -258,7 +259,7 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     assertEquals(replicaCount, v1PartitionMetadata.replicaIds.size, s"Response should have $replicaCount replicas")
   }
 
-  @Test
+  @ClusterTest
   def testIsrAfterBrokerShutDownAndJoinsBack(): Unit = {
     def checkIsr[B <: KafkaBroker](
       brokers: Seq[B],
@@ -272,7 +273,7 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
         var actualIsr = Set.empty[Int]
         TestUtils.waitUntilTrue(() => {
           val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic).asJava, false).build,
-            Some(brokerSocketServer(broker.config.brokerId)))
+            Some(broker.socketServer))
           val firstPartitionMetadata = metadataResponse.topicMetadata.asScala.headOption.flatMap(_.partitionMetadata.asScala.headOption)
           actualIsr = firstPartitionMetadata.map { partitionMetadata =>
             partitionMetadata.inSyncReplicaIds.asScala.map(Int.unbox).toSet
@@ -285,8 +286,8 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     }
 
     val topic = "isr-after-broker-shutdown"
-    val replicaCount = 3
-    createTopic(topic, 1, replicaCount)
+    val replicaCount = 3.toShort
+    cluster.createTopic(topic, 1, replicaCount)
 
     brokers.last.shutdown()
     brokers.last.awaitShutdown()
@@ -295,7 +296,7 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
     checkIsr(brokers, topic)
   }
 
-  @Test
+  @ClusterTest
   def testAliveBrokersWithNoTopics(): Unit = {
     def checkMetadata[B <: KafkaBroker](
       brokers: Seq[B],
@@ -315,7 +316,7 @@ class MetadataRequestTest(cluster: ClusterInstance) extends AbstractMetadataRequ
       brokers.filter(_.brokerState == BrokerState.RUNNING).foreach { broker =>
         TestUtils.waitUntilTrue(() => {
           val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build,
-            Some(brokerSocketServer(broker.config.brokerId)))
+            Some(broker.socketServer))
           val brokers = metadataResponse.brokers.asScala.toSeq.sortBy(_.id)
           val topicMetadata = metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic)
           brokersSorted == brokers && metadataResponse.topicMetadata.asScala.toSeq.sortBy(_.topic) == topicMetadata

@@ -327,6 +327,14 @@ public interface ClusterInstance {
         }
     }
 
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) throws InterruptedException, ExecutionException {
+        try (Admin admin = admin()) {
+            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment))).all().get();
+            int partitions = replicaAssignment.size();
+            waitTopicCreation(topicName, partitions);
+        }
+    }
+
     /**
      * Deletes a topic and waits for the deletion to complete.
      *
