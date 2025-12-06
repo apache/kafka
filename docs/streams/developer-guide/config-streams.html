@@ -1036,7 +1036,10 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
             <div><p>The processing exception handler allows you to manage exceptions triggered during the processing of a record. The implemented exception
               handler needs to return a <code>FAIL</code> or <code>CONTINUE</code> depending on the record and the exception thrown. Returning
               <code>FAIL</code> will signal that Streams should shut down and <code>CONTINUE</code> will signal that Streams should ignore the issue
-              and continue processing. The following library built-in exception handlers are available:</p>
+              and continue processing.</p>
+              <p><strong>Note:</strong> This handler applies only to regular stream processing tasks. It does not apply to global state store updates
+              (global threads). Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.</p>
+              <p>The following library built-in exception handlers are available:</p>
               <ul class="simple">
                 <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/errors/LogAndContinueProcessingExceptionHandler.html">LogAndContinueProcessingExceptionHandler</a>:
                   This handler logs the processing exception and then signals the processing pipeline to continue processing more records.
