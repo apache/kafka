@@ -22,7 +22,6 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.clients.NetworkClient;
@@ -37,7 +36,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -199,20 +197,7 @@ public class BrokerApiVersionsCommand {
             Time time = Time.SYSTEM;
             Metrics metrics = new Metrics(time);
 
-            Cluster cluster = null;
-            Metadata metadata = null;
-            if (usingBootstrapController) {
-                cluster = Cluster.bootstrap(AdminBootstrapAddresses.fromConfig(config).addresses());
-            } else {
-                metadata = new Metadata(
-                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
-                        60 * 60 * 1000L, logContext,
-                        new ClusterResourceListeners());
-                metadata.bootstrap(ClientUtils.parseAndValidateAddresses(
-                        config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                        config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)));
-            }
+            Cluster cluster = Cluster.bootstrap(AdminBootstrapAddresses.fromConfig(config).addresses());
 
             Selector selector = new Selector(
                     DEFAULT_CONNECTION_MAX_IDLE_MS,
@@ -221,7 +206,7 @@ public class BrokerApiVersionsCommand {
                     "admin",
                     ClientUtils.createChannelBuilder(config, time, logContext),
                     logContext);
-            AdminMetadataUpder adminMetadataUpder = new AdminMetadataUpder(Optional.ofNullable(cluster), Optional.ofNullable(metadata));
+            AdminMetadataUpder adminMetadataUpder = new AdminMetadataUpder(cluster);
             NetworkClient networkClient = new NetworkClient(
                     selector,
                     adminMetadataUpder,
@@ -240,8 +225,7 @@ public class BrokerApiVersionsCommand {
                     logContext,
                     MetadataRecoveryStrategy.NONE);
 
-            return new AdminClient(time, networkClient, usingBootstrapController ? cluster.nodes() : metadata.fetch().nodes(),
-                    usingBootstrapController, adminMetadataUpder);
+            return new AdminClient(time, networkClient, cluster.nodes(), usingBootstrapController, adminMetadataUpder);
         }
 
         AdminClient(Time time, NetworkClient client, List<Node> bootstrapBrokers, boolean usingBootstrapController, AdminMetadataUpder adminMetadataUpder) {
@@ -363,31 +347,20 @@ public class BrokerApiVersionsCommand {
     }
 
     private static class AdminMetadataUpder implements MetadataUpdater {
-        private Optional<Cluster> clusterOpt;
-        private Optional<Metadata> metadataOpt;
+        private Cluster cluster;
 
 
-        public AdminMetadataUpder(Optional<Cluster> clusterOpt, Optional<Metadata> metadataOpt) {
-            this.clusterOpt = clusterOpt;
-            this.metadataOpt = metadataOpt;
+        public AdminMetadataUpder(Cluster cluster) {
+            this.cluster = cluster;
         }
 
         public void updateCluster(Cluster cluster) {
-            if (clusterOpt.isPresent()) {
-                this.clusterOpt = Optional.of(cluster);
-            }
+            this.cluster = cluster;
         }
 
         @Override
         public List<Node> fetchNodes() {
-            if (clusterOpt.isEmpty() && metadataOpt.isEmpty()) {
-                throw new IllegalStateException("Must be set Metadata or Cluster");
-            }
-
-            if (clusterOpt.isPresent()) {
-                return clusterOpt.get().nodes();
-            }
-            return metadataOpt.get().fetch().nodes();
+            return cluster.nodes();
         }
 
         @Override
@@ -420,8 +393,6 @@ public class BrokerApiVersionsCommand {
 
 
         @Override
-        public void close() {
-            metadataOpt.ifPresent(Metadata::close);
-        }
+        public void close() { }
     }
 }
