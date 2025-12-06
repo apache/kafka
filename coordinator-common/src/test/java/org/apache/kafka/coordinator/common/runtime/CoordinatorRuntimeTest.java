@@ -2032,7 +2032,7 @@ public class CoordinatorRuntimeTest {
         runtime.onMetadataUpdate(delta, newImage);
 
         // Coordinator 0 should be notified about it.
-        verify(coordinator0).onNewMetadataImage(newImage, delta);
+        verify(coordinator0).onMetadataUpdate(delta, newImage);
 
         // Coordinator 1 is loaded. It should get the current image
         // that is the new image.

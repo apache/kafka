@@ -253,23 +253,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             Node target = entry.getKey();
             ShareSessionHandler handler = entry.getValue();
 
-            log.trace("Building ShareFetch request to send to node {}", target.id());
-            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig);
-
             // For record_limit mode, we only send a full ShareFetch to a single node at a time.
             // We prepare to build ShareFetch requests for all nodes with session handlers to permit
             // piggy-backing of acknowledgements, and also to adjust the topic-partitions
-            // in the share session.
-            if (isShareAcquireModeRecordLimit() && target.id() != fetchRecordsNodeId.get()) {
-                ShareFetchRequestData data = requestBuilder.data();
-                // If there's nothing to send, just skip building the record.
-                if (data.topics().isEmpty() && data.forgottenTopicsData().isEmpty()) {
-                    return null;
-                } else {
-                    // There is something to send, but we don't want to fetch any records.
-                    requestBuilder.data().setMaxRecords(0);
-                }
+            // in the share session, but if the request would contain neither of those, it can be skipped.
+            boolean canSkipIfRequestEmpty = isShareAcquireModeRecordLimit() && target.id() != fetchRecordsNodeId.get();
+
+            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig, canSkipIfRequestEmpty);
+            if (requestBuilder == null) {
+                log.trace("Skipping ShareFetch request to send to node {}", target.id());
+                return null;
             }
+
+            log.trace("Building ShareFetch request to send to node {}", target.id());
 
             nodesWithPendingRequests.add(target.id());
 

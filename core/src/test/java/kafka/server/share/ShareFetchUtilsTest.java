@@ -55,6 +55,7 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +69,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createFileRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -626,6 +628,103 @@ public class ShareFetchUtilsTest {
         Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(
             records, new ShareAcquiredRecords(List.of(), 3));
         assertEquals(records, slicedRecords);
+    }
+
+    @Test
+    void testAccumulateAcquiredRecords() {
+        List<AcquiredRecords> input = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(0).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(1).setLastOffset(1).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(2).setLastOffset(2).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(4).setLastOffset(4).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(5).setLastOffset(5).setDeliveryCount((short) 2)
+        );
+
+        List<AcquiredRecords> result = new ArrayList<>();
+        ShareFetchUtils.accumulateAcquiredRecords(result, input);
+        List<AcquiredRecords> expected = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(1).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(2).setLastOffset(2).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(4).setLastOffset(5).setDeliveryCount((short) 2)
+        );
+        assertArrayEquals(expected.toArray(), result.toArray());
+    }
+
+    @Test
+    void testAccumulateAcquiredRecordsAllBatches() {
+        List<AcquiredRecords> input = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(0).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(1).setLastOffset(1).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(2).setLastOffset(2).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(3).setLastOffset(3).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(4).setLastOffset(4).setDeliveryCount((short) 1)
+        );
+
+        List<AcquiredRecords> result = new ArrayList<>();
+        ShareFetchUtils.accumulateAcquiredRecords(result, input);
+        List<AcquiredRecords> expected = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(4).setDeliveryCount((short) 1)
+        );
+        assertArrayEquals(expected.toArray(), result.toArray());
+    }
+
+    @Test
+    void testAccumulateAcquiredRecordsWithRanges() {
+        List<AcquiredRecords> input = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(4).setLastOffset(4).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(5).setLastOffset(8).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(10).setLastOffset(15).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(16).setLastOffset(20).setDeliveryCount((short) 2)
+        );
+
+        List<AcquiredRecords> result = new ArrayList<>();
+        ShareFetchUtils.accumulateAcquiredRecords(result, input);
+        List<AcquiredRecords> expected = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(4).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(5).setLastOffset(8).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(10).setLastOffset(20).setDeliveryCount((short) 2)
+        );
+        assertArrayEquals(expected.toArray(), result.toArray());
+    }
+
+    @Test
+    void testAccumulateAcquiredRecordsEmptyList() {
+        List<AcquiredRecords> result = new ArrayList<>();
+        ShareFetchUtils.accumulateAcquiredRecords(result, List.of());
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testAccumulateAcquiredRecordsSingleRecord() {
+        List<AcquiredRecords> result = new ArrayList<>();
+        List<AcquiredRecords> input = List.of(
+            new AcquiredRecords().setFirstOffset(5).setLastOffset(5).setDeliveryCount((short) 4));
+        ShareFetchUtils.accumulateAcquiredRecords(result, input);
+        assertArrayEquals(input.toArray(), result.toArray());
+    }
+
+    @Test
+    void testAccumulateAcquiredRecordsNoMerging() {
+        List<AcquiredRecords> input = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(0).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(2).setLastOffset(2).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(4).setLastOffset(4).setDeliveryCount((short) 1)
+        );
+
+        List<AcquiredRecords> result = new ArrayList<>();
+        ShareFetchUtils.accumulateAcquiredRecords(result, input);
+        assertArrayEquals(input.toArray(), result.toArray());
+
+        input = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(0).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(1).setLastOffset(1).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(2).setLastOffset(2).setDeliveryCount((short) 3)
+        );
+
+        result = new ArrayList<>();
+        ShareFetchUtils.accumulateAcquiredRecords(result, input);
+        assertArrayEquals(input.toArray(), result.toArray());
     }
 
     private static class RecordsArgumentsProvider implements ArgumentsProvider {

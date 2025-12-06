@@ -4161,7 +4161,7 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
     please also include in the "controller.properties".</p>
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
-  If the dynamic controller cluster already exists, it can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
+  If the dynamic controller cluster already exists, it can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Use the remove-controller command before shutting down the controller to have it removed from the quorum first.
 
   When using broker endpoints use the --bootstrap-server flag:
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --bootstrap-server localhost:9092 remove-controller --controller-id &lt;id&gt; --controller-directory-id &lt;directory-id&gt;</code></pre>

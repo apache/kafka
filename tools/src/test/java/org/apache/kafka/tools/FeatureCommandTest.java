@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.Feature;
@@ -93,6 +94,138 @@ public class FeatureCommandTest {
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(6)));
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        metadataVersion = MetadataVersion.IBP_3_7_IV0,
+        controllers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(
+                id = 3000,
+                key = "unstable.api.versions.enable",
+                value = "true"
+                ),
+            @ClusterConfigProperty(
+                id = 3001,
+                key = "unstable.api.versions.enable",
+                value = "false"
+                )
+        }
+    )
+    public void testDescribeWithUnstableApiVersions(ClusterInstance cluster) {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe", "--node-id", "3000")
+            )
+        );
+        List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(0)));
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(2)));
+        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
+            "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithUnstable.get(3)));
+        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(4)));
+        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
+        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(6)));
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe", "--node-id", "3001")
+            )
+        );
+        List<String> featuresWithoutUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(0)));
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(2)));
+        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
+            "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithoutUnstable.get(3)));
+        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(4)));
+        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
+        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(6)));
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        metadataVersion = MetadataVersion.IBP_3_7_IV0,
+        brokers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(
+                id = 0,
+                key = "unstable.feature.versions.enable",
+                value = "true"
+                ),
+            @ClusterConfigProperty(
+                id = 1,
+                key = "unstable.feature.versions.enable",
+                value = "false"
+                )
+        }
+    )
+    public void testDescribeWithUnstableFeatureVersions(ClusterInstance cluster) {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--node-id", "0")
+            )
+        );
+        List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(0)));
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(2)));
+        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
+            "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithUnstable.get(3)));
+        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(4)));
+        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
+        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(6)));
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--node-id", "1")
+            )
+        );
+        List<String> featuresWithoutUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(0)));
+        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(1)));
+        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(2)));
+        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
+            "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithoutUnstable.get(3)));
+        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(4)));
+        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
+        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
+            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(6)));
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV3)
@@ -252,13 +385,20 @@ public class FeatureCommandTest {
     public void testHandleDescribe() {
         String describeResult = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                FeatureCommand.handleDescribe(buildAdminClient());
+                FeatureCommand.handleDescribe(new Namespace(Map.of()), buildAdminClient());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         });
         assertEquals(format("Feature: foo.bar\tSupportedMinVersion: 0\tSupportedMaxVersion: 10\tFinalizedVersionLevel: 5\tEpoch: 123%n" +
             "Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\tSupportedMaxVersion: 3.5-IV0\tFinalizedVersionLevel: 3.4-IV0\tEpoch: 123"), describeResult);
+    }
+
+    @Test
+    public void testHandleDescribeWithNegativeNodeId() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> FeatureCommand.handleDescribe(new Namespace(Map.of("node_id", -1)), buildAdminClient()));
     }
 
     @Test
