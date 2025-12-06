@@ -57,7 +57,7 @@ public class DefaultStatePersister implements Persister {
         PersisterStateManager.ReadStateSummaryHandler.class.getCanonicalName()
     );
     private static final Logger DELETE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.DeleteStateHandler.class
+        PersisterStateManager.DeleteStateHandler.class.getCanonicalName()
     );
 
     public DefaultStatePersister(PersisterStateManager stateManager) {
