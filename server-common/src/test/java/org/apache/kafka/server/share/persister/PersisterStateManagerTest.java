@@ -91,22 +91,22 @@ class PersisterStateManagerTest {
     public static final long REQUEST_BACKOFF_MS = 100L;
     public static final long REQUEST_BACKOFF_MAX_MS = 3000L;
     private static final Logger TEST_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManagerTest.TestStateHandler.class
+        PersisterStateManagerTest.TestStateHandler.class.getCanonicalName()
     );
     private static final Logger INITIALIZE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.InitializeStateHandler.class
+        PersisterStateManager.InitializeStateHandler.class.getCanonicalName()
     );
     private static final Logger WRITE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.WriteStateHandler.class
+        PersisterStateManager.WriteStateHandler.class.getCanonicalName()
     );
     private static final Logger READ_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.ReadStateHandler.class
+        PersisterStateManager.ReadStateHandler.class.getCanonicalName()
     );
     private static final Logger READ_SUMMARY_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.ReadStateSummaryHandler.class
+        PersisterStateManager.ReadStateSummaryHandler.class.getCanonicalName()
     );
     private static final Logger DELETE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.DeleteStateHandler.class
+        PersisterStateManager.DeleteStateHandler.class.getCanonicalName()
     );
 
     private static final String HOST = "localhost";
