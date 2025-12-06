@@ -333,7 +333,6 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testConsumerCloseOnBrokerShutdown
 - testControlRecordsSkipped
 - testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement
-- testDeliveryCountNotIncreaseAfterSessionClose
 - testDescribeShareGroupOffsetsForEmptySharePartition
 - testExplicitAcknowledgeCommitSuccess
 - testExplicitAcknowledgeOffsetThrowsNotException
