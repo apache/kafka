@@ -38,6 +38,7 @@ plugins {
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
   id "com.github.spotbugs" version '6.4.4' apply false
+  id 'de.thetaphi.forbiddenapis' version '3.10' apply false
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
   id 'com.diffplug.spotless' version "8.0.0"
@@ -316,6 +317,7 @@ subprojects {
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
+  apply plugin: 'de.thetaphi.forbiddenapis'
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -824,6 +826,12 @@ subprojects {
     ignoreFailures = false
   }
   test.dependsOn('spotbugsMain')
+
+  forbiddenApis {
+    bundledSignatures = ['jdk-unsafe', 'jdk-deprecated']
+    ignoreFailures = true
+  }
+  test.dependsOn('forbiddenApisMain')
 
   tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
     reports.configure {
