@@ -134,4 +134,22 @@ public class SmokeTestUtil {
         } catch (final Exception ignore) { }
     }
 
+    public static class VerificationResult {
+        private final boolean passed;
+        private final String result;
+
+        public VerificationResult(final boolean passed, final String result) {
+            this.passed = passed;
+            this.result = result;
+        }
+
+        public boolean passed() {
+            return passed;
+        }
+
+        public String result() {
+            return result;
+        }
+    }
+
 }

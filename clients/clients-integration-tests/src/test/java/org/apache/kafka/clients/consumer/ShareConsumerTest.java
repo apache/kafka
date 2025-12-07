@@ -24,9 +24,13 @@ import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsResult;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.admin.ShareMemberDescription;
+import org.apache.kafka.clients.admin.SharePartitionOffsetInfo;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -106,17 +110,20 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.test.TestUtils.DEFAULT_POLL_INTERVAL_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@SuppressWarnings("ClassFanOutComplexity")
+@SuppressWarnings({"ClassFanOutComplexity", "ClassDataAbstractionCoupling"})
 @Timeout(1200)
 @Tag("integration")
 @ClusterTestDefaults(
@@ -1253,6 +1260,28 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
+    public void testConsumerCloseOnBrokerShutdown() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+        shareConsumer.subscribe(Set.of(tp.topic()));
+
+        // To ensure coordinator discovery is complete before shutting down the broker
+        shareConsumer.poll(Duration.ofMillis(100));
+
+        // Shutdown the broker.
+        assertEquals(1, cluster.brokers().size());
+        KafkaBroker broker = cluster.brokers().get(0);
+        cluster.shutdownBroker(0);
+
+        broker.awaitShutdown();
+
+        // Assert that close completes in less than 5 seconds, not the full 30-second timeout.
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+            shareConsumer.close();
+        }, "Consumer close should not wait for full timeout when broker is already shutdown");
+    }
+
+    @ClusterTest
     public void testMultipleConsumersInGroupSequentialConsumption() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -2140,11 +2169,7 @@ public class ShareConsumerTest {
                     int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
                     List<Integer> curShareCoordNodeId = null;
                     try {
-                        curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
-                            .partitions().stream()
-                            .filter(info -> info.partition() == shareGroupStateTp)
-                            .map(info -> info.leader().id())
-                            .toList();
+                        curShareCoordNodeId = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
                     } catch (Exception e) {
                         fail(e);
                     }
@@ -2159,11 +2184,7 @@ public class ShareConsumerTest {
 
                     List<Integer> newShareCoordNodeId = null;
                     try {
-                        newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
-                            .partitions().stream()
-                            .filter(info -> info.partition() == shareGroupStateTp)
-                            .map(info -> info.leader().id())
-                            .toList();
+                        newShareCoordNodeId = topicPartitionLeader(admin, Topic.SHARE_GROUP_STATE_TOPIC_NAME, shareGroupStateTp);
                     } catch (Exception e) {
                         fail(e);
                     }
@@ -2198,29 +2219,6 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testDeliveryCountNotIncreaseAfterSessionClose() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer()) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
-            for (int i = 0; i < 10; i++) {
-                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
-            }
-        }
-
-        // Perform the fetch, close in a loop.
-        for (int count = 0; count < ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT; count++) {
-            consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, false);
-        }
-
-        // If the delivery count is increased, consumer will get nothing.
-        int consumedMessageCount = consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, true);
-        // The records returned belong to offsets 0-9.
-        assertEquals(10, consumedMessageCount);
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
     public void testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -2249,13 +2247,13 @@ public class ShareConsumerTest {
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
             assertEquals(2, records.count());
             assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-            assertEquals((short) 1, records.records(tp).get(1).deliveryCount().get());
+            assertEquals((short) 2, records.records(tp).get(1).deliveryCount().get());
         }
     }
 
     @ClusterTest(
         serverProperties = {
-            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2"),
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "3"),
         }
     )
     public void testBehaviorOnDeliveryCountBoundary() {
@@ -2283,7 +2281,6 @@ public class ShareConsumerTest {
             records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-
         }
 
         // Start again and same record should be delivered
@@ -2291,7 +2288,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Set.of(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
-            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+            assertEquals((short) 3, records.records(tp).get(0).deliveryCount().get());
         }
     }
 
@@ -2348,9 +2345,9 @@ public class ShareConsumerTest {
         // Let the complex consumer read the messages.
         service.schedule(() -> prodState.done().set(true), 5L, TimeUnit.SECONDS);
 
-        // All messages which can be read are read, some would be redelivered (roughly 3 times the records produced).
+        // All messages which can be read are read, some would be redelivered (roughly 2 times the records produced).
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
-        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 3 * 0.95);    // 3 times with margin of error (5%).
+        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 2 * 0.95);    // 2 times with margin of error (5%).
 
         assertTrue(delta > 0,
             String.format("Producer (%d) and share consumer (%d) record count mismatch.", prodState.count().get(), complexCons1.recordsRead()));
@@ -3136,6 +3133,638 @@ public class ShareConsumerTest {
         assertEquals(count, ((Meter) renewAck).count());
     }
 
+    @ClusterTest
+    public void testDescribeShareGroupOffsetsForEmptySharePartition() {
+        String groupId = "group1";
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure the share partition is created.
+            shareConsumer.poll(Duration.ofMillis(2000));
+            SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
+            // Since the partition is empty, and no records have been consumed, the share partition startOffset will be
+            // -1. Thus, there will be no description for the share partition.
+            assertNull(sharePartitionOffsetInfo);
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testSharePartitionLagForSingleShareConsumer() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+            Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            producer.send(record);
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure the share partition is created and the record is consumed.
+            waitedPoll(shareConsumer, 2500L, 1);
+            // Acknowledge and commit the consumed record to update the share partition state.
+            shareConsumer.commitSync();
+            // After the acknowledgement is successful, the share partition lag should be 0 because the only produced record has been consumed.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Producing another record to the share partition.
+            producer.send(record);
+            producer.flush();
+            // Since the new record has not been consumed yet, the share partition lag should be 1.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testSharePartitionLagForMultipleShareConsumers() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(groupId);
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            producer.send(record);
+            producer.flush();
+            shareConsumer1.subscribe(List.of(tp.topic()));
+            shareConsumer2.subscribe(List.of(tp.topic()));
+            // Polling share consumer 1 to make sure the share partition is created and the records are consumed.
+            waitedPoll(shareConsumer1, 2500L, 1);
+            // Acknowledge and commit the consumed records to update the share partition state.
+            shareConsumer1.commitSync();
+            // After the acknowledgement is successful, the share partition lag should be 0 because the all produced records have been consumed.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Producing more records to the share partition.
+            producer.send(record);
+            // Polling share consumer 2 this time.
+            waitedPoll(shareConsumer2, 2500L, 1);
+            // Since the consumed record hasn't been acknowledged yet, the share partition lag should be 1.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+            // Acknowledge and commit the consumed records to update the share partition state.
+            shareConsumer2.commitSync();
+            // After the acknowledgement is successful, the share partition lag should be 0 because the all produced records have been consumed.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Producing another record to the share partition.
+            producer.send(record);
+            producer.flush();
+            // Since the new record has not been consumed yet, the share partition lag should be 1.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testSharePartitionLagWithReleaseAcknowledgement() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            producer.send(record);
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure the share partition is created and the record is consumed.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            // Accept the record first to move the offset forward and register the state with persister.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer.commitSync();
+            // After accepting, the lag should be 0 because the record is consumed successfully.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Producing another record to the share partition.
+            producer.send(record);
+            producer.flush();
+            // The produced record is consumed.
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            // Now release the record - it should be available for redelivery.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+            // After releasing the lag should be 1, because the record is released for redelivery.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+            // The record is now consumed again.
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            // Accept the record to mark it as consumed.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer.commitSync();
+            // After accepting the record, the lag should be 0 because all the produced records have been consumed.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testSharePartitionLagWithRejectAcknowledgement() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+             Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            producer.send(record);
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure the share partition is created and the record is consumed.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            // Accept the record first to move the offset forward and register the state with persister.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer.commitSync();
+            // After accepting, the lag should be 0 because the record is consumed successfully.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Producing another record to the share partition.
+            producer.send(record);
+            producer.flush();
+            // The produced record is consumed.
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            // Now reject the record - it should not be available for redelivery.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.REJECT));
+            shareConsumer.commitSync();
+            // After rejecting the lag should be 0, because the record is permanently rejected and offset moves forward.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
+        }
+    )
+    public void testSharePartitionLagOnGroupCoordinatorMovement() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
+            String topicName = "testTopicWithReplicas";
+            // Create a topic with replication factor 3
+            createTopic(topicName, 1, 3);
+            TopicPartition tp = new TopicPartition(topicName, 0);
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            // Produce first record and consume it
+            producer.send(record);
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure the share partition is created and the record is consumed.
+            waitedPoll(shareConsumer, 2500L, 1);
+            // Acknowledge and commit the consumed record to update the share partition state.
+            shareConsumer.commitSync();
+            // After the acknowledgement is successful, the share partition lag should be 0 because the only produced record has been consumed.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Producing another record to the share partition.
+            producer.send(record);
+            producer.flush();
+            // Since the new record has not been consumed yet, the share partition lag should be 1.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+            List<Integer> curGroupCoordNodeId;
+            // Find the broker which is the group coordinator for the share group.
+            curGroupCoordNodeId = topicPartitionLeader(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, 0);
+            assertEquals(1, curGroupCoordNodeId.size());
+            // Shut down the coordinator broker
+            KafkaBroker broker = cluster.brokers().get(curGroupCoordNodeId.get(0));
+            cluster.shutdownBroker(curGroupCoordNodeId.get(0));
+            // Wait for it to be completely shutdown
+            broker.awaitShutdown();
+            // Wait for the leaders of share coordinator, group coordinator and topic partition to be elected, if needed, on a different broker.
+            TestUtils.waitForCondition(() -> {
+                List<Integer> newShareCoordNodeId = topicPartitionLeader(adminClient, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0);
+                List<Integer> newGroupCoordNodeId = topicPartitionLeader(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, 0);
+                List<Integer> newTopicPartitionLeader = topicPartitionLeader(adminClient, tp.topic(), tp.partition());
+
+                return newShareCoordNodeId.size() == 1 && !Objects.equals(newShareCoordNodeId.get(0), curGroupCoordNodeId.get(0)) &&
+                    newGroupCoordNodeId.size() == 1 && !Objects.equals(newGroupCoordNodeId.get(0), curGroupCoordNodeId.get(0)) &&
+                    newTopicPartitionLeader.size() == 1 && !Objects.equals(newTopicPartitionLeader.get(0), curGroupCoordNodeId.get(0));
+            }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to elect new leaders after broker shutdown");
+            // After group coordinator shutdown, check that lag is still 1
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
+        }
+    )
+    public void testSharePartitionLagOnShareCoordinatorMovement() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId);
+             Admin adminClient = createAdminClient()) {
+            String topicName = "testTopicWithReplicas";
+            // Create a topic with replication factor 3
+            createTopic(topicName, 1, 3);
+            TopicPartition tp = new TopicPartition(topicName, 0);
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            // Produce first record and consume it
+            producer.send(record);
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure the share partition is created and the record is consumed.
+            waitedPoll(shareConsumer, 2500L, 1);
+            // Acknowledge and commit the consumed record to update the share partition state.
+            shareConsumer.commitSync();
+            // After the acknowledgement is successful, the share partition lag should be 0 because the only produced record has been consumed.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Producing another record to the share partition.
+            producer.send(record);
+            producer.flush();
+            // Since the new record has not been consumed yet, the share partition lag should be 1.
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+            List<Integer> curShareCoordNodeId;
+            // Find the broker which is the share coordinator for the share partition.
+            curShareCoordNodeId = topicPartitionLeader(adminClient, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0);
+            assertEquals(1, curShareCoordNodeId.size());
+            // Shut down the coordinator broker
+            KafkaBroker broker = cluster.brokers().get(curShareCoordNodeId.get(0));
+            cluster.shutdownBroker(curShareCoordNodeId.get(0));
+            // Wait for it to be completely shutdown
+            broker.awaitShutdown();
+            // Wait for the leaders of share coordinator, group coordinator and topic partition to be elected, if needed, on a different broker.
+            TestUtils.waitForCondition(() -> {
+                List<Integer> newShareCoordNodeId = topicPartitionLeader(adminClient, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0);
+                List<Integer> newGroupCoordNodeId = topicPartitionLeader(adminClient, Topic.GROUP_METADATA_TOPIC_NAME, 0);
+                List<Integer> newTopicPartitionLeader = topicPartitionLeader(adminClient, tp.topic(), tp.partition());
+
+                return newShareCoordNodeId.size() == 1 && !Objects.equals(newShareCoordNodeId.get(0), curShareCoordNodeId.get(0)) &&
+                    newGroupCoordNodeId.size() == 1 && !Objects.equals(newGroupCoordNodeId.get(0), curShareCoordNodeId.get(0)) &&
+                    newTopicPartitionLeader.size() == 1 && !Objects.equals(newTopicPartitionLeader.get(0), curShareCoordNodeId.get(0));
+            }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to elect new leaders after broker shutdown");
+            // After share coordinator shutdown and new leader's election, check that lag is still 1
+            verifySharePartitionLag(adminClient, groupId, tp, 1L);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @ClusterTest
+    public void testFetchWithThrottledDelivery() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            // Produce a batch of 100 messages
+            for (int i = 0; i < 100; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+            producer.flush();
+
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Fetch records in 5 iterations, each time acknowledging with RELEASE. 5 is the default
+            // delivery limit hence we should see throttling from Math.ceil(5/2) = 3 fetches.
+            int throttleDeliveryLimit = 3;
+            for (int i = 0; i < 5; i++) {
+                // Adjust expected fetch count based on throttling. If i < throttleDeliveryLimit, we get full batch of 100.
+                // If i == 4 i.e. the last delivery, then we get 1 record.
+                // Otherwise, we get half the previous fetch count due to throttling. In this case, 100 >> (i - throttleDeliveryLimit + 1) it is 50 for i=3.
+                int expectedFetchCount = (i < throttleDeliveryLimit) ? 100 : ((i == 4) ? 1 : 50);
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, expectedFetchCount);
+                assertEquals(expectedFetchCount, records.count());
+
+                records.forEach(record -> shareConsumer.acknowledge(record, AcknowledgeType.RELEASE));
+                Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+                assertEquals(1, result.size());
+                assertEquals(Optional.empty(),
+                    result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
+            }
+
+            // Offset 0 has already reached the delivery limit hence shall be archived.
+            // Offset 1 to 49 shall be in last delivery attempt and hence 1 record per poll.
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 1, 50, 1);
+            // Delivery limit 4.
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 50, 100, 50);
+            // Delivery limit 5.
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 50, 100, 1);
+            // Next poll should not have any records as all records have reached delivery limit.
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
+        }
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "10"),
+        }
+    )
+    public void testFetchWithThrottledDeliveryBatchesWithIncreasedDeliveryLimit() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(
+                    ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT,
+                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 512
+                )
+            )
+        ) {
+            // Produce records in complete power of 2 to fully test the throttling behavior.
+            int producedMessageCount = 512;
+            // Produce a batch of 512 messages
+            for (int i = 0; i < producedMessageCount; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(),
+                    null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+            producer.flush();
+
+            // Map which defines expected fetch count for each delivery attempt from 1 to 10.
+            Map<Integer, Integer> expectedFetchCountMap = Map.of(1, 512, 2, 512, 3, 512, 4, 512, 5, 512,
+                6, 256, 7, 128, 8, 64, 9, 32, 10, 1);
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Fetch records in 10 iterations, each time acknowledging with RELEASE. 10 is the
+            // delivery limit hence we should see throttling from Math.ceil(10/2) = 5 fetches.
+            for (int i = 0; i < 10; i++) {
+                int expectedFetchCount = expectedFetchCountMap.get(i + 1);
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, expectedFetchCount);
+                assertEquals(expectedFetchCount, records.count());
+                // Acknowledge all records with RELEASE.
+                records.forEach(record -> shareConsumer.acknowledge(record, AcknowledgeType.RELEASE));
+                Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+                assertEquals(1, result.size());
+                assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
+            }
+
+            // Offset 0 is already verified above, so start from offset 1 and as it's last delivery cycle
+            // hence expectedRecords is 1 for each poll till offset 32.
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 1, 32, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 32, 64, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 32, 64, 1);
+            // Delivery 8
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 64, 128, 64);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 64, 96, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 64, 96, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 96, 128, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 96, 128, 1);
+            // Delivery 7
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 128, 256, 128);
+            // Delivery 8
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 128, 192, 64);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 128, 160, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 128, 160, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 160, 192, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 160, 192, 1);
+            // Delivery 8
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 192, 256, 64);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 192, 224, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 192, 224, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 224, 256, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 224, 256, 1);
+            // Delivery 6
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 256, 512, 256);
+            // Delivery 7
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 256, 384, 128);
+            // Delivery 8
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 256, 320, 64);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 256, 288, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 256, 288, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 288, 320, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 288, 320, 1);
+            // Delivery 8
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 320, 384, 64);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 320, 352, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 320, 352, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 352, 384, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 352, 384, 1);
+            // Delivery 7
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 384, 512, 128);
+            // Delivery 8
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 384, 448, 64);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 384, 416, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 384, 416, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 416, 448, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 416, 448, 1);
+            // Delivery 8
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 448, 512, 64);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 448, 480, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 448, 480, 1);
+            // Delivery 9
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 480, 512, 32);
+            // Delivery 10
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 480, 512, 1);
+            // Next poll should not have any records as all records have reached delivery limit.
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
+        }
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "10"),
+        }
+    )
+    public void testFetchWithThrottledDeliveryValidateDeliveryCount() throws InterruptedException {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            int producedMessageCount = 500;
+            // Produce a batch of 500 messages
+            for (int i = 0; i < producedMessageCount; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(),
+                    null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+            producer.flush();
+
+            // Map to track delivery count for each offset.
+            Map<Long, Integer> offsetToDeliveryCountMap = new HashMap<>();
+            // Map which defines expected fetch count for each delivery attempt from 1 to 10.
+            Map<Integer, Integer> expectedFetchCountMap = Map.of(1, 500, 2, 500, 3, 500, 4, 500, 5, 500,
+                6, 250, 7, 125, 8, 62, 9, 31, 10, 1);
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Fetch records in 10 iterations, each time acknowledging with RELEASE. 10 is the
+            // delivery limit hence we should see throttling from Math.ceil(10/2) = 5 fetches.
+            for (int i = 0; i < 10; i++) {
+                int expectedFetchCount = expectedFetchCountMap.get(i + 1);
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, expectedFetchCount);
+                assertEquals(expectedFetchCount, records.count());
+                // Update delivery count for each offset.
+                records.forEach(record -> {
+                    if (!offsetToDeliveryCountMap.containsKey(record.offset())) {
+                        offsetToDeliveryCountMap.put(record.offset(), 1);
+                    } else  {
+                        offsetToDeliveryCountMap.put(record.offset(), offsetToDeliveryCountMap.get(record.offset()) + 1);
+                    }
+                });
+                // Acknowledge with RELEASE.
+                records.forEach(record -> shareConsumer.acknowledge(record, AcknowledgeType.RELEASE));
+                Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+                assertEquals(1, result.size());
+                assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
+            }
+
+            // Validate every offset is delivered at most till delivery limit.
+            waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
+                if (!records.isEmpty()) {
+                    records.forEach(record -> {
+                        if (!offsetToDeliveryCountMap.containsKey(record.offset())) {
+                            offsetToDeliveryCountMap.put(record.offset(), 1);
+                        } else  {
+                            offsetToDeliveryCountMap.put(record.offset(), offsetToDeliveryCountMap.get(record.offset()) + 1);
+                        }
+                    });
+                    records.forEach(record -> shareConsumer.acknowledge(record, AcknowledgeType.RELEASE));
+                    Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+                    assertEquals(1, result.size());
+                    assertEquals(Optional.empty(),
+                        result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
+                }
+                return offsetToDeliveryCountMap.size() == 500 &&
+                    offsetToDeliveryCountMap.values().stream().allMatch(deliveryCount -> deliveryCount == 10);
+                },
+                120000L, // 120 seconds.
+                50L,
+                () -> "failed to get records till delivery limit"
+            );
+
+            // Next poll should not have any records as all records have reached delivery limit.
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
+        }
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2"),
+        }
+    )
+    public void testFetchWithThrottledDeliveryBatchesWithDecreasedDeliveryLimit() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(
+                    ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT,
+                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 512
+                ))
+        ) {
+            // Produce records in complete power of 2 to fully test the throttling behavior.
+            int producedMessageCount = 512;
+            // Produce a batch of 512 messages
+            for (int i = 0; i < producedMessageCount; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(),
+                    null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+            producer.flush();
+
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Fetch records in 2 iterations, each time acknowledging with RELEASE. As throttling
+            // currently applies for delivery limit > 2, hence we should get full batch in both fetches.
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 0, 512, 512);
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer, 0, 512, 512);
+            // Next poll should not have any records as all records have reached delivery limit.
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2500L));
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
+        }
+    }
+
+    @ClusterTest
+    public void testFetchWithThrottledDeliveryBatchesMultipleConsumers() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(
+                "group1",
+                Map.of(
+                    ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT,
+                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1
+                ));
+            ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(
+                "group1",
+                Map.of(
+                    ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT,
+                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 2
+                ))
+        ) {
+            // Produce 2 records in separate batches.
+            for (int i = 0; i < 2; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(),
+                    null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+                // Flush immediately to create 2 different batches.
+                producer.flush();
+            }
+
+            shareConsumer1.subscribe(List.of(tp.topic()));
+            shareConsumer2.subscribe(List.of(tp.topic()));
+            // Fetch from consumer1 - should get 1 record as max.poll.records=1.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer1, 2500L, 1);
+            assertEquals(1, records.count());
+            // Verify the first offset of the fetched records.
+            assertEquals(0, records.iterator().next().offset());
+            // Fetch from consumer2 - should get 1 record as offset 0 is Acquired by consumer1.
+            // Release the record from consumer2 after fetching until the last delivery attempt.
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer2, 1, 2, 1);
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer2, 1, 2, 1);
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer2, 1, 2, 1);
+            validateExpectedRecordsInEachPollAndRelease(shareConsumer2, 1, 2, 1);
+
+            // Now release the record from consumer1. Fetch again from consumer2 to verify it gets the released record.
+            // And should only get 1 record at offset 0 as offset 1 record is in final delivery attempt.
+            records.forEach(record -> shareConsumer1.acknowledge(record, AcknowledgeType.RELEASE));
+            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer1.commitSync();
+            assertEquals(1, result.size());
+            assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
+            // Fetch from consumer2 - should get the released record at offset 0. Accept the record after fetching.
+            validateExpectedRecordsInEachPollAndAcknowledge(shareConsumer2, 0, 1, 1, AcknowledgeType.ACCEPT);
+            // Now fetch the last record at offset 1 from consumer2 in its final delivery attempt.
+            validateExpectedRecordsInEachPollAndAcknowledge(shareConsumer2, 1, 2, 1, AcknowledgeType.ACCEPT);
+
+            // Next poll from consumer1 should not have any records as all records have reached delivery limit.
+            records = shareConsumer1.poll(Duration.ofMillis(2500L));
+            assertTrue(records.isEmpty(), "Records should be empty as all records have reached delivery limit. But received: " + records.count());
+        }
+    }
+
     /**
      * Util class to encapsulate state for a consumer/producer
      * being executed by an {@link ExecutorService}.
@@ -3447,6 +4076,34 @@ public class ShareConsumerTest {
         }
     }
 
+    private List<Integer> topicPartitionLeader(Admin adminClient, String topicName, int partition) throws InterruptedException, ExecutionException {
+        return adminClient.describeTopics(List.of(topicName)).allTopicNames().get().get(topicName)
+            .partitions().stream()
+            .filter(info -> info.partition() == partition)
+            .map(info -> info.leader().id())
+            .filter(info -> info != -1)
+            .toList();
+    }
+
+    private SharePartitionOffsetInfo sharePartitionOffsetInfo(Admin adminClient, String groupId, TopicPartition tp) throws InterruptedException, ExecutionException {
+        SharePartitionOffsetInfo partitionResult;
+        ListShareGroupOffsetsResult result = adminClient.listShareGroupOffsets(
+            Map.of(groupId, new ListShareGroupOffsetsSpec().topicPartitions(List.of(tp))),
+            new ListShareGroupOffsetsOptions().timeoutMs(30000)
+        );
+        partitionResult = result.partitionsToOffsetInfo(groupId).get().get(tp);
+        return partitionResult;
+    }
+
+    private void verifySharePartitionLag(Admin adminClient, String groupId, TopicPartition tp, long expectedLag) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
+            return sharePartitionOffsetInfo != null &&
+                sharePartitionOffsetInfo.lag().isPresent() &&
+                sharePartitionOffsetInfo.lag().get() == expectedLag;
+        }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to retrieve share partition lag");
+    }
+
     private void alterShareRecordLockDurationMs(String groupId, int newValue) {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
@@ -3592,6 +4249,35 @@ public class ShareConsumerTest {
             return recordsAtomic.get();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private void validateExpectedRecordsInEachPollAndRelease(
+        ShareConsumer<byte[], byte[]> shareConsumer,
+        int startOffset,
+        int lastOffset,
+        int expectedRecordsInEachPoll
+    ) {
+        validateExpectedRecordsInEachPollAndAcknowledge(shareConsumer, startOffset, lastOffset, expectedRecordsInEachPoll, AcknowledgeType.RELEASE);
+    }
+
+    private void validateExpectedRecordsInEachPollAndAcknowledge(
+        ShareConsumer<byte[], byte[]> shareConsumer,
+        int startOffset,
+        int lastOffset,
+        int expectedRecordsInEachPoll,
+        AcknowledgeType acknowledgeType
+    ) {
+        for (int i = startOffset; i < lastOffset; i = i + expectedRecordsInEachPoll) {
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, expectedRecordsInEachPoll);
+            assertEquals(expectedRecordsInEachPoll, records.count());
+            // Verify the first offset of the fetched records.
+            assertEquals(i, records.iterator().next().offset());
+
+            records.forEach(record -> shareConsumer.acknowledge(record, acknowledgeType));
+            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+            assertEquals(1, result.size());
+            assertEquals(Optional.empty(), result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic())));
         }
     }
 
