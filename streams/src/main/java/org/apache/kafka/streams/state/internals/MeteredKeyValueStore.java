@@ -49,10 +49,10 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
@@ -157,11 +157,8 @@ public class MeteredKeyValueStore<K, V>
                 (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
             (config, now) -> {
-                try {
-                    return openIterators.isEmpty() ? 0L : openIterators.first().startTimestamp();
-                } catch (final NoSuchElementException ignore) {
-                    return 0L;
-                }
+                final Iterator<MeteredIterator> iter = openIterators.iterator();
+                return iter.hasNext() ? iter.next().startTimestamp() : 0L;
             });
     }
 
