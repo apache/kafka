@@ -4272,7 +4272,7 @@ customized state stores; for built-in state stores, currently we have:
     <tr>
       <td>acknowledgements-error-rate</td>
       <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-error-rate,client-id=([-.\w]+)</td>
-      <td>The number of seconds since the last poll() invocation.</td>
+      <td>The average number of record acknowledgements that resulted in errors per second.</td>
     </tr>
     <tr>
       <td>acknowledgements-error-total</td>
@@ -4328,16 +4328,6 @@ customized state stores; for built-in state stores, currently we have:
       <td>records-consumed-total</td>
       <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-consumed-total,client-id=([-.\w]+)</td>
       <td>The total number of records consumed.</td>
-    </tr>
-    <tr>
-      <td>records-per-request-avg</td>
-      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-avg,client-id=([-.\w]+)</td>
-      <td>The average number of records in each request.</td>
-    </tr>
-    <tr>
-      <td>records-per-request-max</td>
-      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-max,client-id=([-.\w]+)</td>
-      <td>The maximum number of records in a request.</td>
     </tr>
     </tbody>
   </table>
