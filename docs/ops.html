@@ -3981,7 +3981,7 @@ customized state stores; for built-in state stores, currently we have:
  </table>
 
   <h4 class="anchor-heading"><a id="kafka_share_group_monitoring" class="anchor-link"></a><a href="#kafka_share_group_monitoring">Share Group Monitoring</a></h4>
-  The following set of metrics are available for monitoring the share group:<br/><br/>
+  The following set of metrics are available for monitoring the share group:
   <table class="data-table">
     <tbody><tr>
       <th>Metric/Attribute name</th>
@@ -4109,16 +4109,6 @@ customized state stores; for built-in state stores, currently we have:
       <td>The number of share groups in respective state.</td>
     </tr>
     <tr>
-      <td>rebalance-total</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=rebalance-total,protocol=share</td>
-      <td>The total number of share group rebalances count.</td>
-    </tr>
-    <tr>
-      <td>rebalance-rate-per-hour</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=rebalance-rate-per-hour,protocol=share</td>
-      <td>The number of share group rebalances event per hour.</td>
-    </tr>
-    <tr>
       <td>partition-load-time-max</td>
       <td>kafka.server:type=share-coordinator-metrics,name=partition-load-time-max</td>
       <td>The maximum time taken in milliseconds to load the share-group state from the share-group state partitions.</td>
@@ -4172,8 +4162,185 @@ customized state stores; for built-in state stores, currently we have:
   </table>
 
   <h5 class="anchor-heading"><a id="kafka_share_client_monitoring" class="anchor-link"></a><a href="#kafka_share_client_monitoring">Client Metrics</a></h5>
-  The following metrics are available on share consumer instances:<br/><br/>
-  <!--#include virtual="generated/share_consumer_metrics.html" -->
+  The following metrics are available on share consumer instances:
+  <table class="data-table">
+    <tbody><tr>
+      <th>Metric/Attribute name</th>
+      <th>Mbean name</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>last-poll-seconds-ago</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=last-poll-seconds-ago,client-id=([-.\w]+)</td>
+      <td>The number of seconds since the last poll() invocation.</td>
+    </tr>
+    <tr>
+      <td>time-between-poll-avg</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=time-between-poll-avg,client-id=([-.\w]+)</td>
+      <td>The average delay between invocations of poll() in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>time-between-poll-max</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=time-between-poll-max,client-id=([-.\w]+)</td>
+      <td>The maximum delay between invocations of poll() in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>poll-idle-ratio-avg</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=poll-idle-ratio-avg,client-id=([-.\w]+)</td>
+      <td>The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records.</td>
+    </tr>
+    <tr>
+      <td>heartbeat-response-time-max</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=heartbeat-response-time-max,client-id=([-.\w]+)</td>
+      <td>The maximum time taken to receive a response to a heartbeat request in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>heartbeat-rate</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=heartbeat-rate,client-id=([-.\w]+)</td>
+      <td>The number of heartbeats per second.</td>
+    </tr>
+    <tr>
+      <td>heartbeat-total</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=heartbeat-total,client-id=([-.\w]+)</td>
+      <td>The total number of heartbeats.</td>
+    </tr>
+    <tr>
+      <td>last-heartbeat-seconds-ago</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=last-heartbeat-seconds-ago,client-id=([-.\w]+)</td>
+      <td>The number of seconds since the last coordinator heartbeat was sent.</td>
+    </tr>
+    <tr>
+      <td>rebalance-total</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=rebalance-total,client-id=([-.\w]+)</td>
+      <td>The total number of share group rebalances count.</td>
+    </tr>
+    <tr>
+      <td>rebalance-rate-per-hour</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=rebalance-rate-per-hour,client-id=([-.\w]+)</td>
+      <td>The number of share group rebalances event per hour.</td>
+    </tr>
+    <tr>
+      <td>fetch-size-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-size-avg,client-id=([-.\w]+)</td>
+      <td>The average number of bytes fetched per request.</td>
+    </tr>
+    <tr>
+      <td>fetch-size-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-size-max,client-id=([-.\w]+)</td>
+      <td>The maximum number of bytes fetched per request.</td>
+    </tr>
+    <tr>
+      <td>bytes-fetched-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-fetched-rate,client-id=([-.\w]+)</td>
+      <td>The average number of bytes fetched per second.</td>
+    </tr>
+    <tr>
+      <td>bytes-fetched-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-fetched-total,client-id=([-.\w]+)</td>
+      <td>The total number of bytes fetched.</td>
+    </tr>
+    <tr>
+      <td>records-per-request-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-avg,client-id=([-.\w]+)</td>
+      <td>The average number of records in each request.</td>
+    </tr>
+    <tr>
+      <td>records-per-request-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-max,client-id=([-.\w]+)</td>
+      <td>The maximum number of records in a request.</td>
+    </tr>
+    <tr>
+      <td>records-fetched-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-fetched-rate,client-id=([-.\w]+)</td>
+      <td>The average number of records fetched per second.</td>
+    </tr>
+    <tr>
+      <td>records-fetched-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-fetched-total,client-id=([-.\w]+)</td>
+      <td>The total number of records fetched.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-send-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-send-rate,client-id=([-.\w]+)</td>
+      <td>The average number of record acknowledgements sent per second.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-send-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-send-total,client-id=([-.\w]+)</td>
+      <td>The total number of record acknowledgements sent.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-error-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-error-rate,client-id=([-.\w]+)</td>
+      <td>The number of seconds since the last poll() invocation.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-error-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-error-total,client-id=([-.\w]+)</td>
+      <td>The total number of record acknowledgements that resulted in errors.</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-latency-avg,client-id=([-.\w]+)</td>
+      <td>The average time taken for a fetch request.</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-latency-max,client-id=([-.\w]+)</td>
+      <td>The maximum time taken for any fetch request.</td>
+    </tr>
+    <tr>
+      <td>fetch-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-rate,client-id=([-.\w]+)</td>
+      <td>The number of fetch requests per second.</td>
+    </tr>
+    <tr>
+      <td>fetch-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-total,client-id=([-.\w]+)</td>
+      <td>The total number of fetch requests.</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-throttle-time-avg,client-id=([-.\w]+)</td>
+      <td>The average throttle time in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-throttle-time-max,client-id=([-.\w]+)</td>
+      <td>The maximum throttle time in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>bytes-consumed-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-consumed-rate,client-id=([-.\w]+)</td>
+      <td>The average number of bytes consumed per second.</td>
+    </tr>
+    <tr>
+      <td>bytes-consumed-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-consumed-total,client-id=([-.\w]+)</td>
+      <td>The total number of bytes consumed.</td>
+    </tr>
+    <tr>
+      <td>records-consumed-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-consumed-rate,client-id=([-.\w]+)</td>
+      <td>The average number of records consumed per second.</td>
+    </tr>
+    <tr>
+      <td>records-consumed-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-consumed-total,client-id=([-.\w]+)</td>
+      <td>The total number of records consumed.</td>
+    </tr>
+    <tr>
+      <td>records-per-request-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-avg,client-id=([-.\w]+)</td>
+      <td>The average number of records in each request.</td>
+    </tr>
+    <tr>
+      <td>records-per-request-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-max,client-id=([-.\w]+)</td>
+      <td>The maximum number of records in a request.</td>
+    </tr>
+    </tbody>
+  </table>
 
   <h4 class="anchor-heading"><a id="others_monitoring" class="anchor-link"></a><a href="#others_monitoring">Others</a></h4>
 

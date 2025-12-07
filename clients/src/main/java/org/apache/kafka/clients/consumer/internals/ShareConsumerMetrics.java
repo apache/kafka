@@ -16,12 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.Metrics;
-
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
@@ -35,16 +30,5 @@ public class ShareConsumerMetrics {
 
     public ShareConsumerMetrics() {
         this(new HashSet<>(), CONSUMER_SHARE_METRIC_GROUP_PREFIX);
-    }
-
-    private List<MetricNameTemplate> getAllTemplates() {
-        return new ArrayList<>(this.shareFetchMetrics.getAllTemplates());
-    }
-
-    public static void main(String[] args) {
-        Set<String> tags = new HashSet<>();
-        tags.add("client-id");
-        ShareConsumerMetrics metrics = new ShareConsumerMetrics(tags, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
-        System.out.println(Metrics.toHtmlTable("kafka.consumer", metrics.getAllTemplates()));
     }
 }
