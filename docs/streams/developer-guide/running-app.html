@@ -47,6 +47,13 @@
                   </ul>
                   </li>
                   <li><a class="reference internal" href="#handling-crashes-and-failures" id="id9">Handling crashes and failures</a></li>
+                  <li><a class="reference internal" href="#application-lifecycle-listeners" id="id10">Application lifecycle listeners and callbacks</a><ul>
+                      <li><a class="reference internal" href="#state-listener" id="id11">State listener</a></li>
+                      <li><a class="reference internal" href="#uncaught-exception-handler" id="id12">Uncaught exception handler</a></li>
+                      <li><a class="reference internal" href="#global-state-restore-listener" id="id13">Global state restore listener</a></li>
+                      <li><a class="reference internal" href="#standby-update-listener" id="id14">Standby update listener</a></li>
+                  </ul>
+                  </li>
               </ul>
           </div>
           <div class="section" id="starting-a-kafka-streams-application">
@@ -146,13 +153,157 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                             and using strategies such as dead letter queues to handle "poison pill" records. </li>
                     </ul>
                   </p>
-                  <p>If your Kafka Streams application does crash or fail, it will first enter the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state 
-                    to gracefully close all of its existing resources, and then transition into the <code class="docutils literal"><span class="pre">ERROR</span></code> state. 
-                    It is important to note that the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state is not recoverable, and only a 
-                    restart will get the application back to the RUNNING state, thus monitoring for this state in addition to the <code class="docutils literal"><span class="pre">ERROR</span></code> 
+                  <p>If your Kafka Streams application does crash or fail, it will first enter the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state
+                    to gracefully close all of its existing resources, and then transition into the <code class="docutils literal"><span class="pre">ERROR</span></code> state.
+                    It is important to note that the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state is not recoverable, and only a
+                    restart will get the application back to the RUNNING state, thus monitoring for this state in addition to the <code class="docutils literal"><span class="pre">ERROR</span></code>
                     state is important to ensure that your application is able to recover.
                   </p>
 </div>
+              <div class="section" id="application-lifecycle-listeners">
+                <span id="streams-developer-guide-lifecycle-listeners"></span><h2><a class="toc-backref" href="#id10">Application lifecycle listeners and callbacks</a><a class="headerlink" href="#application-lifecycle-listeners" title="Permalink to this headline"></a></h2>
+                <p>Kafka Streams provides several listeners and callbacks that allow you to monitor and respond to various
+                   lifecycle events in your application. These must be set before calling <code class="docutils literal"><span class="pre">start()</span></code> on the
+                   <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance.</p>
+
+                <div class="section" id="state-listener">
+                    <h3>State listener</h3>
+                    <p>The <code class="docutils literal"><span class="pre">StateListener</span></code> allows you to receive notifications when the
+                       <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance transitions between states (e.g., from REBALANCING to RUNNING,
+                       or from RUNNING to PENDING_ERROR). This is useful for monitoring application health and
+                       triggering actions based on state changes.</p>
+                    <pre><code class="language-java">KafkaStreams streams = new KafkaStreams(topology, props);
+streams.setStateListener((newState, oldState) -> {
+    System.out.println("State changed from " + oldState + " to " + newState);
+    if (newState == KafkaStreams.State.ERROR) {
+        // Handle error state, e.g., alert monitoring systems
+    }
+});
+streams.start();</code></pre>
+                    <p>The possible states are: <code class="docutils literal"><span class="pre">CREATED</span></code>, <code class="docutils literal"><span class="pre">REBALANCING</span></code>,
+                       <code class="docutils literal"><span class="pre">RUNNING</span></code>, <code class="docutils literal"><span class="pre">PENDING_SHUTDOWN</span></code>, <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code>,
+                       <code class="docutils literal"><span class="pre">NOT_RUNNING</span></code>, and <code class="docutils literal"><span class="pre">ERROR</span></code>.</p>
+                </div>
+
+                <div class="section" id="uncaught-exception-handler">
+                    <h3>Uncaught exception handler</h3>
+                    <p>The <code class="docutils literal"><span class="pre">StreamsUncaughtExceptionHandler</span></code> allows you to handle unexpected exceptions
+                       thrown by stream threads. This is particularly useful for implementing custom error handling
+                       strategies such as replacing failed threads, gracefully shutting down the client, or shutting
+                       down the entire application.</p>
+                    <pre><code class="language-java">import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.*;
+
+KafkaStreams streams = new KafkaStreams(topology, props);
+streams.setUncaughtExceptionHandler(exception -> {
+    if (exception instanceof RecoverableException) {
+        // Replace the failed thread and continue processing
+        return REPLACE_THREAD;
+    } else if (exception instanceof FatalException) {
+        // Shut down the entire application
+        return SHUTDOWN_APPLICATION;
+    }
+    // Default: shut down this Kafka Streams client
+    return SHUTDOWN_CLIENT;
+});
+streams.start();</code></pre>
+                    <p>The available response options are:</p>
+                    <ul class="simple">
+                        <li><code class="docutils literal"><span class="pre">REPLACE_THREAD</span></code>: Replace the failed thread with a new one and continue processing.</li>
+                        <li><code class="docutils literal"><span class="pre">SHUTDOWN_CLIENT</span></code>: Shut down this Kafka Streams client instance.</li>
+                        <li><code class="docutils literal"><span class="pre">SHUTDOWN_APPLICATION</span></code>: Attempt to shut down all instances of the application (requires at least one running thread to propagate the shutdown signal).</li>
+                    </ul>
+                    <p>Note that this handler must be thread-safe as it may be invoked from multiple threads concurrently.</p>
+                </div>
+
+                <div class="section" id="global-state-restore-listener">
+                    <h3>Global state restore listener</h3>
+                    <p>The <code class="docutils literal"><span class="pre">StateRestoreListener</span></code> allows you to monitor the progress of state store
+                       restoration. During application startup or rebalancing, state stores need to be restored from
+                       their changelog topics. This listener provides callbacks for tracking restoration progress.</p>
+                    <pre><code class="language-java">import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.common.TopicPartition;
+
+KafkaStreams streams = new KafkaStreams(topology, props);
+streams.setGlobalStateRestoreListener(new StateRestoreListener() {
+    @Override
+    public void onRestoreStart(TopicPartition topicPartition, String storeName,
+                               long startingOffset, long endingOffset) {
+        System.out.println("Starting restoration of " + storeName +
+                           " from offset " + startingOffset + " to " + endingOffset);
+    }
+
+    @Override
+    public void onBatchRestored(TopicPartition topicPartition, String storeName,
+                                long batchEndOffset, long numRestored) {
+        // Called after each batch; keep processing minimal to avoid slowing restoration
+    }
+
+    @Override
+    public void onRestoreEnd(TopicPartition topicPartition, String storeName,
+                             long totalRestored) {
+        System.out.println("Finished restoring " + storeName +
+                           ", total records restored: " + totalRestored);
+    }
+
+    @Override
+    public void onRestoreSuspended(TopicPartition topicPartition, String storeName,
+                                   long totalRestored) {
+        // Called when restoration is suspended due to task migration
+    }
+});
+streams.start();</code></pre>
+                    <p>The listener implementation must be stateless or provide its own synchronization, as it is
+                       shared across all stream threads. This listener only monitors active task restoration; for
+                       standby task updates, use the <code class="docutils literal"><span class="pre">StandbyUpdateListener</span></code>.</p>
+                </div>
+
+                <div class="section" id="standby-update-listener">
+                    <h3>Standby update listener</h3>
+                    <p>The <code class="docutils literal"><span class="pre">StandbyUpdateListener</span></code> allows you to monitor the progress of standby replica
+                       updates. Standby replicas are configured via the <code class="docutils literal"><span class="pre">num.standby.replicas</span></code> setting
+                       and help minimize restoration time during task migrations by maintaining up-to-date copies of
+                       state stores.</p>
+                    <pre><code class="language-java">import org.apache.kafka.streams.processor.StandbyUpdateListener;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
+
+KafkaStreams streams = new KafkaStreams(topology, props);
+streams.setStandbyUpdateListener(new StandbyUpdateListener() {
+    @Override
+    public void onUpdateStart(TopicPartition topicPartition, String storeName,
+                              long startingOffset) {
+        System.out.println("Standby task started loading " + storeName);
+    }
+
+    @Override
+    public void onBatchLoaded(TopicPartition topicPartition, String storeName,
+                              TaskId taskId, long batchEndOffset,
+                              long batchSize, long currentEndOffset) {
+        // Called after each batch; keep processing minimal
+        double progress = (double) batchEndOffset / currentEndOffset * 100;
+        System.out.println("Standby " + storeName + " progress: " + progress + "%");
+    }
+
+    @Override
+    public void onUpdateSuspended(TopicPartition topicPartition, String storeName,
+                                  long storeOffset, long currentEndOffset,
+                                  SuspendReason reason) {
+        if (reason == SuspendReason.PROMOTED) {
+            System.out.println("Standby " + storeName + " promoted to active task");
+        } else {
+            System.out.println("Standby " + storeName + " migrated to another instance");
+        }
+    }
+});
+streams.start();</code></pre>
+                    <p>The <code class="docutils literal"><span class="pre">SuspendReason</span></code> indicates why the standby task stopped updating:</p>
+                    <ul class="simple">
+                        <li><code class="docutils literal"><span class="pre">MIGRATED</span></code>: The task was moved to another application instance.</li>
+                        <li><code class="docutils literal"><span class="pre">PROMOTED</span></code>: The standby task was promoted to an active task (e.g., due to rebalancing).</li>
+                    </ul>
+                </div>
+              </div>
 </div>
 </div>
 
