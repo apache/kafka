@@ -61,8 +61,6 @@ public class CoordinatorRuntimeMetricsImplTest {
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "loading"),
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "active"),
             kafkaMetricName(metrics, NUM_PARTITIONS_METRIC_NAME, "state", "failed"),
-            kafkaMetricName(metrics, BATCH_BUFFER_CACHE_SIZE_METRIC_NAME),
-            kafkaMetricName(metrics, BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME),
             kafkaMetricName(metrics, "event-queue-size"),
             kafkaMetricName(metrics, "partition-load-time-max"),
             kafkaMetricName(metrics, "partition-load-time-avg"),
@@ -92,7 +90,9 @@ public class CoordinatorRuntimeMetricsImplTest {
             kafkaMetricName(metrics, "batch-flush-time-ms-p95"),
             kafkaMetricName(metrics, "batch-flush-time-ms-p99"),
             kafkaMetricName(metrics, "batch-flush-time-ms-p999"),
-            kafkaMetricName(metrics, "batch-flush-rate")
+            kafkaMetricName(metrics, "batch-flush-rate"),
+            kafkaMetricName(metrics, BATCH_BUFFER_CACHE_SIZE_METRIC_NAME),
+            kafkaMetricName(metrics, BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME)
         );
     }
 

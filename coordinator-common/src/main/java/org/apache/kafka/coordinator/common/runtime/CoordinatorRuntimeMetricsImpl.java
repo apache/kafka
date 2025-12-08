@@ -70,12 +70,12 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     public static final String BATCH_FLUSH_TIME_METRIC_NAME = "batch-flush-time-ms";
 
     /**
-     * The cached buffer size metric name.
+     * The buffer cache size metric name.
      */
     public static final String BATCH_BUFFER_CACHE_SIZE_METRIC_NAME = "batch-buffer-cache-size-bytes";
 
     /**
-     * The buffer skip cache count metric name.
+     * The buffer cache discard count metric name.
      */
     public static final String BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME = "batch-buffer-cache-discard-count";
 
@@ -103,7 +103,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     private final MetricName eventQueueSize;
 
     /**
-     * Metric to count the size of the cached buffer.
+     * Metric to count the size of the cached buffers.
      */
     private final MetricName bufferCacheSize;
 
@@ -187,10 +187,10 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
             "The count of over-sized append buffers that were discarded instead of being cached upon release."
         );
         
-        metrics.addMetric(bufferCacheDiscardCount, (Gauge<Long>) (config, now) -> bufferCacheDiscardCounter.get());
         metrics.addMetric(numPartitionsLoading, (Gauge<Long>) (config, now) -> numPartitionsLoadingCounter.get());
         metrics.addMetric(numPartitionsActive, (Gauge<Long>) (config, now) -> numPartitionsActiveCounter.get());
         metrics.addMetric(numPartitionsFailed, (Gauge<Long>) (config, now) -> numPartitionsFailedCounter.get());
+        metrics.addMetric(bufferCacheDiscardCount, (Gauge<Long>) (config, now) -> bufferCacheDiscardCounter.get());
 
         this.partitionLoadSensor = metrics.sensor(this.metricsGroup + "-PartitionLoadTime");
         this.partitionLoadSensor.add(
