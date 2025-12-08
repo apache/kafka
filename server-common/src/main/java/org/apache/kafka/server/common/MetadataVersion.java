@@ -213,6 +213,10 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_4_0_IV1);
     }
 
+    public boolean isCidrAclSupported() {
+        return this.isAtLeast(IBP_4_3_IV0);
+    }
+
     public boolean isMigrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
     }

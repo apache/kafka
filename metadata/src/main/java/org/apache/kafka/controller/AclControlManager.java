@@ -23,6 +23,8 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.requests.ApiError;
@@ -39,6 +41,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
 
+import org.apache.commons.net.util.SubnetUtils;
+import org.apache.commons.net.util.SubnetUtils6;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -61,6 +65,7 @@ public class AclControlManager {
     static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
+        private FeatureControlManager featureControl = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -72,24 +77,35 @@ public class AclControlManager {
             return this;
         }
 
+        Builder setFeatureControl(FeatureControlManager featureControl) {
+            this.featureControl = featureControl;
+            return this;
+        }
+
         AclControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
-            return new AclControlManager(logContext, snapshotRegistry);
+            if (featureControl == null) {
+                featureControl = new FeatureControlManager.Builder().build();
+            }
+            return new AclControlManager(logContext, snapshotRegistry, featureControl);
         }
     }
 
     private final Logger log;
     private final TimelineHashMap<Uuid, StandardAcl> idToAcl;
     private final TimelineHashSet<StandardAcl> existingAcls;
+    private final FeatureControlManager featureControl;
 
     private AclControlManager(
         LogContext logContext,
-        SnapshotRegistry snapshotRegistry
+        SnapshotRegistry snapshotRegistry,
+        FeatureControlManager featureControl
     ) {
         this.log = logContext.logger(AclControlManager.class);
         this.idToAcl = new TimelineHashMap<>(snapshotRegistry, 0);
         this.existingAcls = new TimelineHashSet<>(snapshotRegistry, 0);
+        this.featureControl = featureControl;
     }
 
     ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
@@ -132,7 +148,7 @@ public class AclControlManager {
         return uuid;
     }
 
-    static void validateNewAcl(AclBinding binding) {
+    void validateNewAcl(AclBinding binding) {
         switch (binding.pattern().resourceType()) {
             case UNKNOWN:
             case ANY:
@@ -173,6 +189,63 @@ public class AclControlManager {
             throw new InvalidRequestException("Could not parse principal from `" +
                 binding.entry().principal() + "` " + "(no colon is present separating the " +
                 "principal type from the principal name)");
+        }
+        boolean cidrSupported = featureControl.metadataVersion()
+            .map(MetadataVersion::isCidrAclSupported)
+            .orElse(false);
+        validateHostPattern(binding.entry().host(), cidrSupported);
+    }
+
+    /**
+     * Validates the host pattern of an ACL entry.
+     *
+     * Accepts:
+     * - Wildcard "*" (matches any host)
+     * - Valid IPv4 address (e.g., "192.168.1.1")
+     * - Valid IPv6 address (e.g., "2001:db8::1")
+     * - Valid IPv4 CIDR notation (e.g., "192.168.0.0/24"), which requires cidrSupported=true
+     * - Valid IPv6 CIDR notation (e.g., "2001:db8::/32"), which requires cidrSupported=true
+     *
+     * @param host The host pattern to validate
+     * @param cidrSupported Whether CIDR notation is supported by the current metadata version
+     * @throws InvalidRequestException if the host pattern is invalid
+     * @throws UnsupportedVersionException if CIDR notation is used but not supported
+     */
+    static void validateHostPattern(String host, boolean cidrSupported) {
+        if (host == null || host.isEmpty()) {
+            throw new InvalidRequestException("Host pattern cannot be null or empty");
+        }
+
+        if ("*".equals(host)) {
+            return;
+        }
+
+        if (host.contains("/")) {
+            if (!cidrSupported) {
+                throw new UnsupportedVersionException(
+                    "CIDR-based ACL host patterns require metadata version " +
+                    MetadataVersion.IBP_4_3_IV0 + " or higher.");
+            }
+            validateCidrNotation(host);
+        }
+    }
+
+    /**
+     * Validates a CIDR notation pattern.
+     * Supports both IPv4 (e.g., "192.168.0.0/24") and IPv6 (e.g., "2001:db8::/32") CIDR patterns.
+     *
+     * @param cidrPattern The CIDR pattern to validate
+     * @throws InvalidRequestException if the CIDR pattern is invalid
+     */
+    static void validateCidrNotation(String cidrPattern) {
+        try {
+            if (cidrPattern.contains(":")) {
+                new SubnetUtils6(cidrPattern);
+            } else {
+                new SubnetUtils(cidrPattern);
+            }
+        } catch (IllegalArgumentException e) {
+            throw new InvalidRequestException("Invalid CIDR notation '" + cidrPattern + "': " + e.getMessage());
         }
     }
 

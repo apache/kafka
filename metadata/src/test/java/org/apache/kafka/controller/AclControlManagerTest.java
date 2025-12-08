@@ -27,7 +27,10 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -86,30 +89,31 @@ public class AclControlManagerTest {
      */
     @Test
     public void testValidateNewAcl() {
-        AclControlManager.validateNewAcl(new AclBinding(
+        AclControlManager manager = new AclControlManager.Builder().build();
+        manager.validateNewAcl(new AclBinding(
             new ResourcePattern(TOPIC, "*", LITERAL),
             new AccessControlEntry("User:*", "*", ALTER, ALLOW)));
         assertEquals("Invalid patternType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                AclControlManager.validateNewAcl(new AclBinding(
+                manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
                     new AccessControlEntry("User:*", "*", ALTER, ALLOW)))).
                 getMessage());
         assertEquals("Invalid resourceType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                AclControlManager.validateNewAcl(new AclBinding(
+                manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(ResourceType.UNKNOWN, "*", LITERAL),
                     new AccessControlEntry("User:*", "*", ALTER, ALLOW)))).
                 getMessage());
         assertEquals("Invalid operation UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                AclControlManager.validateNewAcl(new AclBinding(
+                manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("User:*", "*", AclOperation.UNKNOWN, ALLOW)))).
                 getMessage());
         assertEquals("Invalid permissionType UNKNOWN",
             assertThrows(InvalidRequestException.class, () ->
-                AclControlManager.validateNewAcl(new AclBinding(
+                manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("User:*", "*", ALTER, AclPermissionType.UNKNOWN)))).
                 getMessage());
@@ -120,10 +124,11 @@ public class AclControlManagerTest {
      */
     @Test
     public void testValidateAclWithBadPrincipal() {
+        AclControlManager manager = new AclControlManager.Builder().build();
         assertEquals("Could not parse principal from `invalid` (no colon is present " +
                 "separating the principal type from the principal name)",
             assertThrows(InvalidRequestException.class, () ->
-                AclControlManager.validateNewAcl(new AclBinding(
+                manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("invalid", "*", ALTER, ALLOW)))).
                 getMessage());
@@ -134,10 +139,11 @@ public class AclControlManagerTest {
      */
     @Test
     public void testValidateAclWithEmptyPrincipal() {
+        AclControlManager manager = new AclControlManager.Builder().build();
         assertEquals("Could not parse principal from `` (no colon is present " +
                 "separating the principal type from the principal name)",
             assertThrows(InvalidRequestException.class, () ->
-                AclControlManager.validateNewAcl(new AclBinding(
+                manager.validateNewAcl(new AclBinding(
                     new ResourcePattern(TOPIC, "*", LITERAL),
                     new AccessControlEntry("", "*", ALTER, ALLOW)))).
                         getMessage());
@@ -439,5 +445,220 @@ public class AclControlManagerTest {
         Exception exception = assertThrows(InvalidRequestException.class, () -> manager.deleteAcls(filters));
         assertEquals(BoundedListTooLongException.class, exception.getCause().getClass());
         assertEquals("Cannot remove more than " + MAX_RECORDS_PER_USER_OP + " acls in a single delete operation.", exception.getCause().getMessage());
+    }
+
+    @Test
+    public void testValidateHostPatternValid() {
+        // Wildcard - works with or without CIDR support
+        AclControlManager.validateHostPattern("*", false);
+        AclControlManager.validateHostPattern("*", true);
+
+        // Regular IPv4 addresses - works with or without CIDR support
+        AclControlManager.validateHostPattern("192.168.1.1", false);
+        AclControlManager.validateHostPattern("10.0.0.1", false);
+        AclControlManager.validateHostPattern("127.0.0.1", true);
+
+        // Regular IPv6 addresses - works with or without CIDR support
+        AclControlManager.validateHostPattern("2001:db8::1", false);
+        AclControlManager.validateHostPattern("::1", false);
+        AclControlManager.validateHostPattern("fe80::1", true);
+
+        // Valid IPv4 CIDR notations (require CIDR support)
+        AclControlManager.validateHostPattern("192.168.0.0/24", true);
+        AclControlManager.validateHostPattern("10.0.0.0/8", true);
+        AclControlManager.validateHostPattern("172.16.0.0/16", true);
+        AclControlManager.validateHostPattern("192.168.1.1/32", true);
+        AclControlManager.validateHostPattern("0.0.0.0/0", true);
+
+        // Valid IPv6 CIDR notations (require CIDR support)
+        AclControlManager.validateHostPattern("2001:db8::/32", true);
+        AclControlManager.validateHostPattern("2001:db8:abcd::/48", true);
+        AclControlManager.validateHostPattern("::1/128", true);
+        AclControlManager.validateHostPattern("::/0", true);
+    }
+
+    @Test
+    public void testValidateHostPatternInvalid() {
+        // Null or empty
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern(null, true));
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("", true));
+
+        // Invalid IPv4 CIDR - prefix too large
+        InvalidRequestException e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.0/33", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+
+        // Invalid IPv4 CIDR - negative prefix
+        e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.0/-1", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+
+        // Invalid IPv4 CIDR - malformed address
+        e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.256/24", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+
+        // Invalid IPv4 CIDR - non-numeric prefix
+        e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.0/abc", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+
+        // Invalid IPv6 CIDR - prefix too large
+        e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("2001:db8::/129", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+
+        // Invalid - just a slash with no prefix
+        e = assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.0/", true));
+        assertTrue(e.getMessage().contains("Invalid CIDR notation"));
+    }
+
+    @Test
+    public void testValidateHostPatternCidrNotSupported() {
+        // CIDR patterns should be rejected when cidrSupported is false
+        UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () ->
+            AclControlManager.validateHostPattern("192.168.0.0/24", false));
+        assertTrue(e.getMessage().contains("CIDR-based ACL host patterns require metadata version"));
+
+        e = assertThrows(UnsupportedVersionException.class, () ->
+            AclControlManager.validateHostPattern("2001:db8::/32", false));
+        assertTrue(e.getMessage().contains("CIDR-based ACL host patterns require metadata version"));
+    }
+
+    /**
+     * Verify that validateCidrNotation validates IPv4 CIDR patterns correctly.
+     */
+    @Test
+    public void testValidateCidrNotationIpv4() {
+        // Valid patterns
+        AclControlManager.validateCidrNotation("192.168.0.0/24");
+        AclControlManager.validateCidrNotation("10.0.0.0/8");
+        AclControlManager.validateCidrNotation("192.168.1.1/32");
+        AclControlManager.validateCidrNotation("0.0.0.0/0");
+
+        // Invalid patterns
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateCidrNotation("192.168.0.0/33"));
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateCidrNotation("not.an.ip/24"));
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateCidrNotation("192.168.0.256/24"));
+    }
+
+    @Test
+    public void testValidateCidrNotationIpv6() {
+        // Valid patterns
+        AclControlManager.validateCidrNotation("2001:db8::/32");
+        AclControlManager.validateCidrNotation("2001:db8:abcd::/48");
+        AclControlManager.validateCidrNotation("::1/128");
+        AclControlManager.validateCidrNotation("::/0");
+        AclControlManager.validateCidrNotation("fe80::/10");
+
+        // Invalid patterns
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateCidrNotation("2001:db8::/129"));
+        assertThrows(InvalidRequestException.class, () ->
+            AclControlManager.validateCidrNotation("not:valid:ipv6::/32"));
+    }
+
+    private static AclControlManager createManagerWithMetadataVersion(MetadataVersion version) {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder()
+            .setSnapshotRegistry(snapshotRegistry)
+            .setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                List.of()))
+            .build();
+        featureControl.replay(new FeatureLevelRecord()
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setFeatureLevel(version.featureLevel()));
+        return new AclControlManager.Builder()
+            .setSnapshotRegistry(snapshotRegistry)
+            .setFeatureControl(featureControl)
+            .build();
+    }
+
+    @Test
+    public void testCreateAclWithValidCidrHost() {
+        // Use a metadata version that supports CIDR ACLs
+        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_3_IV0);
+
+        // Create ACL with valid IPv4 CIDR
+        AclBinding ipv4CidrAcl = new AclBinding(
+            new ResourcePattern(TOPIC, "test-topic", LITERAL),
+            new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
+
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(ipv4CidrAcl));
+        assertEquals(1, result.response().size());
+        assertFalse(result.response().get(0).exception().isPresent());
+
+        // Create ACL with valid IPv6 CIDR
+        AclBinding ipv6CidrAcl = new AclBinding(
+            new ResourcePattern(TOPIC, "test-topic-2", LITERAL),
+            new AccessControlEntry("User:test", "2001:db8::/32", ALTER, ALLOW));
+
+        result = manager.createAcls(List.of(ipv6CidrAcl));
+        assertEquals(1, result.response().size());
+        assertFalse(result.response().get(0).exception().isPresent());
+    }
+
+    @Test
+    public void testCreateAclWithInvalidCidrHost() {
+        // Use a metadata version that supports CIDR ACLs
+        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_3_IV0);
+
+        // Create ACL with invalid IPv4 CIDR (prefix too large)
+        AclBinding invalidCidrAcl = new AclBinding(
+            new ResourcePattern(TOPIC, "test-topic", LITERAL),
+            new AccessControlEntry("User:test", "192.168.0.0/33", ALTER, ALLOW));
+
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(invalidCidrAcl));
+        assertEquals(1, result.response().size());
+        assertTrue(result.response().get(0).exception().isPresent());
+        assertTrue(result.response().get(0).exception().get().getMessage().contains("Invalid CIDR notation"));
+    }
+
+    @Test
+    public void testCreateAclWithCidrHostUnsupportedVersion() {
+        // Use a metadata version that doesn't support CIDR ACLs
+        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_0_IV0);
+
+        // Create ACL with valid CIDR but unsupported metadata version
+        AclBinding cidrAcl = new AclBinding(
+            new ResourcePattern(TOPIC, "test-topic", LITERAL),
+            new AccessControlEntry("User:test", "192.168.0.0/24", ALTER, ALLOW));
+
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(cidrAcl));
+        assertEquals(1, result.response().size());
+        assertTrue(result.response().get(0).exception().isPresent());
+        assertTrue(result.response().get(0).exception().get() instanceof UnsupportedVersionException);
+        assertTrue(result.response().get(0).exception().get().getMessage().contains("CIDR-based ACL host patterns require metadata version"));
+    }
+
+    @Test
+    public void testCreateAclWithRegularHostOlderVersion() {
+        // Use a metadata version that doesn't support CIDR ACLs
+        AclControlManager manager = createManagerWithMetadataVersion(MetadataVersion.IBP_4_0_IV0);
+
+        // Create ACL with regular IP address should still work
+        AclBinding regularAcl = new AclBinding(
+            new ResourcePattern(TOPIC, "test-topic", LITERAL),
+            new AccessControlEntry("User:test", "192.168.0.1", ALTER, ALLOW));
+
+        ControllerResult<List<AclCreateResult>> result = manager.createAcls(List.of(regularAcl));
+        assertEquals(1, result.response().size());
+        assertFalse(result.response().get(0).exception().isPresent());
+
+        // Create ACL with wildcard should also work
+        AclBinding wildcardAcl = new AclBinding(
+            new ResourcePattern(TOPIC, "test-topic-2", LITERAL),
+            new AccessControlEntry("User:test", "*", ALTER, ALLOW));
+
+        result = manager.createAcls(List.of(wildcardAcl));
+        assertEquals(1, result.response().size());
+        assertFalse(result.response().get(0).exception().isPresent());
     }
 }

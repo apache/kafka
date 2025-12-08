@@ -1619,6 +1619,7 @@ public final class QuorumController implements Controller {
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
+            setFeatureControl(featureControl).
             build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
