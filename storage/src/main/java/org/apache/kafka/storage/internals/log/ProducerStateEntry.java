@@ -80,11 +80,10 @@ public class ProducerStateEntry {
     }
 
     /**
-     * Returns a new instance with the provided parameters (when present) and the values from the current instance
-     * otherwise.
+     * Returns a new instance with the provided producer ID and the values from the current instance.
      */
-    ProducerStateEntry withProducerIdAndBatchMetadata(long producerId, Optional<BatchMetadata> batchMetadata) {
-        return new ProducerStateEntry(producerId, producerEpoch(), coordinatorEpoch, lastTimestamp, currentTxnFirstOffset, batchMetadata);
+    ProducerStateEntry withProducerId(long producerId) {
+        return new ProducerStateEntry(producerId, producerEpoch(), coordinatorEpoch, lastTimestamp, currentTxnFirstOffset, Optional.empty());
     }
 
     void addBatch(short producerEpoch, int lastSeq, long lastOffset, int offsetDelta, long timestamp) {
