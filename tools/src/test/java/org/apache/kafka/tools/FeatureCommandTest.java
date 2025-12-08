@@ -151,20 +151,34 @@ public class FeatureCommandTest {
         List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-            "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithUnstable.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                outputWithoutEpoch(featuresWithUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(6))
+        );
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
             assertEquals(
@@ -174,20 +188,34 @@ public class FeatureCommandTest {
         );
         List<String> featuresWithoutUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-            "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithoutUnstable.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.2-IV1", "3.7-IV0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(6))
+        );
     }
 
     @ClusterTest(
@@ -217,20 +245,34 @@ public class FeatureCommandTest {
         List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-            "SupportedMaxVersion: 4.3-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithUnstable.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                outputWithoutEpoch(featuresWithUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(6))
+        );
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
             assertEquals(
@@ -240,20 +282,34 @@ public class FeatureCommandTest {
         );
         List<String> featuresWithoutUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-            "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(featuresWithoutUnstable.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithUnstable.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(featuresWithoutUnstable.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.2-IV1", "3.7-IV0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(6))
+        );
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV3)
