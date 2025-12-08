@@ -241,7 +241,7 @@ public class FeatureCommand {
         featureMetadata.supportedFeatures().keySet().stream().sorted().forEach(feature -> {
             short finalizedLevel = (featureMetadata.finalizedFeatures().get(feature) == null) ? 0 : featureMetadata.finalizedFeatures().get(feature).maxVersionLevel();
             SupportedVersionRange range = featureMetadata.supportedFeatures().get(feature);
-            System.out.printf("Feature: %s\tSupportedMinVersion: %s\tSupportedMaxVersion: %s\tFinalizedVersionLevel: %s\tEpoch: %s%n",
+            System.out.printf("Feature: %-40s  SupportedMinVersion: %-15s  SupportedMaxVersion: %-15s  FinalizedVersionLevel: %-15s  Epoch: %s%n",
                     feature,
                     levelToString(feature, range.minVersion()),
                     levelToString(feature, range.maxVersion()),

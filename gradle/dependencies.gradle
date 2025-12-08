@@ -58,7 +58,7 @@ versions += [
   bndlib: "7.1.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "10.20.2",
   commonsLang: "3.18.0",
-  commonsValidator: "1.10.0",
+  commonsValidator: "1.10.1",
   classgraph: "4.8.179",
   gradle: "9.2.1",
   grgit: "5.3.3",
