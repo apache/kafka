@@ -65,13 +65,13 @@ public class UniformHomogeneousAssignmentBuilderTest {
     private final String memberC = "C";
 
     @ParameterizedTest
-    @ValueSource(booleans = {false})
+    @ValueSource(booleans = {false, true})
     public void testAssignmentReuse(boolean rackAware) {
         CommonAssignorTests.testAssignmentReuse(assignor, HOMOGENEOUS, rackAware);
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false})
+    @ValueSource(booleans = {false, true})
     public void testReassignmentStickiness(boolean rackAware) {
         CommonAssignorTests.testReassignmentStickiness(assignor, HOMOGENEOUS, rackAware);
     }

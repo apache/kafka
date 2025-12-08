@@ -26,6 +26,7 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -64,6 +65,11 @@ public class UniformHomogeneousAssignmentBuilder {
      * The set of topic Ids that the consumer group is subscribed to.
      */
     private final Set<Uuid> subscribedTopicIds;
+
+    /**
+     * The member Ids of the consumer group.
+     */
+    private final List<String> memberIds;
 
     /**
      * The members that are below their quota.
@@ -107,7 +113,9 @@ public class UniformHomogeneousAssignmentBuilder {
     UniformHomogeneousAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
+        this.memberIds = new ArrayList<>(groupSpec.memberIds());
+        Collections.sort(memberIds);
+        this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(this.memberIds.get(0))
             .subscribedTopicIds());
         this.unfilledMembers = new ArrayList<>();
         this.unassignedPartitions = new ArrayList<>();
@@ -116,21 +124,25 @@ public class UniformHomogeneousAssignmentBuilder {
         this.partitionRacks = new HashMap<>();
 
         Set<String> allMemberRacks = new HashSet<>();
-        for (String memberId : groupSpec.memberIds()) {
+        for (String memberId : this.memberIds) {
             groupSpec.memberSubscription(memberId).rackId().ifPresent(allMemberRacks::add);
         }
 
-        Set<String> allPartitionRacks = new HashSet<>();
-        for (Uuid topicId : this.subscribedTopicIds) {
-            int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
-            for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
-                Set<String> racks = subscribedTopicDescriber.racksForPartition(topicId, partitionId);
-                partitionRacks.put(new TopicIdPartition(topicId, partitionId), racks);
-                allPartitionRacks.addAll(racks);
+        if (allMemberRacks.isEmpty()) {
+            this.useRackStrategy = false;
+        } else {
+            Set<String> allPartitionRacks = new HashSet<>();
+            for (Uuid topicId : this.subscribedTopicIds) {
+                int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
+                for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
+                    Set<String> racks = subscribedTopicDescriber.racksForPartition(topicId, partitionId);
+                    partitionRacks.put(new TopicIdPartition(topicId, partitionId), racks);
+                    allPartitionRacks.addAll(racks);
+                }
             }
-        }
 
-        this.useRackStrategy = AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, partitionRacks);
+            this.useRackStrategy = AssignorHelpers.useRackAwareAssignment(allMemberRacks, allPartitionRacks, partitionRacks);
+        }
     }
 
     /**
@@ -161,7 +173,7 @@ public class UniformHomogeneousAssignmentBuilder {
 
         // Compute the minimum required quota per member and the number of members
         // that should receive an extra partition.
-        int numberOfMembers = groupSpec.memberIds().size();
+        int numberOfMembers = this.memberIds.size();
         minimumMemberQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
@@ -189,7 +201,7 @@ public class UniformHomogeneousAssignmentBuilder {
      */
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     private void maybeRevokePartitions() {
-        for (String memberId : groupSpec.memberIds()) {
+        for (String memberId : this.memberIds) {
             Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId).partitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
