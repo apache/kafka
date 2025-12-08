@@ -360,16 +360,16 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testIncrementalAlterNullValueConfigsByControllers(ClusterInstance clusterInstance) throws Exception {
+    public void testIncrementalAlterNullValueConfigsByControllers(ClusterInstance clusterInstance) {
         testIncrementalAlterNullValueConfigs(clusterInstance, true);
     }
 
     @ClusterTest
-    public void testIncrementalAlterNullValueConfigs(ClusterInstance clusterInstance) throws Exception {
+    public void testIncrementalAlterNullValueConfigs(ClusterInstance clusterInstance) {
         testIncrementalAlterNullValueConfigs(clusterInstance, false);
     }
 
-    private void testIncrementalAlterNullValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+    private void testIncrementalAlterNullValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             int nodeId = usingBootstrapControllers ?
                     clusterInstance.controllers().values().iterator().next().config().nodeId() :
@@ -395,16 +395,16 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testIncrementalAlterDuplicateValueConfigsByControllers(ClusterInstance clusterInstance) throws Exception {
+    public void testIncrementalAlterDuplicateValueConfigsByControllers(ClusterInstance clusterInstance) {
         testIncrementalAlterDuplicateValueConfigs(clusterInstance, true);
     }
 
     @ClusterTest
-    public void testIncrementalAlterDuplicateValueConfigs(ClusterInstance clusterInstance) throws Exception {
+    public void testIncrementalAlterDuplicateValueConfigs(ClusterInstance clusterInstance) {
         testIncrementalAlterDuplicateValueConfigs(clusterInstance, false);
     }
 
-    private void testIncrementalAlterDuplicateValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+    private void testIncrementalAlterDuplicateValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             int nodeId = usingBootstrapControllers ?
                     clusterInstance.controllers().values().iterator().next().config().nodeId() :
@@ -430,16 +430,16 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testIncrementalAlterUnknownResourceTypeByControllers(ClusterInstance clusterInstance) throws Exception {
+    public void testIncrementalAlterUnknownResourceTypeByControllers(ClusterInstance clusterInstance) {
         testIncrementalAlterUnknownResourceType(clusterInstance, true);
     }
 
     @ClusterTest
-    public void testIncrementalAlterUnknownResourceType(ClusterInstance clusterInstance) throws Exception {
+    public void testIncrementalAlterUnknownResourceType(ClusterInstance clusterInstance) {
         testIncrementalAlterUnknownResourceType(clusterInstance, false);
     }
 
-    private void testIncrementalAlterUnknownResourceType(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+    private void testIncrementalAlterUnknownResourceType(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             ConfigResource nodeResource = new ConfigResource(UNKNOWN, "unknown");
             Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
