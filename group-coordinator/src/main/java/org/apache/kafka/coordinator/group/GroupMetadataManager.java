@@ -145,6 +145,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.consumer.TopicRegexResolver;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
@@ -514,9 +515,9 @@ public class GroupMetadataManager {
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     /**
-     * The authorizer to validate the regex subscription topics.
+     * The topic regex resolver to resolve the regex subscription topics.
      */
-    private final Optional<Plugin<Authorizer>> authorizerPlugin;
+    private final TopicRegexResolver topicRegexResolver;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -551,8 +552,8 @@ public class GroupMetadataManager {
         this.shareGroupStatePartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
-        this.authorizerPlugin = authorizerPlugin;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
     }
 
@@ -2356,7 +2357,7 @@ public class GroupMetadataManager {
             updatedMember,
             records
         );
-        UpdateRegularExpressionsResult updateRegularExpressionsResult = maybeUpdateRegularExpressions(
+        UpdateRegularExpressionStatus updateRegularExpressionStatus = maybeUpdateRegularExpressions(
             context,
             group,
             member,
@@ -2366,7 +2367,7 @@ public class GroupMetadataManager {
 
         // The subscription has changed when either the subscribed topic names or subscribed topic
         // regex has changed.
-        boolean hasSubscriptionChanged = subscribedTopicNamesChanged || updateRegularExpressionsResult.regexUpdated();
+        boolean hasSubscriptionChanged = subscribedTopicNamesChanged || updateRegularExpressionStatus.regexUpdated();
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
 
@@ -2380,7 +2381,7 @@ public class GroupMetadataManager {
             // bumping the group epoch when the new subscribed topic regex has not been resolved
             // yet, since we will have to update the target assignment again later.
             subscribedTopicNamesChanged ||
-            updateRegularExpressionsResult == UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+            updateRegularExpressionStatus == UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED;
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -2558,7 +2559,7 @@ public class GroupMetadataManager {
 
         // Maybe create tombstone for the regex if the joining member replaces a static member
         // with regex subscription.
-        UpdateRegularExpressionsResult updateRegularExpressionsResult = maybeUpdateRegularExpressions(
+        UpdateRegularExpressionStatus updateRegularExpressionStatus = maybeUpdateRegularExpressions(
             context,
             group,
             member,
@@ -2566,7 +2567,7 @@ public class GroupMetadataManager {
             records
         );
 
-        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionsResult.regexUpdated();
+        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionStatus.regexUpdated();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -3242,7 +3243,7 @@ public class GroupMetadataManager {
         return value != null && !value.isEmpty();
     }
 
-    private enum UpdateRegularExpressionsResult {
+    private enum UpdateRegularExpressionStatus {
         NO_CHANGE,
         REGEX_UPDATED,
         REGEX_UPDATED_AND_RESOLVED;
@@ -3265,7 +3266,7 @@ public class GroupMetadataManager {
      * @param records       The records accumulator.
      * @return The result of the update.
      */
-    private UpdateRegularExpressionsResult maybeUpdateRegularExpressions(
+    private UpdateRegularExpressionStatus maybeUpdateRegularExpressions(
         AuthorizableRequestContext context,
         ConsumerGroup group,
         ConsumerGroupMember member,
@@ -3279,7 +3280,7 @@ public class GroupMetadataManager {
         String newSubscribedTopicRegex = updatedMember.subscribedTopicRegex();
 
         boolean requireRefresh = false;
-        UpdateRegularExpressionsResult updateRegularExpressionsResult = UpdateRegularExpressionsResult.NO_CHANGE;
+        UpdateRegularExpressionStatus updateRegularExpressionStatus = UpdateRegularExpressionStatus.NO_CHANGE;
 
         // Check whether the member has changed its subscribed regex.
         boolean subscribedTopicRegexChanged = !Objects.equals(oldSubscribedTopicRegex, newSubscribedTopicRegex);
@@ -3287,7 +3288,7 @@ public class GroupMetadataManager {
             log.debug("[GroupId {}] Member {} updated its subscribed regex to: {}.",
                 groupId, memberId, newSubscribedTopicRegex);
 
-            updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED;
+            updateRegularExpressionStatus = UpdateRegularExpressionStatus.REGEX_UPDATED;
 
             if (isNotEmpty(oldSubscribedTopicRegex) && group.numSubscribedMembers(oldSubscribedTopicRegex) == 1) {
                 // If the member was the last one subscribed to the regex, we delete the
@@ -3308,11 +3309,11 @@ public class GroupMetadataManager {
                     // If the new regex is already resolved, we trigger a rebalance
                     // by bumping the group epoch.
                     if (group.resolvedRegularExpression(newSubscribedTopicRegex).isPresent()) {
-                        updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+                        updateRegularExpressionStatus = UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED;
                     }
                 }
             } else if (isNotEmpty(oldSubscribedTopicRegex)) {
-                updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+                updateRegularExpressionStatus = UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED;
             }
         }
 
@@ -3327,20 +3328,20 @@ public class GroupMetadataManager {
         // 0. The group is subscribed to regular expressions. We also take the one
         //    that the current may have just introduced.
         if (!requireRefresh && group.subscribedRegularExpressions().isEmpty()) {
-            return updateRegularExpressionsResult;
+            return updateRegularExpressionStatus;
         }
 
         // 1. There is no ongoing refresh for the group.
         String key = group.groupId() + "-regex";
         if (executor.isScheduled(key)) {
-            return updateRegularExpressionsResult;
+            return updateRegularExpressionStatus;
         }
 
         // 2. The last refresh is older than 10s. If the group does not have any regular
         //    expressions but the current member just brought a new one, we should continue.
         long lastRefreshTimeMs = group.lastResolvedRegularExpressionRefreshTimeMs();
         if (currentTimeMs <= lastRefreshTimeMs + REGEX_BATCH_REFRESH_MIN_INTERVAL_MS) {
-            return updateRegularExpressionsResult;
+            return updateRegularExpressionStatus;
         }
 
         // 3.1 The group has unresolved regular expressions.
@@ -3364,12 +3365,12 @@ public class GroupMetadataManager {
             Set<String> regexes = Collections.unmodifiableSet(subscribedRegularExpressions.keySet());
             executor.schedule(
                 key,
-                () -> refreshRegularExpressions(context, groupId, log, time, metadataImage, authorizerPlugin, regexes),
+                () -> topicRegexResolver.resolveRegularExpressions(context, groupId, log, metadataImage, regexes),
                 (result, exception) -> handleRegularExpressionsResult(groupId, memberId, result, exception)
             );
         }
 
-        return updateRegularExpressionsResult;
+        return updateRegularExpressionStatus;
     }
 
     /**
