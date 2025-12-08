@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern.consumer;
 
-import com.google.re2j.Pattern;
-import com.google.re2j.PatternSyntaxException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.Time;
@@ -27,6 +25,10 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
+
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
