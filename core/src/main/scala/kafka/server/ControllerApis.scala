@@ -788,6 +788,10 @@ class ControllerApis(
     response: IncrementalAlterConfigsResponseData
   ): Unit = {
     val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+    resource.configs.forEach { config =>
+      altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+        AlterConfigOp.OpType.forId(config.configOperation), config.value))
+    }
     if (configChanges.put(configResource, altersByName) != null) {
       configChanges.remove(configResource)
       response.responses().add(new AlterConfigsResourceResponse()
@@ -795,11 +799,6 @@ class ControllerApis(
         .setErrorMessage("Duplicate resource.")
         .setResourceName(resource.resourceName())
         .setResourceType(resource.resourceType()))
-    } else {
-      resource.configs.forEach { config =>
-        altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-          AlterConfigOp.OpType.forId(config.configOperation), config.value))
-      }
     }
   }
 
