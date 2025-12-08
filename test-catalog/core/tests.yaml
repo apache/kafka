@@ -1969,6 +1969,7 @@ kafka.server.FetchFromFollowerIntegrationTest:
 - testFetchFromFollowerWithRoll
 - testFetchFromLeaderWhilePreferredReadReplicaIsUnavailable
 - testFollowerCompleteDelayedFetchesOnReplication
+- testRackAwareRangeAssignor
 kafka.server.FetchRequestMaxBytesTest:
 - testConsumeMultipleRecords
 kafka.server.FetchRequestTest:
