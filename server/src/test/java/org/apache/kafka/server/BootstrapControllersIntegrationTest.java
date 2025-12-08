@@ -76,6 +76,7 @@ import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS
 import static org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
 import static org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
+import static org.apache.kafka.common.config.ConfigResource.Type.UNKNOWN;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -388,6 +389,72 @@ public class BootstrapControllersIntegrationTest {
             assertEquals(
                 "org.apache.kafka.common.errors.InvalidRequestException: " +
                     "Null value not supported for : my.custom.config, my.custom.config1",
+                exception.getMessage()
+            );
+        }
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterDuplicateValueConfigsByControllers(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterDuplicateValueConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterDuplicateValueConfigs(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterDuplicateValueConfigs(clusterInstance, false);
+    }
+
+    private void testIncrementalAlterDuplicateValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            int nodeId = usingBootstrapControllers ?
+                    clusterInstance.controllers().values().iterator().next().config().nodeId() :
+                    clusterInstance.brokers().values().iterator().next().config().nodeId();
+            ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
+            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                nodeResource,
+                List.of(
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", "value"), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", "value1"), AlterConfigOp.OpType.SET)
+                )
+            );
+            ExecutionException exception = assertThrows(
+                    ExecutionException.class,
+                    () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
+            );
+            System.out.println(exception.getCause().getClass());
+            assertEquals(
+                "org.apache.kafka.common.errors.InvalidRequestException: Error due to duplicate config keys",
+                exception.getMessage()
+            );
+        }
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterUnknownResourceTypeByControllers(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterUnknownResourceType(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterUnknownResourceType(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterUnknownResourceType(clusterInstance, false);
+    }
+
+    private void testIncrementalAlterUnknownResourceType(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            ConfigResource nodeResource = new ConfigResource(UNKNOWN, "unknown");
+            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                nodeResource,
+                List.of(
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", "value"), AlterConfigOp.OpType.SET)
+                )
+            );
+            ExecutionException exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
+            );
+            System.out.println(exception.getCause().getClass());
+            assertEquals(
+                "org.apache.kafka.common.errors.InvalidRequestException: Unknown resource type 0.",
                 exception.getMessage()
             );
         }

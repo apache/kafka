@@ -716,7 +716,6 @@ class ControllerApis(
     val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
     val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
       OptionalLong.empty())
-    val duplicateResources = new util.HashSet[ConfigResource]
     val configChanges = new util.HashMap[ConfigResource,
       util.Map[String, Entry[AlterConfigOp.OpType, String]]]()
     val brokerLoggerResponses = new util.ArrayList[AlterConfigsResourceResponse](1)
@@ -735,10 +734,10 @@ class ControllerApis(
             .setErrorMessage(null))
         },
         configResource => {
-          addConfigChangesOrHandleDuplicate(configResource, resource, duplicateResources, configChanges, response)
+          addConfigChangesOrHandleDuplicate(configResource, resource, configChanges, response)
         },
         configResource => {
-          addConfigChangesOrHandleDuplicate(configResource, resource, duplicateResources, configChanges, response)
+          addConfigChangesOrHandleDuplicate(configResource, resource, configChanges, response)
         },
         (_, t) => {
           val err = ApiError.fromThrowable(t)
@@ -785,25 +784,21 @@ class ControllerApis(
   private def addConfigChangesOrHandleDuplicate(
     configResource: ConfigResource,
     resource: IncrementalAlterConfigsRequestData.AlterConfigsResource,
-    duplicateResources: util.HashSet[ConfigResource],
     configChanges: util.HashMap[ConfigResource, util.Map[String, Entry[AlterConfigOp.OpType, String]]],
     response: IncrementalAlterConfigsResponseData
   ): Unit = {
-    if (!duplicateResources.contains(configResource)) {
-      val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+    val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+    if (configChanges.put(configResource, altersByName) != null) {
+      configChanges.remove(configResource)
+      response.responses().add(new AlterConfigsResourceResponse()
+        .setErrorCode(INVALID_REQUEST.code())
+        .setErrorMessage("Duplicate resource.")
+        .setResourceName(resource.resourceName())
+        .setResourceType(resource.resourceType()))
+    } else {
       resource.configs.forEach { config =>
         altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
           AlterConfigOp.OpType.forId(config.configOperation), config.value))
-      }
-
-      if (configChanges.put(configResource, altersByName) != null) {
-        duplicateResources.add(configResource)
-        configChanges.remove(configResource)
-        response.responses().add(new AlterConfigsResourceResponse()
-          .setErrorCode(INVALID_REQUEST.code())
-          .setErrorMessage("Duplicate resource.")
-          .setResourceName(resource.resourceName())
-          .setResourceType(resource.resourceType()))
       }
     }
   }
