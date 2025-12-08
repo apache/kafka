@@ -787,18 +787,19 @@ class ControllerApis(
     configChanges: util.HashMap[ConfigResource, util.Map[String, Entry[AlterConfigOp.OpType, String]]],
     response: IncrementalAlterConfigsResponseData
   ): Unit = {
-    val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
-    resource.configs.forEach { config =>
-      altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
-        AlterConfigOp.OpType.forId(config.configOperation), config.value))
-    }
-    if (configChanges.put(configResource, altersByName) != null) {
-      configChanges.remove(configResource)
+    if (configChanges.containsKey(configResource)) {
       response.responses().add(new AlterConfigsResourceResponse()
         .setErrorCode(INVALID_REQUEST.code())
         .setErrorMessage("Duplicate resource.")
         .setResourceName(resource.resourceName())
         .setResourceType(resource.resourceType()))
+    } else {
+      val altersByName = new util.HashMap[String, Entry[AlterConfigOp.OpType, String]]()
+      resource.configs.forEach { config =>
+        altersByName.put(config.name, new util.AbstractMap.SimpleEntry[AlterConfigOp.OpType, String](
+          AlterConfigOp.OpType.forId(config.configOperation), config.value))
+      }
+      configChanges.put(configResource, altersByName)
     }
   }
 
