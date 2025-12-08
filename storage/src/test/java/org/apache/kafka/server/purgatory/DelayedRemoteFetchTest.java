@@ -92,7 +92,7 @@ public class DelayedRemoteFetchTest {
         CompletableFuture<RemoteLogReadResult> future = new CompletableFuture<>();
         future.complete(buildRemoteReadResult(Errors.NONE));
 
-        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
+        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
         long highWatermark = 100L;
         long leaderLogStartOffset = 10L;
         LogReadResult logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset);
@@ -129,7 +129,7 @@ public class DelayedRemoteFetchTest {
 
         CompletableFuture<RemoteLogReadResult> future = new CompletableFuture<>();
         future.complete(buildRemoteReadResult(Errors.NONE));
-        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
+        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
         LogReadResult logReadInfo = buildReadResult(Errors.NONE, 100L, 10L);
 
         assertThrows(IllegalStateException.class, () ->
@@ -163,7 +163,7 @@ public class DelayedRemoteFetchTest {
             .when(partitionOrException).accept(topicIdPartition.topicPartition());
 
         CompletableFuture<RemoteLogReadResult> future = new CompletableFuture<>();
-        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
+        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
 
         LogReadResult logReadInfo = buildReadResult(Errors.NONE);
 
@@ -201,7 +201,7 @@ public class DelayedRemoteFetchTest {
         CompletableFuture<RemoteLogReadResult> future = new CompletableFuture<>();
         future.complete(buildRemoteReadResult(Errors.NONE));
 
-        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
+        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
 
         // build a read result with error
         LogReadResult logReadInfo = buildReadResult(Errors.FENCED_LEADER_EPOCH);
@@ -255,8 +255,8 @@ public class DelayedRemoteFetchTest {
         // Only complete one remote fetch
         future2.complete(buildRemoteReadResult(Errors.NONE));
 
-        RemoteStorageFetchInfo fetchInfo1 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
-        RemoteStorageFetchInfo fetchInfo2 = new RemoteStorageFetchInfo(0, false, topicIdPartition2, null, null);
+        RemoteStorageFetchInfo fetchInfo1 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
+        RemoteStorageFetchInfo fetchInfo2 = new RemoteStorageFetchInfo(0, false, topicIdPartition2, null, null, 0);
 
         long highWatermark = 100L;
         long leaderLogStartOffset = 10L;
@@ -329,8 +329,8 @@ public class DelayedRemoteFetchTest {
         // Only complete one remote fetch
         future1.complete(buildRemoteReadResult(Errors.NONE));
 
-        RemoteStorageFetchInfo fetchInfo1 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
-        RemoteStorageFetchInfo fetchInfo2 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
+        RemoteStorageFetchInfo fetchInfo1 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
+        RemoteStorageFetchInfo fetchInfo2 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
 
         long highWatermark1 = 100L;
         long leaderLogStartOffset1 = 10L;
@@ -399,8 +399,8 @@ public class DelayedRemoteFetchTest {
         future1.complete(buildRemoteReadResult(Errors.NONE));
         future2.complete(buildRemoteReadResult(Errors.UNKNOWN_SERVER_ERROR));
 
-        RemoteStorageFetchInfo fetchInfo1 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
-        RemoteStorageFetchInfo fetchInfo2 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null);
+        RemoteStorageFetchInfo fetchInfo1 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
+        RemoteStorageFetchInfo fetchInfo2 = new RemoteStorageFetchInfo(0, false, topicIdPartition, null, null, 0);
 
         LogReadResult logReadInfo1 = buildReadResult(Errors.NONE, 100, 10);
         LogReadResult logReadInfo2 = buildReadResult(Errors.NONE, 100, 10);

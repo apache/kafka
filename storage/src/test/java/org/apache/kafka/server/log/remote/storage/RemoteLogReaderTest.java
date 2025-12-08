@@ -70,7 +70,7 @@ public class RemoteLogReaderTest {
         when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenReturn(fetchDataInfo);
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null, 0);
         RemoteLogReader remoteLogReader =
                 new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager, timer);
         remoteLogReader.call();
@@ -83,10 +83,8 @@ public class RemoteLogReaderTest {
         assertTrue(actualRemoteLogReadResult.fetchDataInfo().isPresent());
         assertEquals(fetchDataInfo, actualRemoteLogReadResult.fetchDataInfo().get());
 
-        // verify the record method on quota manager was called with the expected value
-        ArgumentCaptor<Double> recordedArg = ArgumentCaptor.forClass(Double.class);
-        verify(mockQuotaManager, times(1)).record(recordedArg.capture());
-        assertEquals(100, recordedArg.getValue());
+        // With quotaReservedBytes=0, quota manager record() is not called
+        verify(mockQuotaManager, times(0)).record(any(Double.class));
 
         // Verify metrics for remote reads are updated correctly
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteFetchRequestRate().count());
@@ -103,7 +101,7 @@ public class RemoteLogReaderTest {
         when(mockRLM.read(any(RemoteStorageFetchInfo.class))).thenThrow(new RuntimeException("error"));
 
         Consumer<RemoteLogReadResult> callback = mock(Consumer.class);
-        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC), null, null, 0);
         RemoteLogReader remoteLogReader =
                 new RemoteLogReader(remoteStorageFetchInfo, mockRLM, callback, brokerTopicStats, mockQuotaManager, timer);
         remoteLogReader.call();
@@ -115,10 +113,8 @@ public class RemoteLogReaderTest {
         assertTrue(actualRemoteLogReadResult.error().isPresent());
         assertFalse(actualRemoteLogReadResult.fetchDataInfo().isPresent());
 
-        // verify the record method on quota manager was called with the expected value
-        ArgumentCaptor<Double> recordedArg = ArgumentCaptor.forClass(Double.class);
-        verify(mockQuotaManager, times(1)).record(recordedArg.capture());
-        assertEquals(0, recordedArg.getValue());
+        // With quotaReservedBytes=0, quota manager record() is not called
+        verify(mockQuotaManager, times(0)).record(any(Double.class));
 
         // Verify metrics for remote reads are updated correctly
         assertEquals(1, brokerTopicStats.topicStats(TOPIC).remoteFetchRequestRate().count());

@@ -353,6 +353,32 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return fetchQuotaMetrics.sensor();
     }
 
+    /**
+     * Atomically records estimated fetch size and checks quota.
+     * This prevents the race condition where multiple threads check quota before any record usage.
+     */
+    public long recordAndCheckFetchQuota(int estimatedBytes) {
+        return rlmFetchQuotaManager.recordAndGetThrottleTimeMs(estimatedBytes);
+    }
+
+    /**
+     * Releases a previously reserved quota amount.
+     * Used when a fetch is throttled and not executed.
+     */
+    public void releaseFetchQuota(int bytes) {
+        rlmFetchQuotaManager.record(-bytes);
+    }
+
+    // Visible for testing
+    public RLMQuotaManager fetchQuotaManager() {
+        return rlmFetchQuotaManager;
+    }
+
+    // Visible for testing
+    public RLMQuotaManager copyQuotaManager() {
+        return rlmCopyQuotaManager;
+    }
+
     static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
         return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerCopyMaxBytesPerSecond(),
           rlmConfig.remoteLogManagerCopyNumQuotaSamples(),

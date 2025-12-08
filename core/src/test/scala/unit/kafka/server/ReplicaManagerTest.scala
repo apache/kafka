@@ -5746,7 +5746,8 @@ class ReplicaManagerTest {
 
   @Test
   def testRemoteReadQuotaExceeded(): Unit = {
-    when(mockRemoteLogManager.getFetchThrottleTimeMs).thenReturn(quotaExceededThrottleTime)
+    when(mockRemoteLogManager.recordAndCheckFetchQuota(anyInt())).thenReturn(quotaExceededThrottleTime)
+    doNothing().when(mockRemoteLogManager).releaseFetchQuota(anyInt())
 
     val tp0 = new TopicPartition(topic, 0)
     val tpId0 = new TopicIdPartition(topicId, tp0)
@@ -5770,7 +5771,7 @@ class ReplicaManagerTest {
 
   @Test
   def testRemoteReadQuotaNotExceeded(): Unit = {
-    when(mockRemoteLogManager.getFetchThrottleTimeMs).thenReturn(quotaAvailableThrottleTime)
+    when(mockRemoteLogManager.recordAndCheckFetchQuota(anyInt())).thenReturn(quotaAvailableThrottleTime)
 
     val tp0 = new TopicPartition(topic, 0)
     val tpId0 = new TopicIdPartition(topicId, tp0)

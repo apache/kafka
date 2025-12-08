@@ -93,6 +93,48 @@ public class RLMQuotaManager {
         sensor().record(value, time.milliseconds(), false);
     }
 
+    /**
+     * Record usage and immediately check quota. This ensures the check sees the recorded value
+     * by using the sensor's internal synchronization.
+     *
+     * @param value The value to record
+     * @return The throttle time in milliseconds, or 0 if quota is not exceeded
+     */
+    public long recordAndGetThrottleTimeMs(double value) {
+        Sensor sensorInstance = sensor();
+        // Record with checkQuotas=false to avoid immediate exception
+        sensorInstance.record(value, time.milliseconds(), false);
+
+        // Now check quotas - this will see the value we just recorded
+        // because Sensor uses synchronized internally
+        try {
+            sensorInstance.checkQuotas();
+        } catch (QuotaViolationException qve) {
+            LOGGER.debug("Quota violated after recording {} bytes for sensor ({}), metric: ({}), metric-value: ({}), bound: ({})",
+                value, sensorInstance.name(), qve.metric().metricName(), qve.value(), qve.bound());
+            return QuotaUtils.throttleTime(qve, time.milliseconds());
+        }
+        return 0L;
+    }
+
+    /**
+     * Returns the current quota configuration.
+     * This method is thread-safe and returns a consistent snapshot of the quota.
+     *
+     * Visible for testing - allows tests to verify quota values are correctly initialized
+     * and updated without requiring indirect measurement through throttle behavior.
+     *
+     * @return the current Quota
+     */
+    public Quota quota() {
+        lock.readLock().lock();
+        try {
+            return quota;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     private MetricConfig getQuotaMetricConfig(Quota quota) {
         return new MetricConfig()
             .timeWindow(config.quotaWindowSizeSeconds(), TimeUnit.SECONDS)

@@ -1925,8 +1925,14 @@ class ReplicaManager(val config: KafkaConfig,
         createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
           new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
       } else {
-        val throttleTimeMs = remoteLogManager.get.getFetchThrottleTimeMs
+        // Reserve quota atomically before dispatching to prevent concurrent bypass
+        // This records the estimated fetch size and checks quota in one atomic operation
+        val quotaCheckResult = remoteLogManager.get.recordAndCheckFetchQuota(adjustedMaxBytes)
+        val throttleTimeMs = quotaCheckResult
         val fetchDataInfo = if (throttleTimeMs > 0) {
+          // Quota exceeded - release the reservation immediately since we're not fetching
+          remoteLogManager.get.releaseFetchQuota(adjustedMaxBytes)
+
           // Record the throttle time for the remote log fetches
           remoteLogManager.get.fetchThrottleTimeSensor().record(throttleTimeMs, time.milliseconds())
 
@@ -1945,7 +1951,7 @@ class ReplicaManager(val config: KafkaConfig,
           val remoteStorageFetchInfoOpt = if (adjustedMaxBytes > 0) {
             // For consume fetch requests, create a dummy FetchDataInfo with the remote storage fetch information.
             // For the topic-partitions that need remote data, we will use this information to read the data in another thread.
-            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, params.isolation))
+            Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, params.isolation, adjustedMaxBytes))
           } else {
             Optional.empty[RemoteStorageFetchInfo]()
           }

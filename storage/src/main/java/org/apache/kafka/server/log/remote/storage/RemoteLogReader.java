@@ -60,22 +60,51 @@ public class RemoteLogReader implements Callable<Void> {
     @Override
     public Void call() {
         RemoteLogReadResult result;
+        String topic = fetchInfo.topicIdPartition().topic();
+
+        int quotaReservedBytes = fetchInfo.quotaReservedBytes();
+
         try {
             LOGGER.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicIdPartition());
             FetchDataInfo fetchDataInfo = remoteReadTimer.time(() -> rlm.read(fetchInfo));
-            brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
-            brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+            int actualFetchSize = fetchDataInfo.records.sizeInBytes();
+
+            // Adjust quota: record only the DELTA between actual and reserved
+            if (quotaReservedBytes > 0) {
+                int delta = actualFetchSize - quotaReservedBytes;
+                if (delta != 0) {
+                    quotaManager.record(delta);
+                    LOGGER.debug("Adjusted quota for {}: reserved={}, actual={}, delta={}",
+                        fetchInfo.topicIdPartition(), quotaReservedBytes, actualFetchSize, delta);
+                }
+            }
+
+            brokerTopicStats.topicStats(topic).remoteFetchBytesRate().mark(actualFetchSize);
+            brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(actualFetchSize);
+
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
         } catch (OffsetOutOfRangeException e) {
+            // Fetch failed, release the reservation
+            if (quotaReservedBytes > 0) {
+                quotaManager.record(-quotaReservedBytes);
+                LOGGER.debug("Released {} bytes reservation due to offset out of range for {}",
+                    quotaReservedBytes, fetchInfo.topicIdPartition());
+            }
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         } catch (Exception e) {
-            brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).failedRemoteFetchRequestRate().mark();
+            // Fetch failed, release the reservation
+            if (quotaReservedBytes > 0) {
+                quotaManager.record(-quotaReservedBytes);
+                LOGGER.debug("Released {} bytes reservation due to error for {}",
+                    quotaReservedBytes, fetchInfo.topicIdPartition());
+            }
+            brokerTopicStats.topicStats(topic).failedRemoteFetchRequestRate().mark();
             brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().mark();
             LOGGER.error("Error occurred while reading the remote data for {}", fetchInfo.topicIdPartition(), e);
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
+
         LOGGER.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicIdPartition());
-        quotaManager.record(result.fetchDataInfo().map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
         callback.accept(result);
         return null;
     }

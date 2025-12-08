@@ -286,6 +286,9 @@ class BrokerServer(
 
       remoteLogManagerOpt = createRemoteLogManager(listenerInfo)
 
+      // Eagerly apply tiered storage quota configurations to prevent startup race condition
+      remoteLogManagerOpt.foreach(applyRemoteLogQuotas)
+
       alterPartitionManager = AlterPartitionManager(
         config,
         scheduler = kafkaScheduler,
@@ -760,6 +763,32 @@ class BrokerServer(
       Some(rlm)
     } else {
       None
+    }
+  }
+
+  /**
+   * Eagerly applies tiered storage quota configurations to RemoteLogManager.
+   * This prevents a startup race condition where RemoteLogManager would otherwise start with
+   * default quotas (unlimited) until dynamic config updates apply the correct values.
+   *
+   * In KRaft mode, configs are read directly from the broker configuration which is already
+   * loaded from the controller metadata at startup.
+   *
+   * @param remoteLogManager The RemoteLogManager instance to configure
+   */
+  private def applyRemoteLogQuotas(remoteLogManager: RemoteLogManager): Unit = {
+    val fetchQuota = config.remoteLogManagerConfig.remoteLogManagerFetchMaxBytesPerSecond()
+    val copyQuota = config.remoteLogManagerConfig.remoteLogManagerCopyMaxBytesPerSecond()
+
+    // Only apply if not using default (unlimited) values
+    if (fetchQuota != RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND) {
+      remoteLogManager.updateFetchQuota(fetchQuota)
+      info(s"Initialized RemoteLogManager fetch quota from configuration: $fetchQuota bytes/sec")
+    }
+
+    if (copyQuota != RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND) {
+      remoteLogManager.updateCopyQuota(copyQuota)
+      info(s"Initialized RemoteLogManager copy quota from configuration: $copyQuota bytes/sec")
     }
   }
 

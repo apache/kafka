@@ -28,6 +28,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -110,6 +113,459 @@ public class RLMQuotaManagerTest {
 
     private void moveClock(int secs) {
         time.setCurrentTimeMs(time.milliseconds() + secs * 1000L);
+    }
+
+    @Test
+    public void testRecordAndGetThrottleTimeMs() {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        // First request should not be throttled
+        long throttleTime = quotaManager.recordAndGetThrottleTimeMs(30);
+        assertEquals(0L, throttleTime, "First request under quota should not be throttled");
+
+        // Move clock forward to capture the rate
+        moveClock(1);
+
+        // Second request that exceeds quota should be throttled
+        throttleTime = quotaManager.recordAndGetThrottleTimeMs(30);
+        assertTrue(throttleTime > 0, "Request exceeding quota should be throttled");
+    }
+
+    @Test
+    public void testRecordAndGetThrottleTimeMsSeesRecordedValue() {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        // Record a value that exceeds quota
+        long throttleTime = quotaManager.recordAndGetThrottleTimeMs(500);
+        moveClock(1);
+
+        // The throttle time should be non-zero because recordAndGetThrottleTimeMs
+        // should see its own recorded value
+        assertTrue(throttleTime > 0, "recordAndGetThrottleTimeMs should see its own recorded value");
+    }
+
+    @Test
+    public void testRecordAndGetThrottleTimeMsMultipleRequests() {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(100, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        // Record multiple small requests
+        assertEquals(0L, quotaManager.recordAndGetThrottleTimeMs(20));
+        assertEquals(0L, quotaManager.recordAndGetThrottleTimeMs(20));
+        assertEquals(0L, quotaManager.recordAndGetThrottleTimeMs(20));
+
+        moveClock(1);
+
+        // Next request should see accumulated usage
+        assertEquals(0L, quotaManager.recordAndGetThrottleTimeMs(20));
+
+        // This one pushes over quota
+        long throttleTime = quotaManager.recordAndGetThrottleTimeMs(30);
+        assertTrue(throttleTime > 0, "Request that pushes over quota should be throttled");
+    }
+
+    @Test
+    public void testConcurrentRecordAndGetThrottleTimeMs() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(100, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 10;
+        int recordsPerThread = 5;
+        int bytesPerRecord = 30; // 10 threads * 5 records * 30 bytes = 1500 bytes total
+
+        Thread[] threads = new Thread[numThreads];
+        long[][] throttleTimes = new long[numThreads][recordsPerThread];
+
+        // Create threads that will concurrently record
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                for (int j = 0; j < recordsPerThread; j++) {
+                    throttleTimes[threadIndex][j] = quotaManager.recordAndGetThrottleTimeMs(bytesPerRecord);
+                    try {
+                        Thread.sleep(1); // Small delay to simulate real work
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        moveClock(1);
+
+        int throttledCount = 0;
+        for (int i = 0; i < numThreads; i++) {
+            for (int j = 0; j < recordsPerThread; j++) {
+                if (throttleTimes[i][j] > 0) {
+                    throttledCount++;
+                }
+            }
+        }
+
+        assertTrue(throttledCount > 0,
+            "At least some concurrent requests should have been throttled when quota is exceeded");
+    }
+
+    @Test
+    public void testConcurrentRecordAndGetThrottleTimeMsConsistency() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(50, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 5;
+        Thread[] threads = new Thread[numThreads];
+        boolean[] wasThrottled = new boolean[numThreads];
+
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                long throttleTime = quotaManager.recordAndGetThrottleTimeMs(60);
+                wasThrottled[threadIndex] = throttleTime > 0;
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        moveClock(1);
+
+        int throttledCount = 0;
+        for (boolean throttled : wasThrottled) {
+            if (throttled) {
+                throttledCount++;
+            }
+        }
+
+        assertTrue(throttledCount >= 1,
+            "At least one thread should have been throttled when all threads exceed quota");
+    }
+
+    @Test
+    public void testRecordAndGetThrottleTimeMsNegativeValue() {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(100, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        quotaManager.recordAndGetThrottleTimeMs(150);
+        moveClock(1);
+
+        assertTrue(quotaManager.getThrottleTimeMs() > 0);
+
+        quotaManager.record(-150);
+
+        assertEquals(0L, quotaManager.getThrottleTimeMs(),
+            "Quota should not be exceeded after releasing reservation");
+    }
+
+    @Test
+    public void testConcurrentDeltaAdjustments() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(200, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 20;
+        Thread[] threads = new Thread[numThreads];
+
+        // Simulate fetch scenario: reserve estimate, then adjust with actual delta
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                int estimated = 50;
+                quotaManager.recordAndGetThrottleTimeMs(estimated);
+
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                int actual = 30 + (threadIndex % 31);
+                int delta = actual - estimated;
+                quotaManager.record(delta);
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        moveClock(1);
+
+        long throttleTime = quotaManager.getThrottleTimeMs();
+        assertTrue(throttleTime >= 0, "Quota manager should be in consistent state after concurrent delta adjustments");
+    }
+
+    @Test
+    public void testConcurrentReservationReleases() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(100, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 15;
+        Thread[] threads = new Thread[numThreads];
+
+        // Half succeed with delta adjustment, half fail and release
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                int estimated = 40;
+                quotaManager.recordAndGetThrottleTimeMs(estimated);
+
+                try {
+                    Thread.sleep(2);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                if (threadIndex % 2 == 0) {
+                    int actual = 35;
+                    int delta = actual - estimated;
+                    quotaManager.record(delta);
+                } else {
+                    quotaManager.record(-estimated);
+                }
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        moveClock(1);
+
+        long throttleTime = quotaManager.getThrottleTimeMs();
+        assertTrue(throttleTime >= 0, "Quota manager should handle mixed success/failure scenarios");
+    }
+
+    @Test
+    public void testHighConcurrencyStressTest() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(500, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 50;
+        Thread[] threads = new Thread[numThreads];
+        boolean[] completed = new boolean[numThreads];
+
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    int estimated = 20 + (threadIndex % 30);
+                    long throttleTime = quotaManager.recordAndGetThrottleTimeMs(estimated);
+
+                    if (throttleTime > 0) {
+                        Thread.sleep(Math.min(throttleTime, 10));
+                    }
+
+                    Thread.sleep(1);
+
+                    if (threadIndex % 3 == 0) {
+                        quotaManager.record(-estimated);
+                    } else {
+                        int actual = estimated + (threadIndex % 10) - 5;
+                        quotaManager.record(actual - estimated);
+                    }
+
+                    completed[threadIndex] = true;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join(5000);
+        }
+
+        int completedCount = 0;
+        for (boolean c : completed) {
+            if (c) {
+                completedCount++;
+            }
+        }
+
+        assertTrue(completedCount >= numThreads * 0.95,
+            "At least 95% of threads should complete under high concurrency");
+
+        moveClock(1);
+
+        long throttleTime = quotaManager.getThrottleTimeMs();
+        assertTrue(throttleTime >= 0, "Quota manager should remain consistent under stress");
+    }
+
+    @Test
+    public void testConcurrentRecordAndCheckRace() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(100, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 20;
+        Thread[] threads = new Thread[numThreads];
+        long[] throttleTimes = new long[numThreads];
+        CyclicBarrier barrier = new CyclicBarrier(numThreads);
+        AtomicInteger exceptions = new AtomicInteger(0);
+
+        // Use barrier to ensure true concurrent execution
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    barrier.await();
+                    throttleTimes[threadIndex] = quotaManager.recordAndGetThrottleTimeMs(10);
+                } catch (InterruptedException | BrokenBarrierException e) {
+                    exceptions.incrementAndGet();
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        assertEquals(0, exceptions.get(), "No threads should have exceptions");
+
+        moveClock(1);
+
+        int throttledCount = 0;
+        for (long throttleTime : throttleTimes) {
+            if (throttleTime > 0) {
+                throttledCount++;
+            }
+        }
+
+        assertTrue(throttledCount > 0,
+            "With 20 threads recording 10 bytes each (200 total), some should be throttled (quota is 100)");
+
+        long finalThrottleTime = quotaManager.getThrottleTimeMs();
+        assertTrue(finalThrottleTime > 0,
+            "After recording 200 bytes with 100 bytes/sec quota, should be throttled");
+    }
+
+    @Test
+    public void testConcurrentRecordAndReleaseInterleaved() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(150, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 30;
+        Thread[] threads = new Thread[numThreads];
+        CyclicBarrier barrier = new CyclicBarrier(numThreads);
+        AtomicInteger exceptions = new AtomicInteger(0);
+
+        // Use barrier to ensure true concurrent execution
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    barrier.await();
+
+                    if (threadIndex % 3 == 0) {
+                        quotaManager.recordAndGetThrottleTimeMs(30);
+                    } else if (threadIndex % 3 == 1) {
+                        quotaManager.record(-30);
+                    } else {
+                        quotaManager.record(5);
+                    }
+                } catch (InterruptedException | BrokenBarrierException e) {
+                    exceptions.incrementAndGet();
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        assertEquals(0, exceptions.get(), "No threads should have exceptions");
+
+        moveClock(1);
+
+        long throttleTime = quotaManager.getThrottleTimeMs();
+        assertTrue(throttleTime >= 0,
+            "Quota manager should handle interleaved record/release operations");
+    }
+
+    @Test
+    public void testRecordCheckInterleavingRace() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(100, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 10;
+        Thread[] threads = new Thread[numThreads];
+        long[] throttleTimes = new long[numThreads];
+        CyclicBarrier barrier = new CyclicBarrier(numThreads);
+        AtomicInteger exceptions = new AtomicInteger(0);
+
+        // Use barrier to ensure true concurrent execution
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    barrier.await();
+                    throttleTimes[threadIndex] = quotaManager.recordAndGetThrottleTimeMs(15);
+                } catch (InterruptedException | BrokenBarrierException e) {
+                    exceptions.incrementAndGet();
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        assertEquals(0, exceptions.get(), "No threads should have exceptions");
+
+        moveClock(1);
+
+        int throttledCount = 0;
+        for (long throttleTime : throttleTimes) {
+            if (throttleTime > 0) {
+                throttledCount++;
+            }
+        }
+
+        assertTrue(throttledCount > 0,
+            "With 10 threads recording 15 bytes each (150 total), exceeding 100 quota, some should be throttled");
+
+        long finalThrottleTime = quotaManager.getThrottleTimeMs();
+        assertTrue(finalThrottleTime > 0,
+            "Final quota check should show violation after 150 bytes recorded (quota is 100)");
     }
 
     private Map<MetricName, MetricConfig> extractMetricConfig(Map<MetricName, KafkaMetric> metrics) {

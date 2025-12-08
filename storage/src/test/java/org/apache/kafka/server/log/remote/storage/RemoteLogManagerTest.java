@@ -3120,7 +3120,7 @@ public class RemoteLogManagerTest {
         );
 
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, false, tpId, partitionData, FetchIsolation.TXN_COMMITTED
+                0, false, tpId, partitionData, FetchIsolation.TXN_COMMITTED, 0
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
@@ -3200,7 +3200,7 @@ public class RemoteLogManagerTest {
         );
 
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, minOneMessage, tpId, partitionData, FetchIsolation.HIGH_WATERMARK
+                0, minOneMessage, tpId, partitionData, FetchIsolation.HIGH_WATERMARK, 0
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
@@ -3286,7 +3286,7 @@ public class RemoteLogManagerTest {
         when(firstBatch.sizeInBytes()).thenReturn(recordBatchSizeInBytes);
         doNothing().when(firstBatch).writeTo(capture.capture());
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, true, tpId, partitionData, FetchIsolation.HIGH_WATERMARK
+                0, true, tpId, partitionData, FetchIsolation.HIGH_WATERMARK, 0
         );
 
 
@@ -3677,7 +3677,7 @@ public class RemoteLogManagerTest {
                 Uuid.randomUuid(), fetchOffset, 0, 100, Optional.empty());
         RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(
                 1048576, true, leaderTopicIdPartition,
-                partitionData, FetchIsolation.HIGH_WATERMARK);
+                partitionData, FetchIsolation.HIGH_WATERMARK, 0);
         FetchDataInfo fetchDataInfo = remoteLogManager.read(remoteStorageFetchInfo);
         // firstBatch baseOffset may not be equal to the fetchOffset
         assertEquals(9, fetchDataInfo.fetchOffsetMetadata.messageOffset);
