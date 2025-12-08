@@ -69,9 +69,9 @@ public class ShareFetchMetricsRegistry {
                 "The average number of records in each request", tags);
         this.recordsPerRequestMax = new MetricNameTemplate("records-per-request-max", groupName,
                 "The maximum number of records in a request.", tags);
-        this.recordsFetchedRate = new MetricNameTemplate("records-consumed-rate", groupName,
+        this.recordsFetchedRate = new MetricNameTemplate("records-fetched-rate", groupName,
                 "The average number of records consumed per second", tags);
-        this.recordsFetchedTotal = new MetricNameTemplate("records-consumed-total", groupName,
+        this.recordsFetchedTotal = new MetricNameTemplate("records-fetched-total", groupName,
                 "The total number of records consumed", tags);
 
         this.acknowledgementSendRate = new MetricNameTemplate("acknowledgements-send-rate", groupName,

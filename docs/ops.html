@@ -4104,9 +4104,19 @@ customized state stores; for built-in state stores, currently we have:
       <td>The total number of share groups managed by group coordinator.</td>
     </tr>
     <tr>
-      <td>share-group-count</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=share-group-count,state={Empty|Stable|Dead}</td>
-      <td>The number of share groups in respective state.</td>
+      <td>share-group-rebalance-rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=share-group-rebalance-rate</td>
+      <td>The total number of share group rebalances.</td>
+    </tr>
+    <tr>
+      <td>share-group-rebalance-count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=share-group-rebalance-count</td>
+      <td>The total number of share group rebalances.</td>
+    </tr>
+    <tr>
+      <td>group-count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol=share</td>
+      <td>The total number of share groups managed by group coordinator.</td>
     </tr>
     <tr>
       <td>partition-load-time-max</td>
@@ -4228,16 +4238,6 @@ customized state stores; for built-in state stores, currently we have:
       <td>fetch-size-max</td>
       <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-size-max,client-id=([-.\w]+)</td>
       <td>The maximum number of bytes fetched per request.</td>
-    </tr>
-    <tr>
-      <td>bytes-fetched-rate</td>
-      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-fetched-rate,client-id=([-.\w]+)</td>
-      <td>The average number of bytes fetched per second.</td>
-    </tr>
-    <tr>
-      <td>bytes-fetched-total</td>
-      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-fetched-total,client-id=([-.\w]+)</td>
-      <td>The total number of bytes fetched.</td>
     </tr>
     <tr>
       <td>records-per-request-avg</td>
