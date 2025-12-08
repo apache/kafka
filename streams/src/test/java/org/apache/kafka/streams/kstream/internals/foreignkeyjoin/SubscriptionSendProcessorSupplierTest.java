@@ -295,6 +295,10 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
     }
 
     @Test
@@ -372,6 +376,9 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(null)), 0));
 
         assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(0.0, getDroppedRecordsTotalMetric(context));
     }
 
     @Test
