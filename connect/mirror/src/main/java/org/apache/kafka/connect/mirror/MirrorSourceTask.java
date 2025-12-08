@@ -58,9 +58,9 @@ public class MirrorSourceTask extends SourceTask {
 	private boolean stopping = false;
 	private Semaphore consumerAccess;
 	private OffsetSyncWriter offsetSyncWriter;
-	private Map<TopicPartition, Long> lastReplicatedSourceOffset = new HashMap<>();  // ← TASK 1: Silent data loss
+	private Map<TopicPartition, Long> lastReplicatedSourceOffset = new HashMap<>();  //TASK 1: Silent data loss
 	private Map<TopicPartition, Long> knownTopicCreationTime = new HashMap<>();
-	private Map<TopicPartition, Long> knownLogStartOffset = new HashMap<>();// ← TASK 2: Topic reset detection
+	private Map<TopicPartition, Long> knownLogStartOffset = new HashMap<>();//TASK 2: Topic reset detection
 
 	public MirrorSourceTask() {
 	}
