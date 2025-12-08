@@ -30,6 +30,8 @@ import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class OptimizedUniformAssignmentBuilderTest {
+public class UniformHomogeneousAssignmentBuilderTest {
     private final UniformAssignor assignor = new UniformAssignor();
     private final Uuid topic1Uuid = Uuid.fromString("T1-A4s3VTwiI5CTbEp6POw");
     private final Uuid topic2Uuid = Uuid.fromString("T2-B4s3VTwiI5YHbPp6YUe");
@@ -61,6 +63,18 @@ public class OptimizedUniformAssignmentBuilderTest {
     private final String memberA = "A";
     private final String memberB = "B";
     private final String memberC = "C";
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false})
+    public void testAssignmentReuse(boolean rackAware) {
+        CommonAssignorTests.testAssignmentReuse(assignor, HOMOGENEOUS, rackAware);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false})
+    public void testReassignmentStickiness(boolean rackAware) {
+        CommonAssignorTests.testReassignmentStickiness(assignor, HOMOGENEOUS, rackAware);
+    }
 
     @Test
     public void testOneMemberNoTopicSubscription() {

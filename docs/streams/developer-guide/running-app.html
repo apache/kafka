@@ -46,6 +46,7 @@
                       <li><a class="reference internal" href="#determining-how-many-application-instances-to-run" id="id8">Determining how many application instances to run</a></li>
                   </ul>
                   </li>
+                  <li><a class="reference internal" href="#handling-crashes-and-failures" id="id9">Handling crashes and failures</a></li>
               </ul>
           </div>
           <div class="section" id="starting-a-kafka-streams-application">
@@ -134,6 +135,23 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                       <li>Data should be equally distributed across topic partitions. For example, if two topic partitions each have 1 million messages, this is better than a single partition with 2 million messages and none in the other.</li>
                       <li>Processing workload should be equally distributed across topic partitions. For example, if the time to process messages varies widely, then it is better to spread the processing-intensive messages across partitions rather than storing these messages within the same partition.</li>
                   </ul>
+              </div>
+              <div class="section" id="handling-crashes-and-failures">
+                <span id="streams-developer-guide-execution-scaling"></span><h2><a class="toc-backref" href="#id9">Handling crashes and failures</a><a class="headerlink" href="#handling-crashes-and-failures" title="Permalink to this headline"></a></h2>
+                <p>There are a few things you can do to reduce the likelihood of crashes and failures of your Kafka Streams application.
+                    <ul class="simple">
+                        <li>Kafka Streams has a few configurations that can help with resilience in the face of broker failures. They can be found in the <a class="reference internal" href="config-streams.html#recommended-configuration-parameters-for-resiliency">configuration guide.</a></li>
+                        <li>Ensure that your application is able to handle errors and failures. This includes things like 
+                            configuring the correct exception handlers to handle errors such as authorization and deserialization errors, 
+                            and using strategies such as dead letter queues to handle "poison pill" records. </li>
+                    </ul>
+                  </p>
+                  <p>If your Kafka Streams application does crash or fail, it will first enter the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state 
+                    to gracefully close all of its existing resources, and then transition into the <code class="docutils literal"><span class="pre">ERROR</span></code> state. 
+                    It is important to note that the <code class="docutils literal"><span class="pre">PENDING_ERROR</span></code> state is not recoverable, and only a 
+                    restart will get the application back to the RUNNING state, thus monitoring for this state in addition to the <code class="docutils literal"><span class="pre">ERROR</span></code> 
+                    state is important to ensure that your application is able to recover.
+                  </p>
 </div>
 </div>
 </div>

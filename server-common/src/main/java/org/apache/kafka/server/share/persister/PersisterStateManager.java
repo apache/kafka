@@ -53,7 +53,7 @@ import org.apache.kafka.common.requests.ReadShareGroupStateSummaryRequest;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateRequest;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
-import org.apache.kafka.common.utils.ExponentialBackoff;
+import org.apache.kafka.common.utils.ExponentialBackoffManager;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -94,6 +94,8 @@ public class PersisterStateManager {
     public static final long REQUEST_BACKOFF_MS = 1_000L;
     public static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
     private static final int MAX_FIND_COORD_ATTEMPTS = 5;
+    private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+    private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
     private final Time time;
     private final Timer timer;
     private final ShareCoordinatorMetadataCacheHelper cacheHelper;
@@ -115,38 +117,6 @@ public class PersisterStateManager {
     // Mainly for testing and introspection purpose to inspect the state of the nodeRPC map
     // when generateRequests is called.
     private Runnable generateCallback;
-
-    private static class BackoffManager {
-        private final int maxAttempts;
-        private int attempts;
-        private final ExponentialBackoff backoff;
-
-        BackoffManager(int maxAttempts, long initialBackoffMs, long maxBackoffMs) {
-            this.maxAttempts = maxAttempts;
-            this.backoff = new ExponentialBackoff(
-                initialBackoffMs,
-                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
-                maxBackoffMs,
-                CommonClientConfigs.RETRY_BACKOFF_JITTER
-            );
-        }
-
-        void incrementAttempt() {
-            attempts++;
-        }
-
-        void resetAttempts() {
-            attempts = 0;
-        }
-
-        boolean canAttempt() {
-            return attempts < maxAttempts;
-        }
-
-        long backOff() {
-            return this.backoff.backoff(attempts);
-        }
-    }
 
     public enum RPCType {
         INITIALIZE,
@@ -219,7 +189,7 @@ public class PersisterStateManager {
      */
     public abstract class PersisterStateManagerHandler implements RequestCompletionHandler {
         protected Node coordinatorNode;
-        private final BackoffManager findCoordBackoff;
+        private final ExponentialBackoffManager findCoordBackoff;
         protected final Logger log;
         private Consumer<ClientResponse> onCompleteCallback;
         protected final SharePartitionKey partitionKey;
@@ -232,7 +202,12 @@ public class PersisterStateManager {
             long backoffMaxMs,
             int maxRPCRetryAttempts
         ) {
-            this.findCoordBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
+            this.findCoordBackoff = new ExponentialBackoffManager(
+                maxRPCRetryAttempts,
+                backoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                backoffMaxMs,
+                RETRY_BACKOFF_JITTER);
             this.onCompleteCallback = response -> {
             }; // noop
             partitionKey = SharePartitionKey.getInstance(groupId, topicId, partition);
@@ -522,7 +497,7 @@ public class PersisterStateManager {
         private final int stateEpoch;
         private final long startOffset;
         private final CompletableFuture<InitializeShareGroupStateResponse> result;
-        private final BackoffManager initializeStateBackoff;
+        private final ExponentialBackoffManager initializeStateBackoff;
 
         public InitializeStateHandler(
             String groupId,
@@ -539,7 +514,12 @@ public class PersisterStateManager {
             this.stateEpoch = stateEpoch;
             this.startOffset = startOffset;
             this.result = result;
-            this.initializeStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
+            this.initializeStateBackoff = new ExponentialBackoffManager(
+                maxRPCRetryAttempts,
+                backoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                backoffMaxMs,
+                RETRY_BACKOFF_JITTER);
         }
 
         public InitializeStateHandler(
@@ -701,7 +681,7 @@ public class PersisterStateManager {
         private final int deliveryCompleteCount;
         private final List<PersisterStateBatch> batches;
         private final CompletableFuture<WriteShareGroupStateResponse> result;
-        private final BackoffManager writeStateBackoff;
+        private final ExponentialBackoffManager writeStateBackoff;
 
         public WriteStateHandler(
             String groupId,
@@ -724,7 +704,12 @@ public class PersisterStateManager {
             this.deliveryCompleteCount = deliveryCompleteCount;
             this.batches = batches;
             this.result = result;
-            this.writeStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
+            this.writeStateBackoff = new ExponentialBackoffManager(
+                maxRPCRetryAttempts,
+                backoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                backoffMaxMs,
+                RETRY_BACKOFF_JITTER);
         }
 
         public WriteStateHandler(
@@ -887,7 +872,7 @@ public class PersisterStateManager {
     public class ReadStateHandler extends PersisterStateManagerHandler {
         private final int leaderEpoch;
         private final CompletableFuture<ReadShareGroupStateResponse> result;
-        private final BackoffManager readStateBackoff;
+        private final ExponentialBackoffManager readStateBackoff;
 
         public ReadStateHandler(
             String groupId,
@@ -903,7 +888,12 @@ public class PersisterStateManager {
             super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
             this.leaderEpoch = leaderEpoch;
             this.result = result;
-            this.readStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
+            this.readStateBackoff = new ExponentialBackoffManager(
+                maxRPCRetryAttempts,
+                backoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                backoffMaxMs,
+                RETRY_BACKOFF_JITTER);
         }
 
         public ReadStateHandler(
@@ -1057,7 +1047,7 @@ public class PersisterStateManager {
     public class ReadStateSummaryHandler extends PersisterStateManagerHandler {
         private final int leaderEpoch;
         private final CompletableFuture<ReadShareGroupStateSummaryResponse> result;
-        private final BackoffManager readStateSummaryBackoff;
+        private final ExponentialBackoffManager readStateSummaryBackoff;
 
         public ReadStateSummaryHandler(
             String groupId,
@@ -1073,7 +1063,12 @@ public class PersisterStateManager {
             super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
             this.leaderEpoch = leaderEpoch;
             this.result = result;
-            this.readStateSummaryBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
+            this.readStateSummaryBackoff = new ExponentialBackoffManager(
+                maxRPCRetryAttempts,
+                backoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                backoffMaxMs,
+                RETRY_BACKOFF_JITTER);
         }
 
         public ReadStateSummaryHandler(
@@ -1226,7 +1221,7 @@ public class PersisterStateManager {
 
     public class DeleteStateHandler extends PersisterStateManagerHandler {
         private final CompletableFuture<DeleteShareGroupStateResponse> result;
-        private final BackoffManager deleteStateBackoff;
+        private final ExponentialBackoffManager deleteStateBackoff;
 
         public DeleteStateHandler(
             String groupId,
@@ -1239,7 +1234,12 @@ public class PersisterStateManager {
         ) {
             super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
             this.result = result;
-            this.deleteStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
+            this.deleteStateBackoff = new ExponentialBackoffManager(
+                maxRPCRetryAttempts,
+                backoffMs,
+                RETRY_BACKOFF_EXP_BASE,
+                backoffMaxMs,
+                RETRY_BACKOFF_JITTER);
         }
 
         public DeleteStateHandler(
