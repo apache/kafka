@@ -52,7 +52,10 @@ public class ProducerStateEntry {
         this.coordinatorEpoch = coordinatorEpoch;
         this.lastTimestamp = lastTimestamp;
         this.currentTxnFirstOffset = currentTxnFirstOffset;
-        firstBatchMetadata.ifPresent(batchMetadata::add);
+        firstBatchMetadata.ifPresent(batch -> {
+            batchMetadata.add(batch);
+            this.lastTimestamp = batch.timestamp();
+        });
     }
 
     int firstSeq() {
