@@ -153,7 +153,7 @@ public class MirrorSourceTask extends SourceTask {
 				metrics.recordBytes(topicPartition, byteSize(record.value()));
 			}
 			if (!sourceRecords.isEmpty()) {
-				detectTruncationIfAny(records);
+				detectTruncationIfAny(records); // TASK 1: Fail-fast on silent data loss
 			}
 			if (sourceRecords.isEmpty()) {
 				// WorkerSourceTasks expects non-zero batch size
@@ -175,7 +175,8 @@ public class MirrorSourceTask extends SourceTask {
 			consumerAccess.release();
 		}
 	}
-
+	
+	//new method added for silent data loss detection 
 	private void detectTruncationIfAny(ConsumerRecords<byte[], byte[]> rawRecords) {
 		if (rawRecords.isEmpty())
 			return;
@@ -187,8 +188,7 @@ public class MirrorSourceTask extends SourceTask {
 			TopicPartition tp = new TopicPartition(record.topic(), record.partition());
 			long currentOffset = record.offset();
 
-			// Agar pehli baar dekh rahe ho → daal do
-			// Agar pehle se hai → sirf chhota wala rakho
+			
 			if (!batchStartOffsets.containsKey(tp)) {
 				batchStartOffsets.put(tp, currentOffset);
 			} else {
@@ -236,7 +236,7 @@ public class MirrorSourceTask extends SourceTask {
 		}
 		TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
 		long sourceOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
-		lastReplicatedSourceOffset.put(sourceTopicPartition, sourceOffset); // ← ye line add kar
+		lastReplicatedSourceOffset.put(sourceTopicPartition, sourceOffset); // TASK 1: Silent data loss detection
 		TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
 		long latency = System.currentTimeMillis() - record.timestamp();
 		metrics.countRecord(topicPartition);
@@ -272,6 +272,7 @@ public class MirrorSourceTask extends SourceTask {
 		for (TopicPartition tp : taskTopicPartitions) {
 	        Long savedOffset = topicPartitionOffsets.get(tp);
 
+			// TASK 2: Topic delete + recreate detect
 	        if (isTopicReset(tp)) {
 	            log.warn("Topic reset detected for {}. Forcing replication from offset 0.", tp);
 	            consumer.seek(tp, 0L);
@@ -324,6 +325,7 @@ public class MirrorSourceTask extends SourceTask {
 		return offset == null || offset < 0;
 	}
 	
+	// new method added for topic reset detection
 	private boolean isTopicReset(TopicPartition tp) {
 	    try {
 	        consumer.assign(java.util.Collections.singletonList(tp));
