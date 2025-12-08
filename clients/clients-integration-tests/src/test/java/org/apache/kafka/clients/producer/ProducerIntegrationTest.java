@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerMetrics;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.NoCompression;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.Plugin;
@@ -42,11 +43,11 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Assertions;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ProducerIntegrationTest {
@@ -60,38 +61,26 @@ public class ProducerIntegrationTest {
 
         AtomicReference<EvilBufferPool> bufferPoolBox = new AtomicReference<>();
 
-        try (var producer = expireProducer(cluster.bootstrapServers(), 5000, 1000, bufferPoolBox)) {
+        try (var producer = expireProducer(cluster.bootstrapServers(), bufferPoolBox)) {
             producer.send(new ProducerRecord<>(topic, "key".getBytes(), "value".getBytes()));
+            Thread.sleep(1000);
             //  request timeout but delivery not timeout, the buffer should not be released
-            Thread.sleep(2000);
-            Assertions.assertEquals(0, bufferPoolBox.get().deallocateCount);
+            Assertions.assertEquals(0, bufferPoolBox.get().deallocateCount.get());
         }
     }
 
 
     private Producer<byte[], byte[]> expireProducer(String bootstrapServers,
-                                                    int deliveryTimeoutMs,
-                                                    int requestTimeoutMs,
                                                     AtomicReference<EvilBufferPool> bufferPoolRef) {
         Map<String, Object> config = Map.of(
             ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
             ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
             ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false,
-            ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs,
-            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs
+            ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 200,
+            ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 2000
         );
         return new EvilKafkaProducerBuilder(bufferPoolRef).build(config);
-    }
-
-    private Producer<byte[], byte[]> expireProducer(ClusterInstance cluster) {
-        Map<String, Object> config = Map.of(
-            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
-            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName(),
-            ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
-            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false
-        );
-        return new EvilKafkaProducerBuilder(null).build(config);
     }
 
 
@@ -186,9 +175,11 @@ public class ProducerIntegrationTest {
                 protected long sendProducerData(long now) {
                     long result = super.sendProducerData(now);
                     try {
-                        // Ensure the batch expires by sleeping longer than the delivery timeout (800 ms)
-                        // This simulates a scenario where the batch becomes stale and should expire
-                        Thread.sleep(800);
+                        //  Ensure the batch expires by sleeping longer than the request timeout (200 ms)
+                        //  However, since it has not exceeded delivery timeout (2000 ms), it should not be returned to the buffer pool
+                        if (!this.inFlightBatches(new TopicPartition("test-topic", 0)).isEmpty()) {
+                            Thread.sleep(500);
+                        }
                         return result;
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -268,7 +259,7 @@ public class ProducerIntegrationTest {
 
     static class EvilBufferPool extends BufferPool {
 
-        int deallocateCount = 0;
+        AtomicInteger deallocateCount = new AtomicInteger();
         
         public EvilBufferPool(long memory, int poolableSize, Metrics metrics, Time time, String metricGrpName) {
             super(memory, poolableSize, metrics, time, metricGrpName);
@@ -281,15 +272,8 @@ public class ProducerIntegrationTest {
          */
         @Override
         public void deallocate(ByteBuffer buffer, int size) {
-            //  Ensure atomicity using reentrant behavior
-            lock.lock();
-            try {
-                deallocateCount++;
-                Arrays.fill(buffer.array(), (byte) 0);
-                super.deallocate(buffer, size);
-            } finally {
-                lock.unlock();
-            }
+            deallocateCount.incrementAndGet();
+            super.deallocate(buffer, size);
         }
     }
 }

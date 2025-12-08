@@ -48,7 +48,7 @@ public class BufferPool {
 
     private final long totalMemory;
     private final int poolableSize;
-    protected final ReentrantLock lock;
+    private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
     /** Total available memory is the sum of nonPooledAvailableMemory and the number of byte buffers in free * poolableSize.  */
