@@ -4250,6 +4250,16 @@ customized state stores; for built-in state stores, currently we have:
       <td>The maximum number of records in a request.</td>
     </tr>
     <tr>
+      <td>bytes-fetched-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-fetched-rate,client-id=([-.\w]+)</td>
+      <td>The average number of bytes consumed per second.</td>
+    </tr>
+    <tr>
+      <td>bytes-fetched-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-fetched-total,client-id=([-.\w]+)</td>
+      <td>The total number of bytes consumed.</td>
+    </tr>
+    <tr>
       <td>records-fetched-rate</td>
       <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-fetched-rate,client-id=([-.\w]+)</td>
       <td>The average number of records fetched per second.</td>

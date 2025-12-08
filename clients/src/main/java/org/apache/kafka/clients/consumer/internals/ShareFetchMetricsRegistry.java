@@ -60,9 +60,9 @@ public class ShareFetchMetricsRegistry {
 
         this.fetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName,
                 "The maximum number of bytes fetched per request", tags);
-        this.bytesFetchedRate = new MetricNameTemplate("bytes-consumed-rate", groupName,
+        this.bytesFetchedRate = new MetricNameTemplate("bytes-fetched-rate", groupName,
                 "The average number of bytes consumed per second", tags);
-        this.bytesFetchedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,
+        this.bytesFetchedTotal = new MetricNameTemplate("bytes-fetched-total", groupName,
                 "The total number of bytes consumed", tags);
 
         this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName,
