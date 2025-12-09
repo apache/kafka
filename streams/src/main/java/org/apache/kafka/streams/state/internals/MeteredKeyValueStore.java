@@ -53,6 +53,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
@@ -157,8 +158,12 @@ public class MeteredKeyValueStore<K, V>
                 (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
             (config, now) -> {
-                final Iterator<MeteredIterator> iter = openIterators.iterator();
-                return iter.hasNext() ? iter.next().startTimestamp() : 0L;
+                try {
+                    final Iterator<MeteredIterator> iter = openIterators.iterator();
+                    return iter.hasNext() ? iter.next().startTimestamp() : 0L;
+                } catch (final NoSuchElementException e) {
+                    return 0L;
+                }
             });
     }
 
