@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -119,6 +120,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
             describedGroup.members().forEach(groupMember ->
                 memberDescriptions.add(new ShareMemberDescription(
                     groupMember.memberId(),
+                    Optional.ofNullable(groupMember.rackId()),
                     groupMember.clientId(),
                     groupMember.clientHost(),
                     new ShareMemberAssignment(convertAssignment(groupMember.assignment())),

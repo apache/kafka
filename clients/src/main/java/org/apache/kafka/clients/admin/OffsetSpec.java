@@ -28,6 +28,7 @@ public class OffsetSpec {
     public static class MaxTimestampSpec extends OffsetSpec { }
     public static class EarliestLocalSpec extends OffsetSpec { }
     public static class LatestTieredSpec extends OffsetSpec { }
+    public static class EarliestPendingUploadSpec extends OffsetSpec { }
     public static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 
@@ -90,5 +91,14 @@ public class OffsetSpec {
      */
     public static OffsetSpec latestTiered() {
         return new LatestTieredSpec();
+    }
+
+    /**
+     * Used to retrieve the earliest offset of records that are pending upload to remote storage.
+     * <br/>
+     * Note: When tiered storage is not enabled, we will return unknown offset.
+     */
+    public static OffsetSpec earliestPendingUpload() {
+        return new EarliestPendingUploadSpec();
     }
 }

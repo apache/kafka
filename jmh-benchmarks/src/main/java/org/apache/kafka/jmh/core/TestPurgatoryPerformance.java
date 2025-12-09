@@ -30,7 +30,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
@@ -405,12 +404,7 @@ public class TestPurgatoryPerformance {
 
     }
 
-    private static class Scheduled implements Delayed {
-        final FakeOperation operation;
-
-        public Scheduled(FakeOperation operation) {
-            this.operation = operation;
-        }
+    private record Scheduled(FakeOperation operation) implements Delayed {
 
         @Override
         public long getDelay(TimeUnit unit) {
@@ -429,29 +423,10 @@ public class TestPurgatoryPerformance {
         }
     }
 
-    private static class FakeOperationKey implements DelayedOperationKey {
-        private final String key;
-
-        public FakeOperationKey(String key) {
-            this.key = key;
-        }
-
+    private record FakeOperationKey(String key) implements DelayedOperationKey {
         @Override
         public String keyLabel() {
             return key;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            FakeOperationKey that = (FakeOperationKey) o;
-            return Objects.equals(key, that.key);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(key);
         }
     }
 
@@ -469,7 +444,6 @@ public class TestPurgatoryPerformance {
 
         @Override
         public void onExpiration() {
-
         }
 
         @Override

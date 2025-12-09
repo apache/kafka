@@ -314,6 +314,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
         metricsGroup.removeMetric(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC);
         remoteStorageReaderThreadPool.removeMetrics();
+        Utils.closeQuietly(fetchQuotaMetrics, "fetchQuotaMetrics");
+        Utils.closeQuietly(copyQuotaMetrics, "copyQuotaMetrics");
     }
 
     // Visible for testing
@@ -424,7 +426,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return Plugin.wrapInstance(rlmm, metrics, RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
     }
 
-    RemoteLogMetadataManager remoteLogMetadataManager() {
+    public RemoteLogMetadataManager remoteLogMetadataManager() {
         return remoteLogMetadataManagerPlugin.get();
     }
 
@@ -2038,23 +2040,24 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 leaderCopyRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 leaderExpirationRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 followerRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
-                Utils.closeQuietly(remoteStorageManagerPlugin, "remoteStorageManagerPlugin");
-                Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
-                Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
                 rlmCopyThreadPool.close();
                 rlmExpirationThreadPool.close();
                 followerThreadPool.close();
                 try {
                     shutdownAndAwaitTermination(remoteStorageReaderThreadPool, "RemoteStorageReaderThreadPool", 10, TimeUnit.SECONDS);
+
+                    leaderCopyRLMTasks.clear();
+                    leaderExpirationRLMTasks.clear();
+                    followerRLMTasks.clear();
+
+                    Utils.closeQuietly(indexCache, "RemoteIndexCache");
+                    Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
+                    Utils.closeQuietly(remoteStorageManagerPlugin, "remoteStorageManagerPlugin");
+                    closed = true;
                 } finally {
                     removeMetrics();
                 }
-
-                leaderCopyRLMTasks.clear();
-                leaderExpirationRLMTasks.clear();
-                followerRLMTasks.clear();
-                closed = true;
             }
         }
     }

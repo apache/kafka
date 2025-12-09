@@ -121,6 +121,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@SuppressWarnings("removal")
 public class TransactionManagerTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
     private static final short ACKS_ALL = -1;
@@ -132,6 +133,9 @@ public class TransactionManagerTest {
     private final String transactionalId = "foobar";
     private final int transactionTimeoutMs = 1121;
 
+    private static final String SENDER_TIMEOUT_MSG = "The request has not been sent, or no server response has been received yet.";
+    private static final String TEST_TIMEOUT_MSG = "Unexpected time out during the test.";
+    
     private final String topic = "test";
     private static final Uuid TOPIC_ID = Uuid.fromString("y2J9jXHhfIkQ1wK8mMKXx1");
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -623,9 +627,9 @@ public class TransactionManagerTest {
     @ValueSource(booleans = {true, false})
     public void testDefaultSequenceNumber(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, 3);
-        assertEquals(transactionManager.sequenceNumber(tp0), 3);
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
     }
 
     @ParameterizedTest
@@ -786,7 +790,7 @@ public class TransactionManagerTest {
         // is reached even though the delivery timeout has expired and the
         // future has completed exceptionally.
         assertTrue(responseFuture1.isDone());
-        TestUtils.assertFutureThrows(TimeoutException.class, responseFuture1);
+        TestUtils.assertFutureThrowsWithMessageContaining(TimeoutException.class, responseFuture1, SENDER_TIMEOUT_MSG);
         assertFalse(transactionManager.hasInFlightRequest());
         assertEquals(1, client.inFlightRequestCount());
 
@@ -849,13 +853,13 @@ public class TransactionManagerTest {
     @ValueSource(booleans = {true, false})
     public void testSequenceNumberOverflow(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
-        assertEquals(transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
+        assertEquals(Integer.MAX_VALUE, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, 100);
-        assertEquals(transactionManager.sequenceNumber(tp0), 99);
+        assertEquals(99, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
-        assertEquals(transactionManager.sequenceNumber(tp0), 98);
+        assertEquals(98, transactionManager.sequenceNumber(tp0));
     }
 
     @ParameterizedTest
@@ -863,17 +867,17 @@ public class TransactionManagerTest {
     public void testProducerIdReset(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         initializeIdempotentProducerId(15L, Short.MAX_VALUE);
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
-        assertEquals(transactionManager.sequenceNumber(tp1), 0);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        assertEquals(0, transactionManager.sequenceNumber(tp1));
         transactionManager.incrementSequenceNumber(tp0, 3);
-        assertEquals(transactionManager.sequenceNumber(tp0), 3);
+        assertEquals(3, transactionManager.sequenceNumber(tp0));
         transactionManager.incrementSequenceNumber(tp1, 3);
-        assertEquals(transactionManager.sequenceNumber(tp1), 3);
+        assertEquals(3, transactionManager.sequenceNumber(tp1));
 
         transactionManager.requestIdempotentEpochBumpForPartition(tp0);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
-        assertEquals(transactionManager.sequenceNumber(tp0), 0);
-        assertEquals(transactionManager.sequenceNumber(tp1), 3);
+        assertEquals(0, transactionManager.sequenceNumber(tp0));
+        assertEquals(3, transactionManager.sequenceNumber(tp1));
     }
 
     @Test
@@ -969,7 +973,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         runUntil(retryResult::isCompleted);
-        retryResult.await();
+        retryResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
 
@@ -1101,7 +1105,7 @@ public class TransactionManagerTest {
         transactionManager.initializeTransactions(false);
         client.prepareUnsupportedVersionResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-            assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), CoordinatorType.TRANSACTION);
+            assertEquals(CoordinatorType.TRANSACTION, CoordinatorType.forId(findCoordinatorRequest.data().keyType()));
             assertTrue(findCoordinatorRequest.data().key().isEmpty());
             assertEquals(1, findCoordinatorRequest.data().coordinatorKeys().size());
             assertTrue(findCoordinatorRequest.data().coordinatorKeys().contains(transactionalId));
@@ -1357,7 +1361,9 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasFatalError());
         assertInstanceOf(TransactionalIdAuthorizationException.class, transactionManager.lastError());
         assertFalse(initPidResult.isSuccessful());
-        assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
+        assertThrows(TransactionalIdAuthorizationException.class, () -> initPidResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                TEST_TIMEOUT_MSG)
+        );
         assertFatalError(TransactionalIdAuthorizationException.class);
     }
 
@@ -1372,7 +1378,9 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasError);
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
-        assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
+        assertThrows(TransactionalIdAuthorizationException.class, () -> initPidResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                TEST_TIMEOUT_MSG)
+        );
         assertAbortableError(TransactionalIdAuthorizationException.class);
     }
 
@@ -1621,7 +1629,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
 
         // ensure we can now start a new transaction
 
@@ -1655,7 +1663,10 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         TransactionalRequestResult result = transactionManager.beginAbort();
-        assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
+        var timoutEx = assertThrows(TimeoutException.class, () -> 
+                result.await(0, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG)
+        );
+        assertTrue(timoutEx.getMessage().contains(TEST_TIMEOUT_MSG));
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(transactionManager::isReady);
@@ -1669,7 +1680,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginAbort());
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
 
         transactionManager.beginTransaction();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -1689,8 +1700,9 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         TransactionalRequestResult result = transactionManager.beginCommit();
-        assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
-
+        var timeoutEx = assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG));
+        assertTrue(timeoutEx.getMessage().contains(TEST_TIMEOUT_MSG));
+        
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
         runUntil(transactionManager::isReady);
         assertTrue(result.isSuccessful());
@@ -1703,7 +1715,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.beginCommit());
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
 
         transactionManager.beginTransaction();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -1716,7 +1728,8 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
+        var timeoutEx = assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG));
+        assertTrue(timeoutEx.getMessage().contains(TEST_TIMEOUT_MSG));
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
@@ -1733,7 +1746,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
         assertSame(result, transactionManager.initializeTransactions(false));
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(result.isAcked());
         assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions(false));
 
@@ -1772,7 +1785,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
         assertTrue(result.isSuccessful());
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
 
         // ensure we can now start a new transaction
 
@@ -1836,7 +1849,7 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
 
         // ensure we can now start a new transaction
 
@@ -1988,7 +2001,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         transactionManager.beginTransaction();
 
         // Ensure AddPartitionsToTxn retries. Since CONCURRENT_TRANSACTIONS is handled differently here, we substitute.
@@ -2020,7 +2033,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
     }
 
     @Test
@@ -2043,7 +2056,9 @@ public class TransactionManagerTest {
 
         runUntil(transactionManager::hasError);
 
-        assertThrows(ProducerFencedException.class, result::await);
+        assertThrows(ProducerFencedException.class, () -> result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                TEST_TIMEOUT_MSG)
+        );
 
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
@@ -2138,7 +2153,9 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);
         runUntil(responseFuture::isDone);
 
-        assertThrows(KafkaException.class, commitResult::await);
+        assertThrows(KafkaException.class, () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                TEST_TIMEOUT_MSG
+        ));
         assertFalse(commitResult.isSuccessful());
         assertTrue(commitResult.isAcked());
 
@@ -2200,7 +2217,9 @@ public class TransactionManagerTest {
 
         runUntil(commitResult::isCompleted);  // commit should be cancelled with exception without being sent.
 
-        assertThrows(KafkaException.class, commitResult::await);
+        assertThrows(KafkaException.class, () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                TEST_TIMEOUT_MSG
+        ));
         TestUtils.assertFutureThrows(OutOfOrderSequenceException.class, responseFuture);
 
         // Commit is not allowed, so let's abort and try again.
@@ -2858,10 +2877,11 @@ public class TransactionManagerTest {
         runUntil(responseFuture::isDone);
 
         // make sure the produce was expired.
-        assertInstanceOf(
+        var timeoutEx = assertInstanceOf(
             TimeoutException.class,
             assertThrows(ExecutionException.class, responseFuture::get).getCause(),
             "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        assertTrue(timeoutEx.getMessage().contains(SENDER_TIMEOUT_MSG));
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -2906,15 +2926,17 @@ public class TransactionManagerTest {
         runUntil(secondBatchResponse::isDone);
 
         // make sure the produce was expired.
-        assertInstanceOf(
+        var timeoutEx1 = assertInstanceOf(
             TimeoutException.class,
             assertThrows(ExecutionException.class, firstBatchResponse::get).getCause(),
             "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        assertTrue(timeoutEx1.getMessage().contains(SENDER_TIMEOUT_MSG));
         // make sure the produce was expired.
-        assertInstanceOf(
+        var timeoutEx2 = assertInstanceOf(
             TimeoutException.class,
             assertThrows(ExecutionException.class, secondBatchResponse::get).getCause(),
             "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        assertTrue(timeoutEx2.getMessage().contains(SENDER_TIMEOUT_MSG));
 
         assertTrue(transactionManager.hasAbortableError());
     }
@@ -2951,13 +2973,17 @@ public class TransactionManagerTest {
         runUntil(responseFuture::isDone);  // We should try to flush the produce, but expire it instead without sending anything.
 
         // make sure the produce was expired.
-        assertInstanceOf(
+        var timeoutEx1 = assertInstanceOf(
             TimeoutException.class,
             assertThrows(ExecutionException.class, responseFuture::get).getCause(),
             "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        assertTrue(timeoutEx1.getMessage().contains(SENDER_TIMEOUT_MSG));
+        
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
-        assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, commitResult::await).getCause());
+        var timeoutEx2 = assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, 
+                () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG)).getCause());
+        assertTrue(timeoutEx2.getMessage().contains(SENDER_TIMEOUT_MSG));
 
         assertTrue(transactionManager.hasAbortableError());
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -3023,10 +3049,11 @@ public class TransactionManagerTest {
         runUntil(responseFuture::isDone);  // We should try to flush the produce, but expire it instead without sending anything.
 
         // make sure the produce was expired.
-        assertInstanceOf(
+        var timeoutEx = assertInstanceOf(
             TimeoutException.class,
             assertThrows(ExecutionException.class, responseFuture::get).getCause(),
             "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        assertTrue(timeoutEx.getMessage().contains(SENDER_TIMEOUT_MSG));
         runUntil(commitResult::isCompleted);
         assertFalse(commitResult.isSuccessful());  // the commit should have been dropped.
 
@@ -3308,7 +3335,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3376,7 +3403,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
         runUntil(abortResult::isCompleted);
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3424,7 +3451,7 @@ public class TransactionManagerTest {
 
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3471,7 +3498,7 @@ public class TransactionManagerTest {
 
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3530,7 +3557,7 @@ public class TransactionManagerTest {
 
         assertTrue(abortResult.isCompleted());
         assertTrue(abortResult.isSuccessful());
-        abortResult.await();
+        abortResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
         transactionManager.beginTransaction();
@@ -3862,7 +3889,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         runUntil(retryResult::isCompleted);
-        retryResult.await();
+        retryResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
     }
@@ -3878,7 +3905,9 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasError);
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
-        assertThrows(TransactionAbortableException.class, initPidResult::await);
+        assertThrows(TransactionAbortableException.class, () -> initPidResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                TEST_TIMEOUT_MSG
+        ));
         assertAbortableError(TransactionAbortableException.class);
     }
 
@@ -3938,7 +3967,9 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);
         runUntil(responseFuture::isDone);
 
-        assertThrows(KafkaException.class, commitResult::await);
+        assertThrows(KafkaException.class, () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS,
+                TEST_TIMEOUT_MSG
+        ));
         assertFalse(commitResult.isSuccessful());
         assertTrue(commitResult.isAcked());
 
@@ -4011,7 +4042,7 @@ public class TransactionManagerTest {
         prepareEndTxnResponse(Errors.NONE, firstTransactionResult, producerId, epoch, producerId, epoch, true);
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(result.isCompleted());
-        assertThrows(TimeoutException.class, () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS));
+        assertThrows(TimeoutException.class, () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG));
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> !client.hasPendingResponses());
@@ -4101,8 +4132,8 @@ public class TransactionManagerTest {
         
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
-        
-        result.await();
+
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(result.isSuccessful());
         
         // Verify transaction manager transitioned to PREPARED_TRANSACTION state
@@ -4142,8 +4173,8 @@ public class TransactionManagerTest {
         
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
-        
-        result.await();
+
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(result.isSuccessful());
         
         // Verify transaction manager transitioned to READY state (not PREPARED_TRANSACTION)
@@ -4489,7 +4520,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(result.isSuccessful());
         assertTrue(result.isAcked());
     }
@@ -4531,7 +4562,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
 
-        result.await();
+        result.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG);
         assertTrue(result.isSuccessful());
         assertTrue(result.isAcked());
     }

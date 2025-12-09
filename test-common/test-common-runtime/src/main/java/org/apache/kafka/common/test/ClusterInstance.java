@@ -273,12 +273,7 @@ public interface ClusterInstance {
                 broker -> broker.metadataCache().numPartitions(topic).isEmpty()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
-        for (ControllerServer controller : controllers().values()) {
-            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
-            TestUtils.waitForCondition(
-                () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
-                60000L, "Timeout waiting for controller metadata propagating to brokers");
-        }
+        ensureConsistentMetadata(brokers, controllers().values());
 
         TopicPartition topicPartition = new TopicPartition(topic, 0);
 
@@ -358,7 +353,15 @@ public interface ClusterInstance {
             () -> brokers.stream().allMatch(broker -> broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()),
                 60000L, topic + " metadata not propagated after 60000 ms");
 
-        for (ControllerServer controller : controllers().values()) {
+        ensureConsistentMetadata(brokers, controllers().values());
+    }
+
+    default void ensureConsistentMetadata() throws InterruptedException  {
+        ensureConsistentMetadata(aliveBrokers().values(), controllers().values());
+    }
+
+    default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
+        for (ControllerServer controller : controllers) {
             long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),

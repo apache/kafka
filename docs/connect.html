@@ -47,7 +47,7 @@
         <li><code>bootstrap.servers</code> - List of Kafka servers used to bootstrap connections to Kafka</li>
         <li><code>key.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
         <li><code>value.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
-        <li><code>plugin.path</code> (default <code>empty</code>) - a list of paths that contain Connect plugins (connectors, converters, transformations). Before running quick starts, users must add the absolute path that contains the example FileStreamSourceConnector and FileStreamSinkConnector packaged in <code>connect-file-"version".jar</code>, because these connectors are not included by default to the <code>CLASSPATH</code> or the <code>plugin.path</code> of the Connect worker (see <a href="#connectconfigs_plugin.path">plugin.path</a> property for examples).</li>
+        <li><code>plugin.path</code> (default <code>null</code>) - a list of paths that contain Connect plugins (connectors, converters, transformations). Before running quick starts, users must add the absolute path that contains the example FileStreamSourceConnector and FileStreamSinkConnector packaged in <code>connect-file-{{fullDotVersion}}.jar</code>, because these connectors are not included by default to the <code>CLASSPATH</code> or the <code>plugin.path</code> of the Connect worker (see <a href="#connectconfigs_plugin.path">plugin.path</a> property for examples).</li>
     </ul>
 
     <p>The important configuration options specific to standalone mode are:</p>
@@ -57,7 +57,7 @@
 
     <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of the producers used by Kafka source tasks and the consumers used by Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>producer.</code> and <code>consumer.</code> respectively. The only Kafka client parameter that is inherited without a prefix from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sources and once for Kafka sinks.</p> 
     
-    <p>Starting with 2.3.0, client configuration overrides can be configured individually per connector by using the prefixes <code>producer.override.</code> and <code>consumer.override.</code> for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.</p>
+    <p>Client configuration overrides can be configured individually per connector by using the prefixes <code>producer.override.</code> and <code>consumer.override.</code> for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.</p>
 
     <p>The remaining parameters are connector configuration files. Each file may either be a Java Properties file or a JSON file containing an object with the same structure as the request body of either the <code>POST /connectors</code> endpoint or the <code>PUT /connectors/{name}/config</code> endpoint (see the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a>). You may include as many as you want, but all will execute within the same process (on different threads). You can also choose not to specify any connector configuration files on the command line, and instead use the REST API to create connectors at runtime after your standalone worker starts.</p>
 
@@ -69,10 +69,10 @@
 
     <p>In particular, the following configuration parameters, in addition to the common settings mentioned above, are critical to set before starting your cluster:</p>
     <ul>
-        <li><code>group.id</code> (default <code>connect-cluster</code>) - unique name for the cluster, used in forming the Connect cluster group; note that this <b>must not conflict</b> with consumer group IDs</li>
-        <li><code>config.storage.topic</code> (default <code>connect-configs</code>) - topic to use for storing connector and task configurations; note that this should be a single partition, highly replicated, compacted topic. You may need to manually create the topic to ensure the correct configuration as auto created topics may have multiple partitions or be automatically configured for deletion rather than compaction</li>
-        <li><code>offset.storage.topic</code> (default <code>connect-offsets</code>) - topic to use for storing offsets; this topic should have many partitions, be replicated, and be configured for compaction</li>
-        <li><code>status.storage.topic</code> (default <code>connect-status</code>) - topic to use for storing statuses; this topic can have multiple partitions, and should be replicated and configured for compaction</li>
+        <li><code>group.id</code> - Unique name for the cluster, used in forming the Connect cluster group; note that this <b>must not conflict</b> with consumer group IDs</li>
+        <li><code>config.storage.topic</code> - Name for the topic to use for storing connector and task configurations; this topic should have a single partition, be replicated, and be configured for compaction</li>
+        <li><code>offset.storage.topic</code> - Name for the topic to use for storing offsets; this topic should have many partitions, be replicated, and be configured for compaction</li>
+        <li><code>status.storage.topic</code> - Name for the topic to use for storing statuses; this topic can have multiple partitions, be replicated, and be configured for compaction</li>
     </ul>
 
     <p>Note that in distributed mode the connector configurations are not passed on the command line. Instead, use the REST API described below to create, modify, and destroy connectors.</p>
@@ -198,7 +198,7 @@ transforms.InsertSource.static.value=test-file-source</code></pre>
         <li><code>predicates.$alias.$predicateSpecificConfig</code> - Configuration properties for the predicate.</li>
     </ul>
 
-    <p>All transformations have the implicit config properties <code>predicate</code> and <code>negate</code>. A predicular predicate is associated with a transformation by setting the transformation's <code>predicate</code> config to the predicate's alias. The predicate's value can be reversed using the <code>negate</code> configuration property.</p>
+    <p>All transformations have the implicit config properties <code>predicate</code> and <code>negate</code>. A particular predicate is associated with a transformation by setting the transformation's <code>predicate</code> config to the predicate's alias. The predicate's value can be reversed using the <code>negate</code> configuration property.</p>
 
     <p>For example, suppose you have a source connector which produces messages to many different topics and you want to:</p>
     <ul>
@@ -590,6 +590,10 @@ errors.tolerance=all</code></pre>
 com.example.MySinkConnector</code></pre>
 
     <p>You should then verify that your manifests are correct by using the <a href="#connect_plugindiscovery_compatibility">verification steps</a> with a pre-release artifact. If the verification succeeds, you can then release the plugin normally, and operators can upgrade to the compatible version.</p>
+
+    <h4><a id="connect_security" href="#connect_security">Security</a></h4>
+
+    <p>It's important to understand the security concerns inherent to Connect. First, Connect allows running custom plugins. These plugins can run arbitrary code, so you must trust them before installing them in your Connect clusters. By default, the REST API is unsecured and allows anyone that can access it to start and stop connectors. You should only directly expose the REST API to trusted users, otherwise it's easy to gain arbitrary code execution on Connect workers. By default, connectors can also override the configurations of the Kafka clients that Connect uses internally. Since Kafka 4.2.0, it's recommended to set <code>connector.client.config.override.policy</code> to <code>Allowlist</code>, this will be the default from Kafka 5.0.0, and explicitly only allow configurations that you need to override. Keep in mind that configurations that can load classes such as <code>sasl.jaas.config</code> or <code>sasl.login.class</code> should only be allowed if only trusted users can access the REST API as they, by design, enable executing code on the Connect worker.</p>
 
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
 

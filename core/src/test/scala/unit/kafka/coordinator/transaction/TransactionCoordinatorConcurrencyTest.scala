@@ -37,7 +37,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch, 
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionState}
+import org.apache.kafka.coordinator.transaction.{ProducerIdManager, TransactionMetadata, TransactionState}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation
@@ -63,7 +63,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   private val allOperations = Seq(
       new InitProducerIdOperation,
-      new AddPartitionsToTxnOperation(Set(new TopicPartition("topic", 0))),
+      new AddPartitionsToTxnOperation(util.Set.of(new TopicPartition("topic", 0))),
       new EndTxnOperation)
 
   private val allTransactions = mutable.Set[Transaction]()
@@ -459,7 +459,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val partitionId = txnStateManager.partitionFor(txn.transactionalId)
     val txnRecords = txnRecordsByPartition(partitionId)
     val initPidOp = new InitProducerIdOperation()
-    val addPartitionsOp = new AddPartitionsToTxnOperation(Set(new TopicPartition("topic", 0)))
+    val addPartitionsOp = new AddPartitionsToTxnOperation(util.Set.of(new TopicPartition("topic", 0)))
     initPidOp.run(txn)
     initPidOp.awaitAndVerify(txn)
     addPartitionsOp.run(txn)
@@ -468,7 +468,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
     txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
-    txnMetadata.state = TransactionState.PREPARE_COMMIT
+    txnMetadata.state(TransactionState.PREPARE_COMMIT)
     txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
     prepareTxnLog(partitionId)
@@ -506,17 +506,18 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   private def prepareExhaustedEpochTxnMetadata(txn: Transaction): TransactionMetadata = {
-    new TransactionMetadata(transactionalId = txn.transactionalId,
-      producerId = producerId,
-      prevProducerId = RecordBatch.NO_PRODUCER_ID,
-      nextProducerId = RecordBatch.NO_PRODUCER_ID,
-      producerEpoch = (Short.MaxValue - 1).toShort,
-      lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-      txnTimeoutMs = 60000,
-      state = TransactionState.EMPTY,
-      topicPartitions = collection.mutable.Set.empty[TopicPartition],
-      txnLastUpdateTimestamp = time.milliseconds(),
-      clientTransactionVersion = TransactionVersion.TV_0)
+    new TransactionMetadata(txn.transactionalId,
+      producerId,
+      RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID,
+      (Short.MaxValue - 1).toShort,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      60000,
+      TransactionState.EMPTY,
+      new util.HashSet[TopicPartition](),
+      -1,
+      time.milliseconds(),
+      TransactionVersion.TV_0)
   }
 
   abstract class TxnOperation[R] extends Operation {
@@ -548,7 +549,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     }
   }
 
-  class AddPartitionsToTxnOperation(partitions: Set[TopicPartition]) extends TxnOperation[Errors] {
+  class AddPartitionsToTxnOperation(partitions: util.Set[TopicPartition]) extends TxnOperation[Errors] {
     override def run(txn: Transaction): Unit = {
       transactionMetadata(txn).foreach { txnMetadata =>
         transactionCoordinator.handleAddPartitionsToTransaction(txn.transactionalId,
@@ -629,7 +630,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     override def run(): Unit = {
       transactions.foreach { txn =>
         transactionMetadata(txn).foreach { txnMetadata =>
-          txnMetadata.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
+          txnMetadata.txnLastUpdateTimestamp(time.milliseconds() - txnConfig.transactionalIdExpirationMs)
         }
       }
       txnStateManager.enableTransactionalIdExpiration()

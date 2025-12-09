@@ -17,9 +17,9 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegate;
 import org.apache.kafka.clients.consumer.internals.ShareConsumerDelegateCreator;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaShareConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
@@ -27,7 +27,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -50,8 +49,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 
 /**
  * A client that consumes records from a Kafka cluster using a share group.
- * <p>
- *     <em>This is a preview feature introduced by KIP-932. It is not yet recommended for production use.</em>
  *
  * <h3>Cross-Version Compatibility</h3>
  * This client can communicate with brokers that are a version that supports share groups. You will receive an
@@ -59,8 +56,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * available on the running broker version.
  *
  * <h3><a name="sharegroups">Share Groups and Topic Subscriptions</a></h3>
- * Kafka uses the concept of <i>share groups</i> to allow a pool of consumers to cooperate on the work of
- * consuming and processing records. All consumer instances sharing the same {@code group.id} will be part of
+ * Kafka uses the concept of <i>share groups</i> to allow a pool of share consumers to cooperate on the work of
+ * consuming and processing records. All share consumer instances sharing the same {@code group.id} will be part of
  * the same share group.
  * <p>
  * Each consumer in a group can dynamically set the list of topics it wants to subscribe to using the
@@ -97,7 +94,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <h3>Record Delivery and Acknowledgement</h3>
  * When a consumer in a share-group fetches records using {@link #poll(Duration)}, it receives available records from any
  * of the topic-partitions that match its subscriptions. Records are acquired for delivery to this consumer with a
- * time-limited acquisition lock. While a record is acquired, it is not available for another consumer. By default,
+ * time-limited <i>acquisition lock</i>. While a record is acquired, it is not available for another consumer. By default,
  * the lock duration is 30 seconds, but it can also be controlled using the group {@code group.share.record.lock.duration.ms}
  * configuration property. The idea is that the lock is automatically released once the lock duration has elapsed, and
  * then the record is available to be given to another consumer. The consumer which holds the lock can deal with it in
@@ -107,6 +104,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     <li>The consumer can release the record, which makes the record available for another delivery attempt</li>
  *     <li>The consumer can reject the record, which indicates that the record is unprocessable and does not make
  *     the record available for another delivery attempt</li>
+ *     <li>The consumer can renew the record, which indicates that the record is still being processed by this consumer
+ *     (see <a href="#renewal">below</a>)</li>
  *     <li>The consumer can do nothing, in which case the lock is automatically released when the lock duration has elapsed</li>
  * </ul>
  * The cluster limits the number of records acquired for consumers for each topic-partition in a share group. Once the limit
@@ -147,6 +146,23 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * in a batch are performed atomically. This makes error handling significantly more straightforward because there can be
  * one error code per partition.
  *
+ * <h3>Share Acquire Mode and Batching</h3>
+ * The share consumer is optimized to deliver records to the consuming application in batches which align with the data
+ * when it was written to the topics, and it may also pre-fetch records in readiness for the application.
+ * If the application needs precise control over the number of records fetched or the processing time is significant,
+ * the application is able to limit the number of records fetched.
+ * <p>
+ * The application chooses between the two modes using the consumer {@code share.acquire.mode} configuration property.
+ * <ul>
+ *     <li>If the application sets the property to {@code "batch_optimized"} or does not set it at all, the share
+ *     consumer fetches records based on batch boundaries which may mean that the number of records returned may exceed
+ *     the {@code max.poll.records} configuration property. The share consumer may also prefetch records and buffer them
+ *     temporarily awaiting the application's next call to {@link #poll(Duration)}.</li>
+ *     <li>If the application sets the property to {@code "record_limit"}, the share consumer fetches no more than
+ *     {@code max.poll.records} records at a time and does not prefetch. This is slower but gives the application
+ *     tighter control on how many records are fetched and when the acquisition locks begin.</li>
+ * </ul>
+ *
  * <h3>Usage Examples</h3>
  * The share consumer APIs offer flexibility to cover a variety of consumption use cases. Here are some examples to
  * demonstrate how to use them.
@@ -165,7 +181,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
  *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
  *             doProcessing(record);
@@ -185,7 +201,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
  *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
  *             doProcessing(record);
@@ -208,7 +224,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
  *             try {
  *                 doProcessing(record);
@@ -244,6 +260,73 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * non-transactional records and committed transactional records only. The consumption is bounded by the last stable
  * offset, so an open transaction blocks the progress of the share group with read_committed isolation level.
  *
+ * <h3><a name="renewal">Extending Processing Times using Renewal Acknowledgement</a></h3>
+ * For situations in which the processing time is longer than the acquisition lock duration, the application
+ * can use <em>renewal acknowledgement</em>. This allows the application to renew its acquisition lock continuously
+ * while the processing of a record is in progress. The application must be using explicit acknowledgement.
+ * <p>
+ * It must call {@link #poll(Duration)} regularly and also call {@link #acknowledge(ConsumerRecord, AcknowledgeType)}
+ * specifying {@link AcknowledgeType#RENEW} on each iteration of its poll loop. When a record is renewed successfully,
+ * it is returned again by the {@link #poll(Duration)} call. An acknowledgement commit callback can be used to
+ * observe the completion of the acknowledgements.
+ *
+ * <p>This example illustrates how an application could use renewal acknowledgement.
+ *
+ * <pre>
+ *     Properties props = new Properties();
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;share.acknowledgement.mode&quot;, &quot;explicit&quot;);
+ *     props.setProperty(&quot;share.acquire.mode&quot;, &quot;record_limit&quot;);
+ *     props.setProperty(&quot;max.poll.records&quot;, &quot;1&quot;);
+ *
+ *     HashMap&lt;Long, ConsumerRecord&lt;String, String&gt;&gt; processing = new HashMap&lt;&gt;();
+ *
+ *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
+ *     consumer.setAcknowledgementCommitCallback((offsets, exception) -> {
+ *        if (exception != null) {
+ *            for (long offset: offsets) {
+ *                if (processing.remove(offset) != null) {
+ *                    // Cancel the processing for this offset because the acknowledgement failed
+ *                }
+ *            }
+ *        }
+ *     });
+ *
+ *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     while (true) {
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
+ *
+ *         // Get the acquisition lock timeout and prepare to wait half that time before renewing again
+ *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().getOrElse(10000) / 2;
+ *
+ *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *             if (processing.put(rec.offset(), rec) == null) {
+ *                 // Start the processing on another thread
+ *             }
+ *
+ *             // Wait for the processing to complete for up to timeToWaitMs milliseconds
+ *
+ *             if (processingCompletedSuccessfully) {
+ *                 consumer.acknowledge(record, AcknowledgeType.ACCEPT);
+ *                 processing.remove(record.offset());
+ *             } else if (processingFailed) {
+ *                 consumer.acknowledge(record, AcknowledgeType.REJECT);
+ *                 processing.remove(record.offset());
+ *             } else {
+ *                 consumer.acknowledge(record, AcknowledgeType.RENEW);
+ *             }
+ *         }
+ *     }
+ * </pre>
+ * <p>
+ * Note that using renewal acknowledgements is intended only for situations where the processing times of the records
+ * exceeds the acquisition lock duration. Consumers which use renewal acknowledgements can impact the delivery
+ * progress of the share group. If the leadership of the partition for a record being delivered changes or the
+ * application's connection to the leader broker is disconnected, the current delivery attempt ends.
+
  * <h3><a name="multithreaded">Multithreaded Processing</a></h3>
  * The consumer is NOT thread-safe. It is the responsibility of the user to ensure that multithreaded access
  * is properly synchronized. Unsynchronized access will result in {@link java.util.ConcurrentModificationException}.
@@ -267,7 +350,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *         try {
  *             consumer.subscribe(Arrays.asList("topic"));
  *             while (!closed.get()) {
- *                 ConsumerRecords records = consumer.poll(Duration.ofMillis(10000));
+ *                 ConsumerRecords records = consumer.poll(Duration.ofMillis(1000));
  *                 // Handle new records
  *             }
  *         } catch (WakeupException e) {
@@ -301,7 +384,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * We have intentionally avoided implementing a particular threading model for processing. Various options for
  * multithreaded processing are possible, of which the most straightforward is to dedicate a thread to each consumer.
  */
-@InterfaceStability.Evolving
 public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
     private static final ShareConsumerDelegateCreator CREATOR = new ShareConsumerDelegateCreator();
@@ -392,7 +474,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
                        final Time time,
                        final KafkaClient client,
                        final SubscriptionState subscriptions,
-                       final ConsumerMetadata metadata) {
+                       final ShareConsumerMetadata metadata) {
         delegate = CREATOR.create(
                 logContext, clientId, groupId, config, keyDeserializer, valueDeserializer,
                 time, client, subscriptions, metadata);
@@ -557,7 +639,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * the acknowledgements to commit have been indicated using {@link #acknowledge(ConsumerRecord)} or
      * {@link #acknowledge(ConsumerRecord, AcknowledgeType)}. If the consumer is using implicit acknowledgement,
      * all the records returned by the latest call to {@link #poll(Duration)} are acknowledged.
-
+     *
      * <p>
      * This is a synchronous commit and will block until either the commit succeeds, an unrecoverable error is
      * encountered (in which case it is thrown to the caller), or the timeout expires.
@@ -633,6 +715,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
+     * Returns the acquisition lock timeout for the last set of records fetched from the cluster.
+     *
+     * @return The acquisition lock timeout in milliseconds, or {@code Optional.empty()} if the timeout is not known.
+     */
+    @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return delegate.acquisitionLockTimeoutMs();
+    }
+
+    /**
      * Get the metrics kept by the consumer
      */
     @Override
@@ -679,10 +771,13 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * This will commit acknowledgements if possible within the default timeout.
      * See {@link #close(Duration)} for details. Note that {@link #wakeup()} cannot be used to interrupt close.
+     * <p>
+     * This close operation will attempt all shutdown steps even if one of them fails.
+     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
-     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
+     * @throws WakeupException    if {@link #wakeup()} is called before or while this method is called
      * @throws InterruptException if the thread is interrupted before or while this method is called
-     * @throws KafkaException for any other error during close
+     * @throws KafkaException     for any other error during close
      */
     @Override
     public void close() {
@@ -701,14 +796,16 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * Even if a larger timeout is specified, the consumer will not wait longer than
      * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
      * Note that the execution time of callbacks (such as {@link AcknowledgementCommitCallback}) do not consume time from the close timeout.
+     * <p>
+     * This close operation will attempt all shutdown steps even if one of them fails.
+     * It logs all encountered errors, continues to execute the next steps, and finally throws the first error found.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
-     *
      * @throws IllegalArgumentException if the {@code timeout} is negative
-     * @throws WakeupException if {@link #wakeup()} is called before or while this method is called
-     * @throws InterruptException if the thread is interrupted before or while this method is called
-     * @throws KafkaException for any other error during close
+     * @throws WakeupException          if {@link #wakeup()} is called before or while this method is called
+     * @throws InterruptException       if the thread is interrupted before or while this method is called
+     * @throws KafkaException           for any other error during close
      */
     @Override
     public void close(Duration timeout) {

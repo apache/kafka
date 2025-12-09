@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 
 import java.util.Arrays;
 import java.util.List;
@@ -111,14 +112,14 @@ public interface Group {
      *                                  for consumer groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
      * @param apiVersion                The api version.
+     * @return A validator for per-partition validation.
      */
-    void validateOffsetCommit(
+    CommitPartitionValidator validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
         int apiVersion
-
     ) throws KafkaException;
 
     /**
@@ -159,6 +160,13 @@ public interface Group {
      * @param records The list of records.
      */
     void createGroupTombstoneRecords(List<CoordinatorRecord> records);
+
+    /**
+     * Cancel any timers associated with the group.
+     *
+     * @param timer The coordinator timer.
+     */
+    default void cancelTimers(CoordinatorTimer<Void, CoordinatorRecord> timer) {}
 
     /**
      * @return Whether the group is in Empty state.

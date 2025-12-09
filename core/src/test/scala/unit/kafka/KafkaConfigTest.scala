@@ -57,13 +57,13 @@ class KafkaConfigTest {
 
     properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
     assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"controller.listener.names\" which has no default value.")
+
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    assertBadConfigContainingMessage(properties,
       "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
 
     properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-    assertBadConfigContainingMessage(properties,
-      "requirement failed: controller.listener.names must contain at least one value when running KRaft with just the broker role")
-
-    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     KafkaConfig.fromProps(properties)
   }
 
@@ -83,6 +83,10 @@ class KafkaConfigTest {
 
     properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
     assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"controller.listener.names\" which has no default value.")
+
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    assertBadConfigContainingMessage(properties,
       "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
 
     properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
@@ -90,15 +94,34 @@ class KafkaConfigTest {
       "requirement failed: The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
 
     properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
-    assertBadConfigContainingMessage(properties,
-      "No security protocol defined for listener CONTROLLER")
-
     properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT")
+    KafkaConfig.fromProps(properties)
+  }
+
+  @Test
+  def testControllerListenerNamesMismatch(): Unit = {
+    val properties = new Properties()
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "OTHER")
+    properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
+    properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT")
+
     assertBadConfigContainingMessage(properties,
       "requirement failed: The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
+  }
 
-    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    KafkaConfig.fromProps(properties)
+  @Test
+  def testControllerSecurityProtocolMapMissing(): Unit = {
+    val properties = new Properties()
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "OTHER")
+    properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
+
+    assertBadConfigContainingMessage(properties, "No security protocol defined for listener CONTROLLER")
   }
 
   @Test

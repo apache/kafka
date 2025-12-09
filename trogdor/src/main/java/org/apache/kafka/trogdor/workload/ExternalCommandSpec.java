@@ -26,10 +26,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * ExternalCommandSpec describes a task that executes Trogdor tasks with the command.
@@ -78,7 +77,7 @@ public class ExternalCommandSpec extends TaskSpec {
             @JsonProperty("shutdownGracePeriodMs") Optional<Integer> shutdownGracePeriodMs) {
         super(startMs, durationMs);
         this.commandNode = (commandNode == null) ? "" : commandNode;
-        this.command = (command == null) ? Collections.unmodifiableList(new ArrayList<>()) : command;
+        this.command = (command == null) ? List.of() : command;
         this.workload = (workload == null) ? NullNode.instance : workload;
         this.shutdownGracePeriodMs = shutdownGracePeriodMs;
     }
@@ -105,7 +104,7 @@ public class ExternalCommandSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(commandNode);
+        return topology -> Set.of(commandNode);
     }
 
     @Override

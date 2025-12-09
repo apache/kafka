@@ -25,7 +25,7 @@ pip install -r requirements.txt
 
 # Usage
 
-To start a release, first activate the virutalenv, and then run
+To start a release, first activate the virtualenv, and then run
 the release script.
 
 ```

@@ -23,57 +23,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
-public class CreateConnectorRequest {
-    private final String name;
-    private final Map<String, String> config;
-    private final InitialState initialState;
-
-    @JsonCreator
-    public CreateConnectorRequest(@JsonProperty("name") String name, @JsonProperty("config") Map<String, String> config,
-                                  @JsonProperty("initial_state") InitialState initialState) {
-        this.name = name;
-        this.config = config;
-        this.initialState = initialState;
-    }
-
-    @JsonProperty
-    public String name() {
-        return name;
-    }
-
-    @JsonProperty
-    public Map<String, String> config() {
-        return config;
-    }
-
-    @JsonProperty("initial_state")
-    public InitialState initialState() {
-        return initialState;
-    }
-
+public record CreateConnectorRequest(
+    @JsonProperty("name") String name,
+    @JsonProperty("config") Map<String, String> config,
+    @JsonProperty("initial_state") InitialState initialState
+) {
     public TargetState initialTargetState() {
-        if (initialState != null) {
-            return initialState.toTargetState();
-        } else {
-            return null;
-        }
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        CreateConnectorRequest that = (CreateConnectorRequest) o;
-        return Objects.equals(name, that.name) &&
-            Objects.equals(config, that.config) &&
-            Objects.equals(initialState, that.initialState);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, config, initialState);
+        return initialState != null ? initialState.toTargetState() : null;
     }
 
     public enum InitialState {
@@ -87,16 +44,11 @@ public class CreateConnectorRequest {
         }
 
         public TargetState toTargetState() {
-            switch (this) {
-                case RUNNING:
-                    return TargetState.STARTED;
-                case PAUSED:
-                    return TargetState.PAUSED;
-                case STOPPED:
-                    return TargetState.STOPPED;
-                default:
-                    throw new IllegalArgumentException("Unknown initial state: " + this);
-            }
+            return switch (this) {
+                case RUNNING -> TargetState.STARTED;
+                case PAUSED  -> TargetState.PAUSED;
+                case STOPPED -> TargetState.STOPPED;
+            };
         }
     }
 }
