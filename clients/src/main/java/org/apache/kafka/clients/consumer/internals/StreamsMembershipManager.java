@@ -699,7 +699,6 @@ public class StreamsMembershipManager implements RequestManager {
         final boolean isGroupReady = isGroupReady(responseData.status());
 
         if (activeTasks != null && standbyTasks != null && warmupTasks != null) {
-
             if (!state.canHandleNewAssignment()) {
                 log.debug("Ignoring new assignment: active tasks {}, standby tasks {}, and warm-up tasks {} received " +
                         "from server because member is in {} state.",
@@ -713,15 +712,12 @@ public class StreamsMembershipManager implements RequestManager {
                 toTasksAssignment(warmupTasks),
                 isGroupReady
             );
-        } else if (responseData.activeTasks() != null ||
-            responseData.standbyTasks() != null ||
-            responseData.warmupTasks() != null) {
-
+        } else if (responseData.activeTasks() != null || responseData.standbyTasks() != null || responseData.warmupTasks() != null) {
             throw new IllegalStateException("Invalid response data, task collections must be all null or all non-null: "
                 + responseData);
         } else if (isGroupReady != targetAssignment.isGroupReady) {
-            // If the client did not provide a new assignment, but the group is now ready, update the target
-            // assignment and reconcile it.
+            // If the client did not provide a new assignment, but the group is now ready or not ready anymore, so
+            // update the target assignment and reconcile it.
             processAssignmentReceived(
                 targetAssignment.activeTasks,
                 targetAssignment.standbyTasks,
@@ -740,6 +736,7 @@ public class StreamsMembershipManager implements RequestManager {
                     case INCORRECTLY_PARTITIONED_TOPICS:
                     case ASSIGNMENT_DELAYED:
                         return false;
+                    case UNKNOWN_STATUS:
                     default:
                         // continue checking other statuses
                 }
@@ -993,8 +990,7 @@ public class StreamsMembershipManager implements RequestManager {
     private void processAssignmentReceived(Map<String, SortedSet<Integer>> activeTasks,
                                            Map<String, SortedSet<Integer>> standbyTasks,
                                            Map<String, SortedSet<Integer>> warmupTasks,
-                                           boolean isGroupReady
-                                           ) {
+                                           boolean isGroupReady) {
         replaceTargetAssignmentWithNewAssignment(activeTasks, standbyTasks, warmupTasks, isGroupReady);
         if (!targetAssignmentReconciled()) {
             transitionTo(MemberState.RECONCILING);

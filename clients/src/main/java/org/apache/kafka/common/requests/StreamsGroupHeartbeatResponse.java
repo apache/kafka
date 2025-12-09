@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -88,7 +89,7 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         private static final Map<Byte, Status> CODE_TO_STATUS;
 
         static {
-            Map<Byte, Status> map = new java.util.HashMap<>();
+            Map<Byte, Status> map = new HashMap<>();
             for (Status status : values()) {
                 map.put(status.code, status);
             }
