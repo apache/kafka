@@ -1561,6 +1561,13 @@ public class StreamThread extends Thread implements ProcessingThread {
         return records;
     }
 
+    /**
+     * Sets the readiness state of the Streams group for this thread.
+     *
+     * @param ready {@code true} if the Streams group is ready to process records; {@code false} otherwise.
+     *              When set to {@code true}, this thread may transition to an active processing state.
+     *              When set to {@code false}, the thread will not process records until the group is ready.
+     */
     public void setStreamsGroupReady(final boolean ready) {
         streamsGroupReady = ready;
     }
