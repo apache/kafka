@@ -267,9 +267,8 @@ public class ProducerIntegrationTest {
         }
 
         /**
-         * Override deallocate to intentionally corrupt the ByteBuffer being returned to the pool.
-         * This is used to simulate a scenario where an in-flight buffer is mistakenly reused
-         * and its contents are unexpectedly modified, helping expose buffer reuse bugs.
+         * Override deallocate to track the number of times a ByteBuffer is deallocated.
+         * This helps monitor buffer usage patterns during testing.
          */
         @Override
         public void deallocate(ByteBuffer buffer, int size) {
