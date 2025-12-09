@@ -2520,7 +2520,6 @@ class ReplicaManager(val config: KafkaConfig,
 
       val listenerName = config.interBrokerListenerName.value
       val partitionAndOffsets = new mutable.HashMap[TopicPartition, InitialFetchState]
-      val partitionsWithoutLeader = new mutable.HashMap[TopicPartition, Option[Int]]
 
       partitionsToStartFetching.foreachEntry { (topicPartition, partition) =>
         val nodeOpt = partition.leaderReplicaIdOpt
@@ -2537,15 +2536,8 @@ class ReplicaManager(val config: KafkaConfig,
               initialFetchOffset(log)
             ))
           case None =>
-            partitionsWithoutLeader.put(topicPartition, partition.leaderReplicaIdOpt)
-        }
-      }
-
-      // Log partitions whose leader is not alive in the metadata image.
-      if (partitionsWithoutLeader.nonEmpty) {
-        partitionsWithoutLeader.foreachEntry { (topicPartition, leaderIdOpt) =>
-          stateChangeLogger.warn(s"Unable to start fetching $topicPartition " +
-            s"from leader $leaderIdOpt because it is not alive.")
+            stateChangeLogger.trace(s"Unable to start fetching $topicPartition " +
+              s"from leader ${partition.leaderReplicaIdOpt} because it is not alive.")
         }
       }
 
