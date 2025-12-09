@@ -282,23 +282,23 @@ public class ConsumerGroupTest {
         consumerGroup.updateMember(m1);
 
         ConsumerGroupMember m2 = new ConsumerGroupMember.Builder("m2")
+            .setMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        // m2 can acquire foo-1 because the epoch is larger than m1's epoch.
+        // This should not throw IllegalStateException.
+        consumerGroup.updateMember(m2);
+
+        ConsumerGroupMember m3 = new ConsumerGroupMember.Builder("m3")
             .setMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)))
             .build();
 
-        // m2 can acquire foo-1 because the epoch is at least as large as m1's epoch.
-        // This should not throw IllegalStateException.
-        consumerGroup.updateMember(m2);
-
-        ConsumerGroupMember m3 = new ConsumerGroupMember.Builder("m3")
-            .setMemberEpoch(9)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
-            .build();
-
         // m3 should not be able to acquire foo-1 because the epoch is smaller 
-        // than the current partition epoch (10).
+        // than the current partition epoch (11).
         assertThrows(IllegalStateException.class, () -> {
             consumerGroup.updateMember(m3);
         });

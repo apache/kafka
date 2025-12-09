@@ -24492,55 +24492,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testReplayConsumerGroupCurrentMemberAssignmentSameEpochWithCompaction() {
-        String groupId = "fooup";
-        String memberIdA = "memberIdA";
-        String memberIdB = "memberIdB";
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
-
-        // This test enacts the following scenario:
-        // 1. Member A unsubscribes from topic bar at epoch 10: Member A { epoch: 10, assigned partitions: [foo], pending revocations: [bar] }
-        // 2. A new assignment is available at epoch 11 with member A unsubscribing from topic foo.
-        // 3. Member A yields bar. The epoch is bumped to 11: Member A { epoch: 11, assigned partitions: [], pending revocations: [foo] }
-        // 4. Member A yields topic foo. Member A { epoch: 11, assigned partitions: [], pending revocations: [] } [removed by compaction]
-        // 5. Member B is assigned topic foo. Member B { epoch: 11, assigned partitions: [foo], pending revocations: [] }
-        // When record 4 is dropped by compaction, we want member B's assignment to be accepted with the same epoch. 
-
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdA)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(9)
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
-            .setPartitionsPendingRevocation(mkAssignment(mkTopicAssignment(barTopicId, 0)))
-            .build()));
-
-        // Member A yields bar at epoch 11.
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdA)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(11)
-            .setPreviousMemberEpoch(10)
-            .setPartitionsPendingRevocation(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
-            .build()));
-
-        // Member A yields foo. [record removed by compaction]
-        // Member B is assigned foo at epoch 11.
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdB)
-            .setState(MemberState.STABLE)
-            .setMemberEpoch(11)
-            .setPreviousMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
-            .build()));
-
-        // Verify partition foo-0 is assigned to member B at epoch 11.
-        ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
-        assertEquals(mkAssignment(mkTopicAssignment(fooTopicId, 0)), group.members().get(memberIdB).assignedPartitions());
-        assertEquals(11, group.currentPartitionEpoch(fooTopicId, 0));
-    }
-
-    @Test
     public void testReplayStreamsGroupCurrentMemberAssignmentWithCompaction() {
         String groupId = "fooup";
         String memberIdA = "memberIdA";
@@ -24594,7 +24545,7 @@ public class GroupMetadataManagerTest {
                     TaskAssignmentTestUtil.mkTasksWithEpochs(subtopologyId, Map.of(1, 13))))
             .build()));
 
-        // Check task 1 is assigned to member A and task 0 to member B.
+        // Verify task 1 is assigned to member A and task 0 to member B.
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
         assertEquals(processIdA, group.currentActiveTaskProcessId(subtopologyId, 1));
         assertEquals(processIdB, group.currentActiveTaskProcessId(subtopologyId, 0));

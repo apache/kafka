@@ -980,7 +980,7 @@ public class StreamsGroup implements Group {
             currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.forEach(partitionId -> {
-                        if (!partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
+                        if (!partitionsOrNull.containsKey(partitionId) || !partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
                             log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the task is " +
                                     "not owned by this process ID", groupId, processIdToRemove, subtopologyId, partitionId);
                         }
@@ -1030,7 +1030,7 @@ public class StreamsGroup implements Group {
                 for (Integer partitionId : assignedTaskPartitionsWithEpochs.keySet()) {
                     String prevValue = partitionsOrNull.put(partitionId, processId);
                     if (prevValue != null) {
-                        log.debug("[GroupId {}]Setting the process ID of {}-{} to {} even though the partition is " +
+                        log.debug("[GroupId {}] Setting the process ID of {}-{} to {} even though the partition is " +
                             "still owned by process ID {}", groupId, subtopologyId, partitionId, processId, prevValue);
                     }
                 }

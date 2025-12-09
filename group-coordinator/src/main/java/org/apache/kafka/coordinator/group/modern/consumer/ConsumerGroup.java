@@ -1084,7 +1084,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      *
      * @param assignment    The assignment.
      * @param epoch         The new epoch.
-     * @throws IllegalStateException if updating a partition with a smaller epoch.
+     * @throws IllegalStateException if updating a partition with a smaller or equal epoch.
      * package-private for testing.
      */
     void addPartitionEpochs(
@@ -1098,7 +1098,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 }
                 for (Integer partitionId : assignedPartitions) {
                     Integer prevValue = partitionsOrNull.get(partitionId);
-                    if (prevValue == null || prevValue <= epoch) {
+                    if (prevValue == null || prevValue < epoch) {
                         partitionsOrNull.put(partitionId, epoch);
                     } else {
                         throw new IllegalStateException(
