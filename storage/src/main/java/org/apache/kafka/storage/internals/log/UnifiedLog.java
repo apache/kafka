@@ -1602,11 +1602,33 @@ public class UnifiedLog implements AutoCloseable {
         if (validBytes == records.sizeInBytes()) {
             return records;
         } else {
-            // trim invalid bytes
+
+            // Duplicate the original buffer for trimming and logging purposes.
             ByteBuffer validByteBuffer = records.buffer().duplicate();
+
+            // Log detailed information about trimmed bytes
+            validByteBuffer.position(validBytes);
+            byte[] invalidBytes = new byte[records.sizeInBytes() - validBytes];
+            validByteBuffer.get(invalidBytes);
+            String invalidBytesHex = bytesToHex(invalidBytes);
+
+            logger.warn("Trimming invalid bytes from message set for partition {}. Original size: {} bytes, valid bytes: {}, trimmed bytes: {}. " +
+                    "bytes of invalid data (hex): {}",
+                    topicPartition(), records.sizeInBytes(), validBytes, invalidBytes.length, invalidBytesHex);
+
+            // Reset buffer for trimming
+            validByteBuffer.clear();
             validByteBuffer.limit(validBytes);
             return MemoryRecords.readableRecords(validByteBuffer);
         }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
     }
 
     private void checkLogStartOffset(long offset) {
