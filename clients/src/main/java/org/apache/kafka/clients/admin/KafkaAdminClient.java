@@ -956,7 +956,10 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
                     new Exception(prettyPrintException(cause)));
             }
-            if (cause instanceof TimeoutException) {
+            // Don't mask OutOfMemoryError as TimeoutException - propagate it directly
+            if (cause instanceof OutOfMemoryError) {
+                handleFailure(cause);
+            } else if (cause instanceof TimeoutException) {
                 handleFailure(cause);
             } else {
                 handleFailure(new TimeoutException(this + " timed out at " + now
