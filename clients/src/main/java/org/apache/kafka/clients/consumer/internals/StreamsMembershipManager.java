@@ -94,8 +94,7 @@ public class StreamsMembershipManager implements RequestManager {
                                final Map<String, SortedSet<Integer>> activeTasks,
                                final Map<String, SortedSet<Integer>> standbyTasks,
                                final Map<String, SortedSet<Integer>> warmupTasks,
-                               final boolean isGroupReady
-                               ) {
+                               final boolean isGroupReady) {
             this.localEpoch = localEpoch;
             this.activeTasks = activeTasks;
             this.standbyTasks = standbyTasks;
