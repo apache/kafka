@@ -52,10 +52,23 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             // to clients. Beginning with version 3, the broker requires only TOPIC Describe
             // permission for the topic of each requested partition. In order to ensure client
             // compatibility, we only send this request when we can guarantee the relaxed permissions.
+
+            // Check if all topics have topic IDs. If so, we can use version 5 which requires topic IDs.
+            // Otherwise, use version 4 which uses topic names.
+            boolean canUseTopicId = true;
+            for (OffsetForLeaderEpochRequestData.OffsetForLeaderTopic topic : epochsByPartition) {
+                if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                    canUseTopicId = false;
+                    break;
+                }
+            }
+
             OffsetForLeaderEpochRequestData data = new OffsetForLeaderEpochRequestData();
             data.setReplicaId(CONSUMER_REPLICA_ID);
             data.setTopics(epochsByPartition);
-            return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), data);
+
+            short latestVersion = canUseTopicId ? (short) 5 : (short) 4;
+            return new Builder((short) 3, latestVersion, data);
         }
 
         public static Builder forFollower(OffsetForLeaderTopicCollection epochsByPartition, int replicaId) {
