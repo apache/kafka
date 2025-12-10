@@ -3676,6 +3676,7 @@ public class FetcherTest {
         OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
         data.topics().add(new OffsetForLeaderTopicResult()
             .setTopic(topicPartition.topic())
+            .setTopicId(topicId)
             .setPartitions(Collections.singletonList(new EpochEndOffset()
                 .setPartition(topicPartition.partition())
                 .setErrorCode(error.code())

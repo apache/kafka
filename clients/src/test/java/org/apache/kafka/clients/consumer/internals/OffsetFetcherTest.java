@@ -1147,7 +1147,9 @@ public class OffsetFetcherTest {
             expectedPartitions.forEach(tp -> {
                 OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
                 if (topic == null) {
-                    topic = new OffsetForLeaderTopicResult().setTopic(tp.topic());
+                    topic = new OffsetForLeaderTopicResult()
+                        .setTopic(tp.topic())
+                        .setTopicId(topicId);
                     data.topics().add(topic);
                 }
                 topic.partitions().add(new EpochEndOffset()

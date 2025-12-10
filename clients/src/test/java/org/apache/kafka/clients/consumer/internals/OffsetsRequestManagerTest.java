@@ -1026,7 +1026,9 @@ public class OffsetsRequestManagerTest {
         partitions.forEach(tp -> {
             OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
             if (topic == null) {
-                topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult().setTopic(tp.topic());
+                topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+                        .setTopic(tp.topic())
+                        .setTopicId(TEST_TOPIC_ID);
                 data.topics().add(topic);
             }
             topic.partitions().add(new OffsetForLeaderEpochResponseData.EpochEndOffset()
@@ -1061,7 +1063,9 @@ public class OffsetsRequestManagerTest {
         partitionErrors.keySet().forEach(tp -> {
             OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
             if (topic == null) {
-                topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult().setTopic(tp.topic());
+                topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+                        .setTopic(tp.topic())
+                        .setTopicId(TEST_TOPIC_ID);
                 data.topics().add(topic);
             }
             topic.partitions().add(new OffsetForLeaderEpochResponseData.EpochEndOffset()
