@@ -105,7 +105,7 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
-    public void testDoesCompleteReassignmentAllNewReplicas() {
+    public void testCanCompleteReassignmentAllNewReplicas() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
@@ -118,7 +118,7 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
-    public void testDoesCompleteReassignmentSomeNewReplicas() {
+    public void testCanCompleteReassignmentSomeNewReplicas() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
@@ -224,7 +224,7 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
-    public void testDoesCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnExistingTargetReplicaFromIsr() {
+    public void testCanCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnExistingTargetReplicaFromIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
                 partitionAssignment(List.of(0, 1, 2, 3)), partitionAssignment(List.of(1, 2, 3, 4, 5)));
         assertTrue(replicas.isReassignmentInProgress());
