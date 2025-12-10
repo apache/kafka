@@ -137,7 +137,7 @@ object ConfigCommand extends Logging {
 
   private def validatePropsKey(props: Properties): Unit = {
     props.keySet.forEach { propsKey =>
-      if (!propsKey.toString.matches("[a-zA-Z0-9._-]*")) {
+      if (!propsKey.toString.matches("[$a-zA-Z0-9._-]*")) {
         throw new IllegalArgumentException(
           s"Invalid character found for config key: $propsKey"
         )
