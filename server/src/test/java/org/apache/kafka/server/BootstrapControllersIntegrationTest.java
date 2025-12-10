@@ -357,4 +357,9 @@ public class BootstrapControllersIntegrationTest {
             assertEquals("2", configEntry.value());
         }
     }
+
+    @ClusterTest(controllers = 1, standalone = true)
+    public void testIncrementalAlterConfigsByControllersWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, true);
+    }
 }
