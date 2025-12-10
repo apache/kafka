@@ -243,9 +243,6 @@ public class DescribeStreamsGroupTest {
             validateDescribeOutput(
                 List.of("--bootstrap-server", bootstrapServers, "--describe", "--verbose", "--members", "--all-groups"),
                 expectedHeader, expectedRowsMap, dontCares);
-
-            streams2.close();
-            streams2.cleanUp();
         }
     }
 
