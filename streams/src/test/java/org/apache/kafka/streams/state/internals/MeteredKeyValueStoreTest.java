@@ -530,6 +530,8 @@ public class MeteredKeyValueStoreTest {
         final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
         assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+
         KeyValueIterator<String, String> second = null;
         final long secondTimestamp;
         try {
@@ -546,14 +548,14 @@ public class MeteredKeyValueStoreTest {
             }
 
             // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
-            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+            assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
         } finally {
             if (second != null) {
                 second.close();
             }
         }
         // no open iterators left, timestamp should be reset to 0
-        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 
     private KafkaMetric metric(final MetricName metricName) {
