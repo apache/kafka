@@ -4190,6 +4190,16 @@ customized state stores; for built-in state stores, currently we have:
       <td>kafka.server:type=share-coordinator-metrics,name=last-pruned-offset,topic=([-.\w]+),partition=([0-9]+)</td>
       <td>The offset at which the share-group state topic was last pruned.</td>
     </tr>
+    <tr>
+      <td>batch-buffer-cache-size-bytes</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=batch-buffer-cache-size-bytes</td>
+      <td>The total size in bytes of append buffers currently held in the share coordinator's cache</td>
+    </tr>
+    <tr>
+      <td>batch-buffer-cache-discard-count</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=batch-buffer-cache-discard-count</td>
+      <td>The total number of over-sized append buffers that were discarded upon release</td>
+    </tr>
     </tbody>
   </table>
 
