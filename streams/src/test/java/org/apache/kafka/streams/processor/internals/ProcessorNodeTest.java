@@ -125,6 +125,24 @@ public class ProcessorNodeTest {
         assertDoesNotThrow(() -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
     }
 
+    @Test
+    public void shouldRethrowExceptionWhenProcessingExceptionHandlerIsNull() {
+        // This simulates the global thread case where no ProcessingExceptionHandler is set
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>(NAME, new IgnoredInternalExceptionsProcessor(), Collections.emptySet());
+
+        final InternalProcessorContext<Object, Object> internalProcessorContext = mockInternalProcessorContext();
+        // Initialize without a ProcessingExceptionHandler (simulates global thread initialization)
+        node.init(internalProcessorContext);
+
+        // The exception should be rethrown since there's no handler to process it
+        final RuntimeException exception = assertThrows(RuntimeException.class,
+            () -> node.process(new Record<>(KEY, VALUE, TIMESTAMP)));
+
+        assertEquals("Processing exception should be caught and handled by the processing exception handler.",
+            exception.getMessage());
+    }
+
     @ParameterizedTest
     @CsvSource({
         "FailedProcessingException,java.lang.RuntimeException,Fail processing",
