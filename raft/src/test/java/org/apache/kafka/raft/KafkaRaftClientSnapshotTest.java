@@ -1965,7 +1965,7 @@ public final class KafkaRaftClientSnapshotTest {
         context.client.schedulePreparedAppend();
         context.time.sleep(context.appendLingerMs());
         context.client.poll();
-        assertEquals(context.log.endOffset().offset(), context.client.highWatermark().getAsLong() + newRecords.size());
+        assertEquals(context.client.highWatermark().getAsLong() + newRecords.size(), context.log.endOffset().offset());
 
         OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + newRecords.size(), currentEpoch);
         exception = assertThrows(
