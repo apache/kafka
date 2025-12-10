@@ -18,6 +18,7 @@
 package kafka.tools
 
 import java.net.InetSocketAddress
+import java.util.Optional
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
@@ -83,7 +84,7 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION))
+      () => Optional.of(FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION)))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val endpoints = Endpoints.fromInetSocketAddresses(

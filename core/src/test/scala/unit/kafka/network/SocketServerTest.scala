@@ -57,6 +57,7 @@ import java.nio.channels.{SelectionKey, SocketChannel}
 import java.nio.charset.StandardCharsets
 import java.security.cert.X509Certificate
 import java.util
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent._
 import java.util.{Properties, Random}
@@ -85,7 +86,7 @@ class SocketServerTest {
   TestUtils.clearYammerMetrics()
 
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-    () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
+    () => Optional.of(new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0)))
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 

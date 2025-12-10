@@ -158,9 +158,10 @@ class ControllerServer(
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         config.unstableApiVersionsEnabled,
-        () => featuresPublisher.features().setFinalizedLevel(
-          KRaftVersion.FEATURE_NAME,
-          raftManager.client.kraftVersion().featureLevel())
+        () => featuresPublisher.features().map(f =>
+          f.setFinalizedLevel(
+            KRaftVersion.FEATURE_NAME,
+            raftManager.client.kraftVersion().featureLevel()))
       )
 
       //  metrics will be set to null when closing a controller, so we should recreate it for testing

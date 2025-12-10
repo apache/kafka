@@ -185,7 +185,7 @@ class KafkaApisTest extends Logging {
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.BROKER,
       true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
+      () => Optional.of(new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0)))
 
     setupFeatures(featureVersions)
 
