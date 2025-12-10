@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -49,6 +50,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
 import org.apache.kafka.timeline.TimelineObject;
+
+import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -106,6 +109,11 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
+     * The logger.
+     */
+    private final Logger log;
+
+    /**
      * The group state.
      */
     private final TimelineObject<ConsumerGroupState> state;
@@ -153,11 +161,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     private final TimelineHashMap<String, ResolvedRegularExpression> resolvedRegularExpressions;
 
     public ConsumerGroup(
+        LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         String groupId,
         GroupCoordinatorMetricsShard metrics
     ) {
         super(snapshotRegistry, groupId);
+        this.log = logContext.logger(ConsumerGroup.class);
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -1040,7 +1050,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      *
      * @param assignment    The assignment.
      * @param expectedEpoch The expected epoch.
-     * @throws IllegalStateException if the epoch does not match the expected one.
      * package-private for testing.
      */
     void removePartitionEpochs(
@@ -1051,11 +1060,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.forEach(partitionId -> {
-                        Integer prevValue = partitionsOrNull.remove(partitionId);
-                        if (prevValue != expectedEpoch) {
-                            throw new IllegalStateException(
-                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
-                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
+                        Integer prevValue = partitionsOrNull.get(partitionId);
+                        if (prevValue != null && prevValue == expectedEpoch) {
+                            partitionsOrNull.remove(partitionId);
+                        } else {
+                            log.debug("[GroupId {}] Cannot remove the epoch {} from {}-{} because the partition is " +
+                                    "still owned at a different epoch {}", groupId, expectedEpoch, topicId, partitionId, prevValue);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -1064,9 +1074,9 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                         return partitionsOrNull;
                     }
                 } else {
-                    throw new IllegalStateException(
-                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
-                            expectedEpoch, topicId));
+                    log.debug("[GroupId {}] Cannot remove the epoch {} from {} because it does not have any epoch",
+                            groupId, expectedEpoch, topicId);
+                    return partitionsOrNull;
                 }
             });
         });
@@ -1077,7 +1087,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      *
      * @param assignment    The assignment.
      * @param epoch         The new epoch.
-     * @throws IllegalStateException if the partition already has an epoch assigned.
+     * @throws IllegalStateException if updating a partition with a smaller or equal epoch.
      * package-private for testing.
      */
     void addPartitionEpochs(
@@ -1090,8 +1100,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
                 }
                 for (Integer partitionId : assignedPartitions) {
-                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
-                    if (prevValue != null) {
+                    Integer prevValue = partitionsOrNull.get(partitionId);
+                    if (prevValue == null || prevValue < epoch) {
+                        partitionsOrNull.put(partitionId, epoch);
+                    } else {
                         throw new IllegalStateException(
                             String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
                                 "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
@@ -1127,6 +1139,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Create a new consumer group according to the given classic group.
      *
+     * @param logContext        The log context.
      * @param snapshotRegistry  The SnapshotRegistry.
      * @param metrics           The GroupCoordinatorMetricsShard.
      * @param classicGroup      The converted classic group.
@@ -1138,6 +1151,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @throws UnsupportedVersionException if userData from a custom assignor would be lost.
      */
     public static ConsumerGroup fromClassicGroup(
+        LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
         ClassicGroup classicGroup,
@@ -1145,7 +1159,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ClusterImage clusterImage
     ) {
         String groupId = classicGroup.groupId();
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+        ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId, metrics);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
 

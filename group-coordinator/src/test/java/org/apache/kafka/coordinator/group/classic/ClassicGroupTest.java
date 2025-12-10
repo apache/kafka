@@ -1383,6 +1383,7 @@ public class ClassicGroupTest {
             .build();
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
+            logContext,
             new SnapshotRegistry(logContext),
             groupId,
             mock(GroupCoordinatorMetricsShard.class)
@@ -1536,6 +1537,7 @@ public class ClassicGroupTest {
             .build();
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
+            logContext,
             new SnapshotRegistry(logContext),
             groupId,
             mock(GroupCoordinatorMetricsShard.class)
