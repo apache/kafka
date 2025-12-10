@@ -34,6 +34,8 @@ import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -60,6 +62,17 @@ public class RangeAssignorTest {
     private final String memberA = "A";
     private final String memberB = "B";
     private final String memberC = "C";
+
+    @ParameterizedTest
+    @CsvSource({
+        "HOMOGENEOUS, false",
+        "HOMOGENEOUS, true",
+        "HETEROGENEOUS, false",
+        "HETEROGENEOUS, true"
+    })
+    public void testReassignmentStickiness(SubscriptionType subscriptionType, boolean rackAware) {
+        CommonAssignorTests.testReassignmentStickiness(assignor, subscriptionType, rackAware);
+    }
 
     @Test
     public void testOneMemberNoTopic() {

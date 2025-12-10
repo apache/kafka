@@ -216,10 +216,14 @@ public class HdrHistogramTest {
 
     @Test
     public void testRecordLimit() {
+        long now = System.currentTimeMillis();
         long highestTrackableValue = 10L;
         HdrHistogram hdrHistogram = new HdrHistogram(10L, highestTrackableValue, 3);
 
         hdrHistogram.record(highestTrackableValue + 1000L);
-        assertEquals(highestTrackableValue, hdrHistogram.max(System.currentTimeMillis()));
+        assertEquals(highestTrackableValue, hdrHistogram.max(now));
+
+        hdrHistogram.record(-50L);
+        assertEquals(0, hdrHistogram.max(now + 1000L));
     }
 }

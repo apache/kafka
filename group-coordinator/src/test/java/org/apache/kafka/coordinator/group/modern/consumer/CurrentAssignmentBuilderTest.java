@@ -386,12 +386,8 @@ public class CurrentAssignmentBuilderTest {
         );
     }
 
-    @ParameterizedTest
-    @CsvSource({
-        "10, 12, 11",
-        "10, 10, 10", // The member epoch must not advance past the target assignment epoch.
-    })
-    public void testUnrevokedPartitionsToUnrevokedPartitions(int memberEpoch, int targetAssignmentEpoch, int expectedMemberEpoch) {
+    @Test
+    public void testUnrevokedPartitionsToUnrevokedPartitions() {
         String topic1 = "topic1";
         String topic2 = "topic2";
         Uuid topicId1 = Uuid.randomUuid();
@@ -404,8 +400,8 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setState(MemberState.UNREVOKED_PARTITIONS)
-            .setMemberEpoch(memberEpoch)
-            .setPreviousMemberEpoch(memberEpoch)
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
@@ -417,7 +413,7 @@ public class CurrentAssignmentBuilderTest {
 
         ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withMetadataImage(metadataImage)
-            .withTargetAssignment(targetAssignmentEpoch, new Assignment(mkAssignment(
+            .withTargetAssignment(12, new Assignment(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6))))
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
@@ -433,8 +429,8 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(
             new ConsumerGroupMember.Builder("member")
                 .setState(MemberState.UNREVOKED_PARTITIONS)
-                .setMemberEpoch(expectedMemberEpoch)
-                .setPreviousMemberEpoch(memberEpoch)
+                .setMemberEpoch(10)
+                .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(topicId1, 3),
