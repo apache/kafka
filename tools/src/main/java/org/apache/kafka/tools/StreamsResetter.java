@@ -585,7 +585,7 @@ public class StreamsResetter {
 
         public StreamsResetterOptions(String[] args) {
             super(args);
-            applicationIdOption = parser.accepts("application-id", "The Kafka Streams application ID (application.id).")
+            applicationIdOption = parser.accepts("application-id", "REQUIRED: The Kafka Streams application ID (application.id).")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("id")

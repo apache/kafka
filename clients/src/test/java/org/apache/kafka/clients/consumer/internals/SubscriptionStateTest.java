@@ -306,13 +306,22 @@ public class SubscriptionStateTest {
     }
 
     @Test
-    public void testMarkingPartitionPending() {
+    public void testMarkingPendingRevocation() {
         state.assignFromUser(Set.of(tp0));
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
+        assertFalse(state.isPaused(tp0));
         state.markPendingRevocation(Set.of(tp0));
         assertFalse(state.isFetchable(tp0));
         assertFalse(state.isPaused(tp0));
+    }
+
+    @Test
+    public void testMarkingPendingRevocationPreventsInitializingPosition() {
+        state.assignFromUser(Set.of(tp0));
+        assertTrue(state.initializingPartitions().contains(tp0));
+        state.markPendingRevocation(Set.of(tp0));
+        assertFalse(state.initializingPartitions().contains(tp0));
     }
 
     @Test

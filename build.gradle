@@ -140,14 +140,14 @@ ext {
   runtimeTestLibs = [
     libs.slf4jLog4j2,
     libs.junitPlatformLanucher,
-    libs.jacksonDatabindYaml,
+    libs.jacksonDataformatYaml,
     project(":test-common:test-common-util")
   ]
 
   log4jReleaseLibs = [
     libs.slf4jLog4j2,
     libs.log4j1Bridge2Api,
-    libs.jacksonDatabindYaml
+    libs.jacksonDataformatYaml
   ]
 
   log4j2Libs = [
@@ -875,6 +875,29 @@ subprojects {
       removeUnusedImports()
     }
   }
+
+  tasks.register("checkJsonLicenseHeader") {
+    group = "Verification"
+    description = "Verify ASF License header in JSON files"
+
+    doLast {
+      def asfHeader = file("${rootProject.projectDir}/gradle/LICENSE.json").readLines()*.trim()
+
+      def incorrectFiles = fileTree(projectDir) {
+        include 'src/main/resources/**/*.json'
+        include 'src/test/resources/**/*.json'
+      }.findAll { f ->
+        f.readLines().take(asfHeader.size())*.trim() != asfHeader
+      }
+
+      if (incorrectFiles) {
+        println "\n${project.name}: Incorrect ASF license header in JSON files:"
+        incorrectFiles.each { println "  - $it" }
+        throw new GradleException("${incorrectFiles.size()} JSON files with incorrect ASF license header")
+      }
+    }
+  }
+  check.dependsOn("checkJsonLicenseHeader")
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
@@ -1073,7 +1096,7 @@ project(':core') {
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonDatabindYaml
+    implementation libs.jacksonDataformatYaml
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
@@ -1487,7 +1510,7 @@ project(':group-coordinator') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':coordinator-common').sourceSets.test.output
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -1609,7 +1632,7 @@ project(':test-common:test-common-runtime') {
 
     implementation libs.junitPlatformLanucher
     implementation libs.junitJupiter
-    implementation libs.jacksonDatabindYaml
+    implementation libs.jacksonDataformatYaml
     implementation libs.slf4jApi
 
     testImplementation libs.junitJupiter
@@ -2008,21 +2031,20 @@ project(':clients') {
     include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/acl/*"
     include "**/org/apache/kafka/common/annotation/*"
+    include "**/org/apache/kafka/common/config/*"
+    include "**/org/apache/kafka/common/config/provider/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/metrics/*"
     include "**/org/apache/kafka/common/metrics/stats/*"
     include "**/org/apache/kafka/common/quota/*"
     include "**/org/apache/kafka/common/resource/*"
-    include "**/org/apache/kafka/common/serialization/*"
-    include "**/org/apache/kafka/common/config/*"
-    include "**/org/apache/kafka/common/config/provider/*"
     include "**/org/apache/kafka/common/security/auth/*"
+    include "**/org/apache/kafka/common/security/oauthbearer/*"
     include "**/org/apache/kafka/common/security/plain/*"
     include "**/org/apache/kafka/common/security/scram/*"
     include "**/org/apache/kafka/common/security/token/delegation/*"
-    include "**/org/apache/kafka/common/security/oauthbearer/*"
-    include "**/org/apache/kafka/common/security/oauthbearer/secured/*"
+    include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/server/authorizer/*"
     include "**/org/apache/kafka/server/policy/*"
     include "**/org/apache/kafka/server/quota/*"
@@ -2084,7 +2106,7 @@ project(':raft') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.jqwik
@@ -2181,7 +2203,7 @@ project(':server-common') {
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
@@ -2322,7 +2344,7 @@ project(':storage') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -2639,7 +2661,7 @@ project(':shell') {
     testImplementation project(':core')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
 
@@ -2688,7 +2710,7 @@ project(':streams') {
     testCompileOnly libs.bndlib
 
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
@@ -2833,7 +2855,7 @@ project(':streams:streams-scala') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':streams:test-utils')
 
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation testLog4j2Libs
@@ -2900,7 +2922,6 @@ project(':streams:integration-tests') {
     testImplementation libs.mockitoCore
     testImplementation testLog4j2Libs
     testImplementation project(':streams:test-utils')
-    testImplementation project(':test-common:test-common-util')
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2938,7 +2959,7 @@ project(':streams:test-utils') {
     implementation libs.slf4jApi
 
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.hamcrest
@@ -3633,7 +3654,7 @@ project(':connect:runtime') {
     testImplementation project(':connect:test-plugins')
     testImplementation project(':server-common').sourceSets.test.output
 
-    testImplementation libs.jacksonDatabindYaml
+    testImplementation libs.jacksonDataformatYaml
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter

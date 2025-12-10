@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -52,6 +53,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -68,6 +70,8 @@ public class ConnectPluginPath {
     };
     public static final String NO_ALIAS = "N/A";
 
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     public static void main(String[] args) {
         Exit.exit(mainNoExit(args, System.out, System.err));
     }
@@ -82,7 +86,7 @@ public class ConnectPluginPath {
         } catch (ArgumentParserException e) {
             parser.handleError(e);
             return 1;
-        } catch (TerseException e) {
+        } catch (TerseException | ConfigException e) {
             err.println(e.getMessage());
             return 2;
         } catch (Throwable e) {
@@ -162,6 +166,9 @@ public class ConnectPluginPath {
         if (rawLocations.isEmpty() && rawPluginPaths.isEmpty() && rawWorkerConfigs.isEmpty()) {
             throw new ArgumentParserException("Must specify at least one --plugin-location, --plugin-path, or --worker-config", parser);
         }
+        for (String pluginPath : rawPluginPaths) {
+            validatePluginPath(pluginPath, "--plugin-path");
+        }
         Set<Path> pluginLocations = new LinkedHashSet<>();
         for (String rawWorkerConfig : rawWorkerConfigs) {
             Properties properties;
@@ -172,6 +179,7 @@ public class ConnectPluginPath {
             }
             String pluginPath = properties.getProperty(WorkerConfig.PLUGIN_PATH_CONFIG);
             if (pluginPath != null) {
+                validatePluginPath(pluginPath, WorkerConfig.PLUGIN_PATH_CONFIG);
                 rawPluginPaths.add(pluginPath);
             }
         }
@@ -190,6 +198,21 @@ public class ConnectPluginPath {
             pluginLocations.add(pluginLocation);
         }
         return pluginLocations;
+    }
+
+    private static void validatePluginPath(String pluginPath, String configName) throws ConfigException {
+        String trimmed = pluginPath.trim();
+        if (trimmed.isEmpty()) {
+            throw new ConfigException("'" + configName + "' must not be empty.");
+        }
+
+        String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(trimmed, -1);
+
+        for (String path : pluginPathElements) {
+            if (path.isEmpty()) {
+                throw new ConfigException("'" + configName + "' values must not be empty.");
+            }
+        }
     }
 
     enum Command {

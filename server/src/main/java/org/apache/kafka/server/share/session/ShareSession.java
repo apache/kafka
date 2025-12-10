@@ -38,6 +38,7 @@ public class ShareSession {
 
     private final ShareSessionKey key;
     private final ImplicitLinkedHashCollection<CachedSharePartition> partitionMap;
+    private final String connectionId;
 
     // visible for testing
     public int epoch;
@@ -48,16 +49,23 @@ public class ShareSession {
     /**
      * The share session.
      * Each share session is protected by its own lock, which must be taken before mutable
-     * fields are read or modified.  This includes modification of the share session partition map.
+     * fields are read or modified. This includes modification of the share session partition map.
      *
      * @param key                The share session key to identify the share session uniquely.
      * @param partitionMap       The CachedPartitionMap.
      * @param epoch              The share session sequence number.
+     * @param connectionId       The connection id associated with this share session.
      */
-    public ShareSession(ShareSessionKey key, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap, int epoch) {
+    public ShareSession(
+        ShareSessionKey key,
+        ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
+        int epoch,
+        String connectionId
+    ) {
         this.key = key;
         this.partitionMap = partitionMap;
         this.epoch = epoch;
+        this.connectionId = connectionId;
     }
 
     public ShareSessionKey key() {
@@ -83,6 +91,10 @@ public class ShareSession {
 
     public synchronized Boolean isEmpty() {
         return partitionMap.isEmpty();
+    }
+
+    public String connectionId() {
+        return connectionId;
     }
 
     // Update the cached partition data based on the request.
@@ -138,6 +150,7 @@ public class ShareSession {
                 ", partitionMap=" + partitionMap +
                 ", epoch=" + epoch +
                 ", cachedSize=" + cachedSize +
+                ", connectionId=" + connectionId +
                 ")";
     }
 }
