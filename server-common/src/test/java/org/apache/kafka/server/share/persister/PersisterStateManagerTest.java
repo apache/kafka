@@ -466,7 +466,7 @@ class PersisterStateManagerTest {
         }
 
         assertEquals(Errors.NETWORK_EXCEPTION.code(), result.data().results().get(0).partitions().get(0).errorCode());
-        verify(handler, times(1)).findShareCoordinatorBuilder();
+        verify(handler, times(5)).findShareCoordinatorBuilder();    // Retriable exception
 
         try {
             // Stopping the state manager
@@ -1374,6 +1374,77 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testWriteStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+        List<PersisterStateBatch> stateBatches = List.of(
+            new PersisterStateBatch(0, 9, (byte) 0, (short) 1),
+            new PersisterStateBatch(10, 19, (byte) 1, (short) 1)
+        );
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<WriteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.WriteStateHandler handler = spy(stateManager.new WriteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            0,
+            0,
+            0,
+            stateBatches,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<WriteShareGroupStateResponse> resultFuture = handler.result();
+
+        WriteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        WriteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testWriteStateRequestBatchingWithCoordinatorNodeLookup() throws ExecutionException, Exception {
         MockClient client = new MockClient(MOCK_TIME);
 
@@ -2235,6 +2306,70 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testReadStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateHandler handler = spy(stateManager.new ReadStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testReadStateSummaryRequestCoordinatorFoundSuccessfully() {
         MockClient client = new MockClient(MOCK_TIME);
 
@@ -3005,6 +3140,70 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testReadStateSummaryClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.ReadStateSummaryHandler handler = spy(stateManager.new ReadStateSummaryHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2,
+            null
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<ReadShareGroupStateSummaryResponse> resultFuture = handler.result();
+
+        ReadShareGroupStateSummaryResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        ReadShareGroupStateSummaryResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testDeleteStateRequestCoordinatorFoundSuccessfully() {
         MockClient client = new MockClient(MOCK_TIME);
 
@@ -3724,6 +3923,68 @@ class PersisterStateManagerTest {
             .map(PersisterStateManager.DeleteStateHandler::result).toArray(CompletableFuture[]::new)).get();
 
         TestUtils.waitForCondition(isBatchingSuccess::get, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "unable to verify batching");
+    }
+
+    @Test
+    public void testDeleteStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        DeleteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
     }
 
     @Test
@@ -4477,6 +4738,70 @@ class PersisterStateManagerTest {
     }
 
     @Test
+    public void testInitializeStateClientResponseErrorRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+        client.setUnreachable(coordinatorNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<InitializeShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.InitializeStateHandler handler = spy(stateManager.new InitializeStateHandler(
+            groupId,
+            topicId,
+            partition,
+            0,
+            0L,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<InitializeShareGroupStateResponse> resultFuture = handler.result();
+
+        InitializeShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        InitializeShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), partitionResult.errorCode());
+        verify(handler, times(2)).handleRequestResponse(any());    // Retriable exception
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
     public void testPersisterStateManagerClose() {
         KafkaClient client = mock(KafkaClient.class);
         Timer timer = mock(Timer.class);
@@ -4600,7 +4925,6 @@ class PersisterStateManagerTest {
         when(response.wasTimedOut()).thenReturn(holder.wasTimedOut);
         when(response.authenticationException()).thenReturn(holder.authException ? new SaslAuthenticationException("bad stuff") : null);
         when(response.versionMismatch()).thenReturn(holder.versionMismatch ? new UnsupportedVersionException("worse stuff") : null);
-        assertEquals(holder.exp, handler.checkResponseError(response, (err, exp) -> {
-        }), holder.toString());
+        assertEquals(holder.exp, handler.checkResponseError(response), holder.toString());
     }
 }

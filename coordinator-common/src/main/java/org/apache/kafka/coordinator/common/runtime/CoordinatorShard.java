@@ -36,10 +36,10 @@ public interface CoordinatorShard<U> {
      * A new metadata image is available. This is only called after {@link CoordinatorShard#onLoaded(CoordinatorMetadataImage)}
      * is called to signal that the coordinator has been fully loaded.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
      */
-    default void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {}
+    default void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {}
 
     /**
      * The coordinator has been unloaded. This is used to apply

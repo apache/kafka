@@ -272,7 +272,7 @@ public class ApplicationEventProcessorTest {
 
         setupProcessor(true);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
-        when(offsetsRequestManager.updateFetchPositions(event.deadlineMs())).thenReturn(CompletableFuture.completedFuture(true));
+        when(offsetsRequestManager.updateFetchPositions(event.deadlineMs())).thenReturn(CompletableFuture.completedFuture(null));
         when(fetchRequestManager.createFetchRequests()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
         assertTrue(event.isComplete());
@@ -693,7 +693,7 @@ public class ApplicationEventProcessorTest {
         when(cluster.topics()).thenReturn(Set.of(topic));
 
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
-        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(CompletableFuture.completedFuture(true));
+        when(offsetsRequestManager.updateFetchPositions(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
 
         setupProcessor(true);
         processor.process(new AsyncPollEvent(110, 100));

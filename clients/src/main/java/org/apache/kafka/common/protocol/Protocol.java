@@ -40,13 +40,16 @@ public class Protocol {
         final String indentStr = indentString(indentSize);
         final Map<String, Type> subTypes = new LinkedHashMap<>();
 
+        b.append(schema.leftBracket());
+        b.append(" ");
         // Top level fields
         for (BoundField field: schema.fields()) {
             Type type = field.def.type;
             if (type.isArray()) {
-                b.append("[");
+                b.append(type.leftBracket());
                 b.append(field.def.name);
-                b.append("] ");
+                b.append(type.rightBracket());
+                b.append(" ");
                 if (!subTypes.containsKey(field.def.name)) {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
@@ -54,9 +57,9 @@ public class Protocol {
                 Map<Integer, Field> taggedFields = new TreeMap<>(((TaggedFields) type).fields());
                 taggedFields.forEach((tag, taggedField) -> {
                     if (taggedField.type.isArray()) {
-                        b.append("[");
+                        b.append(type.leftBracket());
                         b.append(taggedField.name);
-                        b.append("]");
+                        b.append(type.rightBracket());
                         if (!subTypes.containsKey(taggedField.name))
                             subTypes.put(taggedField.name + "&lt;tag: " + tag.toString() + "&gt;", taggedField.type.arrayElementType().get());
                     } else {
@@ -75,6 +78,7 @@ public class Protocol {
                     subTypes.put(field.def.name, type);
             }
         }
+        b.append(schema.rightBracket());
         b.append("\n");
 
         // Sub Types/Schemas
@@ -227,14 +231,14 @@ public class Protocol {
                 b.append(" Response (Version: ");
                 b.append(version);
                 b.append(") => ");
-                schemaToBnfHtml(responses[version], b, 2);
+                schemaToBnfHtml(schema, b, 2);
                 b.append("</pre>");
 
                 b.append("<p><b>Response header version:</b> ");
                 b.append(key.responseHeaderVersion((short) version));
                 b.append("</p>\n");
 
-                schemaToFieldTableHtml(responses[version], b);
+                schemaToFieldTableHtml(schema, b);
                 b.append("</div>\n");
             }
         }

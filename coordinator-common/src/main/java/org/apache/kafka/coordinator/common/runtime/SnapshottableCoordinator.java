@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
@@ -200,14 +199,17 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     }
 
     /**
-     * A new metadata image is available. This is only called after {@link SnapshottableCoordinator#onLoaded(MetadataImage)}
+     * A new metadata image is available. This is only called after {@link SnapshottableCoordinator#onLoaded(CoordinatorMetadataImage)}
      * is called to signal that the coordinator has been fully loaded.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
      */
-    synchronized void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
-        this.coordinator.onNewMetadataImage(newImage, delta);
+    synchronized void onMetadataUpdate(
+        CoordinatorMetadataDelta delta,
+        CoordinatorMetadataImage newImage
+    ) {
+        this.coordinator.onMetadataUpdate(delta, newImage);
     }
 
     /**
