@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.TopicPartition;
 
@@ -28,10 +29,11 @@ import java.time.Duration;
  * offsets and update positions when it gets them. This will first attempt to use the committed offsets if available. If
  * no committed offsets available, it will use the partition offsets retrieved from the leader.
  * <p/>
- * The event completes with a boolean indicating if all assigned partitions have valid fetch positions
- * (based on {@link SubscriptionState#hasAllFetchPositions()}).
+ * The event completes when {@link OffsetsRequestManager} has completed its attempt to update the positions. There
+ * is no guarantee that {@link SubscriptionState#hasAllFetchPositions()} will return {@code true} just because the
+ * event has completed.
  */
-public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Boolean> implements MetadataErrorNotifiableEvent {
+public class CheckAndUpdatePositionsEvent extends CompletableApplicationEvent<Void> implements MetadataErrorNotifiableEvent {
 
     public CheckAndUpdatePositionsEvent(long deadlineMs) {
         super(Type.CHECK_AND_UPDATE_POSITIONS, deadlineMs);

@@ -209,7 +209,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
       assertNotNull(streamsGroupHeartbeatResponse, "StreamsGroupHeartbeatResponse should not be null")
       assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
       assertEquals(3, streamsGroupHeartbeatResponse.memberEpoch())
-      assertEquals(null, streamsGroupHeartbeatResponse.status())
+      assertEquals(List.empty.asJava, streamsGroupHeartbeatResponse.status())
       val expectedActiveTasks = List(
         new StreamsGroupHeartbeatResponseData.TaskIds()
           .setSubtopologyId("subtopology-1")

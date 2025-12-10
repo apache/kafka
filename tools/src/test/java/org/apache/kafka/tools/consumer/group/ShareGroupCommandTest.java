@@ -287,6 +287,47 @@ public class ShareGroupCommandTest {
     }
 
     @Test
+    public void testDescribeOffsetsOfExistingGroupWithNoOffsetInfo() throws Exception {
+        String firstGroup = "group1";
+        String bootstrapServer = "localhost:9092";
+
+        for (List<String> describeType : DESCRIBE_TYPE_OFFSETS) {
+            List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", bootstrapServer, "--describe", "--group", firstGroup));
+            cgcArgs.addAll(describeType);
+            Admin adminClient = mock(KafkaAdminClient.class);
+            DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
+            ShareGroupDescription exp = new ShareGroupDescription(
+                firstGroup,
+                List.of(),
+                GroupState.EMPTY,
+                new Node(0, "host1", 9090), 0, 0);
+            // When there is no offset information at all, an empty map will be returned
+            ListShareGroupOffsetsResult listShareGroupOffsetsResult = AdminClientTestUtils.createListShareGroupOffsetsResult(
+                Map.of(
+                    firstGroup,
+                    KafkaFuture.completedFuture(Map.of())
+                )
+            );
+
+            when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(firstGroup, KafkaFuture.completedFuture(exp)));
+            when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
+            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
+            try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
+                TestUtils.waitForCondition(() -> {
+                    Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                    String[] lines = res.getKey().trim().split("\n");
+                    if (lines.length != 1 && !res.getValue().isEmpty()) {
+                        return false;
+                    }
+
+                    String expectedValue = "Share group '" + firstGroup + "' has no offset information.";
+                    return expectedValue.equals(lines[0]);
+                }, "Expected just an informational message with describe type " + String.join(" ", describeType) + ".");
+            }
+        }
+    }
+
+    @Test
     public void testDescribeOffsetsOfAllExistingGroups() throws Exception {
         String firstGroup = "group1";
         String secondGroup = "group2";

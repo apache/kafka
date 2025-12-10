@@ -38,8 +38,8 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoCloseable {
-    //write (write-rate and write-total) Meter share-coordinator-metric The number of share-group state write calls per second.
-    //write-latency (write-latency-avg and write-latency-total) Meter share-coordinator-metrics The time taken for a share-group state write call, including the time to write to the share-group state topic.
+    // write (write-rate and write-total) Meter share-coordinator-metrics The number of share-group state write calls per second.
+    // write-latency (write-latency-avg and write-latency-max) Meter share-coordinator-metrics The time taken for a share-group state write call, including the time to write to the share-group state topic.
     public static final String METRICS_GROUP = "share-coordinator-metrics";
 
     private final Metrics metrics;
@@ -47,7 +47,7 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     public static final String SHARE_COORDINATOR_WRITE_SENSOR_NAME = "ShareCoordinatorWrite";
     public static final String SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME = "ShareCoordinatorWriteLatency";
-    public static final String SHARE_COORDINATOR_STATE_TOPIC_PRUNE_SENSOR_NAME = "ShareCoordinatorStateTopicPruneSensorName";
+    public static final String SHARE_COORDINATOR_STATE_TOPIC_PRUNE_SENSOR_NAME = "ShareCoordinatorStateTopicPrune";
     private final Map<TopicPartition, ShareGroupPruneMetrics> pruneMetrics = new ConcurrentHashMap<>();
 
     /**

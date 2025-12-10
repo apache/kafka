@@ -578,7 +578,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         /**
          * The current state.
          */
-        CoordinatorState state;
+        volatile CoordinatorState state;
 
         /**
          * The current epoch of the coordinator. This represents
@@ -2535,12 +2535,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The metadata delta.
+     * @param delta    The metadata delta.
+     * @param newImage The new metadata image.
      */
-    public void onNewMetadataImage(
-        CoordinatorMetadataImage newImage,
-        CoordinatorMetadataDelta delta
+    public void onMetadataUpdate(
+        CoordinatorMetadataDelta delta,
+        CoordinatorMetadataImage newImage
     ) {
         throwIfNotRunning();
         log.debug("Scheduling applying of a new metadata image with version {}.", newImage.version());
@@ -2559,7 +2559,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             // The new image can be applied to the coordinator only if the coordinator
                             // exists and is in the active state.
                             log.debug("Applying new metadata image with version {} to {}.", newImage.version(), tp);
-                            context.coordinator.onNewMetadataImage(newImage, delta);
+                            context.coordinator.onMetadataUpdate(delta, newImage);
                         } else {
                             log.debug("Ignored new metadata image with version {} for {} because the coordinator is not active.",
                                 newImage.version(), tp);
@@ -2611,14 +2611,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * Util method which returns all the topic partitions for which
-     * the state machine is in active state.
-     * <p>
-     * This could be useful if the caller does not have a specific
-     * target internal topic partition.
-     * @return List of {@link TopicPartition} whose coordinators are active
+     * @return List of {@link TopicPartition} whose coordinators are active.
      */
-    public List<TopicPartition> activeTopicPartitions() {
+    public List<TopicPartition> activeCoordinators() {
         if (coordinators == null || coordinators.isEmpty()) {
             return List.of();
         }

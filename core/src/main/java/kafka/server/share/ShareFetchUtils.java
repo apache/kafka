@@ -274,4 +274,47 @@ public class ShareFetchUtils {
         }
         return defaultValue;
     }
+
+    /**
+     * Merges contiguous AcquiredRecords with the same delivery count into single records.
+     * <p>
+     * This method takes a list of AcquiredRecords where firstOffset and lastOffset typically are the
+     * same (representing single offsets), but not necessarily required, and merges contiguous offsets
+     * that have the same delivery count into ranges.
+     *
+     * @param result the list to accumulate merged AcquiredRecords into
+     * @param acquiredRecords the sorted list of AcquiredRecords to merge
+     */
+    static void accumulateAcquiredRecords(List<AcquiredRecords> result, List<AcquiredRecords> acquiredRecords) {
+        if (acquiredRecords.isEmpty()) {
+            return;
+        }
+
+        long firstOffset = acquiredRecords.get(0).firstOffset();
+        long lastOffset = acquiredRecords.get(0).lastOffset();
+        short deliveryCount = acquiredRecords.get(0).deliveryCount();
+
+        for (int i = 1; i < acquiredRecords.size(); i++) {
+            AcquiredRecords current = acquiredRecords.get(i);
+            if (current.firstOffset() == lastOffset + 1 && deliveryCount == current.deliveryCount()) {
+                // Extend the last offset.
+                lastOffset = current.lastOffset();
+            } else {
+                // Append the current accumulated batch and start a new batch.
+                result.add(new AcquiredRecords()
+                    .setFirstOffset(firstOffset)
+                    .setLastOffset(lastOffset)
+                    .setDeliveryCount(deliveryCount));
+                // Reset the accumulation variables to the current acquired records.
+                firstOffset = current.firstOffset();
+                lastOffset = current.lastOffset();
+                deliveryCount = current.deliveryCount();
+            }
+        }
+        // Add the last accumulated batch.
+        result.add(new AcquiredRecords()
+            .setFirstOffset(firstOffset)
+            .setLastOffset(lastOffset)
+            .setDeliveryCount(deliveryCount));
+    }
 }
