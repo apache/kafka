@@ -197,7 +197,7 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
-    public void testCompleteReassignmentIfIsrDoesNotHaveAnExistingTargetReplica() {
+    public void testCanCompleteReassignmentIfIsrDoesNotHaveAnExistingTargetReplica() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
                 partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
