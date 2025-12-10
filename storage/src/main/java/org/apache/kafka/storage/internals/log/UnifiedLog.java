@@ -1602,7 +1602,6 @@ public class UnifiedLog implements AutoCloseable {
         if (validBytes == records.sizeInBytes()) {
             return records;
         } else {
-
             // Duplicate the original buffer for trimming and logging purposes.
             ByteBuffer validByteBuffer = records.buffer().duplicate();
 
