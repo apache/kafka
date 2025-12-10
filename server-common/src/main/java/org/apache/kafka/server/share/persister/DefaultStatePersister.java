@@ -45,16 +45,16 @@ public class DefaultStatePersister implements Persister {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultStatePersister.class);
     private static final Logger INITIALIZE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.InitializeStateHandler.class.getCanonicalName()
+        PersisterStateManager.InitializeStateHandler.class
     );
     private static final Logger WRITE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.WriteStateHandler.class.getCanonicalName()
+        PersisterStateManager.WriteStateHandler.class
     );
     private static final Logger READ_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.ReadStateHandler.class.getCanonicalName()
+        PersisterStateManager.ReadStateHandler.class
     );
     private static final Logger READ_SUMMARY_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.ReadStateSummaryHandler.class.getCanonicalName()
+        PersisterStateManager.ReadStateSummaryHandler.class
     );
     private static final Logger DELETE_HANDLER_LOG = LoggerFactory.getLogger(
         PersisterStateManager.DeleteStateHandler.class.getCanonicalName()
