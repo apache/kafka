@@ -263,7 +263,7 @@ public class StreamsRebalanceListenerInvokerTest {
         Set<StreamsRebalanceData.TaskId> standbyTasks = Set.of();
         Set<StreamsRebalanceData.TaskId> warmupTasks = Set.of();
 
-        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, false);
+        return new StreamsRebalanceData.Assignment(activeTasks, standbyTasks, warmupTasks, true);
     }
 
     private Set<StreamsRebalanceData.TaskId> createMockTasks() {

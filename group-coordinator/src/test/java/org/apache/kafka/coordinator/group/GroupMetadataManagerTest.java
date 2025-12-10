@@ -17584,7 +17584,7 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
-                        .setStatusDetail("")
+                        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
                 )),
             result.response().data()
         );

@@ -1946,7 +1946,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
-                .setStatusDetail("")
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -1978,7 +1978,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-                .setStatusDetail("")
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -2010,7 +2010,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code())
-                .setStatusDetail("")
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -2042,7 +2042,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
-                .setStatusDetail("")
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -2100,7 +2100,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())
-                .setStatusDetail("")
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -2151,7 +2151,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
-                .setStatusDetail("")
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
         );
 
         final StreamsGroupHeartbeatResponse responseWithoutTasks = makeHeartbeatResponse(

@@ -736,7 +736,6 @@ public class StreamsMembershipManager implements RequestManager {
                     case INCORRECTLY_PARTITIONED_TOPICS:
                     case ASSIGNMENT_DELAYED:
                         return false;
-                    case UNKNOWN_STATUS:
                     default:
                         // continue checking other statuses
                 }

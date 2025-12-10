@@ -2071,7 +2071,7 @@ public class GroupMetadataManager {
                 returnedStatus.add(
                     new Status()
                         .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
-                        .setStatusDetail("")
+                        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
                 );
             } else {
                 targetAssignment = updateStreamsTargetAssignment(

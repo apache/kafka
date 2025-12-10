@@ -83,8 +83,7 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         INCORRECTLY_PARTITIONED_TOPICS((byte) 2, "One or more topics expected to be copartitioned are not copartitioned."),
         MISSING_INTERNAL_TOPICS((byte) 3, "One or more internal topics are missing."),
         SHUTDOWN_APPLICATION((byte) 4, "A client requested the shutdown of the whole application."),
-        ASSIGNMENT_DELAYED((byte) 5, "The assignment was delayed by the coordinator."),
-        UNKNOWN_STATUS((byte) 255, "Status unrecognized.");
+        ASSIGNMENT_DELAYED((byte) 5, "The assignment was delayed by the coordinator.");
 
         private static final Map<Byte, Status> CODE_TO_STATUS;
 
@@ -115,7 +114,7 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         public static Status fromCode(byte code) {
             Status status = CODE_TO_STATUS.get(code);
             if (status == null) {
-                return UNKNOWN_STATUS;
+                throw new IllegalArgumentException("Unknown code " + code);
             }
             return status;
         }
