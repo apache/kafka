@@ -35,16 +35,11 @@
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.log"/>
     <allow pkg="kafka.server"/>
-    <allow pkg="kafka.api"/>
-    <allow pkg="kafka.controller"/>
     <allow pkg="kafka.coordinator"/>
     <allow pkg="kafka.network"/>
     <allow pkg="kafka.utils"/>
-    <allow pkg="kafka.zk"/>
-    <allow pkg="kafka.common"/>
     <allow pkg="kafka.message"/>
     <allow pkg="org.mockito"/>
-    <allow pkg="kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>
     <allow pkg="org.apache.kafka.storage"/>

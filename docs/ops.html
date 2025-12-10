@@ -3992,6 +3992,348 @@ customized state stores; for built-in state stores, currently we have:
     </tbody>
  </table>
 
+  <h4 class="anchor-heading"><a id="kafka_share_group_monitoring" class="anchor-link"></a><a href="#kafka_share_group_monitoring">Share Group Monitoring</a></h4>
+  The following set of metrics are available for monitoring the share group:
+  <table class="data-table">
+    <tbody><tr>
+      <th>Metric/Attribute name</th>
+      <th>Mbean name</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>TotalShareFetchRequestsPerSec</td>
+      <td>kafka.server:type=BrokerTopicMetrics,name=TotalShareFetchRequestsPerSec,topic=([-.\w]+)</td>
+      <td>The fetch request rate per second.</td>
+    </tr>
+    <tr>
+      <td>FailedShareFetchRequestsPerSec</td>
+      <td>kafka.server:type=BrokerTopicMetrics,name=FailedShareFetchRequestsPerSec,topic=([-.\w]+)</td>
+      <td>The share fetch request rate for requests that failed.</td>
+    </tr>
+    <tr>
+      <td>TotalShareAcknowledgementRequestsPerSec</td>
+      <td>kafka.server:type=BrokerTopicMetrics,name=TotalShareAcknowledgementRequestsPerSec,topic=([-.\w]+)</td>
+      <td>The acknowledgement request rate per second.</td>
+    </tr>
+    <tr>
+      <td>FailedShareAcknowledgementRequestsPerSec</td>
+      <td>kafka.server:type=BrokerTopicMetrics,name=FailedShareAcknowledgementRequestsPerSec,topic=([-.\w]+)</td>
+      <td>The share acknowledgement request rate for requests that failed.</td>
+    </tr>
+    <tr>
+      <td>RecordAcknowledgementsPerSec</td>
+      <td>kafka.server:type=ShareGroupMetrics,name=RecordAcknowledgementsPerSec,ackType={Accept|Release|Reject|Renew}</td>
+      <td>The rate per second of records acknowledged per acknowledgement type.</td>
+    </tr>
+    <tr>
+      <td>PartitionLoadTimeMs</td>
+      <td>kafka.server:type=ShareGroupMetrics,name=PartitionLoadTimeMs</td>
+      <td>The time taken to load the share partitions.</td>
+    </tr>
+    <tr>
+      <td>RequestTopicPartitionsFetchRatio</td>
+      <td>kafka.server:type=ShareGroupMetrics,name=RequestTopicPartitionsFetchRatio,group=([-.\w]+)</td>
+      <td>The ratio of topic-partitions acquired to the total number of topic-partitions in share fetch request.</td>
+    </tr>
+    <tr>
+      <td>TopicPartitionsAcquireTimeMs</td>
+      <td>kafka.server:type=ShareGroupMetrics,name=TopicPartitionsAcquireTimeMs,group=([-.\w]+)</td>
+      <td>The time elapsed (in millisecond) to acquire any topic partition for fetch.</td>
+    </tr>
+    <tr>
+      <td>AcquisitionLockTimeoutPerSec</td>
+      <td>kafka.server:type=SharePartitionMetrics,name=AcquisitionLockTimeoutPerSec,group=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</td>
+      <td>The rate of acquisition locks for records which are not acknowledged within the timeout.</td>
+    </tr>
+    <tr>
+      <td>InFlightMessageCount</td>
+      <td>kafka.server:type=SharePartitionMetrics,name=InFlightMessageCount,group=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</td>
+      <td>The number of in-flight messages for the share partition.</td>
+    </tr>
+    <tr>
+      <td>InFlightBatchCount</td>
+      <td>kafka.server:type=SharePartitionMetrics,name=InFlightBatchCount,group=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</td>
+      <td>The number of in-flight batches for the share partition.</td>
+    </tr>
+    <tr>
+      <td>InFlightBatchMessageCount</td>
+      <td>kafka.server:type=SharePartitionMetrics,name=InFlightBatchMessageCount,group=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</td>
+      <td>The number of messages in the in-flight batch.</td>
+    </tr>
+    <tr>
+      <td>FetchLockTimeMs</td>
+      <td>kafka.server:type=SharePartitionMetrics,name=FetchLockTimeMs,group=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</td>
+      <td>The time elapsed (in milliseconds) while a share partition is held under lock for fetching messages.</td>
+    </tr>
+    <tr>
+      <td>FetchLockRatio</td>
+      <td>kafka.server:type=SharePartitionMetrics,name=FetchLockRatio,group=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</td>
+      <td>The fraction of time that share partition is held under lock.</td>
+    </tr>
+    <tr>
+      <td>ShareSessionEvictionsPerSec</td>
+      <td>kafka.server:type=ShareSessionCache,name=ShareSessionEvictionsPerSec</td>
+      <td>The share session eviction rate per second.</td>
+    </tr>
+    <tr>
+      <td>SharePartitionsCount</td>
+      <td>kafka.server:type=ShareSessionCache,name=SharePartitionsCount</td>
+      <td>The number of cached share partitions.</td>
+    </tr>
+    <tr>
+      <td>ShareSessionsCount</td>
+      <td>kafka.server:type=ShareSessionCache,name=ShareSessionsCount</td>
+      <td>The number of cached share sessions.</td>
+    </tr>
+    <tr>
+      <td>NumDelayedOperations (ShareFetch)</td>
+      <td>kafka.server:type=DelayedOperationPurgatory,name=NumDelayedOperations,delayedOperation=ShareFetch</td>
+      <td>The number of delayed operations for share fetch purgatory.</td>
+    </tr>
+    <tr>
+      <td>PurgatorySize (ShareFetch)</td>
+      <td>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=ShareFetch</td>
+      <td>The number of requests waiting in the share fetch purgatory. This is high if share consumers use a large value for fetch.wait.max.ms.</td>
+    </tr>
+    <tr>
+      <td>ExpiresPerSec</td>
+      <td>kafka.server:type=DelayedShareFetchMetrics,name=ExpiresPerSec</td>
+      <td>The expired delayed share fetch operation rate per second.</td>
+    </tr>
+    </tbody>
+  </table>
+
+  <h5 class="anchor-heading"><a id="kafka_share_coordinator_monitoring" class="anchor-link"></a><a href="#kafka_share_coordinator_monitoring">Coordinator Metrics</a></h5>
+  <table class="data-table">
+    <tbody><tr>
+      <th>Metric/Attribute name</th>
+      <th>Mbean name</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>group-count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol=share</td>
+      <td>The total number of share groups managed by group coordinator.</td>
+    </tr>
+    <tr>
+      <td>share-group-rebalance-rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=share-group-rebalance-rate</td>
+      <td>The total number of share group rebalances.</td>
+    </tr>
+    <tr>
+      <td>share-group-rebalance-count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=share-group-rebalance-count</td>
+      <td>The total number of share group rebalances.</td>
+    </tr>
+    <tr>
+      <td>group-count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol=share</td>
+      <td>The total number of share groups managed by group coordinator.</td>
+    </tr>
+    <tr>
+      <td>partition-load-time-max</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=partition-load-time-max</td>
+      <td>The maximum time taken in milliseconds to load the share-group state from the share-group state partitions.</td>
+    </tr>
+    <tr>
+      <td>partition-load-time-avg</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=partition-load-time-avg</td>
+      <td>The average time taken in milliseconds to load the share-group state from the share-group state partitions.</td>
+    </tr>
+    <tr>
+      <td>thread-idle-ratio-min</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=thread-idle-ratio-min</td>
+      <td>The minimum fraction of time the share coordinator thread is idle.</td>
+    </tr>
+    <tr>
+      <td>thread-idle-ratio-avg</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=thread-idle-ratio-avg</td>
+      <td>The average fraction of time the share coordinator thread is idle.</td>
+    </tr>
+    <tr>
+      <td>write-rate</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=write-rate</td>
+      <td>The number of share-group state write calls per second.</td>
+    </tr>
+    <tr>
+      <td>write-total</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=write-total</td>
+      <td>The total number of share-group state write calls.</td>
+    </tr>
+    <tr>
+      <td>write-latency-avg</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=write-latency-avg</td>
+      <td>The average time taken for a share-group state write call, including the time to write to the share-group state topic.</td>
+    </tr>
+    <tr>
+      <td>write-latency-max</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=write-latency-max</td>
+      <td>The maximum time taken for a share-group state write call, including the time to write to the share-group state topic.</td>
+    </tr>
+    <tr>
+      <td>num-partitions</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=num-partitions,state={loading|active|failed}</td>
+      <td>The number of partitions in the share-state topic in each state.</td>
+    </tr>
+    <tr>
+      <td>last-pruned-offset</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=last-pruned-offset,topic=([-.\w]+),partition=([0-9]+)</td>
+      <td>The offset at which the share-group state topic was last pruned.</td>
+    </tr>
+    </tbody>
+  </table>
+
+  <h5 class="anchor-heading"><a id="kafka_share_client_monitoring" class="anchor-link"></a><a href="#kafka_share_client_monitoring">Client Metrics</a></h5>
+  The following metrics are available on share consumer instances:
+  <table class="data-table">
+    <tbody><tr>
+      <th>Metric/Attribute name</th>
+      <th>Mbean name</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>last-poll-seconds-ago</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=last-poll-seconds-ago,client-id=([-.\w]+)</td>
+      <td>The number of seconds since the last poll() invocation.</td>
+    </tr>
+    <tr>
+      <td>time-between-poll-avg</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=time-between-poll-avg,client-id=([-.\w]+)</td>
+      <td>The average delay between invocations of poll() in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>time-between-poll-max</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=time-between-poll-max,client-id=([-.\w]+)</td>
+      <td>The maximum delay between invocations of poll() in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>poll-idle-ratio-avg</td>
+      <td>kafka.consumer:type=consumer-share-metrics,name=poll-idle-ratio-avg,client-id=([-.\w]+)</td>
+      <td>The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records.</td>
+    </tr>
+    <tr>
+      <td>heartbeat-response-time-max</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=heartbeat-response-time-max,client-id=([-.\w]+)</td>
+      <td>The maximum time taken to receive a response to a heartbeat request in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>heartbeat-rate</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=heartbeat-rate,client-id=([-.\w]+)</td>
+      <td>The number of heartbeats per second.</td>
+    </tr>
+    <tr>
+      <td>heartbeat-total</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=heartbeat-total,client-id=([-.\w]+)</td>
+      <td>The total number of heartbeats.</td>
+    </tr>
+    <tr>
+      <td>last-heartbeat-seconds-ago</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=last-heartbeat-seconds-ago,client-id=([-.\w]+)</td>
+      <td>The number of seconds since the last coordinator heartbeat was sent.</td>
+    </tr>
+    <tr>
+      <td>rebalance-total</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=rebalance-total,client-id=([-.\w]+)</td>
+      <td>The total number of share group rebalances count.</td>
+    </tr>
+    <tr>
+      <td>rebalance-rate-per-hour</td>
+      <td>kafka.consumer:type=consumer-share-coordinator-metrics,name=rebalance-rate-per-hour,client-id=([-.\w]+)</td>
+      <td>The number of share group rebalances event per hour.</td>
+    </tr>
+    <tr>
+      <td>fetch-size-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-size-avg,client-id=([-.\w]+)</td>
+      <td>The average number of bytes fetched per request.</td>
+    </tr>
+    <tr>
+      <td>fetch-size-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-size-max,client-id=([-.\w]+)</td>
+      <td>The maximum number of bytes fetched per request.</td>
+    </tr>
+    <tr>
+      <td>records-per-request-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-avg,client-id=([-.\w]+)</td>
+      <td>The average number of records in each request.</td>
+    </tr>
+    <tr>
+      <td>records-per-request-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-per-request-max,client-id=([-.\w]+)</td>
+      <td>The maximum number of records in a request.</td>
+    </tr>
+    <tr>
+      <td>bytes-consumed-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-consumed-rate,client-id=([-.\w]+)</td>
+      <td>The average number of bytes consumed per second.</td>
+    </tr>
+    <tr>
+      <td>bytes-consumed-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=bytes-consumed-total,client-id=([-.\w]+)</td>
+      <td>The total number of bytes consumed.</td>
+    </tr>
+    <tr>
+      <td>records-consumed-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-consumed-rate,client-id=([-.\w]+)</td>
+      <td>The average number of records fetched per second.</td>
+    </tr>
+    <tr>
+      <td>records-consumed-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=records-consumed-total,client-id=([-.\w]+)</td>
+      <td>The total number of records fetched.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-send-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-send-rate,client-id=([-.\w]+)</td>
+      <td>The average number of record acknowledgements sent per second.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-send-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-send-total,client-id=([-.\w]+)</td>
+      <td>The total number of record acknowledgements sent.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-error-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-error-rate,client-id=([-.\w]+)</td>
+      <td>The average number of record acknowledgements that resulted in errors per second.</td>
+    </tr>
+    <tr>
+      <td>acknowledgements-error-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=acknowledgements-error-total,client-id=([-.\w]+)</td>
+      <td>The total number of record acknowledgements that resulted in errors.</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-latency-avg,client-id=([-.\w]+)</td>
+      <td>The average time taken for a fetch request.</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-latency-max,client-id=([-.\w]+)</td>
+      <td>The maximum time taken for any fetch request.</td>
+    </tr>
+    <tr>
+      <td>fetch-rate</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-rate,client-id=([-.\w]+)</td>
+      <td>The number of fetch requests per second.</td>
+    </tr>
+    <tr>
+      <td>fetch-total</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-total,client-id=([-.\w]+)</td>
+      <td>The total number of fetch requests.</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-avg</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-throttle-time-avg,client-id=([-.\w]+)</td>
+      <td>The average throttle time in milliseconds.</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-max</td>
+      <td>kafka.consumer:type=consumer-share-fetch-manager-metrics,name=fetch-throttle-time-max,client-id=([-.\w]+)</td>
+      <td>The maximum throttle time in milliseconds.</td>
+    </tr>
+    </tbody>
+  </table>
+
   <h4 class="anchor-heading"><a id="others_monitoring" class="anchor-link"></a><a href="#others_monitoring">Others</a></h4>
 
   We recommend monitoring GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.

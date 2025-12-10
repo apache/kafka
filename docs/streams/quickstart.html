@@ -166,6 +166,12 @@ and continuously write its current results to the output topic <b>streams-wordco
 Hence there won't be any STDOUT output except log entries as the results are written back into in Kafka.
 </p>
 
+Optionally, use <code>group.protocol=streams</code> to enable the new rebalancing protocol introduced in KIP-1071. 
+This shifts task assignment logic from the client to the broker, reducing rebalance times and eliminating stop-the-world rebalances.
+
+<pre><code class="language-bash">$ echo "group.protocol=streams" > streams.properties
+$ bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo streams.properties</code></pre>
+
 Now we can start the console producer in a separate terminal to write some input data to this topic:
 
 <pre><code class="language-bash">$ bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input</code></pre>
