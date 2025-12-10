@@ -107,8 +107,9 @@ public class ShareCoordinatorConfig {
         .define(WRITE_TIMEOUT_MS_CONFIG, INT, WRITE_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, WRITE_TIMEOUT_MS_DOC)
         .defineInternal(STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG, INT, STATE_TOPIC_PRUNE_INTERVAL_MS_DEFAULT, atLeast(1), LOW, STATE_TOPIC_PRUNE_INTERVAL_MS_DOC)
         .defineInternal(COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG, INT, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DEFAULT, atLeast(1), LOW, COLD_PARTITION_SNAPSHOT_INTERVAL_MS_DOC)
-        .define(CACHED_BUFFER_MAX_BYTES_CONFIG, INT, CACHED_BUFFER_MAX_BYTES_DEFAULT, atLeast(512 * 1024), MEDIUM,
-            CACHED_BUFFER_MAX_BYTES_DOC);
+        // The minimum size is set equal to `INITIAL_BUFFER_SIZE` to prevent CACHED_BUFFER_MAX_BYTES from being configured too small,
+        // which could otherwise negatively impact performance.
+        .define(CACHED_BUFFER_MAX_BYTES_CONFIG, INT, CACHED_BUFFER_MAX_BYTES_DEFAULT, atLeast(512 * 1024), MEDIUM, CACHED_BUFFER_MAX_BYTES_DOC);
 
     private final int stateTopicNumPartitions;
     private final short stateTopicReplicationFactor;

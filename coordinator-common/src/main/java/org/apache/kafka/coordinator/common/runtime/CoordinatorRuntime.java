@@ -789,7 +789,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             } else if (currentBatch.buffer.capacity() <= cachedBufferMaxBytes) {
                 bufferSupplier.release(currentBatch.buffer);
                 cachedBufferSize.set(currentBatch.buffer.capacity());
-                // If the builder expands the buffer beyond the cachedBufferMaxBytes, that should also increment the discard counter.
+                // If the builder expands the buffer beyond the cachedBufferMaxBytes, that should also increase the discard counter.
                 runtimeMetrics.recordBufferCacheDiscarded();
             } else {
                 runtimeMetrics.recordBufferCacheDiscarded();
