@@ -157,7 +157,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
 
-    try {// Heartbeat request to join the group. Note that the member subscribes
+    try {
+      // Heartbeat request to join the group. Note that the member subscribes
       // to a nonexistent topic.
       var consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
         new ConsumerGroupHeartbeatRequestData()

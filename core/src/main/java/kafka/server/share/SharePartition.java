@@ -1116,7 +1116,7 @@ public class SharePartition {
                 // These records were fetched but they were not actually delivered to the client.
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                         offsetState.getKey() < startOffset ? RecordState.ARCHIVED : recordState,
-                        DeliveryCountOps.DECREASE,
+                        DeliveryCountOps.NO_OP,
                         this.maxDeliveryCount,
                         EMPTY_MEMBER_ID
                 );
@@ -1158,7 +1158,7 @@ public class SharePartition {
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : recordState,
-                    DeliveryCountOps.DECREASE,
+                    DeliveryCountOps.NO_OP,
                     this.maxDeliveryCount,
                     EMPTY_MEMBER_ID
             );

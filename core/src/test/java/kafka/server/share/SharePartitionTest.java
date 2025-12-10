@@ -5034,7 +5034,7 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(0L).batchState());
         // Release delivery count.
-        assertEquals(0, sharePartition.cachedState().get(0L).batchDeliveryCount());
+        assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(0L).offsetState());
         assertEquals(0, sharePartition.deliveryCompleteCount());
     }
@@ -5053,7 +5053,7 @@ public class SharePartitionTest {
         assertEquals(5, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
-        assertEquals(0, sharePartition.cachedState().get(5L).batchDeliveryCount());
+        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(5L).offsetState());
         assertEquals(0, sharePartition.deliveryCompleteCount());
     }
@@ -5126,7 +5126,7 @@ public class SharePartitionTest {
         assertEquals(5, sharePartition.nextFetchOffset());
         // Check cached state.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
-        expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(6L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
 
@@ -5140,8 +5140,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
         assertEquals(10, sharePartition.deliveryCompleteCount());
     }
@@ -5192,8 +5192,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
         assertEquals(9, sharePartition.deliveryCompleteCount());
 
@@ -5216,8 +5216,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
         assertEquals(9, sharePartition.deliveryCompleteCount());
     }
@@ -5268,8 +5268,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
         assertEquals(9, sharePartition.deliveryCompleteCount());
 
@@ -5289,7 +5289,7 @@ public class SharePartitionTest {
         // Check cached state.
         expectedOffsetStateMap.clear();
         expectedOffsetStateMap.put(5L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(6L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(6L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
         expectedOffsetStateMap.clear();
         expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
@@ -5301,8 +5301,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
         assertEquals(9, sharePartition.deliveryCompleteCount());
     }
@@ -5339,7 +5339,7 @@ public class SharePartitionTest {
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(6L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(7L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(7L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(9L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
@@ -5370,9 +5370,9 @@ public class SharePartitionTest {
 
         assertEquals(0, sharePartition.nextFetchOffset());
         assertEquals(2, sharePartition.cachedState().size());
-        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(10L).batchState());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).batchState());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(0, sharePartition.deliveryCompleteCount());
+        assertEquals(5, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5417,26 +5417,25 @@ public class SharePartitionTest {
         assertNotNull(sharePartition.cachedState().get(10L).offsetState());
         assertThrows(IllegalStateException.class, () -> sharePartition.cachedState().get(15L).batchState());
         assertNotNull(sharePartition.cachedState().get(10L).offsetState());
-        assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(20L).batchState());
-        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(20L).batchMemberId());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(20L).batchState());
         assertNull(sharePartition.cachedState().get(20L).offsetState());
 
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
-        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.ARCHIVED, (short) 2, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.ARCHIVED, (short) 2, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
 
         expectedOffsetStateMap.clear();
-        expectedOffsetStateMap.put(15L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(16L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(15L, new InFlightState(RecordState.ARCHIVED, (short) 2, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ARCHIVED, (short) 2, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(19L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(15L).offsetState());
-        assertEquals(3, sharePartition.deliveryCompleteCount());
+        assertEquals(12, sharePartition.deliveryCompleteCount());
     }
 
     @Test
@@ -5604,7 +5603,7 @@ public class SharePartitionTest {
         assertEquals(5, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(5L).batchState());
-        assertEquals(0, sharePartition.cachedState().get(5L).batchDeliveryCount());
+        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(5L).offsetState());
         // Acquisition lock timer task would be cancelled by the release acquired records operation.
         assertNull(sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask());
@@ -5649,7 +5648,7 @@ public class SharePartitionTest {
         assertEquals(5, sharePartition.nextFetchOffset());
         // Check cached state.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
-        expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(5L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(6L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
 
@@ -5663,8 +5662,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
 
         // Acquisition lock timer task would be cancelled by the release acquired records operation.
@@ -6853,7 +6852,7 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(21L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(22L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(23L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(24L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(24L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
 
         assertEquals(0, sharePartition.deliveryCompleteCount());
 
@@ -6869,8 +6868,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(35L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(36L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(37L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(38L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(39L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(38L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(39L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(35L).offsetState());
     }
 
@@ -6932,10 +6931,10 @@ public class SharePartitionTest {
 
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
 
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
 
@@ -6944,7 +6943,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testReleaseAcquiredRecordsDecreaseDeliveryCount() {
+    public void testReleaseAcquiredRecordsDoNotDecreaseDeliveryCount() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
@@ -6986,10 +6985,10 @@ public class SharePartitionTest {
         // After release, the delivery count was decremented.
         expectedOffsetStateMap = new HashMap<>();
         expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(12L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(13L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
         assertEquals(2, sharePartition.deliveryCompleteCount());
     }
@@ -11252,8 +11251,8 @@ public class SharePartitionTest {
         expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(12L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(15L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(16L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(17L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
