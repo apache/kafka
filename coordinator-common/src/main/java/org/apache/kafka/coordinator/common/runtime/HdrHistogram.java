@@ -92,12 +92,12 @@ public final class HdrHistogram {
     }
 
     /**
-     * Writes to the histogram. Caps recording to highestTrackableValue
+     * Writes to the histogram. Caps recording between 0 and highestTrackableValue.
      *
-     * @param value The value to be recorded. Cannot be negative.
+     * @param value The value to be recorded.
      */
     public void record(long value) {
-        recorder.recordValue(Math.min(value, highestTrackableValue));
+        recorder.recordValue(Math.min(Math.max(value, 0), highestTrackableValue));
     }
 
     /**

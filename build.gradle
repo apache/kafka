@@ -875,6 +875,29 @@ subprojects {
       removeUnusedImports()
     }
   }
+
+  tasks.register("checkJsonLicenseHeader") {
+    group = "Verification"
+    description = "Verify ASF License header in JSON files"
+
+    doLast {
+      def asfHeader = file("${rootProject.projectDir}/gradle/LICENSE.json").readLines()*.trim()
+
+      def incorrectFiles = fileTree(projectDir) {
+        include 'src/main/resources/**/*.json'
+        include 'src/test/resources/**/*.json'
+      }.findAll { f ->
+        f.readLines().take(asfHeader.size())*.trim() != asfHeader
+      }
+
+      if (incorrectFiles) {
+        println "\n${project.name}: Incorrect ASF license header in JSON files:"
+        incorrectFiles.each { println "  - $it" }
+        throw new GradleException("${incorrectFiles.size()} JSON files with incorrect ASF license header")
+      }
+    }
+  }
+  check.dependsOn("checkJsonLicenseHeader")
 }
 
 gradle.taskGraph.whenReady { taskGraph ->

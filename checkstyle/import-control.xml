@@ -268,7 +268,6 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>
-    <allow pkg="org.apache.kafka.controller.util"/>
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
@@ -326,7 +325,6 @@
       <subpackage name="group">
         <allow pkg="kafka.api"/>
         <allow pkg="kafka.security"/>
-        <allow pkg="kafka.zk" />
         <allow pkg="scala"/>
         <allow pkg="com.google.re2j"/>
         <subpackage name="share">
@@ -485,7 +483,6 @@
     <!-- for testing -->
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.network" />
-    <allow pkg="org.apache.log4j" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -604,7 +601,6 @@
         <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
         <allow pkg="org.apache.kafka.common.test" />
-        <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
         <allow class="jakarta.servlet.http.HttpServletResponse" />
         <allow class="jakarta.ws.rs.core.Response" />
