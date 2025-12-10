@@ -89,6 +89,7 @@ public class ConsumerGroupTest {
     private ConsumerGroup createConsumerGroup(String groupId) {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         return new ConsumerGroup(
+            new LogContext(),
             snapshotRegistry,
             groupId,
             mock(GroupCoordinatorMetricsShard.class)
@@ -284,14 +285,26 @@ public class ConsumerGroupTest {
         consumerGroup.updateMember(m1);
 
         ConsumerGroupMember m2 = new ConsumerGroupMember.Builder("m2")
+            .setMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        // m2 can acquire foo-1 because the epoch is larger than m1's epoch.
+        // This should not throw IllegalStateException.
+        consumerGroup.updateMember(m2);
+
+        ConsumerGroupMember m3 = new ConsumerGroupMember.Builder("m3")
             .setMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)))
             .build();
 
-        // m2 should not be able to acquire foo-1 because the partition is
-        // still owned by another member.
-        assertThrows(IllegalStateException.class, () -> consumerGroup.updateMember(m2));
+        // m3 should not be able to acquire foo-1 because the epoch is smaller 
+        // than the current partition epoch (11).
+        assertThrows(IllegalStateException.class, () -> {
+            consumerGroup.updateMember(m3);
+        });
     }
 
     @Test
@@ -299,13 +312,13 @@ public class ConsumerGroupTest {
         Uuid fooTopicId = Uuid.randomUuid();
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
-        // Removing should fail because there is no epoch set.
-        assertThrows(IllegalStateException.class, () -> consumerGroup.removePartitionEpochs(
+        // Removing should be a no-op when there is no epoch set.
+        consumerGroup.removePartitionEpochs(
             mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)
             ),
             10
-        ));
+        );
 
         ConsumerGroupMember m1 = new ConsumerGroupMember.Builder("m1")
             .setMemberEpoch(10)
@@ -315,13 +328,15 @@ public class ConsumerGroupTest {
 
         consumerGroup.updateMember(m1);
 
-        // Removing should fail because the expected epoch is incorrect.
-        assertThrows(IllegalStateException.class, () -> consumerGroup.removePartitionEpochs(
+        // Removing with incorrect epoch should do nothing. 
+        // A debug message is logged, no exception is thrown.
+        consumerGroup.removePartitionEpochs(
             mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)
             ),
             11
-        ));
+        );
+        assertEquals(10, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
     }
 
     @Test
@@ -336,14 +351,24 @@ public class ConsumerGroupTest {
             10
         );
 
-        // Changing the epoch should fail because the owner of the partition
-        // should remove it first.
-        assertThrows(IllegalStateException.class, () -> consumerGroup.addPartitionEpochs(
+        // Updating to a larger epoch should succeed.
+        consumerGroup.addPartitionEpochs(
             mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)
             ),
             11
-        ));
+        );
+        assertEquals(11, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
+
+        // Updating to a smaller epoch should fail.
+        assertThrows(IllegalStateException.class, () -> {
+            consumerGroup.addPartitionEpochs(
+                mkAssignment(
+                    mkTopicAssignment(fooTopicId, 1)
+                ),
+                10
+            );
+        });
     }
 
     @Test
@@ -700,7 +725,7 @@ public class ConsumerGroupTest {
     public void testUpdateInvertedAssignment() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
-        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, "test-group", metricsShard);
+        ConsumerGroup consumerGroup = new ConsumerGroup(new LogContext(), snapshotRegistry, "test-group", metricsShard);
         Uuid topicId = Uuid.randomUuid();
         String memberId1 = "member1";
         String memberId2 = "member2";
@@ -920,7 +945,7 @@ public class ConsumerGroupTest {
             Map.of(),
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -935,6 +960,7 @@ public class ConsumerGroupTest {
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ConsumerGroup group = new ConsumerGroup(
+            new LogContext(), 
             snapshotRegistry,
             "group-foo",
             mock(GroupCoordinatorMetricsShard.class)
@@ -996,7 +1022,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty(), Uuid.ZERO_UUID);
-        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
@@ -1033,7 +1059,7 @@ public class ConsumerGroupTest {
     @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
@@ -1075,7 +1101,7 @@ public class ConsumerGroupTest {
             Map.of(),
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        ConsumerGroup group = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertTrue(group.isInStates(Set.of("empty"), 0));
         assertFalse(group.isInStates(Set.of("Empty"), 0));
@@ -1305,6 +1331,7 @@ public class ConsumerGroupTest {
         classicGroup.add(member);
 
         ConsumerGroup consumerGroup = ConsumerGroup.fromClassicGroup(
+            logContext,
             new SnapshotRegistry(logContext),
             mock(GroupCoordinatorMetricsShard.class),
             classicGroup,
@@ -1313,6 +1340,7 @@ public class ConsumerGroupTest {
         );
 
         ConsumerGroup expectedConsumerGroup = new ConsumerGroup(
+            new LogContext(), 
             new SnapshotRegistry(logContext),
             groupId,
             mock(GroupCoordinatorMetricsShard.class)
