@@ -1946,7 +1946,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
-                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                .setStatusDetail("One or more source topics are missing.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -1978,7 +1978,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                .setStatusDetail("One or more internal topics are missing.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -2010,7 +2010,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code())
-                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                .setStatusDetail("One or more topics expected to be copartitioned are not copartitioned.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
@@ -2100,7 +2100,7 @@ public class StreamsMembershipManagerTest {
         final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
             new StreamsGroupHeartbeatResponseData.Status()
                 .setStatusCode(StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())
-                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                .setStatusDetail("The topology epoch supplied is inconsistent with the topology for this streams group.")
         );
 
         final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
