@@ -221,7 +221,7 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            (logContext, time, initializationTimeoutMs, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
             logContext -> backgroundEventReaper,
             (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
             (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
@@ -236,7 +236,7 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            (logContext, time, initializationTimeoutMs, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
             logContext -> backgroundEventReaper,
             (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
             (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
@@ -272,7 +272,8 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             "group-id",
-            false);
+            false,
+            new PositionsValidator(new LogContext(), time, subscriptions, metadata));
     }
 
     @Test
@@ -1317,6 +1318,7 @@ public class AsyncKafkaConsumerTest {
             any(),
             any(),
             applicationThreadMemberStateListener.capture(),
+            any(),
             any()
         ));
         return applicationThreadMemberStateListener.getValue();
@@ -1389,7 +1391,8 @@ public class AsyncKafkaConsumerTest {
             any(),
             any(),
             any(),
-            streamRebalanceData.capture()
+            streamRebalanceData.capture(),
+            any()
         ));
         return streamRebalanceData.getValue();
     }

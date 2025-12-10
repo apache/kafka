@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.types.Type.DocumentedType;
+
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,7 +26,9 @@ import java.util.Objects;
 /**
  * The schema for a compound record definition
  */
-public final class Schema extends Type {
+public class Schema extends DocumentedType {
+    private static final String STRUCT_TYPE_NAME = "STRUCT";
+
     private static final Object[] NO_VALUES = new Object[0];
 
     private final BoundField[] fields;
@@ -53,6 +57,7 @@ public final class Schema extends Type {
      *
      * @throws SchemaException If the given list have duplicate fields
      */
+    @SuppressWarnings("this-escape")
     public Schema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         this.fields = new BoundField[fs.length];
         this.fieldsByName = new HashMap<>();
@@ -173,6 +178,20 @@ public final class Schema extends Type {
         return this.fields;
     }
 
+    protected boolean tolerateMissingFieldsWithDefaults() {
+        return this.tolerateMissingFieldsWithDefaults;
+    }
+
+    @Override
+    public String leftBracket() {
+        return "{";
+    }
+
+    @Override
+    public String rightBracket() {
+        return "}";
+    }
+
     /**
      * Display a string representation of the schema
      */
@@ -204,6 +223,19 @@ public final class Schema extends Type {
         } catch (ClassCastException e) {
             throw new SchemaException("Not a Struct.");
         }
+    }
+
+    @Override
+    public String typeName() {
+        return STRUCT_TYPE_NAME;
+    }
+
+    @Override
+    public String documentation() {
+        return "A struct is named by a string with a capitalized first letter and consists of one or more fields. " +
+            "It represents a composite object encoded as the serialization of each field in the order they are defined." + 
+            "In protocol documentation a struct containing multiple fields is enclosed by " + 
+            leftBracket() + " and " + rightBracket() + ".";
     }
 
     public void walk(Visitor visitor) {

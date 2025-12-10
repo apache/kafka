@@ -574,7 +574,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
 
     private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
-            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.";
+            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.\n" +
+            "Note: This configuration applies only to regular stream processing tasks. It does not apply to global state store updates (global threads).";
 
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
@@ -652,7 +653,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG = "processing.exception.handler";
     @Deprecated
-    public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface.";
+    public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface. " +
+            "Note: This handler applies only to regular stream processing tasks. It does not apply to global state store updates (global threads). " +
+            "Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.";
 
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
@@ -826,7 +829,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
-        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG};
+        new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.GROUP_PROTOCOL_CONFIG, ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG};
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
@@ -1265,7 +1268,8 @@ public class StreamsConfig extends AbstractConfig {
         ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000",
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-        ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"
+        ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic",
+        ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false"
     );
 
     private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
@@ -1309,7 +1313,7 @@ public class StreamsConfig extends AbstractConfig {
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
         public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
-            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
+            return true; // always enabled
         }
 
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
@@ -1499,8 +1503,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            log.warn("The streams rebalance protocol is still in development and should not be used in production. "
-                + "Please set group.protocol=classic (default) in all production use cases.");
             final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
             final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
             if (instanceId != null && !instanceId.isEmpty()) {
@@ -1640,8 +1642,8 @@ public class StreamsConfig extends AbstractConfig {
 
         clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
 
         final Map<String, Object> consumerProps = new HashMap<>(eosEnabled ? CONSUMER_EOS_OVERRIDES : CONSUMER_DEFAULT_OVERRIDES);
         if (StreamsConfigUtils.eosEnabled(this)) {
@@ -1656,12 +1658,12 @@ public class StreamsConfig extends AbstractConfig {
         return consumerProps;
     }
 
-    private void checkIfUnexpectedUserSpecifiedConsumerConfig(final Map<String, Object> clientProvidedProps,
-                                                              final String[] nonConfigurableConfigs) {
-        // Streams does not allow users to configure certain consumer/producer configurations, for example,
-        // enable.auto.commit. In cases where user tries to override such non-configurable
-        // consumer/producer configurations, log a warning and remove the user defined value from the Map.
-        // Thus, the default values for these consumer/producer configurations that are suitable for
+    private void checkIfUnexpectedUserSpecifiedClientConfig(final Map<String, Object> clientProvidedProps,
+                                                            final String[] nonConfigurableConfigs) {
+        // Streams does not allow users to configure certain client configurations (consumer/producer),
+        // for example, enable.auto.commit or transactional.id. In cases where user tries to override
+        // such non-configurable client configurations, log a warning and remove the user defined value
+        // from the Map. Thus, the default values for these client configurations that are suitable for
         // Streams will be used instead.
 
         final String nonConfigurableConfigMessage = "Unexpected user-specified {} config '{}' found. {} setting ({}) will be ignored and the Streams default setting ({}) will be used.";
@@ -1769,6 +1771,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
+        checkIfUnexpectedUserSpecifiedClientConfig(mainConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         consumerProps.putAll(mainConsumerProps);
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
@@ -1798,9 +1801,6 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, getList(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
         consumerProps.put(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, getInt(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
         consumerProps.put(TASK_ASSIGNOR_CLASS_CONFIG, getString(TASK_ASSIGNOR_CLASS_CONFIG));
-
-        // disable auto topic creation
-        consumerProps.put(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false");
 
         // verify that producer batch config is no larger than segment size, then add topic configs required for creating topics
         final Map<String, Object> topicProps = originalsWithPrefix(TOPIC_PREFIX, false);
@@ -1844,6 +1844,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
+        checkIfUnexpectedUserSpecifiedClientConfig(restoreConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(restoreConsumerProps);
 
         // no need to set group id for a restore consumer
@@ -1877,6 +1878,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
+        checkIfUnexpectedUserSpecifiedClientConfig(globalConsumerProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         baseConsumerProps.putAll(globalConsumerProps);
 
         // no need to set group id for a global consumer
@@ -1887,6 +1889,7 @@ public class StreamsConfig extends AbstractConfig {
         // add client id with stream client id prefix
         baseConsumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-global-consumer");
         baseConsumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+
         return baseConsumerProps;
     }
 
@@ -1903,7 +1906,7 @@ public class StreamsConfig extends AbstractConfig {
     public Map<String, Object> getProducerConfigs(final String clientId) {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
 
-        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
+        checkIfUnexpectedUserSpecifiedClientConfig(clientProvidedProps, NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS);
 
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);

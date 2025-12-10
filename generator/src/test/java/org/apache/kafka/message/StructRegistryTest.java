@@ -57,11 +57,11 @@ public class StructRegistryTest {
                 "}")), MessageSpec.class);
         StructRegistry structRegistry = new StructRegistry();
         structRegistry.register(testMessageSpec);
-        assertEquals(structRegistry.commonStructNames(), Collections.singleton("TestCommonStruct"));
+        assertEquals(Collections.singleton("TestCommonStruct"), structRegistry.commonStructNames());
         assertFalse(structRegistry.isStructArrayWithKeys(testMessageSpec.fields().get(1)));
         assertFalse(structRegistry.isStructArrayWithKeys(testMessageSpec.fields().get(2)));
         assertTrue(structRegistry.commonStructs().hasNext());
-        assertEquals(structRegistry.commonStructs().next().name(), "TestCommonStruct");
+        assertEquals("TestCommonStruct", structRegistry.commonStructs().next().name());
     }
 
     @Test
@@ -145,10 +145,10 @@ public class StructRegistryTest {
 
         FieldSpec field2 = testMessageSpec.fields().get(1);
         assertTrue(field2.type().isStruct());
-        assertEquals(field2.type().toString(), "TestInlineStruct");
-        assertEquals(field2.name(), "field2");
+        assertEquals("TestInlineStruct", field2.type().toString());
+        assertEquals("field2", field2.name());
 
-        assertEquals(structRegistry.findStruct(field2).name(), "TestInlineStruct");
+        assertEquals("TestInlineStruct", structRegistry.findStruct(field2).name());
         assertFalse(structRegistry.isStructArrayWithKeys(field2));
     }
 

@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.time.Duration
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CloseOptions, Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 
@@ -307,13 +307,14 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     try {
+      val closeOptions = CloseOptions.timeout(Duration.ZERO)
       producers.foreach(_.close(Duration.ZERO))
       consumers.foreach(_.wakeup())
-      consumers.foreach(_.close(Duration.ZERO))
+      consumers.foreach(_.close(closeOptions))
       shareConsumers.foreach(_.wakeup())
       shareConsumers.foreach(_.close(Duration.ZERO))
       streamsConsumers.foreach(_.wakeup())
-      streamsConsumers.foreach(_.close(Duration.ZERO))
+      streamsConsumers.foreach(_.close(closeOptions))
       adminClients.foreach(_.close(Duration.ZERO))
 
       producers.clear()
