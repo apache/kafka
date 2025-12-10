@@ -2240,6 +2240,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldBeAbleToCloseWithoutRegisteringAnyStores
 - shouldClearStoreCache
 - shouldCloseAllStoresEvenIfStoreThrowsException
+- shouldCloseStateStoresOnStateManagerClose
 - shouldDeleteCheckPointFileIfEosEnabled
 - shouldFindSingleStoreForChangelog
 - shouldFlushCheckpointAndClose
@@ -2251,7 +2252,6 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldLoadMissingFileAsEmptyPosition
 - shouldLogAWarningIfCheckpointThrowsAnIOException
 - shouldNotDeleteCheckPointFileIfEosNotEnabled
-- shouldNotRegisterNonLoggedStore
 - shouldNotThrowTaskCorruptedExceptionAfterCheckpointing
 - shouldNotThrowTaskCorruptedWithoutInMemoryStoreCheckpointAndNonEmptyDir
 - shouldNotWriteCheckpointForNonPersistentStore
@@ -2259,7 +2259,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldOverrideOffsetsWhenRestoreAndProcess
 - shouldPreserveStreamsExceptionOnCloseIfStoreThrows
 - shouldPreserveStreamsExceptionOnFlushIfStoreThrows
-- shouldRecycleStoreAndReregisterChangelog
+- shouldRecycleAndReinitializeStore
 - shouldRegisterNonPersistentStore
 - shouldRegisterPersistentStores
 - shouldReportChangelogAsSource
@@ -2285,7 +2285,6 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldThrowProcessorStateExceptionOnFlushIfStoreThrowsAFailedProcessingException
 - shouldThrowProcessorStateExceptionOnFlushIfStoreThrowsAnException
 - shouldThrowTaskCorruptedWithoutPersistentStoreCheckpointAndNonEmptyDir
-- shouldUnregisterChangelogsDuringClose
 - shouldWriteCheckpointForPersistentStore
 - shouldWritePositionCheckpointFile
 org.apache.kafka.streams.processor.internals.ProcessorTopologyTest:
