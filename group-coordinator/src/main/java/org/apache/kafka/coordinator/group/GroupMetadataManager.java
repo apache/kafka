@@ -2043,8 +2043,7 @@ public class GroupMetadataManager {
         }
 
         // Schedule initial rebalance delay for new streams groups to coalesce joins.
-        boolean isInitialRebalance = (group.groupEpoch() == 0);
-        if (isInitialRebalance) {
+        if (group.isEmpty()) {
             int initialDelayMs = streamsGroupInitialRebalanceDelayMs(groupId);
             if (initialDelayMs > 0) {
                 timer.scheduleIfAbsent(
@@ -2064,9 +2063,9 @@ public class GroupMetadataManager {
         TasksTuple targetAssignment;
         if (groupEpoch > group.assignmentEpoch()) {
             boolean initialDelayActive = timer.isScheduled(streamsInitialRebalanceKey(groupId));
-            if (initialDelayActive && group.assignmentEpoch() == 0) {
+            if (initialDelayActive) {
                 // During initial rebalance delay, return empty assignment to first joining members.
-                targetAssignmentEpoch = 1;
+                targetAssignmentEpoch = Math.max(1, group.assignmentEpoch());
                 targetAssignment = TasksTuple.EMPTY;
             } else {
                 targetAssignment = updateStreamsTargetAssignment(
@@ -2154,9 +2153,7 @@ public class GroupMetadataManager {
                 )
         ));
 
-        if (!returnedStatus.isEmpty()) {
-            response.setStatus(returnedStatus);
-        }
+        response.setStatus(returnedStatus);
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
     }
 
@@ -3314,6 +3311,8 @@ public class GroupMetadataManager {
                         updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
                     }
                 }
+            } else if (isNotEmpty(oldSubscribedTopicRegex)) {
+                updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
             }
         }
 
@@ -4214,7 +4213,8 @@ public class GroupMetadataManager {
         }
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch);
+            .setMemberEpoch(memberEpoch)
+            .setStatus(List.of());
 
         if (instanceId == null) {
             StreamsGroupMember member = group.getMemberOrThrow(memberId);
@@ -6022,10 +6022,10 @@ public class GroupMetadataManager {
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
      */
-    public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
+    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
         metadataImage = newImage;
 
         // Initialize the last version if it was not yet.
@@ -8251,12 +8251,12 @@ public class GroupMetadataManager {
      * @param groupId The id of the group to be deleted. It has been checked in {@link GroupMetadataManager#validateDeleteGroup}.
      * @param records The record list to populate.
      */
-    public void createGroupTombstoneRecords(
+    public void createGroupTombstoneRecordsAndCancelTimers(
         String groupId,
         List<CoordinatorRecord> records
     ) {
         // At this point, we have already validated the group id, so we know that the group exists and that no exception will be thrown.
-        createGroupTombstoneRecords(group(groupId), records);
+        createGroupTombstoneRecordsAndCancelTimers(group(groupId), records);
     }
 
     /**
@@ -8266,12 +8266,12 @@ public class GroupMetadataManager {
      * @param group The group to be deleted.
      * @param records The record list to populate.
      */
-    public void createGroupTombstoneRecords(
+    public void createGroupTombstoneRecordsAndCancelTimers(
         Group group,
         List<CoordinatorRecord> records
     ) {
         group.createGroupTombstoneRecords(records);
-        timer.cancel(streamsInitialRebalanceKey(group.groupId()));
+        group.cancelTimers(timer);
     }
 
     /**
@@ -8666,7 +8666,7 @@ public class GroupMetadataManager {
     public void maybeDeleteGroup(String groupId, List<CoordinatorRecord> records) {
         Group group = groups.get(groupId);
         if (group != null && group.isEmpty()) {
-            createGroupTombstoneRecords(groupId, records);
+            createGroupTombstoneRecordsAndCancelTimers(group, records);
         }
     }
 
@@ -8703,7 +8703,7 @@ public class GroupMetadataManager {
         if (isEmptyClassicGroup(group)) {
             // Delete the classic group by adding tombstones.
             // There's no need to remove the group as the replay of tombstones removes it.
-            createGroupTombstoneRecords(group, records);
+            createGroupTombstoneRecordsAndCancelTimers(group, records);
             return true;
         }
         return false;
@@ -8722,7 +8722,7 @@ public class GroupMetadataManager {
         if (isEmptyConsumerGroup(group)) {
             // Add tombstones for the previous consumer group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
-            createGroupTombstoneRecords(group, records);
+            createGroupTombstoneRecordsAndCancelTimers(group, records);
             removeGroup(groupId);
             return true;
         }
@@ -8742,7 +8742,7 @@ public class GroupMetadataManager {
         if (isEmptyStreamsGroup(group)) {
             // Add tombstones for the previous streams group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
-            createGroupTombstoneRecords(group, records);
+            createGroupTombstoneRecordsAndCancelTimers(group, records);
             removeGroup(groupId);
             return true;
         }
@@ -8908,7 +8908,7 @@ public class GroupMetadataManager {
      * @return the initial rebalance key.
      */
     static String streamsInitialRebalanceKey(String groupId) {
-        return "initial-rebalance-timeout-" + groupId;
+        return StreamsGroup.initialRebalanceTimeoutKey(groupId);
     }
 
     /**
