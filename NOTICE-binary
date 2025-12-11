@@ -100,14 +100,6 @@ Copyright 2002-2021 The Apache Software Foundation
 This product includes software developed at
 The Apache Software Foundation (https://www.apache.org/).
 
-
-Apache Commons Lang
-Copyright 2001-2018 The Apache Software Foundation
-
-This product includes software developed at
-The Apache Software Foundation (http://www.apache.org/).
-
-
 # Jackson JSON processor
 
 Jackson is a high-performance, Free/Open Source JSON processing library.
@@ -793,15 +785,6 @@ the HTTP/2 HPACK algorithm written by Tatsuhiro Tsujikawa. It can be obtained at
     * license/LICENSE.nghttp2-hpack.txt (MIT License)
   * HOMEPAGE:
     * https://github.com/nghttp2/nghttp2/
-
-This product contains a modified portion of 'Apache Commons Lang', a Java library
-provides utilities for the java.lang API, which can be obtained at:
-
-  * LICENSE:
-    * license/LICENSE.commons-lang.txt (Apache License 2.0)
-  * HOMEPAGE:
-    * https://commons.apache.org/proper/commons-lang/
-
 
 This product contains the Maven wrapper scripts from 'Maven Wrapper', that provides an easy way to ensure a user has everything necessary to run the Maven build.
 

@@ -197,8 +197,7 @@ allprojects {
           // ensure we have a single version in the classpath despite transitive dependencies
           libs.scalaLibrary,
           libs.scalaReflect,
-          libs.jacksonAnnotations,
-          libs.commonsLang
+          libs.jacksonAnnotations
         )
       }
     }
