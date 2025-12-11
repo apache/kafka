@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterClientQuotasResult;
@@ -79,7 +80,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.server.IntegrationTestUtils.connectAndReceive;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -516,19 +519,16 @@ public class KRaftClusterTest {
                         "Did not advertise configured advertised host");
                     assertEquals(cluster.brokers().get(broker.id()).socketServer().boundPort(cluster.nodes().brokerListenerName()), broker.port(),
                         "Did not advertise bound socket port");
-                }));
+                })
+        );
     }
 
     @Test
     public void testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer() throws Exception {
-        Map<Integer, Map<String, String>> brokerPropertyOverrides = new HashMap<>();
-        for (int brokerId = 0; brokerId < 3; brokerId++) {
-            Map<String, String> props = new HashMap<>();
-            props.put(SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0");
-            props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG,
-                "EXTERNAL://advertised-host-" + brokerId + ":" + (brokerId + 100));
-            brokerPropertyOverrides.put(brokerId, props);
-        }
+        var brokerPropertyOverrides = IntStream.range(0, 3).boxed().collect(Collectors.toMap(brokerId -> brokerId, brokerId -> Map.of(
+            SocketServerConfigs.LISTENERS_CONFIG, "EXTERNAL://localhost:0",
+            SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "EXTERNAL://advertised-host-" + brokerId + ":" + (brokerId + 100)
+        )));
 
         TestKitNodes nodes = new TestKitNodes.Builder()
             .setNumControllerNodes(1)
@@ -542,10 +542,11 @@ public class KRaftClusterTest {
                 .nodes().values().forEach(broker -> {
                     assertEquals("advertised-host-" + broker.id(), broker.host(), "Did not advertise configured advertised host");
                     assertEquals(broker.id() + 100, broker.port(), "Did not advertise configured advertised port");
-                }));
+                })
+        );
     }
 
-    private void doOnStartedKafkaCluster(TestKitNodes nodes, ThrowingConsumer<KafkaClusterTestKit> action) throws Exception {
+    private void doOnStartedKafkaCluster(TestKitNodes nodes, Consumer<KafkaClusterTestKit> action) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
             cluster.format();
             cluster.startup();
@@ -557,35 +558,33 @@ public class KRaftClusterTest {
         ListenerName listenerName,
         Duration waitTime,
         KafkaClusterTestKit cluster
-    ) throws Exception {
-        long startTime = System.currentTimeMillis();
-        TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-            "Broker never made it to RUNNING state.");
-        TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
-            "RaftManager was not initialized.");
+    ) throws RuntimeException {
+        try {
+            long startTime = System.currentTimeMillis();
+            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                "Broker never made it to RUNNING state.");
+            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
+                "RaftManager was not initialized.");
 
-        Duration remainingWaitTime = waitTime.minus(Duration.ofMillis(System.currentTimeMillis() - startTime));
+            Duration remainingWaitTime = waitTime.minus(Duration.ofMillis(System.currentTimeMillis() - startTime));
 
-        final DescribeClusterResponse[] currentResponse = new DescribeClusterResponse[1];
-        int expectedBrokerCount = cluster.nodes().brokerNodes().size();
-        TestUtils.waitForCondition(
-            () -> {
-                currentResponse[0] = connectAndReceive(
-                    new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
-                    cluster.brokers().get(0).socketServer().boundPort(listenerName)
-                );
-                return currentResponse[0].nodes().size() == expectedBrokerCount;
-            },
-            remainingWaitTime.toMillis(),
-            String.format("After %s ms Broker is only aware of %s brokers, but %s are expected", remainingWaitTime.toMillis(), expectedBrokerCount, expectedBrokerCount)
-        );
-
-        return currentResponse[0];
-    }
-
-    @FunctionalInterface
-    private interface ThrowingConsumer<T> {
-        void accept(T t) throws Exception;
+            final DescribeClusterResponse[] currentResponse = new DescribeClusterResponse[1];
+            int expectedBrokerCount = cluster.nodes().brokerNodes().size();
+            TestUtils.waitForCondition(
+                () -> {
+                    currentResponse[0] = connectAndReceive(
+                        new DescribeClusterRequest.Builder(new DescribeClusterRequestData()).build(),
+                        cluster.brokers().get(0).socketServer().boundPort(listenerName)
+                    );
+                    return currentResponse[0].nodes().size() == expectedBrokerCount;
+                },
+                remainingWaitTime.toMillis(),
+                String.format("After %s ms Broker is only aware of %s brokers, but %s are expected", remainingWaitTime.toMillis(), expectedBrokerCount, expectedBrokerCount)
+            );
+            return currentResponse[0];
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void waitForTopicListing(Admin admin, List<String> expectedPresent, List<String> expectedAbsent)
@@ -603,7 +602,7 @@ public class KRaftClusterTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testUnregisterBroker(boolean usingBootstrapController) throws Exception {
+    public void testUnregisterBroker(boolean usingBootstrapControllers) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(4)
@@ -618,7 +617,7 @@ public class KRaftClusterTest {
             TestUtils.waitForCondition(() -> !brokerIsUnfenced(clusterImage(cluster, 1), 0),
                 "Timed out waiting for broker 0 to be fenced.");
 
-            try (Admin admin = createAdminClient(cluster, usingBootstrapController)) {
+            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 admin.unregisterBroker(0);
             }
 
@@ -643,10 +642,11 @@ public class KRaftClusterTest {
         return !image.brokers().containsKey(brokerId);
     }
 
-    private Admin createAdminClient(KafkaClusterTestKit cluster, boolean bootstrapController) {
-        Properties props;
-        if (bootstrapController) {
-            props = cluster.newClientPropertiesBuilder().setUsingBootstrapControllers(true).build();
+    private Admin createAdminClient(KafkaClusterTestKit cluster, boolean usingBootstrapControllers) {
+        Properties props = new Properties();
+        if (usingBootstrapControllers) {
+            props.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, cluster.bootstrapControllers());
+            props.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         } else {
             props = cluster.clientProperties();
         }
