@@ -220,14 +220,10 @@ public class CurrentAssignmentBuilder {
                     }
                 }
 
-                // When the member has revoked all the pending partitions, it can
-                // transition to the next epoch (current + 1) and we can reconcile
-                // its state towards the latest target assignment.
+                // When the member has revoked all the pending partitions, we can
+                // reconcile its state towards the latest target assignment.
                 return computeNextAssignment(
-                    // When we enter UNREVOKED_PARTITIONS due to a subscription change,
-                    // we must not advance the member epoch when the new target
-                    // assignment is not available yet.
-                    Math.min(member.memberEpoch() + 1, targetAssignmentEpoch),
+                    member.memberEpoch(),
                     member.assignedPartitions()
                 );
 

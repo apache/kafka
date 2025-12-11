@@ -85,18 +85,21 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSupplier;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -126,6 +129,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -344,9 +348,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * The metadata image to extract topic id to names map.
-     * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)} is called
+     * This is initialised when the {@link GroupCoordinator#onMetadataUpdate(MetadataDelta, MetadataImage)} is called
      */
-    private CoordinatorMetadataImage metadataImage = null;
+    private volatile CoordinatorMetadataImage metadataImage = null;
 
     /**
      *
@@ -2222,7 +2226,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) throws ExecutionException, InterruptedException {
         throwIfNotActive();
 
-        CompletableFuture.allOf(
+        var futures = new ArrayList<CompletableFuture<Void>>();
+
+        // Handle the partition deletion for committed offsets.
+        futures.addAll(
             FutureUtils.mapExceptionally(
                 runtime.scheduleWriteAllOperation(
                     "on-partition-deleted",
@@ -2235,37 +2242,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     );
                     return null;
                 }
-            ).toArray(new CompletableFuture<?>[0])
-        ).get();
+            )
+        );
 
-        // At this point the metadata will not have been updated
-        // with the deleted topics. However, we must guard against it.
-        if (metadataImage == null || metadataImage.equals(CoordinatorMetadataImage.EMPTY)) {
-            return;
+        // Handle the topic deletion for share state.
+        if (metadataImage != null) {
+            var topicIds = topicPartitions.stream()
+                .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
+                .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
+                .collect(Collectors.toSet());
+
+            if (!topicIds.isEmpty()) {
+                futures.addAll(
+                    FutureUtils.mapExceptionally(
+                        runtime.scheduleWriteAllOperation(
+                            "maybe-cleanup-share-group-state",
+                            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                            coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                        ),
+                        exception -> {
+                            log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                            return null;
+                        }
+                    )
+                );
+            }
         }
 
-        Set<Uuid> topicIds = topicPartitions.stream()
-            .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
-            .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
-            .collect(Collectors.toSet());
-
-        if (topicIds.isEmpty()) {
-            return;
-        }
-
-        CompletableFuture.allOf(
-            FutureUtils.mapExceptionally(
-                runtime.scheduleWriteAllOperation(
-                    "maybe-cleanup-share-group-state",
-                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                    coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
-                ),
-                exception -> {
-                    log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
-                    return null;
-                }
-            ).toArray(new CompletableFuture<?>[0])
-        ).get();
+        // Wait on the results.
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]));
     }
 
     /**
@@ -2299,16 +2304,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#onNewMetadataImage(CoordinatorMetadataImage, CoordinatorMetadataDelta)}.
+     * See {@link GroupCoordinator#onMetadataUpdate(MetadataDelta, MetadataImage)}.
      */
     @Override
-    public void onNewMetadataImage(
-        CoordinatorMetadataImage newImage,
-        CoordinatorMetadataDelta delta
+    public void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage
     ) {
         throwIfNotActive();
-        metadataImage = newImage;
-        runtime.onNewMetadataImage(newImage, delta);
+        Objects.requireNonNull(delta, "delta must be provided");
+        Objects.requireNonNull(newImage, "newImage must be provided");
+        var wrappedImage = new KRaftCoordinatorMetadataImage(newImage);
+        var wrappedDelta = new KRaftCoordinatorMetadataDelta(delta);
+        metadataImage = wrappedImage;
+        runtime.onMetadataUpdate(wrappedDelta, wrappedImage);
     }
 
     /**

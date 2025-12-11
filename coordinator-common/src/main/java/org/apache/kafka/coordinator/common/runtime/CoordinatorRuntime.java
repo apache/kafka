@@ -2535,12 +2535,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The metadata delta.
+     * @param delta    The metadata delta.
+     * @param newImage The new metadata image.
      */
-    public void onNewMetadataImage(
-        CoordinatorMetadataImage newImage,
-        CoordinatorMetadataDelta delta
+    public void onMetadataUpdate(
+        CoordinatorMetadataDelta delta,
+        CoordinatorMetadataImage newImage
     ) {
         throwIfNotRunning();
         log.debug("Scheduling applying of a new metadata image with version {}.", newImage.version());
@@ -2559,7 +2559,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             // The new image can be applied to the coordinator only if the coordinator
                             // exists and is in the active state.
                             log.debug("Applying new metadata image with version {} to {}.", newImage.version(), tp);
-                            context.coordinator.onNewMetadataImage(newImage, delta);
+                            context.coordinator.onMetadataUpdate(delta, newImage);
                         } else {
                             log.debug("Ignored new metadata image with version {} for {} because the coordinator is not active.",
                                 newImage.version(), tp);
