@@ -3231,6 +3231,36 @@ All the following metrics have a recording level of <code>info</code>:
         <td>The system timestamp in ms that the thread was started.</td>
         <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>tasks-revoked-latency-avg</td>
+        <td>The average time in ms taken for tasks-revoked rebalance listener callback.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>tasks-revoked-latency-max</td>
+        <td>The maximum time in ms taken for tasks-revoked rebalance listener callback.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>tasks-assigned-latency-avg</td>
+        <td>The average time in ms taken for tasks-assigned rebalance listener callback.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>tasks-assigned-latency-max</td>
+        <td>The maximum time in ms taken for tasks-assigned rebalance listener callback.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>tasks-lost-latency-avg</td>
+        <td>The average time in ms taken for tasks-lost rebalance listener callback.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>tasks-lost-latency-max</td>
+        <td>The maximum time in ms taken for tasks-lost rebalance listener callback.</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
