@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
@@ -70,6 +71,44 @@ public final class OffsetsForLeaderEpochUtils {
         return OffsetsForLeaderEpochRequest.Builder.forConsumer(topics);
     }
 
+    /**
+     * Find the TopicIdPartition from the request data that matches the response.
+     * This handles backward compatibility when the response may not include topic IDs.
+     *
+     * @param requestPartitions The set of partitions from the request
+     * @param responseTopicId The topic ID from the response (may be null or ZERO_UUID)
+     * @param responseTopicName The topic name from the response
+     * @param responsePartition The partition number from the response
+     * @return The matching TopicIdPartition, or null if not found
+     */
+    private static TopicIdPartition findTopicIdPartition(
+            Set<TopicIdPartition> requestPartitions,
+            Uuid responseTopicId,
+            String responseTopicName,
+            int responsePartition) {
+
+        for (TopicIdPartition requestPartition : requestPartitions) {
+            // Check if partition number matches
+            if (requestPartition.partition() != responsePartition) {
+                continue;
+            }
+
+            // If response has a valid topic ID, try to match by topic ID
+            if (responseTopicId != null && !responseTopicId.equals(Uuid.ZERO_UUID)) {
+                if (requestPartition.topicId().equals(responseTopicId)) {
+                    return requestPartition;
+                }
+            }
+
+            // Fall back to matching by topic name
+            if (responseTopicName != null && requestPartition.topic().equals(responseTopicName)) {
+                return requestPartition;
+            }
+        }
+
+        return null;
+    }
+
     public static OffsetForEpochResult handleResponse(
             Map<TopicIdPartition, SubscriptionState.FetchPosition> requestData,
             OffsetsForLeaderEpochResponse response) {
@@ -80,10 +119,18 @@ public final class OffsetsForLeaderEpochUtils {
 
         for (OffsetForLeaderTopicResult topic : response.data().topics()) {
             for (EpochEndOffset partition : topic.partitions()) {
-                TopicIdPartition topicIdPartition = new TopicIdPartition(topic.topicId(), partition.partition(), topic.topic());
+                // Try to match the response partition with the request data
+                // Handle both topic ID and topic name for backward compatibility
+                TopicIdPartition topicIdPartition = findTopicIdPartition(
+                    requestData.keySet(),
+                    topic.topicId(),
+                    topic.topic(),
+                    partition.partition()
+                );
 
-                if (!requestData.containsKey(topicIdPartition)) {
-                    LOG.warn("Received unrequested topic or partition {} from response, ignoring.", topicIdPartition);
+                if (topicIdPartition == null) {
+                    LOG.warn("Received unrequested topic or partition (topicId={}, topic={}, partition={}) from response, ignoring.",
+                        topic.topicId(), topic.topic(), partition.partition());
                     continue;
                 }
 
