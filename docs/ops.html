@@ -1937,8 +1937,8 @@ The following set of metrics are available for monitoring the group coordinator:
     </tr>
     <tr>
       <td>Group Count, per group type</td>
-      <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol={consumer|classic}</td>
-      <td>Total number of group per group type: Classic or Consumer</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol={consumer|classic|streams}</td>
+      <td>Total number of group per group type: Classic, Consumer or Streams</td>
     </tr>
     <tr>
       <td>Consumer Group Count, per state</td>
@@ -1954,6 +1954,21 @@ The following set of metrics are available for monitoring the group coordinator:
       <td>Consumer Group Rebalance Count</td>
       <td>kafka.server:type=group-coordinator-metrics,name=consumer-group-rebalance-count</td>
       <td>Total number of Consumer Group Rebalances</td>
+    </tr>
+    <tr>
+      <td>Streams Group Count, per state</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=streams-group-count,state=[empty|not_ready|assigning|reconciling|stable|dead]</td>
+      <td>Total number of Streams Groups in each state: Empty, Not Ready, Assigning, Reconciling, Stable, Dead</td>
+    </tr>
+    <tr>
+      <td>Streams Group Rebalance Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=streams-group-rebalance-rate</td>
+      <td>The rebalance rate of streams groups</td>
+    </tr>
+    <tr>
+      <td>Streams Group Rebalance Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=streams-group-rebalance-count</td>
+      <td>Total number of Streams Group Rebalances</td>
     </tr>
     <tr>
       <td>Classic Group Count</td>
