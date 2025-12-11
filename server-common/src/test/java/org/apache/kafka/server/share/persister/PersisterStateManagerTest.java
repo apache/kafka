@@ -90,24 +90,6 @@ class PersisterStateManagerTest {
     private static final int MAX_RPC_RETRY_ATTEMPTS = 5;
     public static final long REQUEST_BACKOFF_MS = 100L;
     public static final long REQUEST_BACKOFF_MAX_MS = 3000L;
-    private static final Logger TEST_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManagerTest.TestStateHandler.class
-    );
-    private static final Logger INITIALIZE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.InitializeStateHandler.class
-    );
-    private static final Logger WRITE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.WriteStateHandler.class
-    );
-    private static final Logger READ_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.ReadStateHandler.class
-    );
-    private static final Logger READ_SUMMARY_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.ReadStateSummaryHandler.class
-    );
-    private static final Logger DELETE_HANDLER_LOG = LoggerFactory.getLogger(
-        PersisterStateManager.DeleteStateHandler.class
-    );
 
     private static final String HOST = "localhost";
     private static final int PORT = 9092;
@@ -150,6 +132,7 @@ class PersisterStateManagerTest {
     }
 
     private abstract class TestStateHandler extends PersisterStateManager.PersisterStateManagerHandler {
+        private static final Logger LOG = LoggerFactory.getLogger(PersisterStateManagerTest.TestStateHandler.class);
         private final CompletableFuture<TestHandlerResponse> result;
 
         private class TestHandlerResponseData extends WriteShareGroupStateResponseData {
@@ -169,11 +152,15 @@ class PersisterStateManagerTest {
             CompletableFuture<TestHandlerResponse> result,
             long backoffMs,
             long backoffMaxMs,
-            int maxFindCoordAttempts,
-            Logger log
+            int maxFindCoordAttempts
         ) {
-            stateManager.super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxFindCoordAttempts, log);
+            stateManager.super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxFindCoordAttempts);
             this.result = result;
+        }
+
+        @Override
+        protected Logger getLogger() {
+            return LOG;
         }
 
         @Override
@@ -343,8 +330,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            TEST_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ) {
             @Override
             protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
@@ -411,8 +397,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            TEST_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ) {
             @Override
             protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
@@ -472,8 +457,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            TEST_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ) {
             @Override
             protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
@@ -569,8 +553,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            maxAttempts,
-            TEST_HANDLER_LOG
+            maxAttempts
         ) {
             @Override
             protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
@@ -672,8 +655,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -775,8 +757,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            WRITE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -901,8 +882,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            WRITE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -1023,8 +1003,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            WRITE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -1117,8 +1096,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            WRITE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -1233,8 +1211,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            WRITE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -1370,8 +1347,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            WRITE_HANDLER_LOG
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -1445,8 +1421,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            WRITE_HANDLER_LOG
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -1548,8 +1523,7 @@ class PersisterStateManagerTest {
                 future,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_RPC_RETRY_ATTEMPTS,
-                WRITE_HANDLER_LOG
+                MAX_RPC_RETRY_ATTEMPTS
             ));
             handlers.add(handler);
             stateManager.enqueue(handler);
@@ -1635,8 +1609,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -1746,8 +1719,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -1867,8 +1839,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -1985,8 +1956,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2077,8 +2047,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2194,8 +2163,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2311,8 +2279,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             2,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2379,8 +2346,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             2,
-            null,
-            READ_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2485,8 +2451,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2595,8 +2560,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2715,8 +2679,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2832,8 +2795,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -2923,8 +2885,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -3038,8 +2999,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             MAX_RPC_RETRY_ATTEMPTS,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -3153,8 +3113,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             2,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -3221,8 +3180,7 @@ class PersisterStateManagerTest {
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
             2,
-            null,
-            READ_SUMMARY_HANDLER_LOG
+            null
         ));
 
         stateManager.enqueue(handler);
@@ -3323,8 +3281,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            DELETE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3440,8 +3397,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            DELETE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3553,8 +3509,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            DELETE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3638,8 +3593,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            DELETE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3745,8 +3699,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            DELETE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -3873,8 +3826,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            DELETE_HANDLER_LOG
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -3970,8 +3922,7 @@ class PersisterStateManagerTest {
                 future,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_RPC_RETRY_ATTEMPTS,
-                DELETE_HANDLER_LOG
+                MAX_RPC_RETRY_ATTEMPTS
             ));
             handlers.add(handler);
             stateManager.enqueue(handler);
@@ -4013,8 +3964,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            DELETE_HANDLER_LOG
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -4119,8 +4069,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            INITIALIZE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -4240,8 +4189,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            INITIALIZE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -4357,8 +4305,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            INITIALIZE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -4446,8 +4393,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            INITIALIZE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -4557,8 +4503,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            INITIALIZE_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ));
 
         stateManager.enqueue(handler);
@@ -4689,8 +4634,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            INITIALIZE_HANDLER_LOG
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -4790,8 +4734,7 @@ class PersisterStateManagerTest {
                 future,
                 REQUEST_BACKOFF_MS,
                 REQUEST_BACKOFF_MAX_MS,
-                MAX_RPC_RETRY_ATTEMPTS,
-                INITIALIZE_HANDLER_LOG
+                MAX_RPC_RETRY_ATTEMPTS
             ));
             handlers.add(handler);
             stateManager.enqueue(handler);
@@ -4835,8 +4778,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            2,
-            INITIALIZE_HANDLER_LOG
+            2
         ));
 
         stateManager.enqueue(handler);
@@ -4978,8 +4920,7 @@ class PersisterStateManagerTest {
             future,
             REQUEST_BACKOFF_MS,
             REQUEST_BACKOFF_MAX_MS,
-            MAX_RPC_RETRY_ATTEMPTS,
-            TEST_HANDLER_LOG
+            MAX_RPC_RETRY_ATTEMPTS
         ) {
             @Override
             protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
