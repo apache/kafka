@@ -2430,6 +2430,13 @@ org.apache.kafka.clients.consumer.internals.StreamsMembershipManagerTest:
 - testConsumerPollWhenSubscriptionNotUpdated
 - testForDuplicateRegistrationOfSameStateListener
 - testIgnoreLeaveResponseWhenNotLeavingGroup
+- testIsGroupReadyChangeWhenTasksAreNull
+- testIsGroupReadyWithAssignmentDelayedStatus
+- testIsGroupReadyWithIncorrectlyPartitionedTopicsStatus
+- testIsGroupReadyWithMissingInternalTopicsStatus
+- testIsGroupReadyWithMissingSourceTopicsStatus
+- testIsGroupReadyWithNoStatuses
+- testIsGroupReadyWithOtherStatuses
 - testJoining
 - testLeaveGroupOnCloseWhenInGroupWithAssignment
 - testLeaveGroupOnCloseWhenNotInGroup
