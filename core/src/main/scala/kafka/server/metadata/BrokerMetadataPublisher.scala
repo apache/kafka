@@ -17,6 +17,7 @@
 
 package kafka.server.metadata
 
+import java.util.Optional
 import java.util.OptionalInt
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
@@ -253,7 +254,7 @@ class BrokerMetadataPublisher(
 
       if (delta.featuresDelta != null) {
         try {
-          val newFinalizedFeatures = new FinalizedFeatures(newImage.features.metadataVersionOrThrow, newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
+          val newFinalizedFeatures = new FinalizedFeatures(Optional.of(newImage.features.metadataVersionOrThrow), newImage.features.finalizedVersions, newImage.provenance.lastContainedOffset)
           val newFinalizedShareVersion = newFinalizedFeatures.finalizedFeatures().getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort)
           // Share version feature has been toggled.
           if (newFinalizedShareVersion != finalizedShareVersion) {

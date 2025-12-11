@@ -33,6 +33,7 @@ import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, MetadataCach
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
+import java.util.Optional
 import java.util.concurrent.ThreadLocalRandom
 import java.util.function.{Predicate, Supplier}
 import java.util.stream.Collectors
@@ -471,7 +472,7 @@ class KRaftMetadataCache(
       finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionLevel)
     }
     new FinalizedFeatures(
-      image.features().metadataVersionOrThrow(),
+      Optional.of(image.features().metadataVersionOrThrow()),
       finalizedFeatures,
       image.highestOffsetAndEpoch().offset)
   }

@@ -20,6 +20,7 @@ package org.apache.kafka.server.common;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class FinalizedFeaturesTest {
     @Test
     public void testKRaftModeFeatures() {
-        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(MINIMUM_VERSION,
+        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(Optional.of(MINIMUM_VERSION),
                 Map.of("foo", (short) 2), 123);
         assertEquals(MINIMUM_VERSION.featureLevel(),
                 finalizedFeatures.finalizedFeatures().get(FEATURE_NAME));
@@ -41,7 +42,7 @@ class FinalizedFeaturesTest {
     @Test
     public void testSetFinalizedLevel() {
         FinalizedFeatures finalizedFeatures = new FinalizedFeatures(
-            MINIMUM_VERSION,
+            Optional.of(MINIMUM_VERSION),
             Map.of("foo", (short) 2),
             123
         );

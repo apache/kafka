@@ -86,7 +86,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     ).thenReturn(Optional.of(brokerNode))
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
-        MetadataVersion.latestTesting(),
+        Optional.of(MetadataVersion.latestTesting()),
         util.Map.of(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
         0)
     }

@@ -27,13 +27,13 @@ import org.apache.kafka.server.fault.FaultHandler;
 
 import org.slf4j.Logger;
 
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
+import java.util.Optional;
 
 
 public class FeaturesPublisher implements MetadataPublisher {
     private final Logger log;
     private final FaultHandler faultHandler;
-    private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION);
+    private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.EMPTY;
 
     public FeaturesPublisher(
         LogContext logContext,
@@ -60,7 +60,8 @@ public class FeaturesPublisher implements MetadataPublisher {
     ) {
         try {
             if (delta.featuresDelta() != null) {
-                FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersionOrThrow(),
+                FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(
+                    Optional.of(newImage.features().metadataVersionOrThrow()),
                     newImage.features().finalizedVersions(),
                     newImage.provenance().lastContainedOffset()
                 );

@@ -19,25 +19,34 @@ package org.apache.kafka.server.common;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public record FinalizedFeatures(
-    MetadataVersion metadataVersion,
+    Optional<MetadataVersion> metadataVersion,
     Map<String, Short> finalizedFeatures,
     long finalizedFeaturesEpoch
 ) {
+    /**
+     * An empty FinalizedFeatures instance used before metadata is loaded.
+     * Has no metadataVersion set and epoch of -1.
+     */
+    public static final FinalizedFeatures EMPTY = new FinalizedFeatures(
+        Optional.empty(), Map.of(), -1);
+
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
-        return new FinalizedFeatures(version, Map.of(), -1);
+        return new FinalizedFeatures(Optional.of(version), Map.of(), -1);
     }
 
     public FinalizedFeatures(
-        MetadataVersion metadataVersion,
+        Optional<MetadataVersion> metadataVersion,
         Map<String, Short> finalizedFeatures,
         long finalizedFeaturesEpoch
     ) {
         this.metadataVersion = Objects.requireNonNull(metadataVersion);
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
-        this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
+        metadataVersion.ifPresent(mv ->
+            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, mv.featureLevel()));
     }
 
     public FinalizedFeatures setFinalizedLevel(String key, short level) {
