@@ -54,7 +54,7 @@ public class QuotaConfig {
     public static final String CLIENT_QUOTA_CALLBACK_CLASS_CONFIG = "client.quota.callback.class";
     public static final String CLIENT_QUOTA_CALLBACK_CLASS_DOC = "The fully qualified name of a class that implements the ClientQuotaCallback interface, " +
             "which is used to determine quota limits applied to client requests. " +
-            "By default, the &lt;user&gt; and &lt;client-id&gt quotas that are stored and applied. " + 
+            "By default, the &lt;user&gt; and &lt;client-id&gt quotas that are stored and applied. " +
             "For any given request, the most specific quota that matches the user principal of the session and the client-id of the request is applied.";
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "leader.replication.throttled.replicas";
@@ -223,6 +223,14 @@ public class QuotaConfig {
                 .define(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ConfigDef.Type.LONG,
                         QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
                         ConfigDef.Importance.MEDIUM, QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
+    }
+
+    public static Set<String> brokerQuotaConfigsNames() {
+        return Set.of(
+                LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
+                FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
+                REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG
+        );
     }
 
     public static ConfigDef userAndClientQuotaConfigs() {
