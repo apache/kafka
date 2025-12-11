@@ -2536,7 +2536,7 @@ class ReplicaManager(val config: KafkaConfig,
               initialFetchOffset(log)
             ))
           case None =>
-            stateChangeLogger.trace(s"Unable to start fetching $topicPartition " +
+            stateChangeLogger.trace(s"Unable to start fetching $topicPartition with topic ID ${partition.topicId} " +
               s"from leader ${partition.leaderReplicaIdOpt} because it is not alive.")
         }
       }
