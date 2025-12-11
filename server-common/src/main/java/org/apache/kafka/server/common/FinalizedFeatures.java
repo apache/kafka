@@ -26,13 +26,6 @@ public record FinalizedFeatures(
     Map<String, Short> finalizedFeatures,
     long finalizedFeaturesEpoch
 ) {
-    /**
-     * An empty FinalizedFeatures instance used before metadata is loaded.
-     * Has no metadataVersion set and epoch of -1.
-     */
-    public static final FinalizedFeatures EMPTY = new FinalizedFeatures(
-        Optional.empty(), Map.of(), -1);
-
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
         return new FinalizedFeatures(Optional.of(version), Map.of(), -1);
     }
