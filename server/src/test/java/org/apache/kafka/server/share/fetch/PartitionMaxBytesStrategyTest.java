@@ -80,10 +80,10 @@ public class PartitionMaxBytesStrategyTest {
 
         LinkedHashMap<TopicIdPartition, Integer> result = partitionMaxBytesStrategy.maxBytes(
             100, partitions, 3);
-        assertEquals(result.values().stream().toList(), List.of(33, 33, 33));
+        assertEquals(List.of(33, 33, 33), result.values().stream().toList());
 
         result = partitionMaxBytesStrategy.maxBytes(
             100, partitions, 5);
-        assertEquals(result.values().stream().toList(), List.of(20, 20, 20));
+        assertEquals(List.of(20, 20, 20), result.values().stream().toList());
     }
 }
