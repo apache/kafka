@@ -152,14 +152,13 @@ class PersisterStateManagerTest {
             CompletableFuture<TestHandlerResponse> result,
             long backoffMs,
             long backoffMaxMs,
-            int maxFindCoordAttempts
-        ) {
+            int maxFindCoordAttempts) {
             stateManager.super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxFindCoordAttempts);
             this.result = result;
         }
 
         @Override
-        protected Logger getLogger() {
+        protected Logger log() {
             return LOG;
         }
 
