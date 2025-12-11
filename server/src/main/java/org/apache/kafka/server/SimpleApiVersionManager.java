@@ -24,8 +24,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.server.common.FinalizedFeatures;
 
-import java.util.Map;
-import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -37,7 +35,7 @@ public class SimpleApiVersionManager implements ApiVersionManager {
     private final ApiMessageType.ListenerType listenerType;
     private final Features<SupportedVersionRange> brokerFeatures;
     private final boolean enableUnstableLastVersion;
-    private final Supplier<Optional<FinalizedFeatures>> featuresProvider;
+    private final Supplier<FinalizedFeatures> featuresProvider;
     private final ApiVersionsResponseData.ApiVersionCollection apiVersions;
 
     /**
@@ -45,11 +43,11 @@ public class SimpleApiVersionManager implements ApiVersionManager {
      * @param listenerType the listener type
      * @param enableUnstableLastVersion whether to enable unstable last version, see
      *   {@link org.apache.kafka.server.config.ServerConfigs#UNSTABLE_API_VERSIONS_ENABLE_CONFIG}
-     * @param featuresProvider a provider to the finalized features supported (may return Optional.empty() if not yet initialized)
+     * @param featuresProvider a provider to the finalized features supported
      */
     public SimpleApiVersionManager(ApiMessageType.ListenerType listenerType,
                                    boolean enableUnstableLastVersion,
-                                   Supplier<Optional<FinalizedFeatures>> featuresProvider) {
+                                   Supplier<FinalizedFeatures> featuresProvider) {
         this.listenerType = listenerType;
         this.brokerFeatures = BrokerFeatures.defaultSupportedFeatures(enableUnstableLastVersion);
         this.enableUnstableLastVersion = enableUnstableLastVersion;
@@ -69,19 +67,19 @@ public class SimpleApiVersionManager implements ApiVersionManager {
 
     @Override
     public ApiVersionsResponse apiVersionResponse(int throttleTimeMs, boolean alterFeatureLevel0) {
-        Optional<FinalizedFeatures> currentFeatures = featuresProvider.get();
+        FinalizedFeatures currentFeatures = features();
         return new ApiVersionsResponse.Builder()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setApiVersions(apiVersions)
                 .setSupportedFeatures(brokerFeatures)
-                .setFinalizedFeatures(currentFeatures.map(FinalizedFeatures::finalizedFeatures).orElse(Map.of()))
-                .setFinalizedFeaturesEpoch(currentFeatures.map(FinalizedFeatures::finalizedFeaturesEpoch).orElse(-1L))
+                .setFinalizedFeatures(currentFeatures.finalizedFeatures())
+                .setFinalizedFeaturesEpoch(currentFeatures.finalizedFeaturesEpoch())
                 .setAlterFeatureLevel0(alterFeatureLevel0)
                 .build();
     }
 
     @Override
     public FinalizedFeatures features() {
-        return featuresProvider.get().orElse(null);
+        return featuresProvider.get();
     }
 }
