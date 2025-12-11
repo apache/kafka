@@ -152,9 +152,7 @@ public class DefaultStatePersister implements Persister {
                         partitionData.startOffset(),
                         partitionData.deliveryCompleteCount(),
                         partitionData.stateBatches(),
-                        future,
-                        null
-                    )
+                        future, null)
                 );
             });
         });
@@ -293,8 +291,7 @@ public class DefaultStatePersister implements Persister {
                         partitionData.partition(),
                         partitionData.leaderEpoch(),
                         future,
-                        null
-                    )
+                        null)
                 );
             });
         });
