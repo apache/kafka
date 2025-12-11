@@ -511,6 +511,11 @@ org.apache.kafka.tools.ShareConsumerPerformanceTest:
 org.apache.kafka.tools.StreamsResetterTest:
 - shouldDeleteTopic
 - shouldDetermineInternalTopicBasedOnTopicName1
+- shouldFailAfterTooManyRetries
+- shouldFailIfThereAreMembersAndNotForce
+- shouldIgnoreGroupIdNotFoundException
+- shouldRemoveIfThereAreMembersAndForce
+- shouldRetryToRemoveMembersOnUnknownMemberIdExceptionAndForce
 - shouldSeekToEndOffset
 - testResetOffsetToSpecificOffsetWhenAfterEndOffset
 - testResetToDatetimeWhenPartitionIsEmptyResetsToLatestOffset
