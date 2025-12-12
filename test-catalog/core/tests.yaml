@@ -1884,6 +1884,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testDynamicRemoteFetchMaxWaitMsConfig
 - testDynamicRemoteListOffsetsRequestTimeoutMsConfig
 - testDynamicRemoteLogManagerFollowerThreadPoolSizeConfig
+- testEnableFollowerFetchLastTieredOffset
 - testImproperConfigsAreRemoved
 - testIsolatedControllerAuthorizerConfig
 - testLogRetentionTimeMinutesIsNotDynamicallyReconfigurable
