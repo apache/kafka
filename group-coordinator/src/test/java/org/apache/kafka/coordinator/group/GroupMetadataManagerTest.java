@@ -17581,7 +17581,11 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of())
                 .setPartitionsByUserEndpoint(null)
                 .setEndpointInformationEpoch(0)
-                .setStatus(List.of()),
+                .setStatus(List.of(
+                    new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
+                        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                )),
             result.response().data()
         );
 

@@ -19,6 +19,19 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_3_0" href="#upgrade_4_3_0">Upgrading to 4.3.0</a></h4>
+
+<h5><a id="upgrade_4_3_0_from" href="#upgrade_4_3_0_from">Upgrading Servers to 4.3.0 from any version 3.3.x through 4.2.0</a></h5>
+
+<h5><a id="upgrade_430_notable" href="#upgrade_430_notable">Notable changes in 4.3.0</a></h5>
+<ul>
+    <li>
+        Two new configs have been introduced: <code>group.coordinator.cached.buffer.max.bytes</code> and <code>share.coordinator.cached.buffer.max.bytes</code>.
+        They allow the respective coordinators to set the maximum buffer size retained for reuse.
+        For further details, please refer to <a href="https://cwiki.apache.org/confluence/x/hA5JFg">KIP-1196</a>.
+    </li>
+</ul>
+
 <h4><a id="upgrade_4_2_0" href="#upgrade_4_2_0">Upgrading to 4.2.0</a></h4>
 
 <h5><a id="upgrade_4_2_0_from" href="#upgrade_4_2_0_from">Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x</a></h5>
