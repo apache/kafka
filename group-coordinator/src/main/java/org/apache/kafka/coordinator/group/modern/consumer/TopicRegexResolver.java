@@ -133,8 +133,8 @@ public class TopicRegexResolver {
      * @param resolvedRegexes   The map of the regex pattern and its set of matched topics.
      */
     private void filterTopicDescribeAuthorizedTopics(
-            AuthorizableRequestContext context,
-            Map<String, Set<String>> resolvedRegexes
+        AuthorizableRequestContext context,
+        Map<String, Set<String>> resolvedRegexes
     ) {
         if (authorizerPluginSupplier.get().isEmpty()) return;
 

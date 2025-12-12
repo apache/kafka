@@ -18,14 +18,10 @@ package org.apache.kafka.coordinator.group.modern.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.Plugin;
-import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
@@ -36,7 +32,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -50,25 +45,20 @@ public class TopicRegexResolverTest {
 
     private final Logger log = LoggerFactory.getLogger(TopicRegexResolverTest.class);
 
-    private static CoordinatorMetadataImage imageWithTopics(String... topicNames) {
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-        for (String topic : topicNames) {
-            delta.replay(new TopicRecord()
-                .setName(topic)
-                .setTopicId(Uuid.randomUuid()));
-        }
-        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
-        return new KRaftCoordinatorMetadataImage(image);
-    }
-
     @Test
     public void testBasicMatching() {
-        CoordinatorMetadataImage image = imageWithTopics("foo", "bar", "baz", "qux");
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 10)
+            .addTopic(Uuid.randomUuid(), "bar", 10)
+            .addTopic(Uuid.randomUuid(), "baz", 10)
+            .addTopic(Uuid.randomUuid(), "qux", 10)
+            .buildCoordinatorMetadataImage();
+
         Time time = new MockTime(0L, 0L, 0L);
 
         TopicRegexResolver resolver = new TopicRegexResolver(Optional::empty, time);
 
-        Map<String, ResolvedRegularExpression> result = resolver.resolveRegularExpressions(
+        var result = resolver.resolveRegularExpressions(
             null,
             "group-1",
             log,
@@ -76,7 +66,8 @@ public class TopicRegexResolverTest {
             Set.of("ba.*")
         );
 
-        ResolvedRegularExpression resolved = result.get("ba.*");
+        var resolved = result.get("ba.*");
+
         assertEquals(Set.of("bar", "baz"), resolved.topics());
         assertEquals(image.version(), resolved.version());
         assertEquals(0L, resolved.timestamp());
@@ -84,12 +75,16 @@ public class TopicRegexResolverTest {
 
     @Test
     public void testInvalidRegexIgnored() {
-        CoordinatorMetadataImage image = imageWithTopics("foo", "bar");
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 10)
+            .addTopic(Uuid.randomUuid(), "bar", 10)
+            .buildCoordinatorMetadataImage();
+
         Time time = new MockTime(5L, 0L, 0L);
 
         TopicRegexResolver resolver = new TopicRegexResolver(Optional::empty, time);
 
-        Map<String, ResolvedRegularExpression> result = resolver.resolveRegularExpressions(
+        var result = resolver.resolveRegularExpressions(
             null,
             "group-2",
             log,
@@ -97,7 +92,8 @@ public class TopicRegexResolverTest {
             Set.of("a.*")
         );
 
-        ResolvedRegularExpression resolved = result.get("a.*");
+        var resolved = result.get("a.*");
+
         assertTrue(resolved.topics().isEmpty());
         assertEquals(image.version(), resolved.version());
         assertEquals(5L, resolved.timestamp());
@@ -105,13 +101,18 @@ public class TopicRegexResolverTest {
 
     @Test
     public void testAuthorizationFiltering() {
-        CoordinatorMetadataImage image = imageWithTopics("allow1", "deny1", "allow2");
+        CoordinatorMetadataImage image = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "allow1", 10)
+            .addTopic(Uuid.randomUuid(), "deny1", 10)
+            .addTopic(Uuid.randomUuid(), "allow2", 10)
+            .buildCoordinatorMetadataImage();
+
         Time time = new MockTime(10L, 0L, 0L);
 
         Authorizer authorizer = mock(Authorizer.class);
         when(authorizer.authorize(any(), any())).thenAnswer(invocation -> {
             List<Action> actions = invocation.getArgument(1);
-            List<AuthorizationResult> results = new ArrayList<>(actions.size());
+            var results = new ArrayList<>(actions.size());
             for (Action action : actions) {
                 String topic = action.resourcePattern().name();
                 results.add("deny1".equals(topic) ? AuthorizationResult.DENIED : AuthorizationResult.ALLOWED);
@@ -119,11 +120,11 @@ public class TopicRegexResolverTest {
             return results;
         });
 
-        Plugin<Authorizer> plugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
+        var plugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name");
 
         TopicRegexResolver resolver = new TopicRegexResolver(() -> Optional.of(plugin), time);
 
-        Map<String, ResolvedRegularExpression> result = resolver.resolveRegularExpressions(
+        var result = resolver.resolveRegularExpressions(
             null,
             "group-3",
             log,
@@ -131,7 +132,8 @@ public class TopicRegexResolverTest {
             Set.of("a.*", "d.*")
         );
 
-        ResolvedRegularExpression resolved = result.get("a.*");
+        var resolved = result.get("a.*");
+
         assertEquals(Set.of("allow1", "allow2"), resolved.topics());
         assertEquals(image.version(), resolved.version());
         assertEquals(10L, resolved.timestamp());
