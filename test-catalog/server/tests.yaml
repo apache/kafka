@@ -121,13 +121,20 @@ org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
 - testLastKnownLeaderShouldBeElectedIfEmptyElr
 org.apache.kafka.server.KRaftClusterTest:
 - testAuthorizerFailureFoundInControllerStartup
+- testClientQuotas
 - testClusterWithLowerCaseListeners
 - testCreateClusterAndClose
+- testCreateClusterAndCreateAndManyTopics
+- testCreateClusterAndCreateListDeleteTopic
 - testCreateClusterAndRestartBrokerNode
 - testCreateClusterAndWaitForBrokerInRunningState
+- testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer
+- testCreateClusterWithAdvertisedPortZero
+- testDefaultClientQuotas
 - testReconfigureControllerAuthorizer
 - testReconfigureControllerClientQuotas
 - testRemoteLogManagerInstantiation
+- testUnregisterBroker
 org.apache.kafka.server.LogManagerIntegrationTest:
 - testIOExceptionOnLogSegmentCloseResultsInRecovery
 - testRestartBrokerNoErrorIfMissingPartitionMetadata

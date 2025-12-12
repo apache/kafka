@@ -1036,6 +1036,10 @@ org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilderTest:
 org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpressionTest:
 - testConstructor
 - testEquals
+org.apache.kafka.coordinator.group.modern.consumer.TopicRegexResolverTest:
+- testAuthorizationFiltering
+- testBasicMatching
+- testInvalidRegexIgnored
 org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilderTest:
 - testStableToStable
 - testStableToStableWithAssignmentTopicsNoLongerInSubscription
