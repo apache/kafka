@@ -1055,15 +1055,18 @@ public class TaskManager {
             mainConsumer.resume(task.inputPartitions());
             task.clearTaskTimeout();
         } catch (final TimeoutException timeoutException) {
-            task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-            stateUpdater.add(task);
-            log.debug(
-                String.format(
-                    "Could not complete restoration for %s due to the following exception; adding the task " +
-                        "back to the state updater and will retry",
-                    task.id()),
-                timeoutException
-            );
+            try {
+                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                log.debug(
+                    String.format(
+                        "Could not complete restoration for %s due to the following exception; adding the task " +
+                            "back to the state updater and will retry",
+                        task.id()),
+                    timeoutException
+                );
+            } finally {
+                stateUpdater.add(task);
+            }
         }
     }
 

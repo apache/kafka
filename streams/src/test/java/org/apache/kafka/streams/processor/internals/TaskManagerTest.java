@@ -1620,6 +1620,27 @@ public class TaskManagerTest {
         verifyNoInteractions(consumer);
     }
 
+    @Test
+    public void shouldReAddTaskToStateUpdaterEvenWhenMaybeInitTaskTimeoutOrThrowThrowsException() {
+        final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTransitionToRunningOfRestoredTask(Set.of(task), tasks);
+        final TimeoutException timeoutException = new TimeoutException();
+        final TaskMigratedException taskMigratedException = new TaskMigratedException("Task migrated", taskId00);
+        doThrow(timeoutException).when(task).completeRestoration(noOpResetter);
+        doThrow(taskMigratedException).when(task).maybeInitTaskTimeoutOrThrow(anyLong(), eq(timeoutException));
+
+        assertThrows(TaskMigratedException.class, () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+
+        verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), eq(timeoutException));
+        verify(stateUpdater).add(task);
+        verify(tasks, never()).addTask(task);
+        verify(task, never()).clearTaskTimeout();
+        verifyNoInteractions(consumer);
+    }
+
     private TaskManager setUpTransitionToRunningOfRestoredTask(final Set<StreamTask> statefulTasks,
                                                                final TasksRegistry tasks) {
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
