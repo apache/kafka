@@ -64,6 +64,7 @@ org.apache.kafka.tools.ConfigCommandIntegrationTest:
 - testAddConfigKeyValuesUsingCommand
 - testAlterReadOnlyConfigInKRaftThenShouldFail
 - testAlterStreamsGroupNumOfStandbyReplicas
+- testBrokerLoggerConfigUpdate
 - testClientMetricsConfigUpdate
 - testDescribeGroupWithoutDynamicConfigs
 - testDescribeNonExistentConfigResource
