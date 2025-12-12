@@ -29,6 +29,8 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorResultTest:
 - testEquals
 - testRecordsCannotBeNull
 org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImplTest:
+- testBatchBufferCacheDiscardCount
+- testBatchBufferCacheSize
 - testEventQueueSize
 - testFlushRateSensor
 - testHistogramMetrics
@@ -43,15 +45,15 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testAdaptiveAppendLingerWithMaxBatchSizeFlush
 - testAdaptiveAppendLingerWithTransactionalWrite
 - testAppendRecordBatchSize
-- testBufferShrinkWhenMaxMessageSizeReducedBelowInitialBufferSize
+- testBufferShrinkWhenCachedBufferMaxBytesReducedBelowBatchSize
 - testCancelTimer
 - testClose
 - testCompleteTransactionEventCompletesOnlyOnce
 - testCompressibleRecordTriggersFlushAndSucceeds
 - testCoordinatorCompleteTransactionEventWriteTimeoutTaskIsCancelledWhenHighWatermarkIsUpdated
-- testCoordinatorDoNotRetainBufferLargeThanMaxMessageSize
+- testCoordinatorDoNotRetainBufferLargeThanCachedBufferMaxBytes
 - testCoordinatorExecutor
-- testCoordinatorRetainExpandedBufferLessOrEqualToMaxMessageSize
+- testCoordinatorRetainExpandedBufferLessOrEqualToCachedBufferMaxBytes
 - testEmptyBatch
 - testHighWatermarkUpdate
 - testHighWatermarkUpdateWithDeferredEventExceptions

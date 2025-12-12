@@ -1874,6 +1874,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testConfigUpdateWithSomeInvalidConfigs
 - testConnectionQuota
 - testConnectionRateQuota
+- testCoordinatorCachedBufferMaxBytesUpdates
 - testDynamicListenerConfig
 - testDynamicLogConfigHandlesSynonymsCorrectly
 - testDynamicLogLocalRetentionMsConfig
@@ -1924,6 +1925,8 @@ kafka.server.DynamicConfigChangeTest:
 - testDefaultUserClientIdQuotaConfigChange
 - testDefaultUserQuotaConfigChange
 - testDynamicGroupConfigChange
+- testDynamicGroupCoordinatorConfigChange
+- testDynamicShareCoordinatorConfigChange
 - testDynamicShareGroupConfigChange
 - testDynamicTopicConfigChange
 - testIncrementalAlterDefaultGroupConfig
