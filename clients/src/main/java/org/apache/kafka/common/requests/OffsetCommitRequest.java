@@ -51,8 +51,8 @@ public class OffsetCommitRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public static Builder forTopicIdsOrNames(OffsetCommitRequestData data, boolean enableUnstableLastVersion) {
-            return new Builder(data, ApiKeys.OFFSET_COMMIT.oldestVersion(), ApiKeys.OFFSET_COMMIT.latestVersion(enableUnstableLastVersion));
+        public static Builder forTopicIdsOrNames(OffsetCommitRequestData data) {
+            return new Builder(data, ApiKeys.OFFSET_COMMIT.oldestVersion(), ApiKeys.OFFSET_COMMIT.latestVersion());
         }
 
         public static Builder forTopicNames(OffsetCommitRequestData data) {

@@ -112,7 +112,7 @@ public class GlobalStateStoreProviderTest {
         when(mockContext.applicationId()).thenReturn("appId");
         when(mockContext.metrics())
             .thenReturn(
-                new StreamsMetricsImpl(new Metrics(), "threadName", "processId", "applicationId", new MockTime())
+                new StreamsMetricsImpl(new Metrics(), "threadName", new MockTime())
             );
         when(mockContext.taskId()).thenReturn(new TaskId(0, 0));
         when(mockContext.appConfigs()).thenReturn(CONFIGS);

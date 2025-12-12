@@ -29,7 +29,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogCleaningState.{LOG_CLEANING_ABORTED, LOG_CLEANING_IN_PROGRESS}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogCleanerManager, LogCleaningException, LogCleaningState, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, PreCleanStats, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogCleanerManager, LogCleaningException, LogCleaningState, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, PreCleanStats, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -702,7 +703,7 @@ class LogCleanerManagerTest extends Logging {
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
       new EndTransactionMarker(ControlRecordType.ABORT, 15)), 0,
-      AppendOrigin.COORDINATOR)
+      AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_1.featureLevel())
     log.roll()
     log.updateHighWatermark(4L)
 

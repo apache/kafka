@@ -122,7 +122,7 @@ class ShareCoordinatorShardTest {
             var topicMetadata = mock(CoordinatorMetadataImage.TopicMetadata.class);
             when(topicMetadata.partitionCount()).thenReturn(PARTITION + 1);
             when(metadataImage.topicMetadata((Uuid) any())).thenReturn(Optional.of(topicMetadata));
-            shard.onNewMetadataImage(metadataImage, null);
+            shard.onMetadataUpdate(null, metadataImage);
             return shard;
         }
 
@@ -446,7 +446,7 @@ class ShareCoordinatorShardTest {
     public void testWriteNullMetadataImage() {
         initSharePartition(shard, SHARE_PARTITION_KEY);
 
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -676,7 +676,7 @@ class ShareCoordinatorShardTest {
         initSharePartition(shard, SHARE_PARTITION_KEY);
         writeAndReplayDefaultRecord(shard);
 
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         ReadShareGroupStateRequestData request = new ReadShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1081,7 +1081,7 @@ class ShareCoordinatorShardTest {
 
     @Test
     public void testDeleteNullMetadataImage() {
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1103,7 +1103,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testDeleteTopicIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1135,7 +1135,7 @@ class ShareCoordinatorShardTest {
     public void testDeletePartitionIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
         when(image.cluster()).thenReturn(mock(ClusterImage.class));
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1252,7 +1252,7 @@ class ShareCoordinatorShardTest {
 
     @Test
     public void testInitializeNullMetadataImage() {
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1276,7 +1276,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testInitializeTopicIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1306,7 +1306,7 @@ class ShareCoordinatorShardTest {
     public void testInitializePartitionIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
         when(image.cluster()).thenReturn(mock(ClusterImage.class));
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1341,7 +1341,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsNoEligiblePartitions() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1411,7 +1411,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsSnapshotUpdateNotConsidered() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1514,7 +1514,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsDoesNotPerpetuallySnapshot() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1592,7 +1592,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsPartialEligiblePartitions() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1712,7 +1712,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testOnTopicsDeletedTopicIds() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(new KRaftCoordinatorMetadataImage(image), null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         int offset = 0;
         int producerId = 0;

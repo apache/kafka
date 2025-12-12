@@ -17,15 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Objects;
 import java.util.Optional;
 
 /**
  * This class is used to contain the offset and lag information for a share-partition.
  */
-@InterfaceStability.Evolving
 public class SharePartitionOffsetInfo {
     private final long startOffset;
     private final Optional<Integer> leaderEpoch;
@@ -34,7 +31,9 @@ public class SharePartitionOffsetInfo {
     /**
      * Construct a new SharePartitionOffsetInfo.
      *
-     * @param startOffset The share-partition start offset
+     * @param startOffset The share-partition start offset. The start offset is the earliest offset
+     *                    for in-flight records being evaluated for delivery to share consumers.
+     *                    Some records after the start offset may already have completed delivery.
      * @param leaderEpoch The optional leader epoch of the share-partition
      * @param lag         The optional lag for the share-partition
      */
@@ -44,14 +43,31 @@ public class SharePartitionOffsetInfo {
         this.lag = lag;
     }
 
+    /**
+     * Get the start offset for the share-partition. The start offset is the earliest offset for
+     * in-flight records being evaluated for delivery to share consumers. Some records after the start
+     * offset may already have completed delivery.
+     *
+     * @return The start offset of the partition read by the share group.
+     */
     public long startOffset() {
         return startOffset;
     }
 
+    /**
+     * Get the leader epoch for the partition.
+     *
+     * @return The leader epoch of the partition.
+     */
     public Optional<Integer> leaderEpoch() {
         return leaderEpoch;
     }
 
+    /**
+     * Get the lag for the partition.
+     *
+     * @return The lag of the partition.
+     */
     public Optional<Long> lag() {
         return lag;
     }
