@@ -144,31 +144,14 @@ class ConsumerRebalanceMetricsManagerTest {
 
         // Record 3 rebalances within 30ms total (3 x 10ms)
         int rebalanceCount = 3;
-        long startTime = time.milliseconds();
         for (int i = 0; i < rebalanceCount; i++) {
             metricsManager.recordRebalanceStarted(time.milliseconds());
             time.sleep(10);
             metricsManager.recordRebalanceEnded(time.milliseconds());
         }
-        long endTime = time.milliseconds();
-        long actualElapsedMs = endTime - startTime;
 
         double ratePerHour = (Double) metrics.metric(metricsManager.rebalanceRatePerHour).metricValue();
-        
-        // The Rate metric calculation:
-        // - Uses elapsed time from the oldest sample
-        // - Ensures minimum window size of (numSamples - 1) * windowSizeMs
-        // - With default config: minWindow = (2-1) * 30000 = 30000ms
-        long minWindowMs = (numSamples - 1) * windowSizeMs; // (2-1) * 30000 = 30000ms
-        
-        // Since actualElapsedMs (30ms) is much less than minWindowMs (30000ms), 
-        // the rate calculation will use minWindowMs as the window
-        // Rate per hour = count / (windowMs / 1000) * 3600
-        double expectedRatePerHour = (double) rebalanceCount / (minWindowMs / 1000.0) * 3600.0;
-        
-        assertEquals(expectedRatePerHour, ratePerHour, 1.0,
-                String.format("With %d rebalances in %dms, min window %dms: expecting %.1f rebalances/hour", 
-                        rebalanceCount, actualElapsedMs, minWindowMs, expectedRatePerHour));
+        assertEquals(3.0d, ratePerHour, 0.1d);
     }
 
     @Test
@@ -208,15 +191,7 @@ class ConsumerRebalanceMetricsManagerTest {
         assertEquals(2.0d, metrics.metric(metricsManager.failedRebalanceTotal).metricValue());
 
         double failedRate = (Double) metrics.metric(metricsManager.failedRebalanceRate).metricValue();
-        
-        // Calculate expected failed rate based on Rate metric behavior
-        // We had 2 failures over ~40ms, but minimum window is (numSamples - 1) * windowSizeMs
-        long minWindowMs = (numSamples - 1) * windowSizeMs; // (2-1) * 30000 = 30000ms
-        double expectedFailedRatePerHour = 2.0 / (minWindowMs / 1000.0) * 3600.0;
-        
-        assertEquals(expectedFailedRatePerHour, failedRate, 1.0, 
-                String.format("With 2 failures, min window %dms: expecting %.1f failures/hour", 
-                        minWindowMs, expectedFailedRatePerHour));
+        assertEquals(2.0d, failedRate, 0.1d);
     }
 
     @Test

@@ -79,7 +79,7 @@ The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 t
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
 
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) and [build.yml](.github/workflows/build.yml) for more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
@@ -270,6 +270,10 @@ includes inlining of methods within the scala library (which avoids lambda alloc
 only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
 may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
 default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
+
+### Upgrading Gradle version ###
+
+See [gradle/wrapper/README.md](gradle/wrapper/README.md) for instructions on upgrading the Gradle version.
 
 ### Running system tests ###
 

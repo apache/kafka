@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -81,7 +82,18 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         MISSING_SOURCE_TOPICS((byte) 1, "One or more source topics are missing or a source topic regex resolves to zero topics."),
         INCORRECTLY_PARTITIONED_TOPICS((byte) 2, "One or more topics expected to be copartitioned are not copartitioned."),
         MISSING_INTERNAL_TOPICS((byte) 3, "One or more internal topics are missing."),
-        SHUTDOWN_APPLICATION((byte) 4, "A client requested the shutdown of the whole application.");
+        SHUTDOWN_APPLICATION((byte) 4, "A client requested the shutdown of the whole application."),
+        ASSIGNMENT_DELAYED((byte) 5, "The assignment was delayed by the coordinator.");
+
+        private static final Map<Byte, Status> CODE_TO_STATUS;
+
+        static {
+            Map<Byte, Status> map = new HashMap<>();
+            for (Status status : values()) {
+                map.put(status.code, status);
+            }
+            CODE_TO_STATUS = Collections.unmodifiableMap(map);
+        }
 
         private final byte code;
         private final String message;
@@ -97,6 +109,14 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
 
         public String message() {
             return message;
+        }
+
+        public static Status fromCode(byte code) {
+            Status status = CODE_TO_STATUS.get(code);
+            if (status == null) {
+                throw new IllegalArgumentException("Unknown code " + code);
+            }
+            return status;
         }
     }
 }
