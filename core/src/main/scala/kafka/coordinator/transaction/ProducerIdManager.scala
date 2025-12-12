@@ -236,8 +236,7 @@ class RPCProducerIdManager(brokerId: Int,
     debug("Requesting next Producer ID block")
     controllerChannel.sendRequest(request, new ControllerRequestCompletionHandler() {
       override def onComplete(response: ClientResponse): Unit = {
-        val message = response.responseBody().asInstanceOf[AllocateProducerIdsResponse]
-        handleAllocateProducerIdsResponse(message)
+        handleAllocateProducerIdsResponse(response)
       }
 
       override def onTimeout(): Unit = handleTimeout()
@@ -245,7 +244,23 @@ class RPCProducerIdManager(brokerId: Int,
   }
 
   // Visible for testing
-  private[transaction] def handleAllocateProducerIdsResponse(response: AllocateProducerIdsResponse): Unit = {
+  private[transaction] def handleAllocateProducerIdsResponse(clientResponse: ClientResponse): Unit = {
+    if (clientResponse.authenticationException != null) {
+      error("Unable to allocate producer id because of an authentication exception", clientResponse.authenticationException)
+      handleUnsuccessfulResponse()
+      return
+    }
+    if (clientResponse.versionMismatch != null) {
+      error("Unable to allocate producer id because of a version mismatch exception", clientResponse.versionMismatch)
+      handleUnsuccessfulResponse()
+      return
+    }
+    if (!clientResponse.hasResponse) {
+      error("Unable to allocate producer id because of empty response from controller")
+      handleUnsuccessfulResponse()
+      return
+    }
+    val response = clientResponse.responseBody().asInstanceOf[AllocateProducerIdsResponse]
     val data = response.data
     var successfulResponse = false
     Errors.forCode(data.errorCode()) match {
@@ -269,11 +284,15 @@ class RPCProducerIdManager(brokerId: Int,
     }
 
     if (!successfulResponse) {
-      // There is no need to compare and set because only one thread
-      // handles the AllocateProducerIds response.
-      backoffDeadlineMs.set(time.milliseconds() + RetryBackoffMs)
-      requestInFlight.set(false)
+      handleUnsuccessfulResponse()
     }
+  }
+
+  private def handleUnsuccessfulResponse(): Unit = {
+    // There is no need to compare and set because only one thread
+    // handles the AllocateProducerIds response.
+    backoffDeadlineMs.set(time.milliseconds() + RetryBackoffMs)
+    requestInFlight.set(false)
   }
 
   private def handleTimeout(): Unit = {
