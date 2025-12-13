@@ -5252,6 +5252,7 @@ org.apache.kafka.common.utils.ByteUtilsTest:
 - testWriteUnsignedIntLEToArray
 - testWriteUnsignedIntLEToOutputStream
 org.apache.kafka.common.utils.BytesTest:
+- testBytesLexicographicCases
 - testIncrement
 - testIncrementUpperBoundary
 - testIncrementWithSubmap
