@@ -132,7 +132,7 @@ class PersisterStateManagerTest {
     }
 
     private abstract class TestStateHandler extends PersisterStateManager.PersisterStateManagerHandler {
-        private static final Logger LOG = LoggerFactory.getLogger(PersisterStateManagerTest.TestStateHandler.class);
+        private static final Logger LOG = LoggerFactory.getLogger(TestStateHandler.class);
         private final CompletableFuture<TestHandlerResponse> result;
 
         private class TestHandlerResponseData extends WriteShareGroupStateResponseData {

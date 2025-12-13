@@ -212,6 +212,12 @@ public class PersisterStateManager {
             partitionKey = SharePartitionKey.getInstance(groupId, topicId, partition);
         }
 
+        /**
+         * Child classes must provide their own static logger instance. This avoids unnecessary resource usage
+         * caused by creating a large number of logger instances.
+         *
+         * @return child class logger
+         */
         protected abstract Logger log();
 
         /**
@@ -491,7 +497,7 @@ public class PersisterStateManager {
 
     public class InitializeStateHandler extends PersisterStateManagerHandler {
 
-        private static final Logger LOG = LoggerFactory.getLogger(PersisterStateManager.InitializeStateHandler.class);
+        private static final Logger LOG = LoggerFactory.getLogger(InitializeStateHandler.class);
 
         private final int stateEpoch;
         private final long startOffset;
@@ -679,7 +685,7 @@ public class PersisterStateManager {
     }
 
     public class WriteStateHandler extends PersisterStateManagerHandler {
-        private static final Logger LOG = LoggerFactory.getLogger(PersisterStateManager.WriteStateHandler.class);
+        private static final Logger LOG = LoggerFactory.getLogger(WriteStateHandler.class);
         private final int stateEpoch;
         private final int leaderEpoch;
         private final long startOffset;
@@ -880,7 +886,7 @@ public class PersisterStateManager {
     }
 
     public class ReadStateHandler extends PersisterStateManagerHandler {
-        private static final Logger LOG = LoggerFactory.getLogger(PersisterStateManager.ReadStateHandler.class);
+        private static final Logger LOG = LoggerFactory.getLogger(ReadStateHandler.class);
         private final int leaderEpoch;
         private final CompletableFuture<ReadShareGroupStateResponse> result;
         private final ExponentialBackoffManager readStateBackoff;
@@ -1061,7 +1067,7 @@ public class PersisterStateManager {
     }
 
     public class ReadStateSummaryHandler extends PersisterStateManagerHandler {
-        private static final Logger LOG = LoggerFactory.getLogger(PersisterStateManager.ReadStateSummaryHandler.class);
+        private static final Logger LOG = LoggerFactory.getLogger(ReadStateSummaryHandler.class);
         private final int leaderEpoch;
         private final CompletableFuture<ReadShareGroupStateSummaryResponse> result;
         private final ExponentialBackoffManager readStateSummaryBackoff;
@@ -1242,7 +1248,7 @@ public class PersisterStateManager {
     }
 
     public class DeleteStateHandler extends PersisterStateManagerHandler {
-        private static final Logger LOG = LoggerFactory.getLogger(PersisterStateManager.DeleteStateHandler.class);
+        private static final Logger LOG = LoggerFactory.getLogger(DeleteStateHandler.class);
         private final CompletableFuture<DeleteShareGroupStateResponse> result;
         private final ExponentialBackoffManager deleteStateBackoff;
 
