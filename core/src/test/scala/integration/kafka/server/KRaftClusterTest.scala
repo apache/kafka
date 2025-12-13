@@ -48,7 +48,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{FileSystems, Files, Path, Paths}
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import java.util.{Optional, OptionalLong, Properties}
+import java.util.{Optional, OptionalLong}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -96,7 +96,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         // Create the topic.
         val assignments = new util.HashMap[Integer, util.List[Integer]]
@@ -264,7 +264,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         assertEquals(Seq(ApiError.NONE), incrementalAlter(admin, Seq(
           (new ConfigResource(Type.BROKER, ""), Seq(
@@ -321,7 +321,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         Seq(log, log2).foreach(_.debug("setting log4j"))
 
@@ -377,7 +377,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         val createResults = admin.createTopics(util.List.of(
           new NewTopic("foo", 1, 3.toShort),
@@ -399,13 +399,7 @@ class KRaftClusterTest {
   }
 
   def createAdminClient(cluster: KafkaClusterTestKit, bootstrapController: Boolean): Admin = {
-    var props: Properties = null
-    props = if (bootstrapController)
-      cluster.newClientPropertiesBuilder().setUsingBootstrapControllers(true).build()
-    else
-      cluster.clientProperties()
-    props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName)
-    Admin.create(props)
+    cluster.admin(util.Map.of(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName), bootstrapController)
   }
 
   @Test
@@ -522,7 +516,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         admin.updateFeatures(
           util.Map.of(MetadataVersion.FEATURE_NAME,
@@ -551,9 +545,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.newClientPropertiesBuilder().
-        setUsingBootstrapControllers(usingBootstrapControlers).
-        build())
+      val admin = cluster.admin(util.Map.of(), usingBootstrapControlers)
       try {
         val featureMetadata = admin.describeFeatures().featureMetadata().get()
         assertEquals(new SupportedVersionRange(0, 1),
@@ -589,7 +581,7 @@ class KRaftClusterTest {
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
 
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         // Create a test topic
         val newTopic = util.List.of(new NewTopic("test-topic", 1, 1.toShort))
@@ -675,7 +667,7 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         val newTopics = new util.ArrayList[NewTopic]()
         for (i <- 0 to 10000) {
@@ -757,9 +749,7 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      val admin = Admin.create(cluster.newClientPropertiesBuilder().
-        setUsingBootstrapControllers(true).
-        build())
+      val admin = cluster.admin(util.Map.of(), true)
       try {
         val exception = assertThrows(classOf[ExecutionException],
           () => admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES))
@@ -813,7 +803,7 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         val broker0 = cluster.brokers().get(0)
         val broker1 = cluster.brokers().get(1)
@@ -868,7 +858,7 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         val broker0 = cluster.brokers().get(0)
         val broker1 = cluster.brokers().get(1)
@@ -933,7 +923,7 @@ class KRaftClusterTest {
     try {
       cluster.format()
       cluster.startup()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         val broker0 = cluster.brokers().get(0)
         val broker1 = cluster.brokers().get(1)
@@ -1006,7 +996,7 @@ class KRaftClusterTest {
       TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
         "RaftManager was not initialized.")
 
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         // Create a test topic
         admin.createTopics(util.List.of(
@@ -1086,7 +1076,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         admin.incrementalAlterConfigs(
           util.Map.of(new ConfigResource(Type.BROKER, ""),

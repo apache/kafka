@@ -26,8 +26,10 @@ import kafka.server.KafkaRaftServer;
 import kafka.server.SharedServer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
@@ -66,7 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -560,45 +561,48 @@ public class KafkaClusterTestKit implements AutoCloseable {
             "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
-    public class ClientPropertiesBuilder {
-        private final Properties properties;
-        private boolean usingBootstrapControllers = false;
+    public Admin admin() {
+        return admin(Map.of(), false);
+    }
 
-        public ClientPropertiesBuilder() {
-            this.properties = new Properties();
-        }
+    public Admin admin(Map<String, Object> configs) {
+        return admin(configs, false);
+    }
 
-        public ClientPropertiesBuilder(Properties properties) {
-            this.properties = properties;
-        }
+    public Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
+        Map<String, Object> props = new HashMap<>(configs);
+        setBootstrapConfig(props, usingBootstrapControllers);
+        setClientSaslConfig(props, usingBootstrapControllers);
+        return Admin.create(props);
+    }
 
-        public ClientPropertiesBuilder setUsingBootstrapControllers(boolean usingBootstrapControllers) {
-            this.usingBootstrapControllers = usingBootstrapControllers;
-            return this;
-        }
-
-        public Properties build() {
-            if (usingBootstrapControllers) {
-                properties.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllers());
-                properties.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
-            } else {
-                properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-                properties.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
-            }
-            return properties;
+    private void setBootstrapConfig(Map<String, Object> props, boolean usingBootstrapControllers) {
+        if (usingBootstrapControllers) {
+            props.putIfAbsent(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllers());
+            props.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+        } else {
+            props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+            props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         }
     }
 
-    public ClientPropertiesBuilder newClientPropertiesBuilder(Properties properties) {
-        return new ClientPropertiesBuilder(properties);
-    }
+    private void setClientSaslConfig(Map<String, Object> props, boolean usingBootstrapControllers) {
+        SecurityProtocol protocol = usingBootstrapControllers ?
+            nodes.controllerListenerProtocol() : nodes.brokerListenerProtocol();
 
-    public ClientPropertiesBuilder newClientPropertiesBuilder() {
-        return new ClientPropertiesBuilder();
-    }
+        props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, protocol.name);
 
-    public Properties clientProperties() {
-        return new ClientPropertiesBuilder().build();
+        if (protocol == SecurityProtocol.SASL_PLAINTEXT) {
+            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
+            props.putIfAbsent(
+                SaslConfigs.SASL_JAAS_CONFIG,
+                String.format(
+                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                    JaasUtils.KAFKA_PLAIN_ADMIN,
+                    JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                )
+            );
+        }
     }
 
     public String bootstrapServers() {

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterClientQuotasResult;
@@ -74,7 +73,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -142,7 +140,7 @@ public class KRaftClusterTest {
                 "Broker never made it to RUNNING state.");
             TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
                 "RaftManager was not initialized.");
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 assertEquals(cluster.nodes().clusterId(),
                     admin.describeCluster().clusterId().get());
             }
@@ -163,7 +161,7 @@ public class KRaftClusterTest {
                 "Broker never made it to RUNNING state.");
             TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
                 "RaftManager was not initialized.");
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 assertEquals(cluster.nodes().clusterId(),
                     admin.describeCluster().clusterId().get());
             }
@@ -224,7 +222,7 @@ public class KRaftClusterTest {
             cluster.waitForReadyBrokers();
             assertConfigValue(cluster, 0);
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 admin.incrementalAlterConfigs(
                     Map.of(new ConfigResource(Type.BROKER, ""),
                         List.of(new AlterConfigOp(
@@ -264,7 +262,7 @@ public class KRaftClusterTest {
 
             assertFoobarValue(cluster, 0);
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 admin.incrementalAlterConfigs(
                     Map.of(new ConfigResource(Type.BROKER, ""),
                         List.of(new AlterConfigOp(
@@ -304,7 +302,7 @@ public class KRaftClusterTest {
                 "RaftManager was not initialized.");
 
             String testTopic = "test-topic";
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 // Create a test topic
                 List<NewTopic> newTopic = List.of(new NewTopic(testTopic, 1, (short) 3));
                 CreateTopicsResult createTopicResult = admin.createTopics(newTopic);
@@ -336,7 +334,7 @@ public class KRaftClusterTest {
             TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
                 "RaftManager was not initialized.");
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 // Create many topics
                 List<NewTopic> newTopics = List.of(
                     new NewTopic("test-topic-1", 2, (short) 3),
@@ -382,7 +380,7 @@ public class KRaftClusterTest {
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
                 "Broker never made it to RUNNING state.");
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 ClientQuotaEntity entity = new ClientQuotaEntity(Map.of("user", "testkit"));
                 ClientQuotaFilter filter = ClientQuotaFilter.containsOnly(
                     List.of(ClientQuotaFilterComponent.ofEntity("user", "testkit")));
@@ -470,7 +468,7 @@ public class KRaftClusterTest {
             TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
                 "Broker never made it to RUNNING state.");
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 ClientQuotaEntity defaultUser = new ClientQuotaEntity(Collections.singletonMap("user", null));
                 ClientQuotaEntity bobUser = new ClientQuotaEntity(Map.of("user", "bob"));
 
@@ -643,15 +641,7 @@ public class KRaftClusterTest {
     }
 
     private Admin createAdminClient(KafkaClusterTestKit cluster, boolean usingBootstrapControllers) {
-        Properties props = new Properties();
-        if (usingBootstrapControllers) {
-            props.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, cluster.bootstrapControllers());
-            props.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
-        } else {
-            props = cluster.clientProperties();
-        }
-        props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass().getName());
-        return Admin.create(props);
+        return cluster.admin(Map.of(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass().getName()), usingBootstrapControllers);
     }
 
     public static class BadAuthorizer implements Authorizer {
