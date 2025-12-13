@@ -23,7 +23,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala213Version = '2.13.17'
+def defaultScala213Version = '2.13.18'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.13') {
     versions["scala"] = defaultScala213Version
@@ -56,7 +56,7 @@ versions += [
   bcpkix: "1.80",
   caffeine: "3.2.0",
   bndlib: "7.1.0",
-  checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "10.20.2",
+  checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.2.0",
   commonsValidator: "1.10.1",
   classgraph: "4.8.179",
   gradle: "9.2.1",
@@ -121,8 +121,8 @@ versions += [
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
-  scalafmt: "3.10.0",
-  scoverage: "2.4.0",
+  scalafmt: "3.10.2",
+  scoverage: "2.5.1",
   slf4j: "1.7.36",
   snappy: "1.1.10.7",
   spotbugs: "4.9.8",
