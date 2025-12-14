@@ -1138,6 +1138,9 @@ rack.aware.assignment.tags: zone,cluster   | rack.aware.assignment.tags: zone,cl
             <div><p>This specifies the replication factor of internal topics that Kafka Streams creates when local states are used or a stream is
               repartitioned for aggregation. Replication is important for fault tolerance. Without replication even a single broker failure
               may prevent progress of the stream processing application. It is recommended to use a similar replication factor as source topics.</p>
+              <p>A Kafka Streams application defaults to the broker's replication factor for
+                internal topics only in Kafka Streams version 3.0.0 and later. For more
+                information, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-733%3A+change+Kafka+Streams+default+replication+factor+config">KIP-733</a>.</p>
               <dl class="docutils">
                 <dt>Recommendation:</dt>
                 <dd>Increase the replication factor to 3 to ensure that the internal Kafka Streams topic can tolerate up to 2 broker failures.
