@@ -22,6 +22,7 @@
 <script id="quickstart-template" type="text/x-handlebars-template">
 
     <div class="quickstart-step">
+        <p class="note">NOTE: Windows is not currently a well-supported platform for running Kafka. Windows users are encouraged to use WSL (Windows Subsystem for Linux) as an alternative or run Kafka in a Docker container for a more reliable experience.</p>
         <h4 class="anchor-heading">
             <a class="anchor-link" id="quickstart_download" href="#quickstart_download"></a>
             <a href="#quickstart_download">Step 1: Get Kafka</a>
@@ -198,9 +199,6 @@ This is my second event</code></pre>
         </p>
 
         <pre><code class="language-bash">$ echo -e "foo\nbar" &gt; test.txt</code></pre>
-        Or on Windows:
-        <pre><code class="language-bash">$ echo foo &gt; test.txt
-$ echo bar &gt;&gt; test.txt</code></pre>
 
         <p>
             Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
