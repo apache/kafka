@@ -51,7 +51,8 @@ public class RPCProducerIdManager implements ProducerIdManager {
     private final String logPrefix;
 
     private final int brokerId;
-    protected final Time time;
+    // Visible for testing
+    final Time time;
     private final Supplier<Long> brokerEpochSupplier;
     private final NodeToControllerChannelManager controllerChannel;
 
@@ -140,7 +141,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
         });
     }
 
-    protected void handleUnsuccessfulResponse() {
+    private void handleUnsuccessfulResponse() {
         // There is no need to compare and set because only one thread
         // handles the AllocateProducerIds response.
         backoffDeadlineMs.set(time.milliseconds() + RETRY_BACKOFF_MS);
