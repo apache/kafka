@@ -21,7 +21,6 @@ import kafka.cluster.Partition
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -83,7 +82,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{ConfigRepository, MetadataCache, MockConfigRepository}
+import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MockConfigRepository}
 import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig

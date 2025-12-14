@@ -259,7 +259,6 @@ public class StreamThreadTest {
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE_V2 : StreamsConfig.AT_LEAST_ONCE),
             mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
             mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
-            mkEntry(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(true)),
             mkEntry(InternalConfig.PROCESSING_THREADS_ENABLED, Boolean.toString(processingThreadsEnabled)),
             mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1")
         ));
@@ -591,7 +590,7 @@ public class StreamThreadTest {
         final Task runningTask = statelessTask(taskId)
             .inState(Task.State.RUNNING).build();
         final TaskManager taskManager = mock(TaskManager.class);
-        when(taskManager.allOwnedTasks()).thenReturn(Collections.singletonMap(taskId, runningTask));
+        when(taskManager.allRunningTasks()).thenReturn(Collections.singletonMap(taskId, runningTask));
         when(taskManager.commit(Collections.singleton(runningTask))).thenReturn(0);
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
@@ -905,7 +904,6 @@ public class StreamThreadTest {
         );
 
         final Properties properties = new Properties();
-        properties.put(InternalConfig.STATE_UPDATER_ENABLED, true);
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, false);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig(APPLICATION_ID,
@@ -2263,7 +2261,7 @@ public class StreamThreadTest {
 
         TestUtils.waitForCondition(
             () -> mockRestoreConsumer.assignment().size() == 1,
-            "Never get the assignment");
+            "Never got the assignment");
 
         mockRestoreConsumer.addRecord(new ConsumerRecord<>(
             "stream-thread-test-count-changelog",
@@ -2287,7 +2285,7 @@ public class StreamThreadTest {
         // registered again with the changelog reader
         TestUtils.waitForCondition(
             () -> mockRestoreConsumer.assignment().size() == 1,
-            "Never get the assignment");
+            "Never got the assignment");
 
         // after handling the exception and reviving the task, the position
         // should be reset to the beginning.
@@ -2310,7 +2308,7 @@ public class StreamThreadTest {
 
         TestUtils.waitForCondition(
             () -> mockRestoreConsumer.assignment().isEmpty(),
-            "Never get the assignment");
+            "Never got the assignment");
     }
 
     @ParameterizedTest
@@ -2776,7 +2774,7 @@ public class StreamThreadTest {
         when(task2.state()).thenReturn(Task.State.RESTORING);
         when(task3.state()).thenReturn(Task.State.CREATED);
 
-        when(taskManager.allOwnedTasks()).thenReturn(mkMap(
+        when(taskManager.allRunningTasks()).thenReturn(mkMap(
             mkEntry(taskId1, task1),
             mkEntry(taskId2, task2),
             mkEntry(taskId3, task3)
@@ -4036,7 +4034,7 @@ public class StreamThreadTest {
         final TaskId taskId = new TaskId(0, 0);
 
         when(runningTask.state()).thenReturn(Task.State.RUNNING);
-        when(taskManager.allOwnedTasks()).thenReturn(Collections.singletonMap(taskId, runningTask));
+        when(taskManager.allRunningTasks()).thenReturn(Collections.singletonMap(taskId, runningTask));
         return taskManager;
     }
 
@@ -4073,10 +4071,8 @@ public class StreamThreadTest {
             config,
             streamsMetrics,
             stateDirectory,
-            new MockChangelogReader(),
             CLIENT_ID,
-            logContext,
-            false);
+            logContext);
         return standbyTaskCreator.createTasks(singletonMap(new TaskId(1, 2), emptySet()));
     }
 

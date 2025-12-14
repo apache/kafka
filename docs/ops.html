@@ -1938,6 +1938,16 @@ The following set of metrics are available for monitoring the group coordinator:
       <td>The number of batches flushed per second</td>
     </tr>
     <tr>
+      <td>Batch Buffer Cache Size</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-buffer-cache-size-bytes</td>
+      <td>The total size in bytes of append buffers currently held in the coordinator's cache</td>
+    </tr>
+    <tr>
+      <td>Batch Buffer Cache Discard Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-buffer-cache-discard-count</td>
+      <td>The total number of over-sized append buffers that were discarded upon release</td>
+    </tr>
+    <tr>
       <td>Group Count, per group type</td>
       <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol={consumer|classic}</td>
       <td>Total number of group per group type: Classic or Consumer</td>
@@ -4179,6 +4189,16 @@ customized state stores; for built-in state stores, currently we have:
       <td>last-pruned-offset</td>
       <td>kafka.server:type=share-coordinator-metrics,name=last-pruned-offset,topic=([-.\w]+),partition=([0-9]+)</td>
       <td>The offset at which the share-group state topic was last pruned.</td>
+    </tr>
+    <tr>
+      <td>batch-buffer-cache-size-bytes</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=batch-buffer-cache-size-bytes</td>
+      <td>The total size in bytes of append buffers currently held in the share coordinator's cache</td>
+    </tr>
+    <tr>
+      <td>batch-buffer-cache-discard-count</td>
+      <td>kafka.server:type=share-coordinator-metrics,name=batch-buffer-cache-discard-count</td>
+      <td>The total number of over-sized append buffers that were discarded upon release</td>
     </tr>
     </tbody>
   </table>

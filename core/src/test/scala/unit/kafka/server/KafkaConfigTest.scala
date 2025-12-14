@@ -1032,6 +1032,7 @@ class KafkaConfigTest {
         /** New group coordinator configs */
         case GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -2, -0.5)
+        case GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1, 512 * 1024 - 1)
 
         /** Consumer groups configs */
         case GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)

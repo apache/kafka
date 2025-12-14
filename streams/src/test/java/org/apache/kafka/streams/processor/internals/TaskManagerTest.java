@@ -878,7 +878,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId03, activeTask)));
-        assertEquals(taskManager.allOwnedTasks(), mkMap(mkEntry(taskId03, activeTask)));
+        assertEquals(taskManager.allRunningTasks(), mkMap(mkEntry(taskId03, activeTask)));
     }
 
     @Test
@@ -2186,7 +2186,6 @@ public class TaskManagerTest {
         verify(task00).prepareCommit(false);
         verify(task00).postCommit(true);
         verify(task00).addPartitionsForOffsetReset(taskId00Partitions);
-        verify(task00).changelogPartitions();
         verify(task00).closeDirty();
         verify(task00).revive();
         verify(tasks).removeTask(task00);
@@ -2258,7 +2257,6 @@ public class TaskManagerTest {
         verify(nonCorruptedTask).prepareCommit(true);
         verify(nonCorruptedTask, never()).addPartitionsForOffsetReset(any());
         verify(corruptedTask).addPartitionsForOffsetReset(taskId00Partitions);
-        verify(corruptedTask).changelogPartitions();
         verify(corruptedTask).postCommit(true);
 
         // check that we should not commit empty map either
@@ -2373,7 +2371,6 @@ public class TaskManagerTest {
         verify(uncorruptedActive, never()).prepareCommit(anyBoolean());
         verify(uncorruptedActive, never()).postCommit(anyBoolean());
 
-        verify(corruptedActive).changelogPartitions();
         verify(corruptedActive).postCommit(true);
         verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
         verify(consumer, never()).commitSync(emptyMap());

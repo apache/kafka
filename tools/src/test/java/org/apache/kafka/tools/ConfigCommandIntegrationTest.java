@@ -372,6 +372,30 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest
+    public void testBrokerLoggerConfigUpdate() throws Exception {
+        List<String> alterOpts = Stream.concat(entityOp(Optional.of(defaultBrokerId)).stream(),
+            Stream.of("--entity-type", "broker-loggers", "--alter")).toList();
+
+        verifyBrokerLoggerConfigUpdate(alterOpts);
+
+        // Test for the --broker-logger alias
+        verifyBrokerLoggerConfigUpdate(List.of("--broker-logger", defaultBrokerId, "--alter"));
+    }
+
+    private void verifyBrokerLoggerConfigUpdate(List<String> alterOpts) throws Exception {
+        try (Admin client = cluster.admin()) {
+            // Add config
+            Map<String, String> configs = new HashMap<>();
+            configs.put("org.apache.kafka.server.quota.ClientQuotaManager$ThrottledChannelReaper", "DEBUG");
+            alterAndVerifyBrokerLoggerConfig(client, defaultBrokerId, configs, alterOpts);
+
+            // Delete config
+            configs.put("org.apache.kafka.server.quota.ClientQuotaManager$ThrottledChannelReaper", "ERROR");
+            deleteAndVerifyBrokerLoggerConfigValue(client, defaultBrokerId, configs, alterOpts);
+        }
+    }
+
+    @ClusterTest
     public void testAlterReadOnlyConfigInKRaftThenShouldFail() {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -593,7 +617,7 @@ public class ConfigCommandIntegrationTest {
                                       Map<String, String> config,
                                       List<String> alterOpts) throws Exception {
         alterConfigWithAdmin(client, brokerId, config, alterOpts);
-        verifyConfig(client, brokerId, config);
+        verifyBrokerConfig(client, brokerId, config);
     }
 
     private void alterAndVerifyGroupConfig(Admin client,
@@ -610,6 +634,14 @@ public class ConfigCommandIntegrationTest {
                                                    List<String> alterOpts) throws Exception {
         alterConfigWithAdmin(client, config, alterOpts);
         verifyClientMetricsConfig(client, clientMetricsName, config);
+    }
+
+    private void alterAndVerifyBrokerLoggerConfig(Admin client,
+                                                  String brokerId,
+                                                  Map<String, String> config,
+                                                  List<String> alterOpts) throws Exception {
+        alterConfigWithAdmin(client, config, alterOpts);
+        verifyBrokerLoggerConfig(client, brokerId, config);
     }
 
     private void alterConfigWithAdmin(Admin client, Optional<String> resourceName, Map<String, String> config, List<String> alterOpts) {
@@ -635,28 +667,27 @@ public class ConfigCommandIntegrationTest {
         ConfigCommand.alterConfig(client, addOpts);
     }
 
-    private void verifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
+    private void verifyBrokerConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
-        TestUtils.waitForCondition(() -> {
-            Map<String, String> current = getConfigEntryStream(client, configResource)
-                    .filter(configEntry -> Objects.nonNull(configEntry.value()))
-                    .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
-            return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
-        }, 10000, config + " are not updated");
+        verifyConfig(client, config, configResource);
     }
 
     private void verifyGroupConfig(Admin client, String groupName, Map<String, String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupName);
-        TestUtils.waitForCondition(() -> {
-            Map<String, String> current = getConfigEntryStream(client, configResource)
-                .filter(configEntry -> Objects.nonNull(configEntry.value()))
-                .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
-            return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
-        }, 10000, config + " are not updated");
+        verifyConfig(client, config, configResource);
     }
 
     private void verifyClientMetricsConfig(Admin client, String clientMetricsName, Map<String, String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName);
+        verifyConfig(client, config, configResource);
+    }
+
+    private void verifyBrokerLoggerConfig(Admin client, String brokerId, Map<String, String> config) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, brokerId);
+        verifyConfig(client, config, configResource);
+    }
+
+    private void verifyConfig(Admin client, Map<String, String> config, ConfigResource configResource) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             Map<String, String> current = getConfigEntryStream(client, configResource)
                     .filter(configEntry -> Objects.nonNull(configEntry.value()))
@@ -716,6 +747,20 @@ public class ConfigCommandIntegrationTest {
         deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
         verifyClientMetricsConfig(client, clientMetricsName, defaultConfigs);
+    }
+
+    private void deleteAndVerifyBrokerLoggerConfigValue(Admin client,
+                                                        String brokerId,
+                                                        Map<String, String> defaultConfigs,
+                                                        List<String> alterOpts) throws Exception {
+        List<String> bootstrapOpts = quorumArgs().toList();
+        ConfigCommand.ConfigCommandOptions deleteOpts =
+            new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
+                    alterOpts,
+                    List.of("--delete-config", String.join(",", defaultConfigs.keySet()))));
+        deleteOpts.checkArgs();
+        ConfigCommand.alterConfig(client, deleteOpts);
+        verifyBrokerLoggerConfig(client, brokerId, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,

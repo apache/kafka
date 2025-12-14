@@ -307,14 +307,13 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     try {
-      val closeOptions = CloseOptions.timeout(Duration.ZERO)
       producers.foreach(_.close(Duration.ZERO))
       consumers.foreach(_.wakeup())
-      consumers.foreach(_.close(closeOptions))
+      consumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       shareConsumers.foreach(_.wakeup())
       shareConsumers.foreach(_.close(Duration.ZERO))
       streamsConsumers.foreach(_.wakeup())
-      streamsConsumers.foreach(_.close(closeOptions))
+      streamsConsumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       adminClients.foreach(_.close(Duration.ZERO))
 
       producers.clear()
