@@ -135,6 +135,35 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     new OffsetAndEpoch(localLogStartOffset, epoch.orElse(0))
   }
 
+  override def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
+    val partition = replicaManager.getPartitionOrException(topicPartition)
+    val log = partition.localLogOrException
+
+    if (!log.remoteLogEnabled())
+      return new OffsetAndEpoch(-1L, -1)
+
+    val highestRemoteOffset = log.highestOffsetInRemoteStorage()
+
+    if (highestRemoteOffset == -1L) {
+      val localLogStartOffset = fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch)
+      val logStartOffset = fetchEarliestOffset(topicPartition, currentLeaderEpoch)
+
+      if (localLogStartOffset.offset() == logStartOffset.offset()) {
+        // No segments have been uploaded yet
+        return logStartOffset;
+      } else {
+        // Leader currently does not know about the already uploaded segments
+        return new OffsetAndEpoch(-1L, -1);
+      }
+    }
+
+    val logStartOffset = fetchEarliestOffset(topicPartition, currentLeaderEpoch)
+    val earliestPendingUploadOffset = Math.max(highestRemoteOffset + 1, logStartOffset.offset())
+    val epoch = log.leaderEpochCache.epochForOffset(earliestPendingUploadOffset)
+
+    new OffsetAndEpoch(earliestPendingUploadOffset, epoch.orElse(0))
+  }
+
   override def fetchEpochEndOffsets(partitions: util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): util.Map[TopicPartition, EpochEndOffset] = {
     partitions.asScala.map { case (tp, epochData) =>
       try {
