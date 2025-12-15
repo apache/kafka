@@ -169,7 +169,6 @@ class StandbyTaskCreator {
                                                        final Set<TopicPartition> inputPartitions,
                                                        final ProcessorTopology topology,
                                                        final ProcessorStateManager stateManager) {
-        stateManager.reuseState();
         final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 taskId,
                 applicationConfig,

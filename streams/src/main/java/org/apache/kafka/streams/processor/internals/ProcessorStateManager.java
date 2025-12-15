@@ -49,7 +49,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -191,7 +190,6 @@ public class ProcessorStateManager implements StateManager {
     private TaskType taskType;
     private Logger log;
     private Task.State taskState;
-    private final AtomicBoolean startupState;
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {
@@ -212,8 +210,7 @@ public class ProcessorStateManager implements StateManager {
                                  final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions,
-                                 final boolean stateUpdaterEnabled,
-                                 final boolean startupState) throws ProcessorStateException {
+                                 final boolean stateUpdaterEnabled) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -228,22 +225,6 @@ public class ProcessorStateManager implements StateManager {
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);
-        this.startupState = new AtomicBoolean(startupState);
-    }
-
-    /**
-     * @throws ProcessorStateException if the task directory does not exist and could not be created
-     */
-    public ProcessorStateManager(final TaskId taskId,
-                                 final TaskType taskType,
-                                 final boolean eosEnabled,
-                                 final LogContext logContext,
-                                 final StateDirectory stateDirectory,
-                                 final ChangelogRegister changelogReader,
-                                 final Map<String, String> storeToChangelogTopic,
-                                 final Collection<TopicPartition> sourcePartitions,
-                                 final boolean stateUpdaterEnabled) throws ProcessorStateException {
-        this(taskId, taskType, eosEnabled, logContext, stateDirectory, changelogReader, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled, false);
     }
 
     /**
@@ -258,7 +239,7 @@ public class ProcessorStateManager implements StateManager {
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions,
                                                                final boolean stateUpdaterEnabled) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled, true);
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled);
     }
 
     /**
@@ -279,10 +260,6 @@ public class ProcessorStateManager implements StateManager {
         this.sourcePartitions.addAll(sourcePartitions);
     }
 
-    void reuseState() {
-        startupState.set(false);
-    }
-
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
@@ -291,15 +268,30 @@ public class ProcessorStateManager implements StateManager {
                     maybeRegisterStoreWithChangelogReader(store.name());
                 }
             } else {
-                if (startupState.get()) {
-                    store.preInit(processorContext);
-                    startupStores.put(store.name(), new StateStoreMetadata(store));
-                } else {
-                    store.init(processorContext, store);
-                    startupStores.remove(store.name());
-                }
+                store.init(processorContext, store);
+                startupStores.remove(store.name());
             }
             log.trace("Registered state store {}", store.name());
+        }
+    }
+
+    /**
+     * Registers a list of state stores as startup state stores.
+     * Each state store is initialized and added to the startup store registry. If a state store
+     * with the same name is already registered, an exception is thrown.
+     *
+     * @param allStores         the list of state stores to be registered
+     * @param processorContext  the processor context in which the stores will operate
+     * @throws IllegalStateException if a state store with the same name is already registered
+     */
+    void registerStartupStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
+        for (final StateStore store : allStores) {
+            if (!startupStores.containsKey(store.name())) {
+                store.preInit(processorContext);
+                startupStores.put(store.name(), new StateStoreMetadata(store));
+            } else {
+                throw new IllegalStateException("State store " + store.name() + " is already registered as startup store");
+            }
         }
     }
 

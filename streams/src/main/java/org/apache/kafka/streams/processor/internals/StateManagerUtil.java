@@ -111,6 +111,36 @@ final class StateManagerUtil {
     }
 
     /**
+     * Registers and pre-initialize any existing state store discovered during startup.
+     *
+     * @throws LockException if the state directory cannot be locked for the specified task
+     */
+    static void registerStartupStateStores(final Logger log,
+                                    final String logPrefix,
+                                    final ProcessorTopology topology,
+                                    final ProcessorStateManager stateMgr,
+                                    final StateDirectory stateDirectory,
+                                    final InternalProcessorContext<?, ?> processorContext) {
+        if (topology.stateStores().isEmpty()) {
+            return;
+        }
+
+        final TaskId id = stateMgr.taskId();
+        if (!stateDirectory.lock(id)) {
+            throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
+        }
+        log.debug("Acquired state directory lock");
+
+        final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
+
+        stateMgr.registerStartupStateStores(topology.stateStores(), processorContext);
+        log.debug("Registered startup state stores");
+
+        stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
+        log.debug("pre-initialized state stores");
+    }
+
+    /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
     static void closeStateManager(final Logger log,
