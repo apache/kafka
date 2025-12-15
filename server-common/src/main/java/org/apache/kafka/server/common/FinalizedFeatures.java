@@ -26,6 +26,9 @@ public record FinalizedFeatures(
     Map<String, Short> finalizedFeatures,
     long finalizedFeaturesEpoch
 ) {
+    public static final FinalizedFeatures UNKNOWN_FINALIZED_FEATURES =
+        new FinalizedFeatures(Optional.empty(), Map.of(), -1);
+
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
         return new FinalizedFeatures(Optional.of(version), Map.of(), -1);
     }

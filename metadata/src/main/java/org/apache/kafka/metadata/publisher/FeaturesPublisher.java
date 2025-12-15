@@ -27,15 +27,13 @@ import org.apache.kafka.server.fault.FaultHandler;
 
 import org.slf4j.Logger;
 
-import java.util.Map;
 import java.util.Optional;
 
 
 public class FeaturesPublisher implements MetadataPublisher {
     private final Logger log;
     private final FaultHandler faultHandler;
-    private volatile FinalizedFeatures finalizedFeatures = new FinalizedFeatures(
-        Optional.empty(), Map.of(), -1);
+    private volatile FinalizedFeatures finalizedFeatures = FinalizedFeatures.UNKNOWN_FINALIZED_FEATURES;
 
     public FeaturesPublisher(
         LogContext logContext,
