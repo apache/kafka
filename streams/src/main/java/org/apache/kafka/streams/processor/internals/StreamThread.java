@@ -325,6 +325,12 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Sensor punctuateRatioSensor;
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
+    private final Sensor windowedPollLatencySensor;
+    private final Sensor windowedTotalCommitLatencySensor;
+    private final Sensor windowedTotalProcessLatencySensor;
+    private final Sensor windowedTotalPunctuateLatencySensor;
+    private final Sensor windowedRunOnceLatencySensor;
+
 
     private final long logSummaryIntervalMs; // the count summary log output time interval
     private long lastLogSummaryMs = -1L;
@@ -802,6 +808,11 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
         this.failedStreamThreadSensor = ClientMetrics.failedStreamThreadSensor(streamsMetrics);
+        this.windowedPollLatencySensor = null;
+        this.windowedTotalCommitLatencySensor = null;
+        this.windowedTotalProcessLatencySensor = null;
+        this.windowedTotalPunctuateLatencySensor = null;
+        this.windowedRunOnceLatencySensor = null;
         this.assignmentErrorCode = assignmentErrorCode;
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
