@@ -26,15 +26,17 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Test}
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
+import org.apache.kafka.server.log.remote.storage.RetriableRemoteStorageException
 import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.lang
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
@@ -1739,5 +1741,1008 @@ class AbstractFetcherThreadTest {
     assertEquals(151, replicaState.localLogStartOffset)
     assertEquals(151, replicaState.logEndOffset)
     assertEquals(151, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Leader LogStartOffset = 0, and
+   * All Local Segments Retained
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at offset zero,
+   *   and all local log segments are retained.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Leader LogStartOffset: **0**
+   * - Leader LocalLogStartOffset: **0** (all segments retained locally)
+   * - Replica Start offset Strategy: **TieredOffset**
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 0
+   * - Some segments are uploaded to tiered storage (with earliestPendingUploadOffset = 150)
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower adapts to tiered storage configuration:
+   *    - LogStartOffset remains 0
+   *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
+   *    - LogEndOffset advances to 200 after fetching all records
+   * 2. HighWatermark aligns with the leader (199)
+   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   */
+  @Test
+  @Disabled
+  // KIP extension required for LSO = LLSO
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetZeroAllLocalSegmentsRetained(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 0
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 150
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(150, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 2) fetcher.doWork()
+    assertEquals(2, replicaState.log.size)
+    assertEquals(0, replicaState.logStartOffset)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from the Last Tiered Offset, Leader LogStartOffset = 0,
+   * and All Local Segments Deleted
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at offset zero,
+   *   but local segments below a certain offset have been deleted.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **0**
+   * - Leader LocalLogStartOffset: **100** (segments below offset 100 deleted locally)
+   * - EarliestPendingUploadOffset: **150**
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 100, with local segments below 100 deleted
+   * - Some segments are pending upload to tiered storage (from offset 150)
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower adapts to tiered storage configuration:
+   *    - LogStartOffset initializes to 0 (matching leader's logical start)
+   *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
+   *    - LogEndOffset advances to 200 after fetching all records
+   * 2. HighWatermark aligns with the leader (199)
+   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   * 4. The follower correctly handles the gap between LogStartOffset (0) and LocalLogStartOffset (150)
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetZeroAllLocalSegmentsDeleted(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LocalLogStartOffset = 100
+      mkBatch(baseOffset = 100, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 150
+    )
+    leaderState.logStartOffset = 0
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(150, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 2) fetcher.doWork()
+    assertEquals(2, replicaState.log.size)
+    assertEquals(0, replicaState.logStartOffset)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Leader LogStartOffset Non-Zero,
+   * and All Local Segments Retained
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at a non-zero offset,
+   *   and all local log segments from the start offset are retained.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **10** (non-zero)
+   * - Leader LocalLogStartOffset: **10** (equal to LogStartOffset, all segments retained)
+   * - EarliestPendingUploadOffset: **150**
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 10 (non-zero start)
+   * - Some segments are pending upload to tiered storage (from offset 150)
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower adapts to tiered storage configuration:
+   *    - LogStartOffset initializes to 10 (matching leader's logical start)
+   *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
+   *    - LogEndOffset advances to 200 after fetching all records
+   * 2. HighWatermark aligns with the leader (199)
+   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   * 4. The follower correctly handles the gap between LogStartOffset (10) and LocalLogStartOffset (150)
+   *    when segments in that range exist in tiered storage
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetNonZeroAllLocalSegmentsRetained(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 10
+      mkBatch(baseOffset = 10, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 150
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(150, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 2) fetcher.doWork()
+    assertEquals(2, replicaState.log.size)
+    assertEquals(10, replicaState.logStartOffset)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Leader LogStartOffset Non-Zero,
+   * and All Local Segments Deleted
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at a non-zero offset,
+   *   and local segments between log start offset and a higher offset have been deleted.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **10** (non-zero)
+   * - Leader LocalLogStartOffset: **100** (segments between 10 and 100 deleted locally)
+   * - EarliestPendingUploadOffset: **150**
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 100, with local segments below 100 deleted
+   * - Some segments are pending upload to tiered storage (from offset 150)
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower adapts to tiered storage configuration:
+   *    - LogStartOffset initializes to 10 (matching leader's logical start)
+   *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
+   *    - LogEndOffset advances to 200 after fetching all records
+   * 2. HighWatermark aligns with the leader (199)
+   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   * 4. The follower correctly handles two gaps:
+   *    - Between LogStartOffset (10) and leader's LocalLogStartOffset (100)
+   *    - Between leader's LocalLogStartOffset (100) and EarliestPendingUploadOffset (150)
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetNonZeroAllLocalSegmentsDeleted(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LocalLogStartOffset = 100
+      mkBatch(baseOffset = 100, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 150
+    )
+    leaderState.logStartOffset = 10
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(150, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 2) fetcher.doWork()
+    assertEquals(2, replicaState.log.size)
+    assertEquals(10, replicaState.logStartOffset)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset - All Leader Segments Deleted Locally
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset and all leader's segments
+   *   have been uploaded to tiered storage and deleted locally (complete local emptiness).
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **Parameterized (0 or 10)**
+   * - Leader LocalLogStartOffset: **151** (equals LogEndOffset)
+   * - EarliestPendingUploadOffset: **151** (all segments uploaded)
+   *
+   * Scenario:
+   * - The leader has historical record batches (at offsets 100 and 150)
+   * - All segments have been uploaded to tiered storage and deleted locally
+   * - LocalLogStartOffset equals LogEndOffset (151), indicating empty local storage
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   * - The test is parameterized to run with LogStartOffset values of 0 and 10
+   *
+   * Expected Outcomes:
+   * 1. Follower properly adapts to leader's empty local state:
+   *    - LogStartOffset initializes to match leader's (0 or 10)
+   *    - LocalLogStartOffset and LogEndOffset both set to 151 (matching leader)
+   *    - HighWatermark sets to 151 (matching leader)
+   * 2. No record batches are fetched (log size remains 0)
+   * 3. Follower remains in FETCHING state but doesn't receive any data
+   * 4. Subsequent fetch operations don't change the follower's state
+   * 5. Follower correctly handles the gap between LogStartOffset and LocalLogStartOffset
+   *    when all segments are in tiered storage only
+   */
+  @ParameterizedTest
+  @ValueSource(longs = Array(0, 10))
+  def testEmptyFollowerFetchLastTieredOffsetAllLeaderSegmentsDeletedLocally(offsetToStartLog : Long): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LocalLogStartOffset = 100
+      mkBatch(baseOffset = 100, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 151L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 151
+    )
+    leaderState.logStartOffset = offsetToStartLog
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    // Replica log is truncated and fetch offset updated
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(151, replicaState.localLogStartOffset)
+    assertEquals(151, replicaState.logEndOffset)
+    assertEquals(151, replicaState.highWatermark)
+
+    // Call once again to see if new data is received
+    fetcher.doWork()
+    // No metadata update expected
+    assertEquals(0, replicaState.log.size)
+    assertEquals(offsetToStartLog, replicaState.logStartOffset)
+    assertEquals(151, replicaState.localLogStartOffset)
+    assertEquals(151, replicaState.logEndOffset)
+    assertEquals(151, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with Tiered Storage Disabled, fetch from Last Tiered Offset enabled, and Leader LogStartOffset Zero
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset but tiered storage is disabled,
+   *   and the leader's log starts at offset zero.
+   *
+   * Conditions:
+   * - TieredStorage: **Disabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **0**
+   * - Leader LocalLogStartOffset: **0** (equals LogStartOffset, all segments retained)
+   * - EarliestPendingUploadOffset: **N/A** (tiered storage disabled)
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 0
+   * - Tiered storage is disabled, so all segments are local
+   * - The follower starts with an empty log but enabled with data replication from the last tiered offset
+   * - Even though fetch from last tiered offset is enabled, with tiered storage disabled it should follow like
+   *   standard fetch
+   *
+   * Expected Outcomes:
+   * 1. Follower adapts to non-tiered environment despite fetch from last tiered offset enabled:
+   *    - LogStartOffset initializes to 0 (matching leader's start)
+   *    - LocalLogStartOffset equals LogStartOffset (0)
+   *    - LogEndOffset advances to 200 after fetching all records
+   * 2. HighWatermark aligns with the leader (199)
+   * 3. All segments are fetched sequentially from the beginning:
+   *    - First fetch: 1 record batch, logEndOffset = 1
+   *    - After additional fetches: 3 record batches, logEndOffset = 200
+   * 4. Even with fetch from last tiered offset enabled, follower behavior matches traditional fetch
+   *    pattern when tiered storage is disabled
+   */
+  @Test
+  def testEmptyFollowerFetchTieredStorageDisabledTieredOffsetStrategyLeaderLogStartOffsetZero(): Unit = {
+    val rlmEnabled = false
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 0
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(1, replicaState.log.size)
+    assertEquals(0, replicaState.logStartOffset)
+    assertEquals(0, replicaState.localLogStartOffset)
+    assertEquals(1, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 2) fetcher.doWork()
+    assertEquals(3, replicaState.log.size)
+    assertEquals(0, replicaState.logStartOffset)
+    assertEquals(0, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with Tiered Storage Disabled, fetch from Last Tiered Offset enabled, and Leader LogStartOffset Non-Zero
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset but tiered storage is disabled
+   *   and the leader's log starts at a non-zero offset.
+   *
+   * Conditions:
+   * - TieredStorage: **Disabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **10** (non-zero)
+   * - Leader LocalLogStartOffset: **10** (equals LogStartOffset, all segments retained)
+   * - EarliestPendingUploadOffset: **N/A** (tiered storage disabled)
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 10 (non-zero)
+   * - Tiered storage is disabled, so all segments are local
+   * - The follower starts with an empty log but enabled with data replication from the last tiered offset
+   * - Even though fetch from last tiered offset is enabled, with tiered storage disabled it should follow like
+   *   standard fetch
+   *
+   * Expected Outcomes:
+   * 1. Follower adapts to non-tiered environment despite tiered strategy:
+   *    - LogStartOffset initializes to 10 (matching leader's start)
+   *    - LogEndOffset initially sets to 10, then advances as records are fetched
+   *    - After all fetches, LogEndOffset reaches 200
+   * 2. HighWatermark aligns with the leader (199)
+   * 3. All segments are fetched sequentially from the leader's start offset:
+   *    - First fetch: logEndOffset = 10, but no records fetched yet
+   *    - After additional fetches: 3 record batches, logEndOffset = 200
+   * 4. Even with fetch from last tiered offset enabled, follower behavior matches traditional fetch
+   *    pattern when tiered storage is disabled, properly handling non-zero start offsets
+   */
+  @Test
+  def testEmptyFollowerFetchTieredStorageDisabledTieredOffsetStrategyLeaderLogStartOffsetNonZero(): Unit = {
+    val rlmEnabled = false
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 10
+      mkBatch(baseOffset = 10, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(10, replicaState.logStartOffset)
+    assertEquals(10, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 3) fetcher.doWork()
+    assertEquals(3, replicaState.log.size)
+    assertEquals(10, replicaState.logStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Leader LogStartOffset Non-Zero,
+   * No Segments Uploaded
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *   when the leader's log starts at a non-zero offset but no segments have been uploaded to tiered storage.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **10** (non-zero)
+   * - Leader LocalLogStartOffset: **10** (equals LogStartOffset, all segments retained)
+   * - EarliestPendingUploadOffset: **-1** (no segments uploaded or pending upload)
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 10 (non-zero)
+   * - Tiered storage is enabled, but no segments have been uploaded or are pending upload
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   * - With no segments in tiered storage, follower should replicate from leader's start offset
+   *
+   * Expected Outcomes:
+   * 1. Follower properly initializes with leader's state:
+   *    - LogStartOffset initializes to 10 (matching leader's start)
+   *    - LocalLogStartOffset equals LogStartOffset (10)
+   *    - LogEndOffset initially sets to 10, then advances as records are fetched
+   * 2. HighWatermark initially set to 10, then aligned with leader (199) after fetching
+   * 3. All segments are fetched sequentially from the leader's start offset:
+   *    - First fetch: logEndOffset = 10, but no records fetched yet
+   *    - After additional fetches: 3 record batches, logEndOffset = 200
+   * 4. When tiered storage is enabled but no segments are uploaded, and fetch from tiered offset enabled, it
+   *    correctly falls back to fetching all segments from the logical start offset
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetNonZeroNoSegmentsUploaded(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 10
+      mkBatch(baseOffset = 10, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      // Leader has not uploaded any log segments, hence the offset is -1
+      earliestPendingUploadOffset = -1
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(10, replicaState.localLogStartOffset)
+    assertEquals(10, replicaState.logEndOffset)
+    assertEquals(10, replicaState.highWatermark)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 3) fetcher.doWork()
+    assertEquals(3, replicaState.log.size)
+    assertEquals(10, replicaState.logStartOffset)
+    assertEquals(10, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Leader LogStartOffset Zero,
+   * No Segments Uploaded
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *   when the leader's log starts at offset zero and no segments have been uploaded to tiered storage.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **0**
+   * - Leader LocalLogStartOffset: **0** (equals LogStartOffset, all segments retained)
+   * - EarliestPendingUploadOffset: **-1** (no segments uploaded or pending upload)
+   *
+   * Scenario:
+   * - The leader log contains record batches starting from offset 0
+   * - Tiered storage is enabled, but no segments have been uploaded or are pending upload
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   * - With no segments in tiered storage, follower should replicate from leader's start offset (0)
+   *
+   * Expected Outcomes:
+   * 1. Follower properly initializes with leader's state:
+   *    - LogStartOffset initializes to 0 (matching leader's start)
+   *    - LocalLogStartOffset equals LogStartOffset (0)
+   *    - First fetch returns 1 record batch, setting logEndOffset to 1
+   * 2. HighWatermark immediately aligned with leader (199) after first fetch
+   * 3. All segments are fetched sequentially from the leader's start offset:
+   *    - First fetch: 1 record batch, logEndOffset = 1
+   *    - After additional fetches: 3 record batches, logEndOffset = 200
+   * 4. When tiered storage is enabled but no segments are uploaded, and fetch from tiered offset enabled, it
+   *    correctly falls back to traditional fetch behavior from offset 0
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetZeroNoSegmentsUploaded(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 0
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      // Leader has not uploaded any log segments, hence the offset is -1
+      earliestPendingUploadOffset = -1
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(1, replicaState.log.size)
+    assertEquals(0, replicaState.logStartOffset)
+    assertEquals(0, replicaState.localLogStartOffset)
+    assertEquals(1, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 2) fetcher.doWork()
+    assertEquals(3, replicaState.log.size)
+    assertEquals(0, replicaState.logStartOffset)
+    assertEquals(0, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Leader LogStartOffset Non-Zero,
+   * Segments Uploaded and a newly elected Leader
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *   when the leader is newly elected and has local segments that start after the logical log start offset,
+   *   but doesn't yet have information about tiered segments.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **10** (non-zero)
+   * - Leader LocalLogStartOffset: **100** (greater than LogStartOffset, indicating tiered segments should exist)
+   * - EarliestPendingUploadOffset: **-1** (leader doesn't know about tiered segments yet)
+   *
+   * Scenario:
+   * - The leader's local log contains record batches starting from offset 100
+   * - The leader's logical log starts at offset 10 (implying offsets 10-99 should be in tiered storage)
+   * - However, leader reports earliestPendingUploadOffset as -1, indicating it's not aware of tiered segments
+   * - This represents a newly elected leader that hasn't completed initialization of tiered storage state
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower detects the inconsistent state and responds properly:
+   *    - Remains in FETCHING state but doesn't fetch any records
+   *    - Fetch offset remains at 0 (unchanged)
+   *    - Sets a delay before retry to allow leader to complete initialization
+   * 2. Follower's state remains unchanged:
+   *    - LogEndOffset remains at 0
+   *    - No records are fetched until leader initializes properly
+   * 3. The fetch will be retried after some delay, allowing leader time to initialize
+   * 4. This graceful handling prevents replication issues during leader transition
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetNonZeroSegmentsUploadedNewlyElectedLeader(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LocalLogStartOffset = 100
+      mkBatch(baseOffset = 100, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      // Leader has not uploaded any log segments, hence the offset is -1
+      earliestPendingUploadOffset = -1
+    )
+    leaderState.logStartOffset = 10
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+
+    fetcher.doWork()
+    val fetchStateOpt = fetcher.fetchState(partition)
+    assertTrue(fetchStateOpt.nonEmpty)
+    assertEquals(ReplicaState.FETCHING, fetchStateOpt.get.state)
+    // Fetch offset remains unchanged
+    assertEquals(0, fetchStateOpt.get.fetchOffset)
+    // Lag remains unchanged
+    assertTrue(fetchStateOpt.get.lag.isEmpty)
+    assertEquals(0, fetchStateOpt.get.currentLeaderEpoch)
+    // Fetch will be retried after some delay
+    assertTrue(fetchStateOpt.get.delay.isPresent)
+    assertEquals(Optional.of(0), fetchStateOpt.get.lastFetchedEpoch)
+
+    // LogEndOffset is unchanged
+    assertEquals(0, replicaState.logEndOffset)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Leader LogStartOffset Non-Zero,
+   * Slow Local Segment Deletion
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *   when the leader's logical log start offset is higher than its local log start offset due to
+   *   a lag in local segment deletion after tiering.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **110** (non-zero)
+   * - Leader LocalLogStartOffset: **100** (less than LogStartOffset, indicating slow local segment deletion)
+   * - EarliestPendingUploadOffset: **150** (segments up to this offset are already tiered)
+   *
+   * Scenario:
+   * - The leader's local log contains record batches starting from offset 100
+   * - The leader's logical log starts at offset 110 (implying offsets 100-109 are deleted logically but not physically)
+   * - Segments up to offset 150 have been uploaded to tiered storage
+   * - This represents a leader where segment deletion is lagging behind the logical truncation point
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower initializes based on tiered offsets:
+   *    - LocalLogStartOffset initializes to 150 (earliestPendingUploadOffset)
+   *    - LogEndOffset initially set to 150 as well
+   *    - No records fetched in first call
+   * 2. After additional fetch operations:
+   *    - LogStartOffset is properly set to 110 (matching leader's logical start)
+   *    - LocalLogStartOffset remains at 150 (based on tiered storage boundary)
+   *    - LogEndOffset advances to 200 after fetching all records
+   * 3. Follower correctly fetches only the non-tiered segments (150-199)
+   * 4. Follower properly ignores leader's locally retained but logically deleted segments (100-109)
+   * 5. HighWatermark aligns with leader (199)
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetNonZeroSlowLocalSegmentDeletion(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LocalLogStartOffset = 100
+      mkBatch(baseOffset = 100, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 150
+    )
+    // LogStartOffset > LocalLogStartOffset
+    leaderState.logStartOffset = 110
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(150, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 2) fetcher.doWork()
+    assertEquals(2, replicaState.log.size)
+    assertEquals(110, replicaState.logStartOffset)
+    assertEquals(150, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Earliest Offset To Upload Less
+   * Than Leader LogStartOffset
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *   when the leader's earliest pending upload offset is less than its log start offset
+   *   (a scenario that can occur after log truncation).
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **100** (non-zero)
+   * - Leader LocalLogStartOffset: **100** (equals LogStartOffset)
+   * - EarliestPendingUploadOffset: **50** (less than LogStartOffset, indicating truncation)
+   *
+   * Scenario:
+   * - The leader's local log contains record batches starting from offset 100
+   * - The leader reports earliestPendingUploadOffset as 50, which is less than its LogStartOffset of 100
+   * - This represents a case where segments that were pending upload were truncated
+   *   or where offsets were adjusted after a leader change
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower initialization prioritizes leader's log start offset:
+   *    - LocalLogStartOffset initializes to 100 (leader's LogStartOffset)
+   *    - LogEndOffset initially set to 100 as well
+   *    - No records fetched in first call
+   * 2. After additional fetch operations:
+   *    - LogStartOffset remains at 100 (matching leader's logical start)
+   *    - LocalLogStartOffset remains at 100
+   *    - LogEndOffset advances to 200 after fetching all records
+   * 3. Follower correctly ignores the anomalous earliestPendingUploadOffset (50)
+   *    and uses the leader's LogStartOffset (100) as the fetch starting point
+   * 4. All 3 record batches are fetched from the leader (100, 150, 199)
+   * 5. HighWatermark aligns with leader (199)
+   */
+  @Test
+  def testEmptyFollowerFetchLastTieredOffsetEarliestOffsetToUploadLessThanLeaderLogStartOffset(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 100
+      mkBatch(baseOffset = 100, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 50
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    assertEquals(Option(ReplicaState.FETCHING), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.log.size)
+    assertEquals(100, replicaState.localLogStartOffset)
+    assertEquals(100, replicaState.logEndOffset)
+
+    // Only 1 record batch is returned after a poll so calling 'n' number of times to get the desired result.
+    for (_ <- 1 to 3) fetcher.doWork()
+    assertEquals(3, replicaState.log.size)
+    assertEquals(100, replicaState.logStartOffset)
+    assertEquals(100, replicaState.localLogStartOffset)
+    assertEquals(200, replicaState.logEndOffset)
+    assertEquals(199, replicaState.highWatermark)
+  }
+
+  /**
+   * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Retryable Remote Storage Exception
+   *
+   * Purpose:
+   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *   when there's a temporary failure accessing the remote tiered storage.
+   *
+   * Conditions:
+   * - TieredStorage: **Enabled**
+   * - Replica Start offset Strategy: **TieredOffset**
+   * - Leader LogStartOffset: **0**
+   * - Leader LocalLogStartOffset: **0** (equals LogStartOffset)
+   * - EarliestPendingUploadOffset: **150**
+   * - Remote Storage: **Temporarily unavailable** (throws RetriableRemoteStorageException)
+   *
+   * Scenario:
+   * - The leader's local log contains record batches starting from offset 0
+   * - The leader reports earliestPendingUploadOffset as 150, indicating tiered storage is being used
+   * - When attempting to build the remote log state, a RetriableRemoteStorageException is thrown
+   * - This represents a temporary failure in accessing the remote storage service
+   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *
+   * Expected Outcomes:
+   * 1. Follower correctly handles the temporary remote storage failure:
+   *    - The partition is NOT marked as failed (since the error is retryable)
+   *    - Remains in FETCHING state
+   *    - Fetch offset remains unchanged at 0
+   * 2. Follower schedules a retry:
+   *    - Sets a delay before the next fetch attempt
+   *    - Preserves the fetchOffset and other state for retry
+   * 3. Follower's log state remains unchanged during the error:
+   *    - LogEndOffset remains at 0
+   *    - No records are fetched until remote storage is accessible
+   * 4. The leader epoch tracking is maintained (lastFetchedEpoch = 0)
+   */
+  @Test
+  @Disabled
+  // KIP extension required for LSO = LLSO
+  def testEmptyFollowerFetchLastTieredOffsetRetryableRemoteStorageException(): Unit = {
+    val rlmEnabled = true
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
+      override def buildRemoteLogAuxState(topicPartition: TopicPartition,
+                                          currentLeaderEpoch: Integer,
+                                          leaderLocalLogStartOffset: lang.Long,
+                                          epochForLeaderLocalLogStartOffset: Integer,
+                                          leaderLogStartOffset: lang.Long,
+                                          unifiedLog: UnifiedLog): lang.Long = {
+        throw new RetriableRemoteStorageException("Retryable exception")
+      }
+    }
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, fetchFromLastTieredOffset = true)
+
+    val replicaState = emptyReplicaState(rlmEnabled, partition, fetcher)
+
+    val leaderLog = Seq(
+      // LogStartOffset = LocalLogStartOffset = 0
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 150, leaderEpoch = 0, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 199, leaderEpoch = 0, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(
+      leaderLog,
+      leaderEpoch = 0,
+      highWatermark = 199L,
+      rlmEnabled = rlmEnabled,
+      earliestPendingUploadOffset = 150
+    )
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    fetcher.doWork()
+    // Should not be marked as failed
+    assertFalse(failedPartitions.contains(partition))
+
+    val fetchStateOpt = fetcher.fetchState(partition)
+    assertTrue(fetchStateOpt.nonEmpty)
+    assertEquals(ReplicaState.FETCHING, fetchStateOpt.get.state)
+    // Fetch offset remains unchanged
+    assertEquals(0, fetchStateOpt.get.fetchOffset)
+    // Lag remains unchanged
+    assertTrue(fetchStateOpt.get.lag.isEmpty)
+    assertEquals(0, fetchStateOpt.get.currentLeaderEpoch)
+    // Fetch will be retried after some delay
+    assertTrue(fetchStateOpt.get.delay.isPresent)
+    assertEquals(Optional.of(0), fetchStateOpt.get.lastFetchedEpoch)
+
+    // LogEndOffset is unchanged
+    assertEquals(0, replicaState.logEndOffset)
   }
 }
