@@ -3633,6 +3633,71 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    public void testCopyLagMetricsWithOnlyActiveSegment() {
+        LogSegment activeSegment = mock(LogSegment.class);
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.activeSegment()).thenReturn(activeSegment);
+        when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(100L);
+        when(activeSegment.size()).thenReturn(100);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(1L);
+
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        RemoteLogManager.RLMCopyTask rlmTask = (RemoteLogManager.RLMCopyTask) remoteLogManager.rlmCopyTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+
+        rlmTask.recordLagStats(mockLog);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+    }
+
+    @Test
+    public void testCopyLagMetricsWithMultipleSegments() {
+        LogSegment activeSegment = mock(LogSegment.class);
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.activeSegment()).thenReturn(activeSegment);
+        when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(300L);
+        when(activeSegment.size()).thenReturn(100);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(3L);
+
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        RemoteLogManager.RLMCopyTask rlmTask = (RemoteLogManager.RLMCopyTask) remoteLogManager.rlmCopyTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+
+        rlmTask.recordLagStats(mockLog);
+        assertEquals(200, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(2, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+    }
+
+    @Test
+    public void testCopyLagMetricsAfterLeaderChangeWithHigherRemoteOffset() {
+        // Edge case after leader change: active segment base offset is less than highestOffsetInRemoteStorage
+        // This can happen when a new leader takes over and remote storage has data uploaded by the previous leader
+        // onlyLocalLogSegmentsSize returns 0 because active segment doesn't pass the filter (baseOffset < highestOffsetInRemoteStorage)
+        // Without Math.max this would be negative
+        LogSegment activeSegment = mock(LogSegment.class);
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.activeSegment()).thenReturn(activeSegment);
+        when(mockLog.highestOffsetInRemoteStorage()).thenReturn(125L);
+        when(activeSegment.baseOffset()).thenReturn(100L);
+        when(mockLog.logEndOffset()).thenReturn(150L);
+        when(mockLog.lastStableOffset()).thenReturn(150L);
+        when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(0L);
+        when(activeSegment.size()).thenReturn(100);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(0L);
+
+        remoteLogManager.onLeadershipChange(
+                Set.of(mockPartition(leaderTopicIdPartition)), Set.of(), topicIds);
+        RemoteLogManager.RLMCopyTask rlmTask = (RemoteLogManager.RLMCopyTask) remoteLogManager.rlmCopyTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+
+        rlmTask.recordLagStats(mockLog);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+    }
+
+    @Test
     public void testRemoteReadFetchDataInfo() throws RemoteStorageException, IOException {
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);

@@ -985,9 +985,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             segmentIdsBeingCopied.add(segmentId);
                             try {
                                 copyLogSegment(log, candidateLogSegment.logSegment, segmentId, candidateLogSegment.nextSegmentOffset);
-                            } catch (Exception e) {
-                                recordLagStats(log);
-                                throw e;
                             } finally {
                                 segmentIdsBeingCopied.remove(segmentId);
                             }
@@ -1009,6 +1006,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                     logger.error("Error occurred while copying log segments of partition: {}", topicIdPartition, ex);
                 }
+            } finally {
+                recordLagStats(log);
             }
         }
 
@@ -1093,14 +1092,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}",
                     logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
-
-            recordLagStats(log);
-        }
-
-        private void recordLagStats(UnifiedLog log) {
-            long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
-            long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
-            recordLagStats(bytesLag, segmentsLag);
         }
 
         // VisibleForTesting
@@ -1118,6 +1109,17 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             int partition = topicIdPartition.partition();
             brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, 0);
             brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, 0);
+        }
+
+        // VisibleForTesting
+        void recordLagStats(UnifiedLog log) {
+            try {
+                long bytesLag = Math.max(0, log.onlyLocalLogSegmentsSize() - log.activeSegment().size());
+                long segmentsLag = Math.max(0, log.onlyLocalLogSegmentsCount() - 1);
+                recordLagStats(bytesLag, segmentsLag);
+            } catch (Exception e) {
+                logger.debug("Failed to record lag stats for partition {}", topicIdPartition, e);
+            }
         }
 
         private Path toPathIfExists(File file) {
