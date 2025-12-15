@@ -50,7 +50,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -109,7 +108,6 @@ public class WorkerGroupMember {
             String metricGrpPrefix = "connect";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-                time,
                 config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
                 CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS);
@@ -131,7 +129,7 @@ public class WorkerGroupMember {
                     logContext,
                     config.getLong(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG),
                     MetadataRecoveryStrategy.forName(config.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
-                    Optional.of(bootstrapConfiguration)
+                    bootstrapConfiguration
             );
             this.client = new ConsumerNetworkClient(
                     logContext,

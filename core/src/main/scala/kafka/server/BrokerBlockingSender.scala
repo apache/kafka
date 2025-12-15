@@ -28,7 +28,6 @@ import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.server.network.BrokerEndPoint
 
-import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
@@ -80,6 +79,12 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       channelBuilder,
       logContext
     )
+
+    val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+      brokerConfig.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+      ClientDnsLookup.forConfig(brokerConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+      CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+    )
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
@@ -97,7 +102,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       new ApiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      Optional.empty
+      bootstrapConfiguration
     )
     (networkClient, reconfigurableChannelBuilder)
   }

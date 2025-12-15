@@ -17,6 +17,8 @@
 package kafka.server;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
@@ -32,7 +34,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Map;
-import java.util.Optional;
 
 public class NetworkUtils {
 
@@ -70,6 +71,11 @@ public class NetworkUtils {
         );
 
         String clientId = prefix + "-client-" + config.nodeId();
+        NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+            config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+            ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+        );
         return new NetworkClient(
             selector,
             new ManualMetadataUpdater(),
@@ -87,7 +93,7 @@ public class NetworkUtils {
             new ApiVersions(),
             logContext,
             MetadataRecoveryStrategy.NONE,
-            Optional.empty()
+            bootstrapConfiguration
         );
     }
 }

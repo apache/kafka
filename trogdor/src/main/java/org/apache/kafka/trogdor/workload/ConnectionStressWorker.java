@@ -18,7 +18,9 @@
 package org.apache.kafka.trogdor.workload;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
@@ -52,7 +54,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -165,6 +166,11 @@ public class ConnectionStressWorker implements TaskWorker {
                 try (Metrics metrics = new Metrics()) {
                     try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                         metrics, Time.SYSTEM, "", channelBuilder, logContext)) {
+                        NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+                            conf.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                            ClientDnsLookup.forConfig(conf.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+                        );
                         try (NetworkClient client = new NetworkClient(selector,
                             updater,
                             "ConnectionStressWorker",
@@ -181,7 +187,7 @@ public class ConnectionStressWorker implements TaskWorker {
                             new ApiVersions(),
                             logContext,
                             MetadataRecoveryStrategy.NONE,
-                            Optional.empty())) {
+                            bootstrapConfiguration)) {
                             NetworkClientUtils.awaitReady(client, targetNode, Time.SYSTEM, 500);
                         }
                     }

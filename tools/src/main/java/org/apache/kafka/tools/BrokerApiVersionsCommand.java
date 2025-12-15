@@ -57,7 +57,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -183,6 +182,11 @@ public class BrokerApiVersionsCommand {
                     "admin",
                     ClientUtils.createChannelBuilder(config, time, logContext),
                     logContext);
+            NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+                ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+            );
             NetworkClient networkClient = new NetworkClient(
                     selector,
                     metadata,
@@ -200,7 +204,7 @@ public class BrokerApiVersionsCommand {
                     new ApiVersions(),
                     logContext,
                     MetadataRecoveryStrategy.NONE,
-                    Optional.empty());
+                    bootstrapConfiguration);
             ConsumerNetworkClient highLevelClient = new ConsumerNetworkClient(
                     logContext,
                     networkClient,

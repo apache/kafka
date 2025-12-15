@@ -665,7 +665,7 @@ public class ReplicaVerificationTool {
                 metrics,
                 time,
                 "replica-fetcher",
-                new HashMap<String, String>() {{
+                new HashMap<>() {{
                         put("broker-id", sourceNode.idString());
                         put("fetcher-id", String.valueOf(fetcherId));
                     }},
@@ -674,7 +674,6 @@ public class ReplicaVerificationTool {
                 logContext
             );
             NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-                time,
                 consumerConfig.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 ClientDnsLookup.forConfig(consumerConfig.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
                 consumerConfig.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG));
@@ -695,7 +694,7 @@ public class ReplicaVerificationTool {
                 new ApiVersions(),
                 logContext,
                 MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG)),
-                Optional.of(bootstrapConfiguration)
+                bootstrapConfiguration
             );
         }
 

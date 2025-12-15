@@ -38,7 +38,6 @@ import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
-import java.util.Optional
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.javaapi.OptionConverters
@@ -83,6 +82,11 @@ object TransactionMarkerChannelManager {
       channelBuilder,
       logContext
     )
+    val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
+      config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
+      ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+      CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
+    )
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
@@ -100,7 +104,7 @@ object TransactionMarkerChannelManager {
       new ApiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      Optional.empty
+      bootstrapConfiguration
     )
 
     new TransactionMarkerChannelManager(config,

@@ -140,6 +140,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -197,6 +198,7 @@ public class FetcherTest {
     private MemoryRecords emptyRecords;
     private MemoryRecords partialRecords;
     private ExecutorService executorService;
+    private NetworkClient.BootstrapConfiguration mockBootstrapConfig;
 
     @BeforeEach
     public void setup() {
@@ -206,6 +208,7 @@ public class FetcherTest {
         emptyRecords = buildRecords(0L, 0, 0);
         partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
+        mockBootstrapConfig = mock(NetworkClient.BootstrapConfiguration.class);
     }
 
     private void assignFromUser(Set<TopicPartition> partitions) {
@@ -1893,7 +1896,7 @@ public class FetcherTest {
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
                 time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
-                MetadataRecoveryStrategy.NONE, Optional.empty());
+                MetadataRecoveryStrategy.NONE, mockBootstrapConfig);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
             400, ApiMessageType.ListenerType.BROKER);
