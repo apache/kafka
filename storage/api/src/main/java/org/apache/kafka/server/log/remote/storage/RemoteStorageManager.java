@@ -90,11 +90,11 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @param logSegmentData           data to be copied to tiered storage.
      * @return custom metadata to be added to the segment metadata after copying.
-     * @throws RemoteStorageException if there are any errors in storing the data of the segment.
+     * @throws RemoteStorageException          if there are any errors in storing the data of the segment.
+     * @throws RetriableRemoteStorageException if the error is transient and the operation can be retried.
      */
     Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                                LogSegmentData logSegmentData)
-            throws RemoteStorageException;
+                                                LogSegmentData logSegmentData) throws RemoteStorageException;
 
     /**
      * Returns the remote log segment data file/object as InputStream for the given {@link RemoteLogSegmentMetadata}
@@ -150,6 +150,7 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      *
      * @param remoteLogSegmentMetadata metadata about the remote log segment to be deleted.
      * @throws RemoteStorageException          if there are any storage related errors occurred.
+     * @throws RetriableRemoteStorageException if the error is transient and the operation can be retried.
      */
     void deleteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 }
