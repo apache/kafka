@@ -191,8 +191,6 @@ public class TaskManagerTest {
     private StandbyTaskCreator standbyTaskCreator;
     @Mock
     private Admin adminClient;
-    @Mock
-    private ProcessorStateManager stateManager;
     final StateUpdater stateUpdater = mock(StateUpdater.class);
     final DefaultTaskManager schedulingTaskManager = mock(DefaultTaskManager.class);
 
