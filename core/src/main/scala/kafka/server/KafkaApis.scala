@@ -1014,7 +1014,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val futures = new mutable.ArrayBuffer[CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]](groups.size)
     groups.forEach { groupOffsetFetch =>
-      val isAllPartitions = groupOffsetFetch.topics == null
+      val isAllPartitions = OffsetFetchRequest.requestAllOffsets(groupOffsetFetch)
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupOffsetFetch.groupId)) {
         futures += CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
           groupOffsetFetch,
@@ -1050,7 +1050,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
     val useTopicIds = OffsetFetchRequest.useTopicIds(requestContext.apiVersion)
 
-    groupCoordinator.fetchAllOffsets(
+    groupCoordinator.fetchOffsets(
       requestContext,
       groupFetchRequest,
       requireStable
@@ -1708,6 +1708,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
     val errors = new ConcurrentHashMap[java.lang.Long, util.Map[TopicPartition, Errors]]()
+    // List of transaction marker entries, each containing producer metadata, transaction result (commit/abort),
+    // target partitions, and transaction version.
     val markers = writeTxnMarkersRequest.markers
     val numAppends = new AtomicInteger(markers.size)
 
@@ -1780,6 +1782,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         val controlRecords = mutable.Map.empty[TopicIdPartition, MemoryRecords]
+        val markerTransactionVersion = marker.transactionVersion
+
         partitionsWithCompatibleMessageFormat.foreach { partition =>
           if (partition.topic == GROUP_METADATA_TOPIC_NAME) {
             groupCoordinator.completeTransaction(
@@ -1788,6 +1792,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               marker.producerEpoch,
               marker.coordinatorEpoch,
               marker.transactionResult,
+              markerTransactionVersion,
               Duration.ofMillis(config.requestTimeoutMs.toLong)
             ).whenComplete { (_, exception) =>
               val error = if (exception == null) {
@@ -1828,7 +1833,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               errors.forEach { (topicIdPartition, partitionResponse) =>
                 addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
               }
-            }
+            },
+            transactionVersion = markerTransactionVersion
           )
         }
       }
@@ -3364,7 +3370,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session for client id ${request.header.clientId} succeeded, response: $releaseAcquiredRecordsData")
                 }
               )
           }
@@ -3588,7 +3594,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session for client id ${request.header.clientId} succeeded, response: $releaseAcquiredRecordsData")
                 }
               }
           }
@@ -4014,6 +4020,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   // the callback for processing a share acknowledge response, invoked before throttling
   def processShareAcknowledgeResponse(responseAcknowledgeData: Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData],
                                       request: RequestChannel.Request): ShareAcknowledgeResponse = {
+    val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
+    val groupId = shareAcknowledgeRequest.data.groupId
+
     val partitions = new util.LinkedHashMap[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]
     val nodeEndpoints = new mutable.HashMap[Int, Node]
     responseAcknowledgeData.foreach{ case(tp, partitionData) =>
@@ -4035,7 +4044,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       Errors.NONE,
       0,
       partitions,
-      nodeEndpoints.values.toList.asJava
+      nodeEndpoints.values.toList.asJava,
+      ShareFetchUtils.recordLockDurationMsOrDefault(groupConfigManager, groupId, config.shareGroupConfig.shareGroupRecordLockDurationMs)
     )
   }
 

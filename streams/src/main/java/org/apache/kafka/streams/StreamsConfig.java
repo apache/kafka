@@ -574,7 +574,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
 
     private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
-            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.";
+            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.\n" +
+            "Note: This configuration applies only to regular stream processing tasks. It does not apply to global state store updates (global threads).";
 
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
@@ -652,7 +653,9 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG = "processing.exception.handler";
     @Deprecated
-    public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface.";
+    public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface. " +
+            "Note: This handler applies only to regular stream processing tasks. It does not apply to global state store updates (global threads). " +
+            "Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.";
 
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
@@ -1306,13 +1309,6 @@ public class StreamsConfig extends AbstractConfig {
         // Private API used to control the prefix of the auto created topics
         public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
 
-        // Private API to enable the state updater (i.e. state updating on a dedicated thread)
-        public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
-
-        public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
-            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
-        }
-
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
@@ -1500,8 +1496,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private void verifyStreamsProtocolCompatibility(final boolean doLog) {
         if (doLog && isStreamsProtocolEnabled()) {
-            log.warn("The streams rebalance protocol is still in development and should not be used in production. "
-                + "Please set group.protocol=classic (default) in all production use cases.");
             final Map<String, Object> mainConsumerConfigs = getMainConsumerConfigs("dummy", "dummy", -1);
             final String instanceId = (String) mainConsumerConfigs.get(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
             if (instanceId != null && !instanceId.isEmpty()) {

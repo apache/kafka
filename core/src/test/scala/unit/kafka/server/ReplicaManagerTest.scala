@@ -25,12 +25,11 @@ import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_S
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.epoch.util.MockBlockingSender
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.{DelayedShareFetch, SharePartition}
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
-import org.apache.kafka.clients.consumer.ShareAcquireMode
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -55,10 +54,11 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image._
+import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition}
+import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
@@ -715,7 +715,7 @@ class ReplicaManagerTest {
       val abortTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
       val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, abortTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0),
-        abortRecordBatch, origin = AppendOrigin.COORDINATOR).onFire { response =>
+        abortRecordBatch, origin = AppendOrigin.COORDINATOR, transactionVersion = TransactionVersion.TV_0.featureLevel()).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }
       assertLateTransactionCount(Some(0))
@@ -800,7 +800,7 @@ class ReplicaManagerTest {
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
       val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0), commitRecordBatch,
-        origin = AppendOrigin.COORDINATOR)
+        origin = AppendOrigin.COORDINATOR, transactionVersion = TransactionVersion.TV_0.featureLevel())
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 
       // the LSO has advanced, but the appended commit marker has not been replicated, so
@@ -875,7 +875,7 @@ class ReplicaManagerTest {
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.ABORT, 0)
       val abortRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
       appendRecords(replicaManager, new TopicPartition(topic, 0), abortRecordBatch,
-        origin = AppendOrigin.COORDINATOR)
+        origin = AppendOrigin.COORDINATOR, transactionVersion = TransactionVersion.TV_0.featureLevel())
         .onFire { response => assertEquals(Errors.NONE, response.error) }
 
       // fetch as follower to advance the high watermark
@@ -2700,7 +2700,8 @@ class ReplicaManagerTest {
                             partition: TopicPartition,
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
-                            requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
+                            requiredAcks: Short = -1,
+                            transactionVersion: Short = TransactionVersion.TV_UNKNOWN): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     val topicIdPartition = new TopicIdPartition(topicId, partition)
     def appendCallback(responses: util.Map[TopicIdPartition, PartitionResponse]): Unit = {
@@ -2716,6 +2717,7 @@ class ReplicaManagerTest {
       origin = origin,
       entriesPerPartition = Map(new TopicIdPartition(topicId, partition) -> records),
       responseCallback = appendCallback,
+      transactionVersion = transactionVersion
     )
 
     result

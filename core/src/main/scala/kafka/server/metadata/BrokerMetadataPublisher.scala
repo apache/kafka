@@ -26,13 +26,13 @@ import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.coordinator.common.runtime.{KRaftCoordinatorMetadataDelta, KRaftCoordinatorMetadataImage}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
+import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, ScramPublisher}
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
 import org.apache.kafka.server.common.{FinalizedFeatures, RequestLocal, ShareVersion}
@@ -234,7 +234,7 @@ class BrokerMetadataPublisher(
 
       try {
         // Propagate the new image to the group coordinator.
-        groupCoordinator.onNewMetadataImage(new KRaftCoordinatorMetadataImage(newImage), new KRaftCoordinatorMetadataDelta(delta))
+        groupCoordinator.onMetadataUpdate(delta, newImage)
       } catch {
         case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
           s"coordinator with local changes in $deltaName", t)
@@ -242,7 +242,7 @@ class BrokerMetadataPublisher(
 
       try {
         // Propagate the new image to the share coordinator.
-        shareCoordinator.onNewMetadataImage(new KRaftCoordinatorMetadataImage(newImage), newImage.features(), new KRaftCoordinatorMetadataDelta(delta))
+        shareCoordinator.onMetadataUpdate(delta, newImage)
       } catch {
         case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
           s"coordinator with local changes in $deltaName", t)

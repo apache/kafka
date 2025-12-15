@@ -29,7 +29,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{AlterPartitionResponse, FetchRequest, ListOffsetsRequest, RequestHeader}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
-import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
+import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.replica.Replica
 import org.junit.jupiter.api.Assertions._
@@ -43,7 +43,6 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Semaphore}
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.compress.Compression

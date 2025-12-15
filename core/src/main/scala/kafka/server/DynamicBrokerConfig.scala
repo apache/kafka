@@ -37,12 +37,14 @@ import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{BufferSupplier, ConfigUtils, Utils}
 import org.apache.kafka.config
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.{DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{DynamicProducerStateManagerConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
@@ -99,7 +101,10 @@ object DynamicBrokerConfig {
     SocketServer.ReconfigurableConfigs ++
     DynamicProducerStateManagerConfig ++
     DynamicRemoteLogConfig.ReconfigurableConfigs ++
-    Set(AbstractConfig.CONFIG_PROVIDERS_CONFIG)
+    DynamicReplicationConfig.ReconfigurableConfigs ++
+    Set(AbstractConfig.CONFIG_PROVIDERS_CONFIG) ++
+    GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.asScala ++
+    ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS.asScala
 
   private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
@@ -307,6 +312,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
+    addBrokerReconfigurable(new DynamicReplicationConfig(kafkaServer))
   }
 
   /**
@@ -1128,5 +1134,25 @@ object DynamicRemoteLogConfig {
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP
+  )
+}
+
+class DynamicReplicationConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
+  override def reconfigurableConfigs: Set[String] = {
+    DynamicReplicationConfig.ReconfigurableConfigs
+  }
+
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
+  }
+
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
+  }
+}
+
+object DynamicReplicationConfig {
+  val ReconfigurableConfigs = Set(
+    ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG
   )
 }

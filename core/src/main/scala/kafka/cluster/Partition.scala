@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, PartitionRegistration}
-import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
@@ -1215,8 +1215,14 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            requestLocal: RequestLocal, verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
+  def appendRecordsToLeader(
+    records: MemoryRecords,
+    origin: AppendOrigin,
+    requiredAcks: Int,
+    requestLocal: RequestLocal,
+    verificationGuard: VerificationGuard = VerificationGuard.SENTINEL,
+    transactionVersion: Short = TransactionVersion.TV_UNKNOWN
+  ): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
@@ -1230,7 +1236,7 @@ class Partition(val topicPartition: TopicPartition,
               s"live replica(s) broker.id are : $inSyncReplicaIds")
           }
 
-          val info = leaderLog.appendAsLeader(records, this.leaderEpoch, origin, requestLocal, verificationGuard)
+          val info = leaderLog.appendAsLeader(records, this.leaderEpoch, origin, requestLocal, verificationGuard, transactionVersion)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))

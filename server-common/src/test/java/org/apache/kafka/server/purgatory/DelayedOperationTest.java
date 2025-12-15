@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -63,26 +62,7 @@ public class DelayedOperationTest {
             executorService.shutdown();
     }
 
-    private static class MockKey implements DelayedOperationKey {
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            MockKey mockKey = (MockKey) o;
-            return Objects.equals(key, mockKey.key);
-        }
-
-        @Override
-        public int hashCode() {
-            return key != null ? key.hashCode() : 0;
-        }
-
-        final String key;
-
-        MockKey(String key) {
-            this.key = key;
-        }
-
+    private record MockKey(String key) implements DelayedOperationKey {
         @Override
         public String keyLabel() {
             return key;

@@ -22,7 +22,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ListGroupsOptions, NewTopic}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.consumer.internals.{StreamsRebalanceData, StreamsRebalanceListener}
+import org.apache.kafka.clients.consumer.internals.{ShareAcquireMode, StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -3123,8 +3123,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
     addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
 
-    val response = sendAndReceiveFirstRegexHeartbeat(Uuid.randomUuid.toString, listenerName)
-    sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    var response = sendAndReceiveFirstRegexHeartbeat(Uuid.randomUuid.toString, listenerName)
+    TestUtils.tryUntilNoAssertionError() {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    }
   }
 
   @Test
@@ -3845,6 +3847,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val response = sendRequestAndVerifyResponseError(request, resource, isAuthorized = true).asInstanceOf[StreamsGroupHeartbeatResponse]
     assertEquals(
       util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
+        new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
         .setStatusDetail("Internal topics are missing: [topic]; Unauthorized to CREATE on topics topic.")),
     response.data().status())
@@ -3876,6 +3881,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // Request successful, and no internal topic creation error.
     assertEquals(
       util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
+        new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
         .setStatusDetail("Internal topics are missing: [topic]")),
       response.data().status())

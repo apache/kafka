@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorTimer;
 import org.apache.kafka.coordinator.group.CommitPartitionValidator;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -823,6 +824,21 @@ public class StreamsGroup implements Group {
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(groupId()));
     }
 
+    /**
+     * Generate an initial rebalance key for the timer.
+     *
+     * @param groupId The group id.
+     * @return The initial rebalance key.
+     */
+    public static String initialRebalanceTimeoutKey(String groupId) {
+        return "initial-rebalance-timeout-" + groupId;
+    }
+
+    @Override
+    public void cancelTimers(CoordinatorTimer<Void, CoordinatorRecord> timer) {
+        timer.cancel(initialRebalanceTimeoutKey(groupId));
+    }
+
     @Override
     public boolean isEmpty() {
         return state() == StreamsGroupState.EMPTY;
@@ -931,7 +947,7 @@ public class StreamsGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param expectedProcessId The expected process ID.
-     * @throws IllegalStateException if the process ID does not match the expected one. package-private for testing.
+     * package-private for testing.
      */
     private void removeTaskProcessIds(
         Map<String, Map<Integer, Integer>> assignment,
@@ -942,11 +958,12 @@ public class StreamsGroup implements Group {
             currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.keySet().forEach(partitionId -> {
-                        String prevValue = partitionsOrNull.remove(partitionId);
-                        if (!Objects.equals(prevValue, expectedProcessId)) {
-                            throw new IllegalStateException(
-                                String.format("Cannot remove the process ID %s from task %s_%s because the partition is " +
-                                    "still owned at a different process ID %s", expectedProcessId, subtopologyId, partitionId, prevValue));
+                        String prevValue = partitionsOrNull.get(partitionId);
+                        if (Objects.equals(prevValue, expectedProcessId)) {
+                            partitionsOrNull.remove(partitionId);
+                        } else {
+                            log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the partition is " +
+                                    "still owned at a different process ID {}", groupId, expectedProcessId, subtopologyId, partitionId, prevValue);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -955,9 +972,9 @@ public class StreamsGroup implements Group {
                         return partitionsOrNull;
                     }
                 } else {
-                    throw new IllegalStateException(
-                        String.format("Cannot remove the process ID %s from %s because it does not have any processId",
-                            expectedProcessId, subtopologyId));
+                    log.debug("[GroupId {}] Cannot remove the process ID {} from {} because it does not have any processId",
+                            groupId, expectedProcessId, subtopologyId);
+                    return partitionsOrNull;
                 }
             });
         });
@@ -968,7 +985,7 @@ public class StreamsGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param processIdToRemove The expected process ID.
-     * @throws IllegalStateException if the process ID does not match the expected one. package-private for testing.
+     * package-private for testing.
      */
     private void removeTaskProcessIdsFromSet(
         Map<String, Set<Integer>> assignment,
@@ -979,10 +996,9 @@ public class StreamsGroup implements Group {
             currentTasksProcessId.compute(subtopologyId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.forEach(partitionId -> {
-                        if (!partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
-                            throw new IllegalStateException(
-                                String.format("Cannot remove the process ID %s from task %s_%s because the task is " +
-                                    "not owned by this process ID", processIdToRemove, subtopologyId, partitionId));
+                        if (!partitionsOrNull.containsKey(partitionId) || !partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
+                            log.debug("[GroupId {}] Cannot remove the process ID {} from task {}_{} because the task is " +
+                                    "not owned by this process ID", groupId, processIdToRemove, subtopologyId, partitionId);
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -991,9 +1007,9 @@ public class StreamsGroup implements Group {
                         return partitionsOrNull;
                     }
                 } else {
-                    throw new IllegalStateException(
-                        String.format("Cannot remove the process ID %s from %s because it does not have any process ID",
-                            processIdToRemove, subtopologyId));
+                    log.debug("[GroupId {}] Cannot remove the process ID {} from {} because it does not have any process ID",
+                            groupId, processIdToRemove, subtopologyId);
+                    return partitionsOrNull;
                 }
             });
         });
@@ -1004,7 +1020,7 @@ public class StreamsGroup implements Group {
      *
      * @param tasks     The assigned tasks.
      * @param processId The process ID.
-     * @throws IllegalStateException if the partition already has an epoch assigned. package-private for testing.
+     * package-private for testing.
      */
     void addTaskProcessId(
         TasksTupleWithEpochs tasks,
@@ -1030,9 +1046,8 @@ public class StreamsGroup implements Group {
                 for (Integer partitionId : assignedTaskPartitionsWithEpochs.keySet()) {
                     String prevValue = partitionsOrNull.put(partitionId, processId);
                     if (prevValue != null) {
-                        throw new IllegalStateException(
-                            String.format("Cannot set the process ID of %s-%s to %s because the partition is " +
-                                "still owned by process ID %s", subtopologyId, partitionId, processId, prevValue));
+                        log.debug("[GroupId {}] Setting the process ID of {}-{} to {} even though the partition is " +
+                            "still owned by process ID {}", groupId, subtopologyId, partitionId, processId, prevValue);
                     }
                 }
                 return partitionsOrNull;
