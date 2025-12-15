@@ -49,6 +49,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_KID;
 
 /**
  * Set of utilities for the OAuth JWT assertion logic.
@@ -145,6 +146,15 @@ public class AssertionUtils {
         staticAssertionJwtTemplate(cu).ifPresent(templates::add);
         fileAssertionJwtTemplate(cu).ifPresent(templates::add);
         templates.add(dynamicAssertionJwtTemplate(cu, time));
+        kidAssertionJwtTemplate(cu).ifPresent(templates::add);
         return new LayeredAssertionJwtTemplate(templates);
+    }
+
+    public static Optional<KidAssertionJwtTemplate> kidAssertionJwtTemplate(ConfigurationUtils cu) {
+        if (!cu.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_KID)) {
+            return Optional.empty();
+        }
+        String kid = cu.validateString(SASL_OAUTHBEARER_ASSERTION_CLAIM_KID);
+        return Optional.of(new KidAssertionJwtTemplate(kid));
     }
 }
