@@ -17,13 +17,13 @@
 
 package kafka.network
 
-import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.RequestHeaderData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestHeader, RequestTestUtils}
+import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.{BrokerFeatures, DefaultApiVersionManager, SimpleApiVersionManager}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}

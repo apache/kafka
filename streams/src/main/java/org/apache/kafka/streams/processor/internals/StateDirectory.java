@@ -221,7 +221,6 @@ public class StateDirectory implements AutoCloseable {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
-            final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.stateUpdaterEnabled(config.originals());
 
             // discover all non-empty task directories in StateDirectory
             for (final TaskDirectory taskDirectory : nonEmptyTaskDirectories) {
@@ -238,13 +237,12 @@ public class StateDirectory implements AutoCloseable {
                             .map(t -> new TopicPartition(t, id.partition()))
                             .collect(Collectors.toSet());
                     final ProcessorStateManager stateManager = ProcessorStateManager.createStartupTaskStateManager(
-                            id,
-                            eosEnabled,
-                            logContext,
-                            this,
-                            subTopology.storeToChangelogTopic(),
-                            inputPartitions,
-                            stateUpdaterEnabled
+                        id,
+                        eosEnabled,
+                        logContext,
+                        this,
+                        subTopology.storeToChangelogTopic(),
+                        inputPartitions
                     );
                     final StartupContext initContext = new StartupContext(id, config, stateManager);
                     // TODO: we need to pass a proper logPrefix

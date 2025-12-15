@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -73,6 +74,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -1717,6 +1719,114 @@ class DefaultStateUpdaterTest {
         }
     }
 
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFails() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(processorStateException, failedStatefulTask));
+        verifyUpdatingTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsForCorruptedTask() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Set.of(TASK_0_2));
+        when(changelogReader.restore(Map.of(
+                TASK_0_0, activeTask1,
+                TASK_0_2, failedStatefulTask))
+        ).thenThrow(taskCorruptedException);
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(taskCorruptedException, failedStatefulTask));
+        verifyUpdatingTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsDuringTaskRemoval() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        final AtomicBoolean throwException = new AtomicBoolean(false);
+        doAnswer(invocation -> {
+            if (throwException.get()) {
+                throw processorStateException;
+            }
+            return null;
+        }).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(true);
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyUpdatingTasks(failedStatefulTask, activeTask1);
+
+        throwException.set(true);
+        final ExecutionException exception = assertThrows(ExecutionException.class, () -> stateUpdater.remove(TASK_0_2).get());
+        assertEquals(processorStateException, exception.getCause());
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsDuringTaskPause() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        when(topologyMetadata.isPaused(null)).thenReturn(false).thenReturn(false).thenReturn(true);
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(processorStateException, failedStatefulTask));
+        verifyPausedTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyPausedTasks(activeTask1, activeTask2);
+    }
+
+    @Test
+    public void shouldNotFailTheThreadIfMaybeCheckpointFailsDuringTaskRestore() throws Exception {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        final StreamTask failedStatefulTask = statefulTask(TASK_0_2, Set.of(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
+        final ProcessorStateException processorStateException = new ProcessorStateException("flush");
+        doThrow(processorStateException).when(failedStatefulTask).maybeCheckpoint(anyBoolean());
+        when(changelogReader.completedChangelogs()).thenReturn(Set.of(TOPIC_PARTITION_B_0));
+
+        stateUpdater.add(failedStatefulTask);
+        stateUpdater.add(activeTask1);
+        stateUpdater.start();
+        verifyExceptionsAndFailedTasks(new ExceptionAndTask(processorStateException, failedStatefulTask));
+        verifyUpdatingTasks(activeTask1);
+
+        stateUpdater.add(activeTask2);
+        verifyUpdatingTasks(activeTask1, activeTask2);
+    }
+
     private static List<MetricName> getMetricNames(final String threadId) {
         final Map<String, String> tagMap = Map.of("thread-id", threadId);
         return List.of(
@@ -1779,7 +1889,8 @@ class DefaultStateUpdaterTest {
                         && restoredTasks.size() == expectedRestoredTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all restored active task within the given timeout!"
+                () -> "Did not get all restored active task within the given timeout! Expected: "
+                        + expectedRestoredTasks + ", actual: " + restoredTasks
             );
         }
     }
@@ -1794,7 +1905,8 @@ class DefaultStateUpdaterTest {
                     && restoredTasks.size() == expectedRestoredTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all restored active task within the given timeout!"
+            () -> "Did not get all restored active task within the given timeout! Expected: "
+                    + expectedRestoredTasks + ", actual: " + restoredTasks
         );
         assertTrue(stateUpdater.drainRestoredActiveTasks(Duration.ZERO).isEmpty());
     }
@@ -1816,7 +1928,8 @@ class DefaultStateUpdaterTest {
                         && updatingTasks.size() == expectedUpdatingTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all updating task within the given timeout!"
+                () -> "Did not get all updating task within the given timeout! Expected: "
+                        + expectedUpdatingTasks + ", actual: " + updatingTasks
             );
         }
     }
@@ -1831,7 +1944,8 @@ class DefaultStateUpdaterTest {
                     && standbyTasks.size() == expectedStandbyTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not see all standby task within the given timeout!"
+            () -> "Did not see all standby task within the given timeout! Expected: "
+                    + expectedStandbyTasks + ", actual: " + standbyTasks
         );
     }
 
@@ -1860,7 +1974,8 @@ class DefaultStateUpdaterTest {
                         && pausedTasks.size() == expectedPausedTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all paused task within the given timeout!"
+                () -> "Did not get all paused task within the given timeout! Expected: "
+                        + expectedPausedTasks + ", actual: " + pausedTasks
             );
         }
     }
@@ -1875,7 +1990,8 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
+                    + expectedExceptionAndTasks + ", actual: " + failedTasks
         );
     }
 
@@ -1893,7 +2009,8 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedFailedTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
+                        + expectedFailedTasks + ", actual: " + failedTasks
         );
     }
 
@@ -1911,7 +2028,8 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> "Did not get all exceptions and failed tasks within the given timeout! Expected: "
+                    + expectedExceptionAndTasks + ", actual: " + failedTasks
         );
         assertFalse(stateUpdater.hasExceptionsAndFailedTasks());
         assertTrue(stateUpdater.drainExceptionsAndFailedTasks().isEmpty());

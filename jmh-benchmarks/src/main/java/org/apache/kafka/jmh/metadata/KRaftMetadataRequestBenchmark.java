@@ -29,7 +29,6 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
 import kafka.server.builders.KafkaApisBuilder;
-import kafka.server.metadata.KRaftMetadataCache;
 import kafka.server.share.SharePartitionManager;
 
 import org.apache.kafka.common.Uuid;
@@ -52,6 +51,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
