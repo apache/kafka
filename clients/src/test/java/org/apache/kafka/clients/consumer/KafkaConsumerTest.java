@@ -39,6 +39,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -93,6 +94,7 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -131,6 +133,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -152,9 +155,12 @@ import java.util.stream.Stream;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
+import javax.security.auth.login.LoginException;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer.DEFAULT_REASON;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -269,6 +275,35 @@ public class KafkaConsumerTest {
             final String expectedMessage = String.format("Skipping registration for metric %s. Existing consumer metrics cannot be overwritten.", existingMetricToAdd.metricName());
             assertTrue(appender.getMessages().stream().anyMatch(m -> m.contains(expectedMessage)));
         }
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignedPartitionsMetrics(GroupProtocol groupProtocol) throws InterruptedException {
+        consumer = newConsumer(groupProtocol, time, mock(KafkaClient.class), subscription,
+                mock(ConsumerMetadata.class), assignor, false, groupInstanceId);
+        Metrics metrics = consumer.metricsRegistry();
+
+        // This metric is added in the background thread for the AsyncConsumer, so waiting on it to avoid flakiness.
+        TestUtils.waitForCondition(() -> getMetric(metrics, "assigned-partitions") != null,
+                "Consumer should register the assigned-partitions metric");
+        assertNotNull(getMetric(metrics, "assigned-partitions"));
+        assertEquals(0.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.assignFromUser(Set.of(tp0));
+        assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.assignFromUser(Set.of(tp0, tp1));
+        assertEquals(2.0d, getMetric(metrics, "assigned-partitions").metricValue());
+
+        subscription.unsubscribe();
+        subscription.subscribe(Set.of(topic), Optional.empty());
+        subscription.assignFromSubscribed(Set.of(tp0));
+        assertEquals(1.0d, getMetric(metrics, "assigned-partitions").metricValue());
+    }
+
+    private KafkaMetric getMetric(Metrics metrics, String name) {
+        return metrics.metrics().get(metrics.metricName(name, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX));
     }
 
     @ParameterizedTest
@@ -716,26 +751,27 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances(GroupProtocol groupProtocol) {
-        final int targetInterceptor = 3;
+        final int targetInterceptor = 1;
 
         try {
             Properties props = new Properties();
             props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName() + ", "
-                    + MockConsumerInterceptor.class.getName());
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, 
+                    CloseInterceptor.class.getName() + "," + MockConsumerInterceptor.class.getName());
 
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
             assertThrows(KafkaException.class, () -> newConsumer(
                     props, new StringDeserializer(), new StringDeserializer()));
 
-            assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
-            assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CONFIG_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
 
+            assertEquals(1, CloseInterceptor.CLOSE_COUNT.get());
         } finally {
             MockConsumerInterceptor.resetCounters();
+            CloseInterceptor.resetCounters();
         }
     }
 
@@ -2653,9 +2689,9 @@ public class KafkaConsumerTest {
         }
         // poll once again, which should send the list-offset request
         consumer.seek(tp0, 50L);
-        consumer.poll(Duration.ofMillis(0));
         // requests: list-offset, fetch
         TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(0));
             boolean hasListOffsetRequest = requestGenerated(client, ApiKeys.LIST_OFFSETS);
             boolean hasFetchRequest = requestGenerated(client, ApiKeys.FETCH);
             return hasListOffsetRequest && hasFetchRequest;
@@ -3115,6 +3151,7 @@ public class KafkaConsumerTest {
         configs.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
         configs.put(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, throwOnStableOffsetNotSupported);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         groupInstanceId.ifPresent(gi -> configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, gi));
 
         return new ConsumerConfig(configs);
@@ -3763,6 +3800,58 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         }
     }
 
+    /**
+     * This test ensures that both {@link Consumer} implementations fail on creation when the underlying
+     * {@link NetworkClient} fails creation.
+     *
+     * The logic to check for this case is admittedly a bit awkward because the constructor can fail for all
+     * manner of reasons. So a failure case is created by specifying an invalid
+     * {@link javax.security.auth.spi.LoginModule} class name, which in turn causes the {@link NetworkClient}
+     * to fail.
+     *
+     * This test was created to validate the change for KAFKA-19394 for the {@link AsyncKafkaConsumer}. The fix
+     * should handle the case where failure during initialization of resources (in this test, the underlying
+     * {@link NetworkClient}) will not cause the creation of the {@link AsyncKafkaConsumer} to hang.
+     */
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testConstructorFailsOnNetworkClientConstructorFailure(GroupProtocol groupProtocol) {
+        Map<String, Object> configs = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
+            CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
+            SaslConfigs.SASL_MECHANISM, "PLAIN",
+            SaslConfigs.SASL_JAAS_CONFIG, "org.example.InvalidLoginModule required ;",
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT)
+        );
+
+        KafkaException e = assertThrows(KafkaException.class, () -> {
+            try (KafkaConsumer<String, String> ignored = new KafkaConsumer<>(configs)) {
+                fail("Should not be able to create the consumer");
+            }
+        });
+
+        assertEquals("Failed to construct kafka consumer", e.getMessage());
+
+        // The root cause is multiple exceptions deep. This code is more concise and should hopefully be trivial
+        // to update should the underlying implementation change.
+        Throwable cause = e.getCause();
+        assertNotNull(cause);
+        assertInstanceOf(KafkaException.class, cause);
+        assertEquals("Failed to create new NetworkClient", cause.getMessage());
+
+        cause = cause.getCause();
+        assertNotNull(cause);
+        assertInstanceOf(KafkaException.class, cause);
+        assertEquals(LoginException.class.getName() + ": No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
+
+        cause = cause.getCause();
+        assertNotNull(cause);
+        assertInstanceOf(LoginException.class, cause);
+        assertEquals("No LoginModule found for org.example.InvalidLoginModule", cause.getMessage());
+    }
+
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {
         Map<String, String> expectedTags = new LinkedHashMap<>();
         expectedTags.put("client-id", clientId);
@@ -3796,6 +3885,35 @@ public void testPollIdleRatio(GroupProtocol groupProtocol) {
         public void withPluginMetrics(PluginMetrics metrics) {
             MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
             metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class CloseInterceptor implements ConsumerInterceptor<String, String> {
+
+        public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+
+        @Override
+        public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+            return null;
+        }
+
+        @Override
+        public void onCommit(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            // no-op
+        }
+
+        @Override
+        public void close() {
+            CLOSE_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // no-op
+        }
+
+        public static void resetCounters() {
+            CLOSE_COUNT.set(0);
         }
     }
 }

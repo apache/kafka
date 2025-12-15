@@ -61,6 +61,13 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     void recordEventPurgatoryTime(long durationMs);
 
     /**
+     * Record the effective batch linger time.
+     *
+     * @param durationMs The linger time in milliseconds.
+     */
+    void recordLingerTime(long durationMs);
+
+    /**
      * Record the flush time.
      *
      * @param durationMs The flush time in milliseconds.
@@ -79,4 +86,16 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
      * @param sizeSupplier The size supplier.
      */
     void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier);
+
+    /**
+     * Register the cached buffer size gauge.
+     *
+     * @param bufferCacheSizeSupplier The buffer cache size supplier.
+     */
+    void registerBufferCacheSizeGauge(Supplier<Long> bufferCacheSizeSupplier);
+
+    /**
+     * Called when a buffer is discarded upon release instead of being cached.
+     */
+    void recordBufferCacheDiscarded();
 }

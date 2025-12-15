@@ -47,6 +47,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
@@ -57,7 +58,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 
 public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
-    implements SessionStore<K, V> {
+    implements SessionStore<K, V>, MeteredStateStore {
 
     private final String metricsScope;
     private final Serde<K> keySerde;
@@ -73,6 +74,7 @@ public class MeteredSessionStore<K, V>
     private Sensor iteratorDurationSensor;
     private InternalProcessorContext<?, ?> internalContext;
     private TaskId taskId;
+    private Sensor restoreSensor;
 
     private final LongAdder numOpenIterators = new LongAdder();
     private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
@@ -108,11 +110,9 @@ public class MeteredSessionStore<K, V>
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
         registerMetrics();
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
+        super.init(stateStoreContext, root);
     }
 
     private void registerMetrics() {
@@ -126,10 +126,19 @@ public class MeteredSessionStore<K, V>
                 (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> {
+                try {
                     final Iterator<MeteredIterator> openIteratorsIterator = openIterators.iterator();
-                    return openIteratorsIterator.hasNext() ? openIteratorsIterator.next().startTimestamp() : null;
+                    return openIteratorsIterator.hasNext() ? openIteratorsIterator.next().startTimestamp() : 0L;
+                } catch (final NoSuchElementException e) {
+                    return 0L;
                 }
+            }
         );
+    }
+
+    @Override
+    public void recordRestoreTime(final long restoreTimeNs) {
+        restoreSensor.record(restoreTimeNs);
     }
 
     private void initStoreSerde(final StateStoreContext context) {

@@ -18,17 +18,18 @@
 package kafka.api
 
 import java.time.Duration
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CloseOptions, Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 
-import java.util.{Optional, Properties}
+import java.util
+import java.util.{Optional, Properties, UUID}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.JaasTestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData}
+import org.apache.kafka.clients.consumer.internals.{AsyncKafkaConsumer, StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.common.utils.Utils
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -235,6 +237,49 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     streamsConsumer
   }
 
+  def createStreamsGroup[K, V](configOverrides: Properties = new Properties,
+                               configsToRemove: List[String] = List(),
+                               inputTopics: Set[String],
+                               changelogTopics: Set[String] = Set(),
+                               streamsGroupId: String): AsyncKafkaConsumer[K, V] = {
+    val props = new Properties()
+    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, streamsGroupId)
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    props ++= configOverrides
+    configsToRemove.foreach(props.remove(_))
+
+    val streamsRebalanceData = new StreamsRebalanceData(
+      UUID.randomUUID(),
+      Optional.empty(),
+      util.Map.of(
+        "subtopology-0", new StreamsRebalanceData.Subtopology(
+          inputTopics.asJava,
+          util.Set.of(),
+          util.Map.of(),
+          changelogTopics.map(c => (c, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.empty(), util.Map.of()))).toMap.asJava,
+          util.Set.of()
+        )),
+      Map.empty[String, String].asJava
+    )
+
+    val consumer = createStreamsConsumer(
+      keyDeserializer = new ByteArrayDeserializer().asInstanceOf[Deserializer[K]],
+      valueDeserializer = new ByteArrayDeserializer().asInstanceOf[Deserializer[V]],
+      configOverrides = props,
+      streamsRebalanceData = streamsRebalanceData
+    )
+    consumer.subscribe(inputTopics.asJava,
+      new StreamsRebalanceListener {
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
+        override def onAllTasksLost(): Unit = ()
+      })
+    consumer
+  }
+
   def createAdminClient(
     listenerName: ListenerName = listenerName,
     configOverrides: Properties = new Properties
@@ -264,11 +309,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     try {
       producers.foreach(_.close(Duration.ZERO))
       consumers.foreach(_.wakeup())
-      consumers.foreach(_.close(Duration.ZERO))
+      consumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       shareConsumers.foreach(_.wakeup())
       shareConsumers.foreach(_.close(Duration.ZERO))
       streamsConsumers.foreach(_.wakeup())
-      streamsConsumers.foreach(_.close(Duration.ZERO))
+      streamsConsumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       adminClients.foreach(_.close(Duration.ZERO))
 
       producers.clear()

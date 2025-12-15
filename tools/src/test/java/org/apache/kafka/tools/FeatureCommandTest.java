@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.Feature;
@@ -31,6 +32,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static java.lang.String.format;
 import static org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType.SAFE_DOWNGRADE;
@@ -52,21 +54,34 @@ public class FeatureCommandTest {
 
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
-        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-                "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.3-IV3\t", outputWithoutEpoch(features.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.3-IV3",
+                outputWithoutEpoch(features.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(features.get(6))
+        );
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -79,20 +94,222 @@ public class FeatureCommandTest {
         List<String> features = Arrays.stream(commandOutput.split("\n")).sorted().toList();
 
         // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
-        assertEquals("Feature: eligible.leader.replicas.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(0)));
-        assertEquals("Feature: group.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(1)));
-        assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
-        assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
-                "SupportedMaxVersion: 4.2-IV1\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
-        assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
-        assertEquals("Feature: streams.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
-        assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(6)));
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                outputWithoutEpoch(features.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(features.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(features.get(6))
+        );
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        metadataVersion = MetadataVersion.IBP_3_7_IV0,
+        controllers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(
+                id = 3000,
+                key = "unstable.api.versions.enable",
+                value = "true"
+                ),
+            @ClusterConfigProperty(
+                id = 3001,
+                key = "unstable.api.versions.enable",
+                value = "false"
+                )
+        }
+    )
+    public void testDescribeWithUnstableApiVersions(ClusterInstance cluster) {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe", "--node-id", "3000")
+            )
+        );
+        List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                outputWithoutEpoch(featuresWithUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(6))
+        );
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe", "--node-id", "3001")
+            )
+        );
+        List<String> featuresWithoutUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.2-IV1", "3.7-IV0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(6))
+        );
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        metadataVersion = MetadataVersion.IBP_3_7_IV0,
+        brokers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(
+                id = 0,
+                key = "unstable.feature.versions.enable",
+                value = "true"
+                ),
+            @ClusterConfigProperty(
+                id = 1,
+                key = "unstable.feature.versions.enable",
+                value = "false"
+                )
+        }
+    )
+    public void testDescribeWithUnstableFeatureVersions(ClusterInstance cluster) {
+        String commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--node-id", "0")
+            )
+        );
+        List<String> featuresWithUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        // Change expected message to reflect latest MetadataVersion (SupportedMaxVersion increases when adding a new version)
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.3-IV0", "3.7-IV0",
+                outputWithoutEpoch(featuresWithUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithUnstable.get(6))
+        );
+
+        commandOutput = ToolsTestUtils.captureStandardOut(() ->
+            assertEquals(
+                0,
+                FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--node-id", "1")
+            )
+        );
+        List<String> featuresWithoutUnstable = Arrays.stream(commandOutput.split("\n")).sorted().toList();
+
+        assertFeatureOutput(
+                "eligible.leader.replicas.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(0))
+        );
+        assertFeatureOutput(
+                "group.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(1))
+        );
+        assertFeatureOutput(
+                "kraft.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(2))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "4.2-IV1", "3.7-IV0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(3))
+        );
+        assertFeatureOutput(
+                "share.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(4))
+        );
+        assertFeatureOutput(
+                "streams.version", "0", "1", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(5))
+        );
+        assertFeatureOutput(
+                "transaction.version", "0", "2", "0",
+                outputWithoutEpoch(featuresWithoutUnstable.get(6))
+        );
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV3)
@@ -134,7 +351,7 @@ public class FeatureCommandTest {
 
         );
         assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 7." +
-                " The update failed for all features since the following feature had an error: Invalid metadata.version 7." +
+                " The update failed for all features since the following feature had an error: Unsupported metadata.version downgrade from 8 to 7." +
                 " Refusing to perform the requested downgrade because it might delete metadata information."), commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
@@ -143,7 +360,7 @@ public class FeatureCommandTest {
 
         );
         assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not downgrade metadata.version to 7." +
-                " The update failed for all features since the following feature had an error: Invalid metadata.version 7." +
+                " The update failed for all features since the following feature had an error: Unsupported metadata.version downgrade from 8 to 7." +
                 " Unsafe metadata downgrade is not supported in this version."), commandOutput);
     }
 
@@ -211,12 +428,6 @@ public class FeatureCommandTest {
     }
 
     @Test
-    public void testMetadataVersionsToString() {
-        assertEquals("3.5-IV0, 3.5-IV1, 3.5-IV2, 3.6-IV0",
-            FeatureCommand.metadataVersionsToString(MetadataVersion.IBP_3_5_IV0, MetadataVersion.IBP_3_6_IV0));
-    }
-
-    @Test
     public void testDowngradeType() {
         assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(
             new Namespace(Map.of("unsafe", Boolean.FALSE))));
@@ -258,13 +469,28 @@ public class FeatureCommandTest {
     public void testHandleDescribe() {
         String describeResult = ToolsTestUtils.captureStandardOut(() -> {
             try {
-                FeatureCommand.handleDescribe(buildAdminClient());
+                FeatureCommand.handleDescribe(new Namespace(Map.of()), buildAdminClient());
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         });
-        assertEquals(format("Feature: foo.bar\tSupportedMinVersion: 0\tSupportedMaxVersion: 10\tFinalizedVersionLevel: 5\tEpoch: 123%n" +
-            "Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\tSupportedMaxVersion: 3.5-IV0\tFinalizedVersionLevel: 3.4-IV0\tEpoch: 123"), describeResult);
+
+        List<String> features = Arrays.stream(describeResult.split("\n")).sorted().toList();
+        assertFeatureOutput(
+                "foo.bar", "0", "10", "5",
+                outputWithoutEpoch(features.get(0))
+        );
+        assertFeatureOutput(
+                "metadata.version", "3.3-IV3", "3.5-IV0", "3.4-IV0",
+                outputWithoutEpoch(features.get(1))
+        );
+    }
+
+    @Test
+    public void testHandleDescribeWithNegativeNodeId() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> FeatureCommand.handleDescribe(new Namespace(Map.of("node_id", -1)), buildAdminClient()));
     }
 
     @Test
@@ -274,7 +500,7 @@ public class FeatureCommandTest {
         namespace.put("feature", List.of("foo.bar=6"));
         namespace.put("dry_run", false);
         Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-        assertTrue(t.getMessage().contains("Unknown metadata.version 3.3-IV1"));
+        assertTrue(t.getMessage().contains("Unknown metadata.version '3.3-IV1'"));
     }
 
     @Test
@@ -371,7 +597,7 @@ public class FeatureCommandTest {
         namespace.put("release_version", "foo");
         ToolsTestUtils.captureStandardOut(() -> {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleUpgrade(new Namespace(namespace), buildAdminClient()));
-            assertTrue(t.getMessage().contains("Unknown metadata.version foo."));
+            assertTrue(t.getMessage().contains("Unknown metadata.version 'foo'."));
         });
     }
 
@@ -452,9 +678,8 @@ public class FeatureCommandTest {
             FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures)
         );
 
-        assertEquals("Unknown release version '2.9-IV2'." +
-            " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.latestTesting().version(), exception1.getMessage());
+        assertEquals("Unknown metadata.version '2.9-IV2'. Supported metadata.version are: " + MetadataVersion.metadataVersionsToString(
+                MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()), exception1.getMessage());
 
         namespace.put("release_version", "invalid");
 
@@ -462,9 +687,8 @@ public class FeatureCommandTest {
             FeatureCommand.handleVersionMapping(new Namespace(namespace), testingFeatures)
         );
 
-        assertEquals("Unknown release version 'invalid'." +
-            " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
-            " to " + MetadataVersion.latestTesting().version(), exception2.getMessage());
+        assertEquals("Unknown metadata.version 'invalid'. Supported metadata.version are: " + MetadataVersion.metadataVersionsToString(
+            MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()), exception2.getMessage());
     }
 
     @Test
@@ -578,5 +802,23 @@ public class FeatureCommandTest {
         );
 
         assertEquals(expectedOutput.trim(), output.trim());
+    }
+
+    private static void assertFeatureOutput(
+            String expectedFeature,
+            String expectedMinVersion,
+            String expectedMaxVersion,
+            String expectedFinalizedVersion,
+            String actualFeature
+    ) {
+        String featureFormattingRegex = String.format(
+                "Feature:\\s+%s\\s+SupportedMinVersion:\\s+%s\\s+SupportedMaxVersion:\\s+%s\\s+FinalizedVersionLevel:\\s+%s\\s*$",
+                Pattern.quote(expectedFeature),
+                Pattern.quote(expectedMinVersion),
+                Pattern.quote(expectedMaxVersion),
+                Pattern.quote(expectedFinalizedVersion)
+        );
+
+        assertTrue(actualFeature.matches(featureFormattingRegex));
     }
 }

@@ -229,6 +229,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
 
     private Map<String, String> workerProps() {
         Map<String, String> props = new HashMap<>();
+        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
@@ -635,7 +636,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         time.sleep(commitInterval * 2);
 
         awaitPolls(2);
-        assertEquals(2, flushCount(), 
+        assertEquals(2, flushCount(),
                 "Two flushes should have taken place after offset commit interval has elapsed again");
 
         awaitShutdown();

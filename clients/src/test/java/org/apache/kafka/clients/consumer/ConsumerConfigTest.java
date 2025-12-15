@@ -59,6 +59,7 @@ public class ConsumerConfigTest {
     public void setUp() {
         properties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClassName);
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClassName);
+        properties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
     }
 
     @Test
@@ -147,6 +148,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "");
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(ce.getMessage().contains(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
     }
@@ -157,6 +159,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
@@ -167,6 +170,7 @@ public class ConsumerConfigTest {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals(saslSslLowerCase, consumerConfig.originals().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
@@ -177,6 +181,7 @@ public class ConsumerConfigTest {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals("classic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
         assertNull(consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
@@ -191,6 +196,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals(protocol, consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
         assertEquals(remoteAssignorName, consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
@@ -203,6 +209,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, remoteAssignorName);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(exception.getMessage().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG + " cannot be set when " + ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CLASSIC.name()));
     }
@@ -212,6 +219,7 @@ public class ConsumerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
         assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
@@ -222,6 +230,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
@@ -233,6 +242,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         if (isValid) {
             ConsumerConfig config = new ConsumerConfig(configs);
             assertEquals(protocol, config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
@@ -253,10 +263,11 @@ public class ConsumerConfigTest {
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass,
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass,
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name(),
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
                 configName, value
         );
         ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
-        assertEquals(configName + " cannot be set when " + 
+        assertEquals(configName + " cannot be set when " +
                 ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name(), exception.getMessage());
     }
 

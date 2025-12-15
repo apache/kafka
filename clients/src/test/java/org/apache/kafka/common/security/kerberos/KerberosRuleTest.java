@@ -26,12 +26,12 @@ public class KerberosRuleTest {
     @Test
     public void testReplaceParameters() throws BadFormatString {
         // positive test cases
-        assertEquals(KerberosRule.replaceParameters("", new String[0]), "");
-        assertEquals(KerberosRule.replaceParameters("hello", new String[0]), "hello");
-        assertEquals(KerberosRule.replaceParameters("", new String[]{"too", "many", "parameters", "are", "ok"}), "");
-        assertEquals(KerberosRule.replaceParameters("hello", new String[]{"too", "many", "parameters", "are", "ok"}), "hello");
-        assertEquals(KerberosRule.replaceParameters("hello $0", new String[]{"too", "many", "parameters", "are", "ok"}), "hello too");
-        assertEquals(KerberosRule.replaceParameters("hello $0", new String[]{"no recursion $1"}), "hello no recursion $1");
+        assertEquals("", KerberosRule.replaceParameters("", new String[0]));
+        assertEquals("hello", KerberosRule.replaceParameters("hello", new String[0]));
+        assertEquals("", KerberosRule.replaceParameters("", new String[]{"too", "many", "parameters", "are", "ok"}));
+        assertEquals("hello", KerberosRule.replaceParameters("hello", new String[]{"too", "many", "parameters", "are", "ok"}));
+        assertEquals("hello too", KerberosRule.replaceParameters("hello $0", new String[]{"too", "many", "parameters", "are", "ok"}));
+        assertEquals("hello no recursion $1", KerberosRule.replaceParameters("hello $0", new String[]{"no recursion $1"}));
 
         // negative test cases
         assertThrows(
