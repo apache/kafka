@@ -1333,7 +1333,10 @@ public class StreamThread extends Thread implements ProcessingThread {
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
         recordWindowedSum(now, pollLatency, totalCommitLatency, totalProcessLatency, totalPunctuateLatency, runOnceLatency);
-        recordAllRatios(now);
+        recordRatio(now, pollLatencyWindowedSum, pollRatioSensor);
+        recordRatio(now, totalCommitLatencyWindowedSum, commitRatioSensor);
+        recordRatio(now, processLatencyWindowedSum, processRatioSensor);
+        recordRatio(now, punctuateLatencyWindowedSum, punctuateRatioSensor);
         processRecordsSensor.record(totalProcessed, now);
 
         final long timeSinceLastLog = now - lastLogSummaryMs;
@@ -1410,8 +1413,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
         recordWindowedSum(now, pollLatency, totalCommitLatency, 0, 0, runOnceLatency);
-        recordPollRatio(now);
-        recordCommitRatio(now);
+        recordRatio(now, pollLatencyWindowedSum, pollRatioSensor);
+        recordRatio(now, totalCommitLatencyWindowedSum, commitRatioSensor);
 
         if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Committed {} total tasks since the last update", totalCommittedSinceLastSummary);
@@ -2184,50 +2187,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.runOnceLatencyWindowedSum.record(metricsConfig, runOnceLatency, now);
     }
 
-    private void recordPollRatio(final long now) {
-        final double pollLatencyWindow =
-            pollLatencyWindowedSum.measure(metricsConfig, now);
+    private void recordRatio(final long now, final WindowedSum windowedSum, final Sensor ratioSensor) {
+        final double latencyWindow =
+            windowedSum.measure(metricsConfig, now);
         final double runOnceLatencyWindow =
             runOnceLatencyWindowedSum.measure(metricsConfig, now);
 
         if (runOnceLatencyWindow > 0.0) {
-            final double ratio = pollLatencyWindow / runOnceLatencyWindow;
-            pollRatioSensor.record(ratio, now);
+            final double ratio = latencyWindow / runOnceLatencyWindow;
+            ratioSensor.record(ratio, now);
         } else {
-            pollRatioSensor.record(0.0, now);
-        }
-    }
-
-    private void recordCommitRatio(final long now) {
-        final double commitLatencyWindow =
-            totalCommitLatencyWindowedSum.measure(metricsConfig, now);
-        final double runOnceLatencyWindow =
-            runOnceLatencyWindowedSum.measure(metricsConfig, now);
-
-        if (runOnceLatencyWindow > 0.0) {
-            final double ratio = commitLatencyWindow / runOnceLatencyWindow;
-            commitRatioSensor.record(ratio, now);
-        } else {
-            commitRatioSensor.record(0.0, now);
-        }
-    }
-
-    private void recordAllRatios(final long now) {
-        recordCommitRatio(now);
-        recordPollRatio(now);
-        final double runOnceLatencyWindow =
-            runOnceLatencyWindowedSum.measure(metricsConfig, now);
-
-        if (runOnceLatencyWindow > 0.0) {
-            final double totalProcessLatency =
-                processLatencyWindowedSum.measure(metricsConfig, now);
-            final double totalPunctuateLatency =
-                punctuateLatencyWindowedSum.measure(metricsConfig, now);
-            processRatioSensor.record(totalProcessLatency / runOnceLatencyWindow, now);
-            punctuateRatioSensor.record(totalPunctuateLatency / runOnceLatencyWindow, now);
-        } else {
-            processRatioSensor.record(0.0, now);
-            punctuateRatioSensor.record(0.0, now);
+            ratioSensor.record(0.0, now);
         }
     }
 }
