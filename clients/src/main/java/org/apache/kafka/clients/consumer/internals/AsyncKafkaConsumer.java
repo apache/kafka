@@ -112,7 +112,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -163,7 +162,6 @@ import static org.apache.kafka.common.utils.Utils.swallow;
  * {@link ConsumerNetworkThread network thread}. Visit
  * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+threading+refactor+design">this document</a>
  * for implementation detail.
- *
  * <p/>
  *
  * <em>Note:</em> this {@link Consumer} implementation is part of the revised consumer group protocol from KIP-848.
@@ -413,8 +411,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     interceptorList,
                     Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
-            final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
-            metadata.bootstrap(addresses);
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
@@ -1983,7 +1979,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * This method signals the background thread to {@link CreateFetchRequestsEvent create fetch requests} for the
      * pre-fetch case, i.e. right before {@link #poll(Duration)} exits. In the pre-fetch case, the application thread
      * will not wait for confirmation of the request creation before continuing.
-     *
      * <p/>
      *
      * At the point this method is called, {@link KafkaConsumer#poll(Duration)} has data ready to return to the user,
@@ -2193,7 +2188,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * It is possible that {@link ErrorEvent an error}
      * could occur when processing the events. In such cases, the processor will take a reference to the first
      * error, continue to process the remaining events, and then throw the first error that occurred.
-     *
      * Visible for testing.
      */
     boolean processBackgroundEvents() {
@@ -2243,7 +2237,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * Each iteration gives the application thread an opportunity to process background events, which may be
      * necessary to complete the overall processing.
-     *
      * <p/>
      *
      * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an

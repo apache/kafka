@@ -53,6 +53,41 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
+    public static List<InetSocketAddress> validateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
+        List<InetSocketAddress> addresses = new ArrayList<>();
+        urls.forEach(url -> {
+            final String host = getHost(url);
+            final Integer port = getPort(url);
+
+            if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
+                InetAddress[] inetAddresses;
+                try {
+                    inetAddresses = InetAddress.getAllByName(host);
+                } catch (UnknownHostException e) {
+                    inetAddresses = new InetAddress[0];
+                }
+
+                for (InetAddress inetAddress : inetAddresses) {
+                    String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                    InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                    if (address.isUnresolved()) {
+                        log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
+                    } else {
+                        addresses.add(address);
+                    }
+                }
+            } else {
+                InetSocketAddress address = new InetSocketAddress(host, port);
+                if (address.isUnresolved()) {
+                    log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                } else {
+                    addresses.add(address);
+                }
+            }
+        });
+        return addresses;
+    }
+
     public static List<InetSocketAddress> parseAndValidateAddresses(AbstractConfig config) {
         List<String> urls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         String clientDnsLookupConfig = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG);

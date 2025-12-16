@@ -1049,7 +1049,7 @@ public class NetworkClient implements KafkaClient {
                 // the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
                 // If not provided, the client falls back to version 0.
                 short maxApiVersion = 0;
-                if (apiVersionsResponse.data().apiKeys().size() > 0) {
+                if (!apiVersionsResponse.data().apiKeys().isEmpty()) {
                     ApiVersion apiVersion = apiVersionsResponse.data().apiKeys().find(ApiKeys.API_VERSIONS.id);
                     if (apiVersion != null) {
                         maxApiVersion = apiVersion.maxVersion();
@@ -1229,7 +1229,7 @@ public class NetworkClient implements KafkaClient {
 
         List<InetSocketAddress> tryResolveAddresses(final long currentTimeMs) {
             timer.update(currentTimeMs);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
+            List<InetSocketAddress> addresses = ClientUtils.validateAddresses(bootstrapServers, clientDnsLookup);
             if (!addresses.isEmpty()) {
                 timer.reset(dnsResolutionTimeoutMs);
                 return addresses;
@@ -1239,8 +1239,7 @@ public class NetworkClient implements KafkaClient {
                 throw new BootstrapResolutionException("Timeout while attempting to resolve bootstrap " +
                         "servers. ");
             }
-            // TODO: why?
-            return ClientUtils.parseAndValidateAddresses(bootstrapServers, clientDnsLookup);
+            return ClientUtils.validateAddresses(bootstrapServers, clientDnsLookup);
         }
 
         boolean isDisabled() {

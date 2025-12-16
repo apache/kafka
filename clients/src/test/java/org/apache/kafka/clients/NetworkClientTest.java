@@ -92,7 +92,7 @@ import static org.mockito.Mockito.when;
 
 public class NetworkClientTest {
     protected static final MockTime TIME = new MockTime();
-    private static final List<String> BOOTSTRAP_ADDRESSES = new ArrayList<>(Arrays.asList(
+    private static final List<String> BOOTSTRAP_ADDRESSES = new ArrayList<>(List.of(
             "127.0.0.1:8000",
             "127.0.0.2:8000"));
     private static List<InetAddress> initialAddresses;
@@ -101,7 +101,7 @@ public class NetworkClientTest {
             new NetworkClient.BootstrapConfiguration(
                     BOOTSTRAP_ADDRESSES,
                     ClientDnsLookup.USE_ALL_DNS_IPS,
-                    CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS + 100000000);
+                    10 * 1000);
 
     protected final int defaultRequestTimeoutMs = 1000;
     protected final MockSelector selector = new MockSelector(TIME);
@@ -134,6 +134,7 @@ public class NetworkClientTest {
     }
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
+        bootstrapMetadataUpdater(metadataUpdater);
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, TIME, true, new ApiVersions(), new LogContext(),
@@ -164,7 +165,10 @@ public class NetworkClientTest {
                 MetadataRecoveryStrategy.NONE, bootstrapConfiguration);
     }
 
-    private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata) {
+    private NetworkClient createNetworkClientWithNoVersionDiscovery(Metadata metadata, boolean disableBootstrap) {
+        if (disableBootstrap) {
+            bootstrapConfiguration.disableBootstrap();
+        }
         return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, TIME, false, new ApiVersions(), new LogContext(),
@@ -172,6 +176,7 @@ public class NetworkClientTest {
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
+        bootstrapMetadataUpdater(metadataUpdater);
         return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
@@ -324,6 +329,7 @@ public class NetworkClientTest {
                 reconnectBackoffMsTest, 0, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest, TIME, false, new ApiVersions(), new LogContext(),
                 rebootstrapTriggerMs, MetadataRecoveryStrategy.REBOOTSTRAP, bootstrapConfiguration);
+        client.poll(0, TIME.milliseconds());
 
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, TIME.milliseconds());
@@ -608,7 +614,6 @@ public class NetworkClientTest {
      * second produce call is intentionally made to emulate a request timeout. In the case that a timeout occurs
      * during a request, we want to ensure that we {@link Metadata#requestUpdate(boolean) request a metadata update} so that
      * on a subsequent invocation of {@link NetworkClient#poll(long, long) poll}, the metadata request will be sent.
-     *
      * <p/>
      *
      * The {@link MetadataUpdater} has a specific method to handle
@@ -623,10 +628,12 @@ public class NetworkClientTest {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, TIME.milliseconds());
 
-        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata);
+        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata, true);
+        client.poll(0, TIME.milliseconds());
 
         // Send first produce without any timeout.
         ClientResponse clientResponse = produce(client, requestTimeoutMs, false);
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, TIME.milliseconds());
         assertEquals(node.idString(), clientResponse.destination());
         assertFalse(clientResponse.wasDisconnected(), "Expected response to succeed and not disconnect");
         assertFalse(clientResponse.wasTimedOut(), "Expected response to succeed and not time out");
@@ -870,7 +877,7 @@ public class NetworkClientTest {
         Node node1 = cluster.nodes().get(0);
         Node node2 = cluster.nodes().get(1);
 
-        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata);
+        NetworkClient client = createNetworkClientWithNoVersionDiscovery(metadata, true);
 
         awaitReady(client, node1);
 
@@ -1490,5 +1497,28 @@ public class NetworkClientTest {
             this.failure = null;
             return failure;
         }
+    }
+
+    private void bootstrapMetadataWithNodes(Metadata metadata, List<Node> nodes) {
+        List<InetSocketAddress> serverAddresses = new ArrayList<>();
+        nodes.forEach(node -> serverAddresses.add(new InetSocketAddress(node.host(), node.port())));
+        metadata.bootstrap(serverAddresses);
+    }
+
+    private void bootstrapMetadata(Metadata metadata) {
+        List<InetSocketAddress> serverAddresses = new ArrayList<>(List.of(
+            new InetSocketAddress("localhost0", 8000),
+            new InetSocketAddress("localhost1", 8000)
+        ));
+        metadata.bootstrap(serverAddresses);
+    }
+
+    private void bootstrapMetadataUpdater(final MetadataUpdater metadataUpdater) {
+        List<InetSocketAddress> serverAddresses = new ArrayList<>(List.of(
+            new InetSocketAddress("localhost0", 8000),
+            new InetSocketAddress("localhost1", 8000)
+        ));
+        metadataUpdater.bootstrap(serverAddresses);
+        System.out.println("Bootstraping metadata------:" + metadataUpdater.isBootstrapped());
     }
 }
