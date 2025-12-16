@@ -2151,14 +2151,13 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void recordRatio(final long now, final WindowedSum windowedSum, final Sensor ratioSensor) {
-        final double latencyWindow =
-            windowedSum.measure(metricsConfig, now);
         final double runOnceLatencyWindow =
             runOnceLatencyWindowedSum.measure(metricsConfig, now);
 
         if (runOnceLatencyWindow > 0.0) {
-            final double ratio = latencyWindow / runOnceLatencyWindow;
-            ratioSensor.record(ratio, now);
+            final double latencyWindow =
+                windowedSum.measure(metricsConfig, now);
+            ratioSensor.record(latencyWindow / runOnceLatencyWindow);
         } else {
             ratioSensor.record(0.0, now);
         }
