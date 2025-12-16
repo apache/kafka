@@ -292,10 +292,7 @@ org.apache.kafka.storage.internals.log.LogConcurrencyTest:
 - testUncommittedDataNotConsumed
 - testUncommittedDataNotConsumedFrequentSegmentRolls
 org.apache.kafka.storage.internals.log.LogManagerTest:
-- testIsStrayKraftMissingTopicId
-- testIsStrayKraftReplicaInImage
-- testIsStrayKraftReplicaInImageWithRemoteReplicas
-- testIsStrayKraftReplicaWithEmptyImage
+- testIsStrayReplica
 - testWaitForAllToComplete
 org.apache.kafka.storage.internals.log.LogOffsetMetadataTest:
 - testMessageOffsetOnly

@@ -481,6 +481,8 @@ org.apache.kafka.image.TopicsImageTest:
 - testImage1RoundTrip
 - testImage2RoundTrip
 - testLocalReassignmentChanges
+- testPartitionReplicas
+- testPartitionReplicasWithEmptyImage
 - testTopicDeltaElectionStatsWithEmptyImage
 - testTopicDeltaElectionStatsWithNonEmptyImage
 - testTopicIdToNameView
