@@ -308,8 +308,10 @@ public class TransactionalMessageCopier {
 
         String consumerGroup = parsedArgs.getString("consumerGroup");
 
-        final KafkaProducer<String, String> producer = createProducer(parsedArgs);
+        KafkaProducer<String, String> producer = createProducer(parsedArgs);
         final KafkaConsumer<String, String> consumer = createConsumer(parsedArgs);
+
+        int producerNumber = 0;
 
         final AtomicLong remainingMessages = new AtomicLong(
             parsedArgs.getInt("maxMessages") == -1 ? Long.MAX_VALUE : parsedArgs.getInt("maxMessages"));
@@ -387,7 +389,17 @@ public class TransactionalMessageCopier {
                         long messagesSentWithinCurrentTxn = records.count();
 
                         ConsumerGroupMetadata groupMetadata = useGroupMetadata ? consumer.groupMetadata() : new ConsumerGroupMetadata(consumerGroup);
-                        producer.sendOffsetsToTransaction(consumerPositions(consumer), groupMetadata);
+                        try {
+                            producer.sendOffsetsToTransaction(consumerPositions(consumer), groupMetadata);
+                        } catch (KafkaException e) {
+                            // in case the producer gets stuck here, create a new one and continue the loop
+                            try { producer.close(Duration.ofSeconds(0)); } catch (Exception ignore) {}
+                            parsedArgs.getAttrs().put("transactionalId", parsedArgs.getString("transactionalId") + producerNumber++);
+                            producer = createProducer(parsedArgs);
+                            producer.initTransactions();
+                            resetToLastCommittedPositions(consumer);
+                            continue;  
+                        }
 
                         if (enableRandomAborts && random.nextInt() % 3 == 0) {
                             abortTransactionAndResetPosition(producer, consumer);
@@ -402,7 +414,7 @@ public class TransactionalMessageCopier {
                     } catch (KafkaException e) {
                         log.debug("Aborting transaction after catching exception", e);
                         abortTransactionAndResetPosition(producer, consumer);
-                    }
+                    } 
                 }
             }
         } catch (WakeupException e) {

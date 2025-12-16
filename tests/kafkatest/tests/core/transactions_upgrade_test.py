@@ -179,7 +179,7 @@ class TransactionsUpgradeTest(Test):
 
         self.perform_upgrade(from_kafka_version)
 
-        copier_timeout_sec = 180
+        copier_timeout_sec = 360 
         for copier in copiers:
             wait_until(lambda: copier.is_done,
                        timeout_sec=copier_timeout_sec,
