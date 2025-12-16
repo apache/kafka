@@ -132,7 +132,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.AdditionalMatchers.geq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -2517,7 +2516,7 @@ public class SenderTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void testInflightBatchesExpireOnDeliveryTimeout() throws InterruptedException {
+    public void testInflightBatchesNotExpiredBeforeResponseAfterDeliveryTimeout() throws InterruptedException {
         long deliveryTimeoutMs = 1500L;
         setupWithTransactionState(null, true, null);
 
@@ -2527,13 +2526,19 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size(), "Expect one in-flight batch in accumulator");
 
+        // let delivery timeout expire without responding
+        time.sleep(deliveryTimeoutMs);
+        sender.runOnce();
+        // inflight batch should still be there
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertFalse(request.isDone());
+        
         Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
         responseMap.put(new TopicIdPartition(TOPIC_ID, tp0), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
         client.respond(new ProduceResponse(responseMap));
 
-        time.sleep(deliveryTimeoutMs);
         sender.runOnce();  // receive first response
-        assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
+        assertEquals(0, sender.inFlightBatches(tp0).size());
         assertDoesNotThrow(() -> request.get());
     }
 
@@ -2640,11 +2645,11 @@ public class SenderTest {
     }
 
     @Test
-    public void testExpiredBatchDoesNotSplitOnMessageTooLargeError() throws Exception {
+    public void testBatchDoesNotSplitOnMessageTooLargeError() throws Exception {
         long deliverTimeoutMs = 1500L;
         // create a producer batch with more than one record so it is eligible for splitting
-        Future<RecordMetadata> request1 = appendToAccumulator(tp0);
-        Future<RecordMetadata> request2 = appendToAccumulator(tp0);
+        appendToAccumulator(tp0);
+        appendToAccumulator(tp0);
 
         // send request
         sender.runOnce();
@@ -2653,17 +2658,15 @@ public class SenderTest {
         client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
 
         time.sleep(deliverTimeoutMs);
-        // Does not verify expired batch
         sender.runOnce();
-        assertEquals(0, client.inFlightRequestCount());
-        assertEquals(0, sender.inFlightBatches(tp0).size());
+        sender.runOnce();
 
-        // run again and must not split big batch and resend anything.
+        int inflightAfterFailure = client.inFlightRequestCount();
+        int batchesAfterFailure = sender.inFlightBatches(tp0).size();
+        
         sender.runOnce();
-        assertEquals(0, client.inFlightRequestCount());
-        assertEquals(0, sender.inFlightBatches(tp0).size());
-        assertTrue(request1.isDone());
-        assertTrue(request2.isDone());
+        assertEquals(inflightAfterFailure, client.inFlightRequestCount());
+        assertEquals(batchesAfterFailure, sender.inFlightBatches(tp0).size());
     }
 
     @Test
@@ -2684,14 +2687,12 @@ public class SenderTest {
         inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(), any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
-        inOrder.verify(client).poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong());
-        inOrder.verify(client).poll(geq(1L), anyLong());
 
     }
 
     @SuppressWarnings("deprecation")
     @Test
-    public void testExpiredBatchesInMultiplePartitions() throws Exception {
+    public void testInflightBatchesAcrossPartitionsRemainAfterDeliveryTimeoutUntilResponse() throws Exception {
         long deliveryTimeoutMs = 1500L;
         setupWithTransactionState(null, true, null);
 
@@ -2702,15 +2703,25 @@ public class SenderTest {
         // Send request.
         sender.runOnce();
         assertEquals(1, client.inFlightRequestCount());
-        assertEquals(1, sender.inFlightBatches(tp0).size(), "Expect one in-flight batch in accumulator");
-
-        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        responseMap.put(new TopicIdPartition(TOPIC_ID, tp0), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
-        client.respond(new ProduceResponse(responseMap));
-
-        // Successfully expire both batches.
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(1, sender.inFlightBatches(tp1).size());
+        
+        // let delivery timeout expire without responding
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();
+
+        // inflight batches should still exist
+        assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertEquals(1, sender.inFlightBatches(tp1).size());
+        assertFalse(request1.isDone());
+        assertFalse(request2.isDone());
+        
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
+        responseMap.put(new TopicIdPartition(TOPIC_ID, tp0), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+        responseMap.put(new TopicIdPartition(TOPIC_ID, tp1), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+        client.respond(new ProduceResponse(responseMap));
+        sender.runOnce();
+        
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
         assertDoesNotThrow(() -> request1.get());
         assertDoesNotThrow(() -> request2.get());
@@ -3129,8 +3140,9 @@ public class SenderTest {
         client.disconnect(node.idString(), true);
         client.backoff(node, 10);
 
-        sender.runOnce(); // now expire the batch.
-        assertFutureFailure(request1, TimeoutException.class);
+        sender.runOnce();
+        assertFutureFailure(request1, NetworkException.class);
+        assertEquals(0, sender.inFlightBatches(tp0).size());
 
         time.sleep(20);
 
