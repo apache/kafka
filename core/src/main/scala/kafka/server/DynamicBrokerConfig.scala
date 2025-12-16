@@ -391,7 +391,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       dynamicBrokerConfigs ++= props.asScala
       updateCurrentConfig(doLog)
     } catch {
-      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: ${persistentProps.keys()}", e)
+      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: ${persistentProps.keySet()}", e)
     }
   }
 
@@ -402,7 +402,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       dynamicDefaultConfigs ++= props.asScala
       updateCurrentConfig(doLog)
     } catch {
-      case e: Exception => error(s"Cluster default configs could not be applied: ${persistentProps.keys()}", e)
+      case e: Exception => error(s"Cluster default configs could not be applied: ${persistentProps.keySet()}", e)
     }
   }
 
