@@ -317,8 +317,7 @@ public class Sender implements Runnable {
         return false;
     }
 
-    // Visible for testing
-    protected long sendProducerData(long now) {
+    private long sendProducerData(long now) {
         MetadataSnapshot metadataSnapshot = metadata.fetchMetadataSnapshot();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(metadataSnapshot, now);
