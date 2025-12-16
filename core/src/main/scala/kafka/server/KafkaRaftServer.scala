@@ -23,13 +23,13 @@ import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time, Utils}
 import org.apache.kafka.common.{KafkaException, Uuid}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
-import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.{QuotaConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
