@@ -56,7 +56,7 @@ versions += [
   bcpkix: "1.80",
   caffeine: "3.2.0",
   bndlib: "7.1.0",
-  checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "10.20.2",
+  checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "12.2.0",
   commonsValidator: "1.10.1",
   classgraph: "4.8.179",
   gradle: "9.2.1",
