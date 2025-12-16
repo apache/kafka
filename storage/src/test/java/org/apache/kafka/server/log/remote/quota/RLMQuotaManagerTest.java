@@ -568,6 +568,55 @@ public class RLMQuotaManagerTest {
             "Final quota check should show violation after 150 bytes recorded (quota is 100)");
     }
 
+    @Test
+    public void testRecordAndGetThrottleTimeMsPreventsRaceCondition() throws InterruptedException {
+        RLMQuotaManager quotaManager = new RLMQuotaManager(
+            new RLMQuotaManagerConfig(100, 11, 1), metrics, QUOTA_TYPE, DESCRIPTION, time);
+
+        int numThreads = 10;
+        int bytesPerThread = 20;
+        Thread[] threads = new Thread[numThreads];
+        long[] throttleTimes = new long[numThreads];
+        CyclicBarrier barrier = new CyclicBarrier(numThreads);
+        AtomicInteger exceptions = new AtomicInteger(0);
+
+        for (int i = 0; i < numThreads; i++) {
+            final int threadIndex = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    barrier.await();
+                    throttleTimes[threadIndex] = quotaManager.recordAndGetThrottleTimeMs(bytesPerThread);
+                } catch (InterruptedException | BrokenBarrierException e) {
+                    exceptions.incrementAndGet();
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        for (Thread thread : threads) {
+            thread.start();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        assertEquals(0, exceptions.get(), "No threads should have exceptions");
+
+        moveClock(1);
+
+        int allowedCount = 0;
+        for (long throttleTime : throttleTimes) {
+            if (throttleTime == 0) {
+                allowedCount++;
+            }
+        }
+
+        assertTrue(allowedCount < numThreads, "Some threads must be throttled when quota exceeded");
+        assertTrue(allowedCount > 0, "At least one thread should succeed before quota exceeded");
+        assertTrue(quotaManager.getThrottleTimeMs() > 0, "Quota should be exceeded after all recordings");
+    }
+
     private Map<MetricName, MetricConfig> extractMetricConfig(Map<MetricName, KafkaMetric> metrics) {
         return metrics.entrySet().stream()
             .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().config()));

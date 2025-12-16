@@ -3808,6 +3808,38 @@ public class RemoteLogManagerTest {
         assertEquals(4, remoteLogManager.followerThreadPoolSize());
     }
 
+    @Test
+    void testQuotaStartsUnlimitedWithoutExplicitConfig() throws Exception {
+        Properties props = brokerConfig;
+        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
+        appendRLMConfig(props);
+
+        RemoteLogManagerConfig rlmConfig = configs(props);
+        RemoteLogManager rlm = new RemoteLogManager(
+            rlmConfig, brokerId, logDir, clusterId, time,
+            tp -> Optional.empty(),
+            (topicPartition, offset) -> { },
+            brokerTopicStats, metrics, endPoint
+        );
+
+        try {
+            assertEquals(Long.MAX_VALUE, (long) rlm.fetchQuotaManager().quota().bound());
+            assertEquals(Long.MAX_VALUE, (long) rlm.copyQuotaManager().quota().bound());
+
+            long throttleTime = rlm.recordAndCheckFetchQuota(100_000_000);
+            assertEquals(0L, throttleTime);
+
+            long fetchQuota = 1_000_000L;
+            rlm.updateFetchQuota(fetchQuota);
+            assertEquals(fetchQuota, (long) rlm.fetchQuotaManager().quota().bound());
+
+            throttleTime = rlm.recordAndCheckFetchQuota(50_000);
+            assertTrue(throttleTime > 0);
+        } finally {
+            rlm.close();
+        }
+    }
+
     private void appendRecordsToFile(File file, int nRecords, int nRecordsPerBatch) throws IOException {
         byte magic = RecordBatch.CURRENT_MAGIC_VALUE;
         Compression compression = Compression.NONE;
