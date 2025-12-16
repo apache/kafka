@@ -3012,6 +3012,7 @@ org.apache.kafka.streams.processor.internals.TaskExecutorTest:
 org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldAddFailedActiveTaskToRecycleDuringAssignmentToTaskRegistry
 - shouldAddFailedActiveTasksToReassignWithDifferentInputPartitionsDuringAssignmentToTaskRegistry
+- shouldAddFailedRestoredTasksBackToStateUpdaterOnException
 - shouldAddFailedStandbyTaskToRecycleDuringAssignmentToTaskRegistry
 - shouldAddNewActiveTasks
 - shouldAddNonResumedSuspendedTasks
