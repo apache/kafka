@@ -275,6 +275,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
+                    .withCachedBufferMaxBytesSupplier(config::cachedBufferMaxBytes)
                     .build();
 
             return new GroupCoordinatorService(
@@ -2417,11 +2418,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
                     // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
                     // 3.9.
-                    OffsetFetchResponse.groupError(
+                OffsetFetchResponse.groupError(
                             request,
                             Errors.NOT_COORDINATOR,
                             context.requestVersion()
-                    );
+                );
             default -> handleOperationException(
                     operationName,
                     request,

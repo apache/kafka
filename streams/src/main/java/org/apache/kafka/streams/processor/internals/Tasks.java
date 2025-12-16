@@ -207,17 +207,6 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public synchronized void replaceActiveWithStandby(final StandbyTask standbyTask) {
-        final TaskId taskId = standbyTask.id();
-        if (activeTasksPerId.remove(taskId) == null) {
-            throw new IllegalStateException("Attempted to replace unknown active task with standby task: " + taskId);
-        }
-        removePartitionsForActiveTask(taskId);
-
-        standbyTasksPerId.put(standbyTask.id(), standbyTask);
-    }
-
-    @Override
     public synchronized void replaceStandbyWithActive(final StreamTask activeTask) {
         final TaskId taskId = activeTask.id();
         if (standbyTasksPerId.remove(taskId) == null) {
