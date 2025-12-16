@@ -143,11 +143,6 @@ class NodeToControllerChannelManagerImpl(
         logContext
       )
 
-      val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-        config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-        ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-        CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
-      )
       new NetworkClient(
         selector,
         manualMetadataUpdater,
@@ -165,7 +160,7 @@ class NodeToControllerChannelManagerImpl(
         apiVersions,
         logContext,
         MetadataRecoveryStrategy.NONE,
-        bootstrapConfiguration
+        NetworkClient.BootstrapConfiguration.disabled
       )
     }
     val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"

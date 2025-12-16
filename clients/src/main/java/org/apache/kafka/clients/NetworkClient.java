@@ -1201,6 +1201,12 @@ public class NetworkClient implements KafkaClient {
             this.isBootstrapDisabled = false;
         }
 
+        public static BootstrapConfiguration disabled() {
+            BootstrapConfiguration bootstrapConfiguration = new BootstrapConfiguration(null, null, 0);
+            bootstrapConfiguration.disableBootstrap();
+            return bootstrapConfiguration;
+        }
+
         public void disableBootstrap() {
             this.isBootstrapDisabled = true;
         }

@@ -82,11 +82,6 @@ object TransactionMarkerChannelManager {
       channelBuilder,
       logContext
     )
-    val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-      config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-      ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-      CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
-    )
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
@@ -104,7 +99,7 @@ object TransactionMarkerChannelManager {
       new ApiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      bootstrapConfiguration
+      NetworkClient.BootstrapConfiguration.disabled
     )
 
     new TransactionMarkerChannelManager(config,

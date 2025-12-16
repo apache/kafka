@@ -25,7 +25,7 @@ import java.util.concurrent.CompletableFuture
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, CommonClientConfigs, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
@@ -236,11 +236,6 @@ class KafkaRaftManager[T](
     val reconnectBackoffMs = 50
     val reconnectBackoffMsMs = 500
     val discoverBrokerVersions = true
-    val bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-      config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-      ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-      CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
-    )
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
@@ -258,7 +253,7 @@ class KafkaRaftManager[T](
       apiVersions,
       logContext,
       MetadataRecoveryStrategy.NONE,
-      bootstrapConfiguration
+      NetworkClient.BootstrapConfiguration.disabled
     )
 
     (controllerListenerName, networkClient)
