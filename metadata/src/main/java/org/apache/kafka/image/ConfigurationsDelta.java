@@ -21,48 +21,17 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
-import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.function.Supplier;
 
 
 /**
  * Represents changes to the configurations in the metadata image.
  */
 public final class ConfigurationsDelta {
-    /**
-     * Supplier for KafkaConfigSchema to get valid config names whitelist by resource type.
-     */
-    private static volatile Supplier<KafkaConfigSchema> configSchemaSupplier = null;
-
-    /**
-     * Set the supplier for KafkaConfigSchema. This should be called during initialization.
-     */
-    public static void setConfigSchemaSupplier(Supplier<KafkaConfigSchema> supplier) {
-        configSchemaSupplier = supplier;
-    }
-
-    /**
-     * Get the set of valid configuration names for a given resource type.
-     * Returns empty set if configSchema is not initialized.
-     */
-    static Set<String> getValidConfigNames(Type resourceType) {
-        Supplier<KafkaConfigSchema> supplier = configSchemaSupplier;
-        if (supplier == null) {
-            return Set.of();
-        }
-        KafkaConfigSchema configSchema = supplier.get();
-        if (configSchema == null) {
-            return Set.of();
-        }
-        return configSchema.validConfigNames(resourceType);
-    }
-
     private final ConfigurationsImage image;
     private final Map<ConfigResource, ConfigurationDelta> changes = new HashMap<>();
 
@@ -89,18 +58,8 @@ public final class ConfigurationsDelta {
     }
 
     public void replay(ConfigRecord record) {
-        // Filter out invalid configs when building the image
-        Type resourceType = Type.forId(record.resourceType());
-        if (resourceType != Type.UNKNOWN) {
-            Set<String> validConfigNames = getValidConfigNames(resourceType);
-            if (!validConfigNames.isEmpty() && !validConfigNames.contains(record.name())) {
-                // Ignore this record
-                return;
-            }
-        }
-
         ConfigResource resource =
-            new ConfigResource(resourceType, record.resourceName());
+            new ConfigResource(Type.forId(record.resourceType()), record.resourceName());
         ConfigurationImage configImage = image.resourceData().getOrDefault(resource,
                 new ConfigurationImage(resource, Map.of()));
         ConfigurationDelta delta = changes.computeIfAbsent(resource,
@@ -125,11 +84,7 @@ public final class ConfigurationsDelta {
             ConfigResource resource = entry.getKey();
             ConfigurationDelta delta = changes.get(resource);
             if (delta == null) {
-                // Filter invalid configs from the base image
-                ConfigurationImage filteredImage = filterBaseImage(entry.getValue());
-                if (!filteredImage.isEmpty()) {
-                    newData.put(resource, filteredImage);
-                }
+                newData.put(resource, entry.getValue());
             } else {
                 ConfigurationImage newImage = delta.apply();
                 if (!newImage.isEmpty()) {
@@ -146,24 +101,6 @@ public final class ConfigurationsDelta {
             }
         }
         return new ConfigurationsImage(newData);
-    }
-
-    private ConfigurationImage filterBaseImage(ConfigurationImage baseImage) {
-        Type resourceType = baseImage.resource().type();
-        Set<String> validConfigNames = resourceType != Type.UNKNOWN ?
-            getValidConfigNames(resourceType) : Set.of();
-        
-        if (validConfigNames.isEmpty()) {
-            return baseImage;
-        }
-        
-        Map<String, String> filteredData = new HashMap<>();
-        for (Entry<String, String> entry : baseImage.data().entrySet()) {
-            if (validConfigNames.contains(entry.getKey())) {
-                filteredData.put(entry.getKey(), entry.getValue());
-            }
-        }
-        return new ConfigurationImage(baseImage.resource(), filteredData);
     }
 
     @Override

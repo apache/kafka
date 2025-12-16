@@ -17,14 +17,12 @@
 
 package org.apache.kafka.image;
 
-import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.metadata.ConfigRecord;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Set;
 
 
 /**
@@ -59,17 +57,7 @@ public final class ConfigurationDelta {
 
     public ConfigurationImage apply() {
         Map<String, String> newData = new HashMap<>(image.data().size());
-        Type resourceType = image.resource().type();
-        Set<String> validConfigNames = resourceType != Type.UNKNOWN ? 
-            ConfigurationsDelta.getValidConfigNames(resourceType) : Set.of();
-        
-        // Filter out invalid configs from the base image
         for (Entry<String, String> entry : image.data().entrySet()) {
-            if (!validConfigNames.isEmpty() &&
-                !validConfigNames.contains(entry.getKey())) {
-                continue;
-            }
-            
             Optional<String> change = changes.get(entry.getKey());
             if (change == null) {
                 newData.put(entry.getKey(), entry.getValue());

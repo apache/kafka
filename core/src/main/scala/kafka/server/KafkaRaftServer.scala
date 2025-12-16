@@ -30,7 +30,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.coordinator.group.GroupConfig
-import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.config.{QuotaConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.slf4j.Logger
@@ -188,10 +188,20 @@ object KafkaRaftServer {
     (metaPropsEnsemble, bootstrapMetadata)
   }
 
+  def getAllDynamicConfigNames: util.Set[String] = {
+    val topicConfigs = LogConfig.nonInternalConfigNames.asScala.toSet
+    val brokerConfigs = DynamicConfig.Broker.names.asScala.toSet
+    val userConfigs = QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs().names.asScala.toSet
+    val clientConfigs = QuotaConfig.userAndClientQuotaConfigs().names.asScala.toSet
+    val ipConfigs = QuotaConfig.ipConfigs.names.asScala.toSet
+    val clientMetricsConfigs = ClientMetricsConfigs.configDef().names.asScala.toSet
+    val groupConfigs = GroupConfig.configDef().names.asScala.toSet
+
+    (topicConfigs ++ brokerConfigs ++ userConfigs ++ clientConfigs ++ ipConfigs ++ clientMetricsConfigs ++ groupConfigs).asJava
+  }
+
   val configSchema = new KafkaConfigSchema(Map(
     ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
     ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
-    ConfigResource.Type.GROUP -> GroupConfig.configDef(),
-    ConfigResource.Type.CLIENT_METRICS -> ClientMetricsConfigs.configDef(),
   ).asJava, ServerTopicConfigSynonyms.ALL_TOPIC_CONFIG_SYNONYMS)
 }
