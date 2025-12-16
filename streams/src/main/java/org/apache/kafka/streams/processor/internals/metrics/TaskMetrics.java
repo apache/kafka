@@ -116,8 +116,8 @@ public class TaskMetrics {
     }
 
     public static Sensor totalInputBufferBytesSensor(final String threadId,
-        final String taskId,
-        final StreamsMetricsImpl streamsMetrics) {
+                                                     final String taskId,
+                                                     final StreamsMetricsImpl streamsMetrics) {
         final String name = INPUT_BUFFER_BYTES_TOTAL;
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, RecordingLevel.INFO);
 
