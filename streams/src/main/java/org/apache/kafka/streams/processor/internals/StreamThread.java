@@ -2163,6 +2163,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (!latencyWindowsInitialized) {
             // Start both windows at the same instant with a zero record
             pollLatencyWindowedSum.record(metricsConfig, 0.0, now);
+            this.totalCommitLatencyWindowedSum.record(metricsConfig, 0, now);
+            this.processLatencyWindowedSum.record(metricsConfig, 0, now);
+            this.punctuateLatencyWindowedSum.record(metricsConfig, 0, now);
             runOnceLatencyWindowedSum.record(metricsConfig, 0.0, now);
             latencyWindowsInitialized = true;
         }
