@@ -18,15 +18,12 @@ package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.types.nullable.CompactNullableArrayOf;
-import org.apache.kafka.common.protocol.types.nullable.CompactNullableBytes;
-import org.apache.kafka.common.protocol.types.nullable.CompactNullableRecords;
-import org.apache.kafka.common.protocol.types.nullable.CompactNullableString;
 import org.apache.kafka.common.protocol.types.nullable.NullableArrayOf;
-import org.apache.kafka.common.protocol.types.nullable.NullableBytes;
-import org.apache.kafka.common.protocol.types.nullable.NullableRecords;
 import org.apache.kafka.common.protocol.types.nullable.NullableSchema;
-import org.apache.kafka.common.protocol.types.nullable.NullableString;
+import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
@@ -461,29 +458,642 @@ public abstract class Type {
         }
     };
 
-    public static final DocumentedType STRING = new StringType();
+    public String stringRead(ByteBuffer buffer, short length) {
+        if (length > buffer.remaining())
+            throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
+        String result = Utils.utf8(buffer, length);
+        buffer.position(buffer.position() + length);
+        return result;
+    }
 
-    public static final DocumentedType COMPACT_STRING = new CompactString();
+    public static final DocumentedType STRING = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            byte[] bytes = Utils.utf8((String) o);
+            if (bytes.length > Short.MAX_VALUE)
+                throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
+            buffer.putShort((short) bytes.length);
+            buffer.put(bytes);
+        }
 
-    public static final DocumentedType NULLABLE_STRING = new NullableString();
+        @Override
+        public String read(ByteBuffer buffer) {
+            short length = buffer.getShort();
+            if (length < 0)
+                throw new SchemaException("String length " + length + " cannot be negative");
+            return stringRead(buffer, length);
+        }
 
-    public static final DocumentedType COMPACT_NULLABLE_STRING = new CompactNullableString();
+        @Override
+        public int sizeOf(Object o) {
+            return 2 + Utils.utf8Length((String) o);
+        }
 
-    public static final DocumentedType BYTES = new Bytes();
+        @Override
+        public String typeName() {
+            return "STRING";
+        }
 
-    public static final DocumentedType COMPACT_BYTES = new CompactBytes();
+        @Override
+        public String validate(Object item) {
+            if (item instanceof String)
+                return (String) item;
+            else
+                throw new SchemaException(item + " is not a String.");
+        }
 
-    public static final DocumentedType NULLABLE_BYTES = new NullableBytes();
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters. First the length N is given as an " + INT16 +
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                "Length must not be negative.";
+        }
+    };
 
-    public static final DocumentedType COMPACT_NULLABLE_BYTES = new CompactNullableBytes();
+    public String compactStringRead(ByteBuffer buffer, int length) {
+        if (length > Short.MAX_VALUE)
+            throw new SchemaException("String length " + length + " is larger than the maximum string length.");
+        if (length > buffer.remaining())
+            throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
+        String result = Utils.utf8(buffer, length);
+        buffer.position(buffer.position() + length);
+        return result;
+    }
 
-    public static final DocumentedType RECORDS = new Records();
+    public static final DocumentedType COMPACT_STRING = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            byte[] bytes = Utils.utf8((String) o);
+            if (bytes.length > Short.MAX_VALUE)
+                throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
+            ByteUtils.writeUnsignedVarint(bytes.length + 1, buffer);
+            buffer.put(bytes);
+        }
 
-    public static final DocumentedType COMPACT_RECORDS = new CompactRecords();
+        @Override
+        public String read(ByteBuffer buffer) {
+            int length = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (length < 0)
+                throw new SchemaException("String length " + length + " cannot be negative");
+            return compactStringRead(buffer, length);
+        }
 
-    public static final DocumentedType NULLABLE_RECORDS = new NullableRecords();
+        @Override
+        public int sizeOf(Object o) {
+            int length = Utils.utf8Length((String) o);
+            return ByteUtils.sizeOfUnsignedVarint(length + 1) + length;
+        }
 
-    public static final DocumentedType COMPACT_NULLABLE_RECORDS = new CompactNullableRecords();
+        @Override
+        public String typeName() {
+            return "COMPACT_STRING";
+        }
+
+        @Override
+        public String validate(Object item) {
+            if (item instanceof String)
+                return (String) item;
+            else
+                throw new SchemaException(item + " is not a String.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence.";
+        }
+    };
+
+    public static final DocumentedType NULLABLE_STRING = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                buffer.putShort((short) -1);
+                return;
+            }
+
+            STRING.write(buffer, o);
+        }
+
+        @Override
+        public String read(ByteBuffer buffer) {
+            short length = buffer.getShort();
+            if (length < 0)
+                return null;
+
+            return stringRead(buffer, length);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null)
+                return 2;
+
+            return 2 + Utils.utf8Length((String) o);
+        }
+
+        @Override
+        public String typeName() {
+            return "NULLABLE_STRING";
+        }
+
+        @Override
+        public String validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof String)
+                return (String) item;
+            else
+                throw new SchemaException(item + " is not a String.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters or null. For non-null strings, first the length N is given as an " + INT16 +
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                "A null value is encoded with length of -1 and there are no following bytes.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_NULLABLE_STRING = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                ByteUtils.writeUnsignedVarint(0, buffer);
+                return;
+            }
+            COMPACT_STRING.write(buffer, o);
+        }
+
+        @Override
+        public String read(ByteBuffer buffer) {
+            int length = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (length < 0)
+                return null;
+            return compactStringRead(buffer, length);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null) {
+                return 1;
+            }
+            int length = Utils.utf8Length((String) o);
+            return ByteUtils.sizeOfUnsignedVarint(length + 1) + length;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_NULLABLE_STRING";
+        }
+
+        @Override
+        public String validate(Object item) {
+            if (item == null) {
+                return null;
+            } else if (item instanceof String) {
+                return (String) item;
+            } else {
+                throw new SchemaException(item + " is not a String.");
+            }
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
+                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                "A null string is represented with a length of 0.";
+        }
+    };
+
+    public ByteBuffer bytesRead(ByteBuffer buffer, int size) {
+        if (size > buffer.remaining())
+            throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
+
+        int limit = buffer.limit();
+        int newPosition = buffer.position() + size;
+        buffer.limit(newPosition);
+        ByteBuffer val = buffer.slice();
+        buffer.limit(limit);
+        buffer.position(newPosition);
+        return val;
+    }
+
+    public static final DocumentedType BYTES = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteBuffer arg = (ByteBuffer) o;
+            int pos = arg.position();
+            buffer.putInt(arg.remaining());
+            buffer.put(arg);
+            arg.position(pos);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int size = buffer.getInt();
+            if (size < 0)
+                throw new SchemaException("Bytes size " + size + " cannot be negative");
+
+            return bytesRead(buffer, size);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            ByteBuffer buffer = (ByteBuffer) o;
+            return 4 + buffer.remaining();
+        }
+
+        @Override
+        public String typeName() {
+            return "BYTES";
+        }
+
+        @Override
+        public ByteBuffer validate(Object item) {
+            if (item instanceof ByteBuffer)
+                return (ByteBuffer) item;
+            else
+                throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes. First the length N is given as an " + INT32 +
+                ". Then N bytes follow.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_BYTES = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteBuffer arg = (ByteBuffer) o;
+            int pos = arg.position();
+            ByteUtils.writeUnsignedVarint(arg.remaining() + 1, buffer);
+            buffer.put(arg);
+            arg.position(pos);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int size = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (size < 0)
+                throw new SchemaException("Bytes size " + size + " cannot be negative");
+
+            return bytesRead(buffer, size);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            ByteBuffer buffer = (ByteBuffer) o;
+            int remaining = buffer.remaining();
+            return ByteUtils.sizeOfUnsignedVarint(remaining + 1) + remaining;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_BYTES";
+        }
+
+        @Override
+        public ByteBuffer validate(Object item) {
+            if (item instanceof ByteBuffer)
+                return (ByteBuffer) item;
+            else
+                throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
+                " Then N bytes follow.";
+        }
+    };
+
+    public static final DocumentedType NULLABLE_BYTES = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                buffer.putInt(-1);
+                return;
+            }
+            BYTES.write(buffer, o);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int size = buffer.getInt();
+            if (size < 0)
+                return null;
+
+            return bytesRead(buffer, size);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null)
+                return 4;
+
+            return BYTES.sizeOf(o);
+        }
+
+        @Override
+        public String typeName() {
+            return "NULLABLE_BYTES";
+        }
+
+        @Override
+        public ByteBuffer validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof ByteBuffer)
+                return (ByteBuffer) item;
+
+            throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes or null. For non-null values, first the length N is given as an " + INT32 +
+                ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_NULLABLE_BYTES = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                ByteUtils.writeUnsignedVarint(0, buffer);
+                return;
+            }
+            COMPACT_BYTES.write(buffer, o);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            int size = ByteUtils.readUnsignedVarint(buffer) - 1;
+            if (size < 0)
+                return null;
+
+            return bytesRead(buffer, size);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null) {
+                return 1;
+            }
+            return COMPACT_BYTES.sizeOf(o);
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_NULLABLE_BYTES";
+        }
+
+        @Override
+        public ByteBuffer validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof ByteBuffer)
+                return (ByteBuffer) item;
+
+            throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
+                " Then N bytes follow. A null object is represented with a length of 0.";
+        }
+    };
+
+    public static final DocumentedType RECORDS = new DocumentedType() {
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o instanceof MemoryRecords) {
+                MemoryRecords records = (MemoryRecords) o;
+                BYTES.write(buffer, records.buffer().duplicate());
+            } else {
+                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
+            }
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) BYTES.read(buffer);
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            BaseRecords records = (BaseRecords) o;
+            return 4 + records.sizeInBytes();
+        }
+
+        @Override
+        public String typeName() {
+            return "RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item instanceof MemoryRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + MemoryRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + BYTES + ". " +
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_RECORDS = new DocumentedType() {
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o instanceof MemoryRecords) {
+                MemoryRecords records = (MemoryRecords) o;
+                COMPACT_BYTES.write(buffer, records.buffer().duplicate());
+            } else {
+                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
+            }
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) COMPACT_BYTES.read(buffer);
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            BaseRecords records = (BaseRecords) o;
+            int recordsSize = records.sizeInBytes();
+            return ByteUtils.sizeOfUnsignedVarint(recordsSize + 1) + recordsSize;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item instanceof BaseRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + COMPACT_BYTES + ". " +
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
+    };
+
+    public static final DocumentedType NULLABLE_RECORDS = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                NULLABLE_BYTES.write(buffer, null);
+                return;
+            } 
+            RECORDS.write(buffer, o);
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
+            if (recordsBuffer == null) 
+                return null;
+
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null)
+                return 4;
+
+            return RECORDS.sizeOf(o);
+        }
+
+        @Override
+        public String typeName() {
+            return "NULLABLE_RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof BaseRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + NULLABLE_BYTES + ". " +
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_NULLABLE_RECORDS = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                COMPACT_NULLABLE_BYTES.write(buffer, null);
+                return;
+            }
+            COMPACT_RECORDS.write(buffer, o);
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) COMPACT_NULLABLE_BYTES.read(buffer);
+            if (recordsBuffer == null) {
+                return null;
+            }
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null) {
+                return 1;
+            }
+
+            return COMPACT_RECORDS.sizeOf(o);
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_NULLABLE_RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof BaseRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + COMPACT_NULLABLE_BYTES + ". " +
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
+    };
 
     public static final DocumentedType VARINT = new DocumentedType() {
         @Override
