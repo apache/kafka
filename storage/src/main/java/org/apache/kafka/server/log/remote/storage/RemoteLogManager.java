@@ -836,7 +836,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 if (!isCancelled()) {
                     logger.warn("Current thread for partition {} is interrupted", topicIdPartition, ex);
                 }
-            } catch (RetriableException ex) {
+            } catch (RetriableException | RetriableRemoteStorageException ex) {
                 logger.debug("Encountered a retryable error while executing current task for partition {}", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
