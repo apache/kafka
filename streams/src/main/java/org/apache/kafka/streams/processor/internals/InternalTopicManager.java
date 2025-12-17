@@ -614,8 +614,6 @@ public class InternalTopicManager {
                     deadlineMs - time.milliseconds()
                 );
                 Utils.sleep(retryBackOffMs);
-            } else {
-                continue;
             }
         } 
         return createdTopics;
