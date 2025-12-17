@@ -498,7 +498,7 @@ public class InternalTopicManager {
             }
             if (!topicsNotReady.isEmpty()) {
                 maybeThrowTimeout(new TimeoutContext(
-                    Collections.singleton("makeReadyCheck"), // dummy collection just to trigger if `topicsNotReady` is non-empty
+                    topicsNotReady,
                     deadlineMs,
                     "MakeReady timeout",
                     String.format("Could not create topics within %d milliseconds. This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs),
