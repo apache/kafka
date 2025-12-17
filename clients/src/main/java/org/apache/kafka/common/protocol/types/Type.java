@@ -560,7 +560,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
-                ". Then N bytes follow which are the UTF-8 encoding of the character sequence.";
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence.";
         }
     };
 
@@ -977,8 +977,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + COMPACT_BYTES + ". " +
-                "For a detailed description of records see " +
-                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                    "For a detailed description of records see " +
+                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -1033,8 +1033,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + NULLABLE_BYTES + ". " +
-                "For a detailed description of records see " +
-                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                    "For a detailed description of records see " +
+                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -1090,8 +1090,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + COMPACT_NULLABLE_BYTES + ". " +
-                "For a detailed description of records see " +
-                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                    "For a detailed description of records see " +
+                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
