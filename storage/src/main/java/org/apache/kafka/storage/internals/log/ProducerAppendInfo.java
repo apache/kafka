@@ -81,7 +81,7 @@ public class ProducerAppendInfo {
         this.origin = origin;
         this.verificationStateEntry = verificationStateEntry;
 
-        updatedEntry = currentEntry.withProducerIdAndBatchMetadata(producerId, Optional.empty());
+        updatedEntry = currentEntry.withProducerId(producerId);
     }
 
     public long producerId() {

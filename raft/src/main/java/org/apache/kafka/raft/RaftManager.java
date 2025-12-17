@@ -41,11 +41,11 @@ public interface RaftManager<T> {
     RaftClient<T> client();
 
     /**
-     * Returns a replicated log.
+     * Returns a raft log.
      * <p>
      * Always returns the same instance. Callers must NOT close it.
      */
-    ReplicatedLog replicatedLog();
+    RaftLog raftLog();
 
     /**
      * Returns the record Serde.

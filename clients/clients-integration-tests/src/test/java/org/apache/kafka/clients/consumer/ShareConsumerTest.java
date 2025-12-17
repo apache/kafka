@@ -2219,29 +2219,6 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testDeliveryCountNotIncreaseAfterSessionClose() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer()) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
-            for (int i = 0; i < 10; i++) {
-                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
-            }
-        }
-
-        // Perform the fetch, close in a loop.
-        for (int count = 0; count < ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT; count++) {
-            consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, false);
-        }
-
-        // If the delivery count is increased, consumer will get nothing.
-        int consumedMessageCount = consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, true);
-        // The records returned belong to offsets 0-9.
-        assertEquals(10, consumedMessageCount);
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
     public void testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -2270,13 +2247,13 @@ public class ShareConsumerTest {
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
             assertEquals(2, records.count());
             assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-            assertEquals((short) 1, records.records(tp).get(1).deliveryCount().get());
+            assertEquals((short) 2, records.records(tp).get(1).deliveryCount().get());
         }
     }
 
     @ClusterTest(
         serverProperties = {
-            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2"),
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "3"),
         }
     )
     public void testBehaviorOnDeliveryCountBoundary() {
@@ -2304,7 +2281,6 @@ public class ShareConsumerTest {
             records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-
         }
 
         // Start again and same record should be delivered
@@ -2312,7 +2288,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Set.of(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
-            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+            assertEquals((short) 3, records.records(tp).get(0).deliveryCount().get());
         }
     }
 
@@ -2369,9 +2345,9 @@ public class ShareConsumerTest {
         // Let the complex consumer read the messages.
         service.schedule(() -> prodState.done().set(true), 5L, TimeUnit.SECONDS);
 
-        // All messages which can be read are read, some would be redelivered (roughly 3 times the records produced).
+        // All messages which can be read are read, some would be redelivered (roughly 2 times the records produced).
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
-        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 3 * 0.95);    // 3 times with margin of error (5%).
+        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 2 * 0.95);    // 2 times with margin of error (5%).
 
         assertTrue(delta > 0,
             String.format("Producer (%d) and share consumer (%d) record count mismatch.", prodState.count().get(), complexCons1.recordsRead()));

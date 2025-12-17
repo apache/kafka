@@ -197,8 +197,7 @@ allprojects {
           // ensure we have a single version in the classpath despite transitive dependencies
           libs.scalaLibrary,
           libs.scalaReflect,
-          libs.jacksonAnnotations,
-          libs.commonsLang
+          libs.jacksonAnnotations
         )
       }
     }
@@ -2063,6 +2062,7 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':metadata')
+    testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':storage')
     testImplementation project(':core').sourceSets.test.output
@@ -2099,6 +2099,7 @@ project(':raft') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':storage')
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
 
@@ -2319,7 +2320,6 @@ project(':storage') {
   }
 
   dependencies {
-    implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
@@ -3647,6 +3647,7 @@ project(':connect:runtime') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':raft')
     testImplementation project(':server-common')
     testImplementation project(':server')
     testImplementation project(':group-coordinator')
@@ -3875,6 +3876,7 @@ project(':connect:mirror') {
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':raft')
     testImplementation project(':server')
     testImplementation project(':server-common')
 

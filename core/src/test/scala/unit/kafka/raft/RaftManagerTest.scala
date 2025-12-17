@@ -32,9 +32,9 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.raft.{Endpoints, KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions._

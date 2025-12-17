@@ -94,6 +94,7 @@
       //                                       The group coordinator will attempt to create all missing internal topics, if any errors occur during
       //                                       topic creation, this will be indicated in StatusDetail.
       //  4 - SHUTDOWN_APPLICATION           - A client requested the shutdown of the whole application.
+      //  5 - ASSIGNMENT_DELAYED             - No assignment was provided because assignment computation was delayed.
       { "name": "StatusCode", "type": "int8", "versions": "0+",
         "about": "A code to indicate that a particular status is active for the group membership" },
       { "name": "StatusDetail", "type": "string", "versions": "0+",

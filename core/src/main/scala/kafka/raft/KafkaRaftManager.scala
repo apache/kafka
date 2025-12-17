@@ -37,7 +37,8 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftManager, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.internals.KafkaRaftLog
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, MetadataLogConfig, QuorumConfig, RaftLog, RaftManager, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -123,7 +124,7 @@ class KafkaRaftManager[T](
     }
   }
 
-  override val replicatedLog: ReplicatedLog = buildMetadataLog()
+  override val raftLog: RaftLog = buildMetadataLog()
   private val netChannel = buildNetworkChannel()
   private val expirationTimer = new SystemTimer("raft-expiration-executor")
   private val expirationService = new TimingWheelExpirationService(expirationTimer)
@@ -147,7 +148,7 @@ class KafkaRaftManager[T](
     CoreUtils.swallow(clientDriver.shutdown(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
     Utils.closeQuietly(netChannel, "net channel")
-    Utils.closeQuietly(replicatedLog, "replicated log")
+    Utils.closeQuietly(raftLog, "raft log")
     CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
   }
 
@@ -166,7 +167,7 @@ class KafkaRaftManager[T](
       metadataLogDirUuid,
       recordSerde,
       netChannel,
-      replicatedLog,
+      raftLog,
       time,
       expirationService,
       logContext,
@@ -190,14 +191,14 @@ class KafkaRaftManager[T](
     KafkaRaftManager.createLogDirectory(new File(config.metadataLogDir), logDirName)
   }
 
-  private def buildMetadataLog(): KafkaMetadataLog = {
-    KafkaMetadataLog(
+  private def buildMetadataLog(): KafkaRaftLog = {
+    KafkaRaftLog.createLog(
       topicPartition,
       topicId,
       dataDir,
       time,
       scheduler,
-      config = new MetadataLogConfig(config),
+      new MetadataLogConfig(config),
       config.nodeId
     )
   }
