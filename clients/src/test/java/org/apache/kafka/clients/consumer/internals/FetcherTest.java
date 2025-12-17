@@ -155,11 +155,11 @@ public class FetcherTest {
     private final String topicName = "test";
     private final String groupId = "test-group";
     private final Uuid topicId = Uuid.randomUuid();
-    private final Map<String, Uuid> topicIds = new HashMap<>() {
-        {
-            put(topicName, topicId);
-        }
-    };
+    private final Map<String, Uuid> topicIds;
+    {
+        topicIds = new HashMap<>();
+        topicIds.put(topicName, topicId);
+    }
     private final Map<Uuid, String> topicNames = singletonMap(topicId, topicName);
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
     private final TopicPartition tp0 = new TopicPartition(topicName, 0);

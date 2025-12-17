@@ -491,10 +491,9 @@ public class MirrorConnectorsIntegrationBaseTest {
         produceMessages(primaryProducer, "test-topic-1");
         String backupTopic1 = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
-        Map<String, Object> consumerProps  = new HashMap<>() {{
-                put("group.id", consumerGroupName);
-                put("auto.offset.reset", "earliest");
-            }};
+        Map<String, Object> consumerProps = new HashMap<>();
+        consumerProps.put("group.id", consumerGroupName);
+        consumerProps.put("auto.offset.reset", "earliest");
         // create consumers before starting the connectors, so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> primaryConsumer = primary.kafka().createConsumerAndSubscribeTo(consumerProps, 
                 "test-topic-1")) {

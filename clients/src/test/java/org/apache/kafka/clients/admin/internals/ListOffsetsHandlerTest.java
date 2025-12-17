@@ -65,16 +65,16 @@ public final class ListOffsetsHandlerTest {
 
     private final Node node = new Node(1, "host", 1234);
 
-    private final Map<TopicPartition, Long> offsetTimestampsByPartition = new HashMap<>() {
-        {
-            put(t0p0, ListOffsetsRequest.LATEST_TIMESTAMP);
-            put(t0p1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
-            put(t1p0, 123L);
-            put(t1p1, ListOffsetsRequest.MAX_TIMESTAMP);
-            put(t2p0, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
-            put(t2p1, ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
-        }
-    };
+    private final Map<TopicPartition, Long> offsetTimestampsByPartition;
+    {
+        offsetTimestampsByPartition = new HashMap<>();
+        offsetTimestampsByPartition.put(t0p0, ListOffsetsRequest.LATEST_TIMESTAMP);
+        offsetTimestampsByPartition.put(t0p1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
+        offsetTimestampsByPartition.put(t1p0, 123L);
+        offsetTimestampsByPartition.put(t1p1, ListOffsetsRequest.MAX_TIMESTAMP);
+        offsetTimestampsByPartition.put(t2p0, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP);
+        offsetTimestampsByPartition.put(t2p1, ListOffsetsRequest.LATEST_TIERED_TIMESTAMP);
+    }
 
     @Test
     public void testBuildRequestSimple() {

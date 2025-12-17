@@ -82,16 +82,18 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class RetryWithToleranceOperatorTest {
 
-    private static final Map<String, String> PROPERTIES = new HashMap<>() {{
-            put(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG, Objects.toString(2));
-            put(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG, Objects.toString(3000));
-            put(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
+    private static final Map<String, String> PROPERTIES;
+    static {
+        PROPERTIES = new HashMap<>();
+        PROPERTIES.put(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG, Objects.toString(2));
+        PROPERTIES.put(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG, Objects.toString(3000));
+        PROPERTIES.put(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.INFO.toString());
 
-            // define required properties
-            put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-            put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
-            put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
-        }};
+        // define required properties
+        PROPERTIES.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        PROPERTIES.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
+        PROPERTIES.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
+    }
 
     public static <T> RetryWithToleranceOperator<T> noneOperator() {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, new ErrorHandlingMetrics(

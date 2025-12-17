@@ -38,14 +38,11 @@ class EnvVarConfigProviderTest {
 
     @BeforeEach
     public void setup() {
-        Map<String, String> testEnvVars = new HashMap<>() {
-            {
-                put("test_var1", "value1");
-                put("secret_var2", "value2");
-                put("new_var3", "value3");
-                put("not_so_secret_var4", "value4");
-            }
-        };
+        Map<String, String> testEnvVars = new HashMap<>();
+        testEnvVars.put("test_var1", "value1");
+        testEnvVars.put("secret_var2", "value2");
+        testEnvVars.put("new_var3", "value3");
+        testEnvVars.put("not_so_secret_var4", "value4");
         envVarConfigProvider = new EnvVarConfigProvider(testEnvVars);
         envVarConfigProvider.configure(Collections.singletonMap("", ""));
     }

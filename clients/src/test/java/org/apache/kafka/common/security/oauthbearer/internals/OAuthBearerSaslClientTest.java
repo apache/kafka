@@ -42,13 +42,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class OAuthBearerSaslClientTest {
 
-    private static final Map<String, String> TEST_PROPERTIES = new LinkedHashMap<>() {
-        {
-            put("One", "1");
-            put("Two", "2");
-            put("Three", "3");
-        }
-    };
+    private static final Map<String, String> TEST_PROPERTIES;
+    static {
+        TEST_PROPERTIES = new LinkedHashMap<>();
+        TEST_PROPERTIES.put("One", "1");
+        TEST_PROPERTIES.put("Two", "2");
+        TEST_PROPERTIES.put("Three", "3");
+    }
     private SaslExtensions testExtensions = new SaslExtensions(TEST_PROPERTIES);
     private final String errorMessage = "Error as expected!";
 

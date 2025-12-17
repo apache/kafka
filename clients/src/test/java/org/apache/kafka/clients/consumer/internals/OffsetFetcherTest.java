@@ -101,11 +101,11 @@ public class OffsetFetcherTest {
 
     private final String topicName = "test";
     private final Uuid topicId = Uuid.randomUuid();
-    private final Map<String, Uuid> topicIds = new HashMap<>() {
-        {
-            put(topicName, topicId);
-        }
-    };
+    private final Map<String, Uuid> topicIds;
+    {
+        topicIds = new HashMap<>();
+        topicIds.put(topicName, topicId);
+    }
     private final TopicPartition tp0 = new TopicPartition(topicName, 0);
     private final TopicPartition tp1 = new TopicPartition(topicName, 1);
     private final TopicPartition tp2 = new TopicPartition(topicName, 2);

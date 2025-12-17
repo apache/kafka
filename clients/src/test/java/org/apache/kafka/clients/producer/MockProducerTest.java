@@ -400,19 +400,13 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group1 = "g1";
-        Map<TopicPartition, OffsetAndMetadata> group1Commit = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-                put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> group1Commit = new HashMap<>();
+        group1Commit.put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
+        group1Commit.put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
         String group2 = "g2";
-        Map<TopicPartition, OffsetAndMetadata> group2Commit = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(101L, null));
-                put(new TopicPartition(topic, 1), new OffsetAndMetadata(21L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> group2Commit = new HashMap<>();
+        group2Commit.put(new TopicPartition(topic, 0), new OffsetAndMetadata(101L, null));
+        group2Commit.put(new TopicPartition(topic, 1), new OffsetAndMetadata(21L, null));
         producer.sendOffsetsToTransaction(group1Commit, new ConsumerGroupMetadata(group1));
         producer.sendOffsetsToTransaction(group2Commit, new ConsumerGroupMetadata(group2));
 
@@ -451,11 +445,8 @@ public class MockProducerTest {
 
         assertFalse(producer.sentOffsets());
 
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>();
+        groupCommit.put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
         producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata("groupId"));
         assertTrue(producer.sentOffsets());
     }
@@ -468,11 +459,8 @@ public class MockProducerTest {
 
         assertFalse(producer.sentOffsets());
 
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>();
+        groupCommit.put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
         producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata("groupId"));
         producer.commitTransaction(); // commit should not reset "sentOffsets" flag
         assertTrue(producer.sentOffsets());
@@ -495,18 +483,12 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit1 = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-                put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
-            }
-        };
-        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 1), new OffsetAndMetadata(101L, null));
-                put(new TopicPartition(topic, 2), new OffsetAndMetadata(21L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> groupCommit1 = new HashMap<>();
+        groupCommit1.put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
+        groupCommit1.put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
+        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<>();
+        groupCommit2.put(new TopicPartition(topic, 1), new OffsetAndMetadata(101L, null));
+        groupCommit2.put(new TopicPartition(topic, 2), new OffsetAndMetadata(21L, null));
         producer.sendOffsetsToTransaction(groupCommit1, new ConsumerGroupMetadata(group));
         producer.sendOffsetsToTransaction(groupCommit2, new ConsumerGroupMetadata(group));
 
@@ -532,12 +514,9 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-                put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>();
+        groupCommit.put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
+        groupCommit.put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
         producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.abortTransaction();
 
@@ -561,12 +540,9 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-                put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>();
+        groupCommit.put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
+        groupCommit.put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
         producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.commitTransaction();
 
@@ -586,24 +562,18 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         String group = "g";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
-                put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> groupCommit = new HashMap<>();
+        groupCommit.put(new TopicPartition(topic, 0), new OffsetAndMetadata(42L, null));
+        groupCommit.put(new TopicPartition(topic, 1), new OffsetAndMetadata(73L, null));
         producer.sendOffsetsToTransaction(groupCommit, new ConsumerGroupMetadata(group));
         producer.commitTransaction();
 
         producer.beginTransaction();
 
         String group2 = "g2";
-        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<>() {
-            {
-                put(new TopicPartition(topic, 2), new OffsetAndMetadata(53L, null));
-                put(new TopicPartition(topic, 3), new OffsetAndMetadata(84L, null));
-            }
-        };
+        Map<TopicPartition, OffsetAndMetadata> groupCommit2 = new HashMap<>();
+        groupCommit2.put(new TopicPartition(topic, 2), new OffsetAndMetadata(53L, null));
+        groupCommit2.put(new TopicPartition(topic, 3), new OffsetAndMetadata(84L, null));
         producer.sendOffsetsToTransaction(groupCommit2, new ConsumerGroupMetadata(group2));
         producer.abortTransaction();
 

@@ -58,11 +58,11 @@ public class TopicMetadataFetcherTest {
 
     private final String topicName = "test";
     private final Uuid topicId = Uuid.randomUuid();
-    private final Map<String, Uuid> topicIds = new HashMap<>() {
-        {
-            put(topicName, topicId);
-        }
-    };
+    private final Map<String, Uuid> topicIds;
+    {
+        topicIds = new HashMap<>();
+        topicIds.put(topicName, topicId);
+    }
     private final TopicPartition tp0 = new TopicPartition(topicName, 0);
     private final int validLeaderEpoch = 0;
     private final MetadataResponse initialUpdateResponse =

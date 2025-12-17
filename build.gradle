@@ -29,19 +29,21 @@ buildscript {
 }
 
 plugins {
-  id 'com.github.ben-manes.versions' version '0.53.0'
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.8'
-  id 'org.nosphere.apache.rat' version "0.8.1"
-  id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
-
-  id "com.github.spotbugs" version '6.4.4' apply false
-  id 'org.scoverage' version '8.1' apply false
+  id 'com.diffplug.spotless' version '8.1.0'
+  id 'com.github.ben-manes.versions' version '0.53.0'
+  id 'com.github.spotbugs' version '6.4.4' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
-  id 'com.diffplug.spotless' version "8.0.0"
+  id 'io.swagger.core.v3.swagger-gradle-plugin' version "${swaggerVersion}"
+  id 'org.nosphere.apache.rat' version '0.8.1'
+  id 'org.openrewrite.rewrite' version '7.22.0' apply false
+  id 'org.owasp.dependencycheck' version '12.1.8'
+  id 'org.scoverage' version '8.1' apply false
 }
+
+apply from: "$rootDir/gradle/rewrite.gradle"
 
 ext {
   minClientJavaVersion = 11

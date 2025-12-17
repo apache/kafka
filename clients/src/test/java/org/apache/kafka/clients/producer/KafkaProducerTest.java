@@ -250,11 +250,10 @@ public class KafkaProducerTest {
     public void testAcksAndIdempotenceForIdempotentProducers() {
         Properties baseProps = baseProperties();
 
-        Properties validProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "0");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            }};
+        Properties validProps = new Properties();
+        validProps.putAll(baseProps);
+        validProps.setProperty(ProducerConfig.ACKS_CONFIG, "0");
+        validProps.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         ProducerConfig config = new ProducerConfig(validProps);
         assertFalse(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -264,10 +263,9 @@ public class KafkaProducerTest {
             config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be overwritten");
 
-        Properties validProps2 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
+        Properties validProps2 = new Properties();
+        validProps2.putAll(baseProps);
+        validProps2.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
         config = new ProducerConfig(validProps2);
         assertTrue(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -277,11 +275,10 @@ public class KafkaProducerTest {
             config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be set with the default value");
 
-        Properties validProps3 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "all");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            }};
+        Properties validProps3 = new Properties();
+        validProps3.putAll(baseProps);
+        validProps3.setProperty(ProducerConfig.ACKS_CONFIG, "all");
+        validProps3.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         config = new ProducerConfig(validProps3);
         assertFalse(config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
             "idempotence should be overwritten");
@@ -290,10 +287,9 @@ public class KafkaProducerTest {
             config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be overwritten");
 
-        Properties validProps4 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "0");
-            }};
+        Properties validProps4 = new Properties();
+        validProps4.putAll(baseProps);
+        validProps4.setProperty(ProducerConfig.ACKS_CONFIG, "0");
         config = new ProducerConfig(validProps4);
         assertFalse(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -303,10 +299,9 @@ public class KafkaProducerTest {
             config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be set with overridden value");
 
-        Properties validProps5 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "1");
-            }};
+        Properties validProps5 = new Properties();
+        validProps5.putAll(baseProps);
+        validProps5.setProperty(ProducerConfig.ACKS_CONFIG, "1");
         config = new ProducerConfig(validProps5);
         assertFalse(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -316,33 +311,30 @@ public class KafkaProducerTest {
             config.getString(ProducerConfig.ACKS_CONFIG),
             "acks should be set with overridden value");
 
-        Properties invalidProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "0");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
+        Properties invalidProps = new Properties();
+        invalidProps.putAll(baseProps);
+        invalidProps.setProperty(ProducerConfig.ACKS_CONFIG, "0");
+        invalidProps.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        invalidProps.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps),
             "Cannot set a transactional.id without also enabling idempotence");
 
-        Properties invalidProps2 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "1");
-                // explicitly enabling idempotence should still throw exception
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-            }};
+        Properties invalidProps2 = new Properties();
+        invalidProps2.putAll(baseProps);
+        invalidProps2.setProperty(ProducerConfig.ACKS_CONFIG, "1");
+        // explicitly enabling idempotence should still throw exception
+        invalidProps2.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps2),
             "Must set acks to all in order to use the idempotent producer");
 
-        Properties invalidProps3 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.ACKS_CONFIG, "0");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
+        Properties invalidProps3 = new Properties();
+        invalidProps3.putAll(baseProps);
+        invalidProps3.setProperty(ProducerConfig.ACKS_CONFIG, "0");
+        invalidProps3.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
@@ -353,11 +345,10 @@ public class KafkaProducerTest {
     public void testRetriesAndIdempotenceForIdempotentProducers() {
         Properties baseProps = baseProperties();
 
-        Properties validProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            }};
+        Properties validProps = new Properties();
+        validProps.putAll(baseProps);
+        validProps.setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+        validProps.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         ProducerConfig config = new ProducerConfig(validProps);
         assertFalse(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -367,10 +358,9 @@ public class KafkaProducerTest {
             config.getInt(ProducerConfig.RETRIES_CONFIG),
             "retries should be overwritten");
 
-        Properties validProps2 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-            }};
+        Properties validProps2 = new Properties();
+        validProps2.putAll(baseProps);
+        validProps2.setProperty(ProducerConfig.RETRIES_CONFIG, "0");
         config = new ProducerConfig(validProps2);
         assertFalse(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -380,33 +370,30 @@ public class KafkaProducerTest {
             config.getInt(ProducerConfig.RETRIES_CONFIG),
             "retries should be set with overridden value");
 
-        Properties invalidProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
+        Properties invalidProps = new Properties();
+        invalidProps.putAll(baseProps);
+        invalidProps.setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+        invalidProps.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        invalidProps.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps),
             "Cannot set a transactional.id without also enabling idempotence");
 
-        Properties invalidProps2 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                // explicitly enabling idempotence should still throw exception
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-            }};
+        Properties invalidProps2 = new Properties();
+        invalidProps2.putAll(baseProps);
+        invalidProps2.setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+        // explicitly enabling idempotence should still throw exception
+        invalidProps2.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps2),
             "Must set retries to non-zero when using the idempotent producer.");
 
-        Properties invalidProps3 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.RETRIES_CONFIG, "0");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
+        Properties invalidProps3 = new Properties();
+        invalidProps3.putAll(baseProps);
+        invalidProps3.setProperty(ProducerConfig.RETRIES_CONFIG, "0");
+        invalidProps3.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
@@ -425,11 +412,10 @@ public class KafkaProducerTest {
     public void testInflightRequestsAndIdempotenceForIdempotentProducers() {
         Properties baseProps = baseProperties();
 
-        Properties validProps = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-            }};
+        Properties validProps = new Properties();
+        validProps.putAll(baseProps);
+        validProps.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
+        validProps.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
         ProducerConfig config = new ProducerConfig(validProps);
         assertFalse(
             config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG),
@@ -439,42 +425,38 @@ public class KafkaProducerTest {
             config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
             "max.in.flight.requests.per.connection should be overwritten");
 
-        Properties invalidProps1 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
-            }};
+        Properties invalidProps1 = new Properties();
+        invalidProps1.putAll(baseProps);
+        invalidProps1.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
 
         ConfigException configException = assertThrows(ConfigException.class, () -> new ProducerConfig(invalidProps1));
         assertEquals("To use the idempotent producer, " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
-                     " must be set to at most 5. Current value is 6.", configException.getMessage());
+            " must be set to at most 5. Current value is 6.", configException.getMessage());
 
-        Properties invalidProps2 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
+        Properties invalidProps2 = new Properties();
+        invalidProps2.putAll(baseProps);
+        invalidProps2.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "5");
+        invalidProps2.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        invalidProps2.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps2),
             "Cannot set a transactional.id without also enabling idempotence");
 
-        Properties invalidProps3 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
-                // explicitly enabling idempotence should still throw exception
-                setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-            }};
+        Properties invalidProps3 = new Properties();
+        invalidProps3.putAll(baseProps);
+        invalidProps3.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
+        // explicitly enabling idempotence should still throw exception
+        invalidProps3.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps3),
             "Must set max.in.flight.requests.per.connection to at most 5 when using the idempotent producer.");
 
-        Properties invalidProps4 = new Properties() {{
-                putAll(baseProps);
-                setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
-                setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
-            }};
+        Properties invalidProps4 = new Properties();
+        invalidProps4.putAll(baseProps);
+        invalidProps4.setProperty(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "6");
+        invalidProps4.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transactionalId");
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps4),

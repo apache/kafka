@@ -45,24 +45,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class SerializationTest {
 
     private final String topic = "testTopic";
-    private final Map<Class<?>, List<Object>> testData = new HashMap<>() {
-        {
-            put(String.class, Arrays.asList(null, "my string"));
-            put(Short.class, Arrays.asList(null, (short) 32767, (short) -32768));
-            put(Integer.class, Arrays.asList(null, 423412424, -41243432));
-            put(Long.class, Arrays.asList(null, 922337203685477580L, -922337203685477581L));
-            put(Float.class, Arrays.asList(null, 5678567.12312f, -5678567.12341f));
-            put(Double.class, Arrays.asList(null, 5678567.12312d, -5678567.12341d));
-            put(byte[].class, Arrays.asList(null, "my string".getBytes()));
-            put(ByteBuffer.class, Arrays.asList(
-                    null,
-                    ByteBuffer.wrap("my string".getBytes()),
-                    ByteBuffer.allocate(10).put("my string".getBytes()),
-                    ByteBuffer.allocateDirect(10).put("my string".getBytes())));
-            put(Bytes.class, Arrays.asList(null, new Bytes("my string".getBytes())));
-            put(UUID.class, Arrays.asList(null, UUID.randomUUID()));
-        }
-    };
+    private final Map<Class<?>, List<Object>> testData;
+    {
+        testData = new HashMap<>();
+        testData.put(String.class, Arrays.asList(null, "my string"));
+        testData.put(Short.class, Arrays.asList(null, (short) 32767, (short) -32768));
+        testData.put(Integer.class, Arrays.asList(null, 423412424, -41243432));
+        testData.put(Long.class, Arrays.asList(null, 922337203685477580L, -922337203685477581L));
+        testData.put(Float.class, Arrays.asList(null, 5678567.12312f, -5678567.12341f));
+        testData.put(Double.class, Arrays.asList(null, 5678567.12312d, -5678567.12341d));
+        testData.put(byte[].class, Arrays.asList(null, "my string".getBytes()));
+        testData.put(ByteBuffer.class, Arrays.asList(
+            null,
+            ByteBuffer.wrap("my string".getBytes()),
+            ByteBuffer.allocate(10).put("my string".getBytes()),
+            ByteBuffer.allocateDirect(10).put("my string".getBytes())));
+        testData.put(Bytes.class, Arrays.asList(null, new Bytes("my string".getBytes())));
+        testData.put(UUID.class, Arrays.asList(null, UUID.randomUUID()));
+    }
 
     private static class DummyClass {
     }

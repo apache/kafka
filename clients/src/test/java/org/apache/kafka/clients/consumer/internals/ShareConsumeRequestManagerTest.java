@@ -142,12 +142,12 @@ public class ShareConsumeRequestManagerTest {
             put(topicName2, topicId2);
         }
     };
-    private final Map<String, Integer> topicPartitionCounts = new HashMap<>() {
-        {
-            put(topicName, 2);
-            put(topicName2, 1);
-        }
-    };
+    private final Map<String, Integer> topicPartitionCounts;
+    {
+        topicPartitionCounts = new HashMap<>();
+        topicPartitionCounts.put(topicName, 2);
+        topicPartitionCounts.put(topicName2, 1);
+    }
     private final TopicPartition tp0 = new TopicPartition(topicName, 0);
     private final TopicIdPartition tip0 = new TopicIdPartition(topicId, tp0);
     private final TopicPartition tp1 = new TopicPartition(topicName, 1);

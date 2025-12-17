@@ -39,13 +39,12 @@ public class AssignmentsHelperTest {
 
     @Test
     public void testBuildRequestData() {
-        Map<TopicIdPartition, Uuid> assignment = new HashMap<TopicIdPartition, Uuid>() {{
-                put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-                put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
-                put(new TopicIdPartition(TOPIC_1, 3), DIR_3);
-                put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
-                put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
-            }};
+        Map<TopicIdPartition, Uuid> assignment = new HashMap<TopicIdPartition, Uuid>();
+        assignment.put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
+        assignment.put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
+        assignment.put(new TopicIdPartition(TOPIC_1, 3), DIR_3);
+        assignment.put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
+        assignment.put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
         AssignReplicasToDirsRequestData built = AssignmentsHelper.buildRequestData(8, 100L, assignment);
         AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData()
                 .setBrokerId(8)
