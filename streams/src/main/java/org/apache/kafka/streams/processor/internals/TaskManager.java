@@ -1847,8 +1847,7 @@ public class TaskManager {
         final long nowMs
     ) {
         for (final TopicPartition partition : partitions) {
-            final Task task = getActiveTask(partition);
-            task.maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
+            getActiveTask(partition).maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
         }
     }
 
