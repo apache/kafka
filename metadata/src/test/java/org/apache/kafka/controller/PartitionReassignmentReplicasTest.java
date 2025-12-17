@@ -196,6 +196,8 @@ public class PartitionReassignmentReplicasTest {
                 build()));
     }
 
+    // Tests that a reassignment completes when a target replica (that is also present
+    // in the replica set prior to the reassignment) is missing from the ISR.
     @Test
     public void testCanCompleteReassignmentIfIsrDoesNotHaveAnExistingTargetReplica() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
@@ -211,6 +213,24 @@ public class PartitionReassignmentReplicasTest {
         assertEquals(List.of(0, 1, 3), completedReassignment.replicas());
     }
 
+    // Tests that a reassignment completes when multiple target replicas (that are also present
+    // in the replica set prior to the reassignment) are missing from the ISR.
+    @Test
+    public void testCanCompleteReassignmentIfIsrDoesNotHaveBothExistingTargetReplica() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                partitionAssignment(List.of(0, 1, 2)), partitionAssignment(List.of(0, 1, 3)));
+        assertTrue(replicas.isReassignmentInProgress());
+
+        // Replica 0 and 1 are not in sync
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(List.of(2, 3));
+        assertTrue(reassignmentOptional.isPresent());
+        PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
+        assertEquals(List.of(0, 3), completedReassignment.isr());
+        assertEquals(List.of(0, 1, 3), completedReassignment.replicas());
+    }
+
+    // Tests that a reassignment does not complete when a target adding replica is missing from the ISR.
     @Test
     public void testDoesNotCompleteReassignmentIfIsrDoesNotHaveAnAddingTargetReplica() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
@@ -223,6 +243,8 @@ public class PartitionReassignmentReplicasTest {
         assertFalse(reassignmentOptional.isPresent());
     }
 
+    // Tests that a reassignment completes when RF is increasing and a target replica (that is also
+    // present in the replica set prior to the reassignment) is missing from the ISR.
     @Test
     public void testCanCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnExistingTargetReplicaFromIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
@@ -238,6 +260,8 @@ public class PartitionReassignmentReplicasTest {
         assertEquals(List.of(1, 2, 3, 4, 5), completedReassignment.replicas());
     }
 
+    // Tests that a reassignment does not complete when RF is increasing
+    // and a target adding replica is missing from the ISR
     @Test
     public void testDoesNotCompleteReassignmentWhenReplicationFactorIncreasesAndMissingAnAddingReplicaFromIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
@@ -250,6 +274,8 @@ public class PartitionReassignmentReplicasTest {
         assertFalse(reassignmentOptional.isPresent());
     }
 
+    // Tests that a reassignment does not complete when RF is decreasing and a target replica (that is also
+    // present in the replica set prior to the reassignment) is missing from the ISR.
     @Test
     public void testDoesNotCompleteReassignmentWhenReplicationFactorDecreasesAndMissingAnExistingTargetReplicaFromIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
@@ -262,6 +288,8 @@ public class PartitionReassignmentReplicasTest {
         assertFalse(reassignmentOptional.isPresent());
     }
 
+    // Tests that a reassignment does not complete when RF is decreasing
+    // and a target adding replica is missing from the ISR.
     @Test
     public void testDoesNotCompleteReassignmentWhenReplicationFactorDecreasesAndMissingAnAddingReplicasFromISR() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
