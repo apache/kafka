@@ -2537,7 +2537,7 @@ public class SenderTest {
         responseMap.put(new TopicIdPartition(TOPIC_ID, tp0), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
         client.respond(new ProduceResponse(responseMap));
 
-        sender.runOnce();  // receive first response
+        sender.runOnce();
         assertEquals(0, sender.inFlightBatches(tp0).size());
         assertDoesNotThrow(() -> request.get());
     }
@@ -2645,11 +2645,10 @@ public class SenderTest {
     }
 
     @Test
-    public void testBatchDoesNotSplitOnMessageTooLargeError() throws Exception {
-        long deliverTimeoutMs = 1500L;
+    public void testBatchStillSplitOnMessageTooLargeError() throws Exception {
         // create a producer batch with more than one record so it is eligible for splitting
-        appendToAccumulator(tp0);
-        appendToAccumulator(tp0);
+        FutureRecordMetadata request1 = appendToAccumulator(tp0);
+        FutureRecordMetadata request2 = appendToAccumulator(tp0);
 
         // send request
         sender.runOnce();
@@ -2657,16 +2656,30 @@ public class SenderTest {
         // return a MESSAGE_TOO_LARGE error
         client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
 
-        time.sleep(deliverTimeoutMs);
+        //  process MESSAGE_TOO_LARGE response and split the batch
         sender.runOnce();
+        verify(accumulator, atLeastOnce()).splitAndReenqueue(any());
+        
+        assertEquals(0, client.inFlightRequestCount());
+        //  send the split batches
         sender.runOnce();
-
+        
         int inflightAfterFailure = client.inFlightRequestCount();
         int batchesAfterFailure = sender.inFlightBatches(tp0).size();
         
+        //  in-flight requests and batches should remain unchanged
         sender.runOnce();
         assertEquals(inflightAfterFailure, client.inFlightRequestCount());
         assertEquals(batchesAfterFailure, sender.inFlightBatches(tp0).size());
+
+        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
+        //  handle the response
+        sender.runOnce();
+
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+        assertTrue(request1.isDone());
+        assertTrue(request2.isDone());
     }
 
     @Test
@@ -3821,8 +3834,8 @@ public class SenderTest {
         this.metrics = new Metrics(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 
-        this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, lingerMs, 0L, 0L,
-            DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, transactionManager, pool);
+        this.accumulator = spy(new RecordAccumulator(logContext, batchSize, Compression.NONE, lingerMs, 0L, 0L,
+            DELIVERY_TIMEOUT_MS, metrics, metricGrpName, time, transactionManager, pool));
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
             retries, this.senderMetricsRegistry, this.time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager);

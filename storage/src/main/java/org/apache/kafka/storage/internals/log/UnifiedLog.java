@@ -1034,7 +1034,7 @@ public class UnifiedLog implements AutoCloseable {
                                         short transactionVersion) {
         boolean validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER;
         return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal),
-            verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion, true);
+            verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion);
     }
 
     /**
@@ -1046,7 +1046,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public LogAppendInfo appendAsLeaderWithRecordVersion(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
         return append(records, AppendOrigin.CLIENT, true, leaderEpoch, Optional.of(RequestLocal.noCaching()),
-                VerificationGuard.SENTINEL, false, recordVersion.value, TransactionVersion.TV_UNKNOWN, true);
+                VerificationGuard.SENTINEL, false, recordVersion.value, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1066,8 +1066,7 @@ public class UnifiedLog implements AutoCloseable {
                       VerificationGuard.SENTINEL,
                       true,
                       RecordBatch.CURRENT_MAGIC_VALUE,
-                      TransactionVersion.TV_UNKNOWN,
-                      false);
+                      TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1087,8 +1086,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
      *                           Defaults to TV_UNKNOWN (-1) to force explicit specification.
      *                           Used for epoch validation of transaction markers (KIP-1228).
-     * @param isLeader true if the append is from the leader
-     *                           
+     *
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
      * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
@@ -1102,12 +1100,10 @@ public class UnifiedLog implements AutoCloseable {
                                  VerificationGuard verificationGuard,
                                  boolean ignoreRecordSize,
                                  byte toMagic,
-                                 short transactionVersion,
-                                 boolean isLeader) {
+                                 short transactionVersion) {
         // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
         // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
         maybeFlushMetadataFile();
-
         LogAppendInfo appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize, !validateAndAssignOffsets, leaderEpoch);
 
         // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -1115,6 +1111,7 @@ public class UnifiedLog implements AutoCloseable {
             return appendInfo;
         } else {
             // trim any invalid bytes or partial messages before appending it to the on-disk log
+            final boolean isLeader = origin != AppendOrigin.REPLICATION;
             final MemoryRecords trimmedRecords = trimInvalidBytes(records, appendInfo, isLeader);
             // they are valid, insert them in the log
             synchronized (lock)  {
@@ -1594,6 +1591,7 @@ public class UnifiedLog implements AutoCloseable {
      *
      * @param records The records to trim
      * @param info The general information of the message set
+     * @param isLeader whether the record set is from the leader
      * @return A trimmed message set. This may be the same as what was passed in, or it may not.
      */
     private MemoryRecords trimInvalidBytes(MemoryRecords records, LogAppendInfo info, boolean isLeader) {
@@ -1609,8 +1607,8 @@ public class UnifiedLog implements AutoCloseable {
             ByteBuffer validByteBuffer = records.buffer().duplicate();
             validByteBuffer.limit(validBytes);
             if (isLeader) {
-                logger.warn("Trimming invalid bytes from message set for partition {}. Original size: {} bytes, valid bytes: {}, trimmed bytes: {}. ",
-                    topicPartition(), records.sizeInBytes(), validBytes, records.sizeInBytes() - validBytes);
+                logger.warn("Trimming invalid bytes from message set. Original size: {} bytes, valid bytes: {}, trimmed bytes: {}.",
+                    records.sizeInBytes(), validBytes, records.sizeInBytes() - validBytes);
             }
             return MemoryRecords.readableRecords(validByteBuffer);
         }
