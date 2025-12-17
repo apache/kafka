@@ -226,7 +226,7 @@ public class PartitionReassignmentReplicasTest {
                 replicas.maybeCompleteReassignment(List.of(2, 3));
         assertTrue(reassignmentOptional.isPresent());
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = reassignmentOptional.get();
-        assertEquals(List.of(0, 3), completedReassignment.isr());
+        assertEquals(List.of(3), completedReassignment.isr());
         assertEquals(List.of(0, 1, 3), completedReassignment.replicas());
     }
 
