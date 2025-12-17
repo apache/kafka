@@ -143,6 +143,11 @@ import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.RE
  * - also provides APIs to fetch indexes, metadata about remote log segments
  * - copying log segments to the remote storage
  * - cleaning up segments that are expired based on retention size or retention time
+ * <p>
+ * Plugin implementors of {@link RemoteStorageManager} should throw {@link RetriableRemoteStorageException}
+ * for transient errors that can be recovered by retrying. For non-recoverable errors,
+ * {@link RemoteStorageException} should be thrown. This distinction allows {@link RemoteLogManager} to
+ * handle retries gracefully and report metrics accurately.
  */
 public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
