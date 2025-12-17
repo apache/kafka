@@ -43,6 +43,11 @@ import java.util.Optional;
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the manager to register metrics.
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
  * <code>remote.log.storage.manager.class.name</code>, and <code>class</code> set to the RemoteStorageManager class name.
+ * <p>
+ * Plugin implementors of {@link RemoteStorageManager} should throw {@link RetriableRemoteStorageException}
+ * for transient errors that can be recovered by retrying. For non-recoverable errors,
+ * {@link RemoteStorageException} should be thrown. This distinction allows RemoteLogManager to
+ * handle retries gracefully and report metrics accurately.
  */
 public interface RemoteStorageManager extends Configurable, Closeable {
 
