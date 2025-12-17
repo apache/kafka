@@ -505,8 +505,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters. First the length N is given as an " + INT16 +
-                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
-                "Length must not be negative.";
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "Length must not be negative.";
         }
     };
 
@@ -616,8 +616,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters or null. For non-null strings, first the length N is given as an " + INT16 +
-                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
-                "A null value is encoded with length of -1 and there are no following bytes.";
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "A null value is encoded with length of -1 and there are no following bytes.";
         }
     };
 
@@ -672,8 +672,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of characters. First the length N + 1 is given as an UNSIGNED_VARINT " +
-                ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
-                "A null string is represented with a length of 0.";
+                    ". Then N bytes follow which are the UTF-8 encoding of the character sequence. " +
+                    "A null string is represented with a length of 0.";
         }
     };
 
@@ -731,7 +731,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N is given as an " + INT32 +
-                ". Then N bytes follow.";
+                    ". Then N bytes follow.";
         }
     };
 
@@ -777,7 +777,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
-                " Then N bytes follow.";
+                    " Then N bytes follow.";
         }
     };
 
@@ -832,7 +832,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes or null. For non-null values, first the length N is given as an " + INT32 +
-                ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
+                    ". Then N bytes follow. A null value is encoded with length of -1 and there are no following bytes.";
         }
     };
 
@@ -887,7 +887,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
-                " Then N bytes follow. A null object is represented with a length of 0.";
+                    " Then N bytes follow. A null object is represented with a length of 0.";
         }
     };
 
@@ -931,8 +931,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + BYTES + ". " +
-                "For a detailed description of records see " +
-                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                    "For a detailed description of records see " +
+                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -993,14 +993,14 @@ public abstract class Type {
             if (o == null) {
                 NULLABLE_BYTES.write(buffer, null);
                 return;
-            } 
+            }
             RECORDS.write(buffer, o);
         }
 
         @Override
         public MemoryRecords read(ByteBuffer buffer) {
             ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
-            if (recordsBuffer == null) 
+            if (recordsBuffer == null)
                 return null;
 
             return MemoryRecords.readableRecords(recordsBuffer);
