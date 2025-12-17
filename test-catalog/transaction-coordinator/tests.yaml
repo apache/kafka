@@ -2,6 +2,9 @@ org.apache.kafka.coordinator.transaction.ProducerIdManagerTest:
 - testConcurrentGeneratePidRequests
 - testInvalidRanges
 - testRetryBackoff
+- testRetryBackoffOnAuthException
+- testRetryBackoffOnNoResponse
+- testRetryBackoffOnVersionMismatch
 - testUnrecoverableErrors
 org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerdeTest:
 - testDeserialize
