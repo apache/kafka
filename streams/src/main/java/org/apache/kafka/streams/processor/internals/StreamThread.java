@@ -899,7 +899,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         boolean cleanRun = false;
         try {
             taskManager.init();
-            initLatencyWindowsIfNeeded(System.currentTimeMillis());
+            initLatencyWindowsIfNeeded(time.milliseconds());
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
@@ -2129,9 +2129,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (!latencyWindowsInitialized) {
             // Start both windows at the same instant with a zero record
             pollLatencyWindowedSum.record(metricsConfig, 0.0, now);
-            this.totalCommitLatencyWindowedSum.record(metricsConfig, 0, now);
-            this.processLatencyWindowedSum.record(metricsConfig, 0, now);
-            this.punctuateLatencyWindowedSum.record(metricsConfig, 0, now);
+            totalCommitLatencyWindowedSum.record(metricsConfig, 0, now);
+            processLatencyWindowedSum.record(metricsConfig, 0, now);
+            punctuateLatencyWindowedSum.record(metricsConfig, 0, now);
             runOnceLatencyWindowedSum.record(metricsConfig, 0.0, now);
             latencyWindowsInitialized = true;
         }
@@ -2143,11 +2143,11 @@ public class StreamThread extends Thread implements ProcessingThread {
                                    final double processLatency,
                                    final double punctuateLatency,
                                    final double runOnceLatency) {
-        this.pollLatencyWindowedSum.record(metricsConfig, pollLatency, now);
-        this.totalCommitLatencyWindowedSum.record(metricsConfig, totalCommitLatency, now);
-        this.processLatencyWindowedSum.record(metricsConfig, processLatency, now);
-        this.punctuateLatencyWindowedSum.record(metricsConfig, punctuateLatency, now);
-        this.runOnceLatencyWindowedSum.record(metricsConfig, runOnceLatency, now);
+        pollLatencyWindowedSum.record(metricsConfig, pollLatency, now);
+        totalCommitLatencyWindowedSum.record(metricsConfig, totalCommitLatency, now);
+        processLatencyWindowedSum.record(metricsConfig, processLatency, now);
+        punctuateLatencyWindowedSum.record(metricsConfig, punctuateLatency, now);
+        runOnceLatencyWindowedSum.record(metricsConfig, runOnceLatency, now);
     }
 
     private void recordRatio(final long now, final WindowedSum windowedSum, final Sensor ratioSensor) {

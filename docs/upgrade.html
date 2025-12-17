@@ -66,7 +66,7 @@
     <li>The behavior of <code>org.apache.kafka.streams.KafkaStreams#removeStreamThread</code> has been changed. The consumer has no longer remove once <code>removeStreamThread</code> finished.
         Instead, consumer would be kicked off from the group after <code>org.apache.kafka.streams.processor.internals.StreamThread</code> completes its <code>run</code> function.
     </li>
-    <li>TThe streams thread metrics <code>commit-ratio</code>, <code>process-ratio</code>, <code>punctuate-ratio</code>, and <code>poll-ratio</code> have been updated.
+    <li>The streams thread metrics <code>commit-ratio</code>, <code>process-ratio</code>, <code>punctuate-ratio</code>, and <code>poll-ratio</code> have been updated.
         They now report, over a rolling measurement window,
         the ratio of time this thread spends performing the given action (<code>{action}</code>) to the total elapsed time in that window.
         The effective window duration is determined by your metrics configuration: <code>metrics.sample.window.ms</code> (per-sample window length)
