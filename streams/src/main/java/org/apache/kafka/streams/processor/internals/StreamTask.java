@@ -75,6 +75,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator, Task {
 
+    private static final int UNDEFINED_MAX_BUFFERED_SIZE = -1;
+
     private final Time time;
     private final Consumer<byte[], byte[]> mainConsumer;
 
@@ -826,11 +828,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             // TODO the second part of OR condition would be removed once
-            //  deprecated config buffered.records.per.partition is removed
+            //  deprecated config buffered.records.per.partition is removed (KIP-770)
             // Also we need to resume if the queue only contains corrupted records
             // because they represent a processable queue which is actually empty
             if (recordInfo.queue().isEmpty() ||
-                (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) ||
+                (maxBufferedSize != UNDEFINED_MAX_BUFFERED_SIZE && recordInfo.queue().size() == maxBufferedSize) ||
                 recordInfo.queue().headRecordIsCorrupted()) {
                 log.trace("Resume consumption for partition {}: buffered size {} is under the threshold {}",
                         partition, recordInfo.queue().size(), maxBufferedSize);
@@ -1175,7 +1177,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         // We do this only if the deprecated config buffered.records.per.partition is set
-        if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
+        if (maxBufferedSize != UNDEFINED_MAX_BUFFERED_SIZE && newQueueSize > maxBufferedSize) {
             log.info("Pausing partition {} as queue size {} exceeds maxBufferedSize: {}", partition, newQueueSize, maxBufferedSize);
             mainConsumer.pause(singleton(partition));
         }

@@ -254,7 +254,6 @@ class PartitionGroup extends AbstractPartitionGroup {
         info.queue = queue;
 
         if (queue != null) {
-
             // get the buffer size of queue before poll
             final long oldBufferSize = queue.getTotalBytesBuffered();
 
