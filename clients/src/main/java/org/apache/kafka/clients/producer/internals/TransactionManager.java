@@ -1572,13 +1572,12 @@ public class TransactionManager {
                 TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
                 Errors error = topicPartitionErrorEntry.getValue();
 
-                if (error == Errors.NONE) {
-                    continue;
-                } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
+                if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                     lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                     reenqueue();
                     return;
                 } else if (error == Errors.CONCURRENT_TRANSACTIONS) {
+                    retryBackoffMs = ADD_PARTITIONS_RETRY_BACKOFF_MS;
                     maybeOverrideRetryBackoffMs();
                     reenqueue();
                     return;
