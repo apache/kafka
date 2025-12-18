@@ -118,7 +118,7 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetTotalBytesSensor() {
         final String operation = "input-buffer-bytes-total";
-        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
             .thenReturn(expectedSensor);
         final String totalBytesDescription = "The total number of bytes accumulated in this task's input buffer";
         when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
