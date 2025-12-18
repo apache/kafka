@@ -1,0 +1,55 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.server;
+
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.server.common.FinalizedFeatures;
+import org.apache.kafka.server.common.MetadataVersion;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+public class SimpleApiVersionManagerTest {
+
+    @Test
+    public void testUnknownFeaturesHasNoMetadataVersion() {
+        // When no quorum exists, featuresProvider returns UNKNOWN_FINALIZED_FEATURES
+        // which has no metadata version and empty finalized features
+        SimpleApiVersionManager apiVersionManager = new SimpleApiVersionManager(
+            ApiMessageType.ListenerType.CONTROLLER,
+            true,
+            () -> FinalizedFeatures.UNKNOWN_FINALIZED_FEATURES
+        );
+
+        ApiVersionsResponse response = apiVersionManager.apiVersionResponse(0, false);
+
+        // Verify that metadata.version is not present in finalized features
+        assertFalse(
+            response.data().finalizedFeatures().stream()
+                .anyMatch(f -> f.name().equals(MetadataVersion.FEATURE_NAME)),
+            "Finalized features should not contain metadata.version when no quorum exists"
+        );
+
+        // Verify epoch is -1 (unknown)
+        assertEquals(-1, response.data().finalizedFeaturesEpoch(),
+            "Finalized features epoch should be -1 when no quorum exists");
+    }
+}
+
