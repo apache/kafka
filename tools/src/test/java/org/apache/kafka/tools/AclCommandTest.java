@@ -220,7 +220,17 @@ public class AclCommandTest {
 
     @ClusterTest
     public void testAclCliWithMisusingBootstrapControllerToServer(ClusterInstance cluster) {
-        assertThrows(RuntimeException.class, () -> testAclCli(cluster, adminArgs(cluster.bootstrapControllers(), Optional.empty())));
+        Exit.setExitProcedure((status, message) -> {
+            if (status == 1)
+                throw new RuntimeException("Exiting command");
+            else
+                throw new AssertionError("Unexpected exit with status " + status);
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> testAclCli(cluster, adminArgs(cluster.bootstrapControllers(), Optional.empty())));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @ClusterTest
