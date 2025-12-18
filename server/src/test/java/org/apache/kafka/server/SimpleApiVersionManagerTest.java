@@ -19,12 +19,11 @@ package org.apache.kafka.server;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.server.common.FinalizedFeatures;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SimpleApiVersionManagerTest {
 
@@ -40,12 +39,9 @@ public class SimpleApiVersionManagerTest {
 
         ApiVersionsResponse response = apiVersionManager.apiVersionResponse(0, false);
 
-        // Verify that metadata.version is not present in finalized features
-        assertFalse(
-            response.data().finalizedFeatures().stream()
-                .anyMatch(f -> f.name().equals(MetadataVersion.FEATURE_NAME)),
-            "Finalized features should not contain metadata.version when no quorum exists"
-        );
+        // Verify that finalized features is empty
+        assertTrue(response.data().finalizedFeatures().isEmpty(),
+            "Finalized features should be empty when no quorum exists");
 
         // Verify epoch is -1 (unknown)
         assertEquals(-1, response.data().finalizedFeaturesEpoch(),
