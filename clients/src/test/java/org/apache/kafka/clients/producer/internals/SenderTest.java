@@ -132,6 +132,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.AdditionalMatchers.geq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -2645,7 +2646,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testBatchStillSplitOnMessageTooLargeError() throws Exception {
+    public void testExpiredBatchStillSplitOnMessageTooLargeError() throws Exception {
         // create a producer batch with more than one record so it is eligible for splitting
         FutureRecordMetadata request1 = appendToAccumulator(tp0);
         FutureRecordMetadata request2 = appendToAccumulator(tp0);
@@ -2700,6 +2701,8 @@ public class SenderTest {
         inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(), any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
+        inOrder.verify(client).poll(geq(Long.MAX_VALUE - System.currentTimeMillis()), anyLong());
+        inOrder.verify(client).poll(geq(1L), anyLong());
 
     }
 
