@@ -134,6 +134,9 @@ org.apache.kafka.server.log.remote.storage.RemoteLogManagerTest:
 - testCandidateLogSegmentsSkipsActiveSegment
 - testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset
 - testConfigure
+- testCopyLagMetricsAfterLeaderChangeWithHigherRemoteOffset
+- testCopyLagMetricsWithMultipleSegments
+- testCopyLagMetricsWithOnlyActiveSegment
 - testCopyLogSegmentToRemoteForStaleTopic
 - testCopyLogSegmentsToRemoteShouldCopyExpectedLogSegment
 - testCopyQuota
