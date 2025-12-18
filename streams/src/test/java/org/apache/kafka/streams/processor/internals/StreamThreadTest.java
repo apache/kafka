@@ -117,7 +117,6 @@ import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1953,7 +1952,7 @@ public class StreamThreadTest {
         assertTrue(metadata.activeTasks().contains(new TaskMetadataImpl(task1, Set.of(t1p1), new HashMap<>(), new HashMap<>(), Optional.empty())));
         assertTrue(metadata.standbyTasks().isEmpty());
 
-        assertTrue(Arrays.asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()),
+        assertTrue(List.of("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()),
             "#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED");
         final String threadName = metadata.threadName();
         assertThat(threadName, startsWith(CLIENT_ID + "-StreamThread-" + threadIdx));
@@ -2942,7 +2941,7 @@ public class StreamThreadTest {
         final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        final List<Node> cluster = Arrays.asList(broker1, broker2);
+        final List<Node> cluster = List.of(broker1, broker2);
 
         final MockAdminClient adminClient = new MockAdminClient.Builder().
             brokers(cluster).clusterId(null).build();
@@ -3759,7 +3758,8 @@ public class StreamThreadTest {
                 HANDLER,
                 null,
                 Optional.of(streamsRebalanceData),
-                streamsMetadataState
+                streamsMetadataState,
+                defaultMaxBufferSizeInBytes
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3950,7 +3950,8 @@ public class StreamThreadTest {
                 HANDLER,
                 null,
                 Optional.of(streamsRebalanceData),
-                streamsMetadataState
+                streamsMetadataState,
+                defaultMaxBufferSizeInBytes
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -4053,7 +4054,7 @@ public class StreamThreadTest {
             new RecordHeaders(),
             Optional.empty()));
 
-        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = Collections.singletonList(
+        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = List.of(
             new ConsumerRecord<>(
                 t2p1.topic(),
                 t2p1.partition(),
@@ -4071,7 +4072,7 @@ public class StreamThreadTest {
         polledRecords.put(t2p1, t2p1Records);
 
         // Set up consumer behavior
-        final Set<TopicPartition> partitionSet = new HashSet<>(Arrays.asList(t1p1, t2p1));
+        final Set<TopicPartition> partitionSet = new HashSet<>(List.of(t1p1, t2p1));
 
         // First poll returns records
         when(consumer.poll(any())).thenReturn(new ConsumerRecords<>(polledRecords, Map.of()))
@@ -4112,13 +4113,13 @@ public class StreamThreadTest {
             .thenReturn(0);
 
         // Create configuration and thread
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         final StreamsConfig config = new StreamsConfig(props);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
 
         thread = new StreamThread(
             mockTime,
@@ -4197,7 +4198,7 @@ public class StreamThreadTest {
             new byte[6],
             new RecordHeaders(),
             Optional.empty()));
-        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = Collections.singletonList(
+        final List<ConsumerRecord<byte[], byte[]>> t2p1Records = List.of(
             new ConsumerRecord<>(
                 t2p1.topic(),
                 t2p1.partition(),
@@ -4243,13 +4244,13 @@ public class StreamThreadTest {
             .thenReturn(0);
 
         // Create configuration and thread
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         final StreamsConfig config = new StreamsConfig(props);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
 
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
+            new StreamsMetricsImpl(metrics, CLIENT_ID, mockTime);
 
         thread = new StreamThread(
             mockTime,

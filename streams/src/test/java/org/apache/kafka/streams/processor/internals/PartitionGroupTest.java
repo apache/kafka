@@ -45,7 +45,6 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -346,7 +345,7 @@ public class PartitionGroupTest {
         assertEquals(0, group.numBuffered());
 
         // add three 3 records with timestamp 1, 5, 3 to partition-1
-        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+        final List<ConsumerRecord<byte[], byte[]>> list1 = List.of(
                 new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
                 new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue),
                 new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue));
@@ -939,11 +938,11 @@ public class PartitionGroupTest {
 
         // get first two records from partition 1
         record = group.nextRecord(info, time.milliseconds());
-        assertEquals(record.timestamp, 1L);
+        assertEquals(1L, record.timestamp);
         record = group.nextRecord(info, time.milliseconds());
-        assertEquals(record.timestamp, 5L);
+        assertEquals(5L, record.timestamp);
 
-        partition1TotalBytes -= getBytesBufferedForRawRecords(Arrays.asList(list1.get(0), list1.get(1)));
+        partition1TotalBytes -= getBytesBufferedForRawRecords(List.of(list1.get(0), list1.get(1)));
         assertEquals(group.totalBytesBuffered(), partition1TotalBytes);
         assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition1TotalBytes));
 
@@ -964,19 +963,19 @@ public class PartitionGroupTest {
         record = group.nextRecord(info, time.milliseconds());
         // 1:[3]
         // 2:[4, 6]
-        partition2TotalBytes -= getBytesBufferedForRawRecords(Collections.singletonList(list2.get(0)));
+        partition2TotalBytes -= getBytesBufferedForRawRecords(List.of(list2.get(0)));
         assertEquals(group.totalBytesBuffered(), partition2TotalBytes + partition1TotalBytes);
         assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition2TotalBytes + partition1TotalBytes));
-        assertEquals(record.timestamp, 2L);
+        assertEquals(2L, record.timestamp);
 
         // get one record, next up should have ts=3 from partition 1 (even though it has seen a larger max timestamp =5)
         record = group.nextRecord(info, time.milliseconds());
         // 1:[]
         // 2:[4, 6]
-        partition1TotalBytes -= getBytesBufferedForRawRecords(Collections.singletonList(list1.get(2)));
+        partition1TotalBytes -= getBytesBufferedForRawRecords(List.of(list1.get(2)));
         assertEquals(group.totalBytesBuffered(), partition2TotalBytes + partition1TotalBytes);
         assertThat(metrics.metric(totalBytesValue).metricValue(), is((double) partition2TotalBytes + partition1TotalBytes));
-        assertEquals(record.timestamp, 3L);
+        assertEquals(3L, record.timestamp);
     }
 
     private long getBytesBufferedForRawRecords(final List<ConsumerRecord<byte[], byte[]>> rawRecords) {
