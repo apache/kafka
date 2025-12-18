@@ -107,16 +107,16 @@ if __name__ == "__main__":
     """
     This script performs some basic linting of our PR titles and body. The PR number is read from the PR_NUMBER
     environment variable. Since this script expects to run on a GHA runner, it expects the "gh" tool to be installed.
-    
+
     The STDOUT from this script is used as the status check message. It should not be too long. Use the logger for
     any necessary logging.
-    
+
     Title checks:
     * Not too short (at least 15 characters)
     * Not too long (at most 120 characters)
     * Not truncated (ending with ...)
     * Starts with "KAFKA-", "MINOR", or "HOTFIX"
-    
+
     Body checks:
     * Is not empty
     * Has "Reviewers:" trailer if the PR is approved

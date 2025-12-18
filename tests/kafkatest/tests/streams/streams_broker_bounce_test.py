@@ -38,7 +38,7 @@ def broker_node(test, topic, broker_type):
 
 def signal_node(test, node, sig):
     test.kafka.signal_node(node, sig)
-    
+
 def clean_shutdown(test, topic, broker_type):
     """Discover broker node of requested type and shut it down cleanly.
     """
@@ -110,7 +110,7 @@ many_failures = {
     "clean_bounce": bulk_clean_bounce,
     "hard_bounce": bulk_hard_bounce
 }
-        
+
 class StreamsBrokerBounceTest(Test):
     """
     Simple test of Kafka Streams with brokers failing
@@ -170,7 +170,7 @@ class StreamsBrokerBounceTest(Test):
 
         return True
 
-        
+
     def setup_system(self, start_processor=True, num_threads=3, group_protocol='classic'):
         # Setup phase
         use_streams_groups = True if group_protocol == 'streams' else False
@@ -203,7 +203,7 @@ class StreamsBrokerBounceTest(Test):
         self.processor1.stop()
 
         node = self.driver.node
-        
+
         # Success is declared if streams does not crash when sleep time > 0
         # It should give an exception when sleep time is 0 since we kill the brokers immediately
         # and the topic manager cannot create internal topics with the desired replication factor
@@ -211,7 +211,7 @@ class StreamsBrokerBounceTest(Test):
             output_streams = self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-EXCEPTION %s" % self.processor1.STDOUT_FILE, allow_fail=False)
         else:
             output_streams = self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
-            
+
         for line in output_streams:
             data["Client closed"] = line
 
@@ -223,8 +223,8 @@ class StreamsBrokerBounceTest(Test):
         output = node.account.ssh_capture("grep -E 'SUCCESS|FAILURE' %s" % self.driver.STDOUT_FILE, allow_fail=False)
         for line in output:
             data["Logic Success/Failure"] = line
-            
-        
+
+
         return data
 
     @cluster(num_nodes=7)

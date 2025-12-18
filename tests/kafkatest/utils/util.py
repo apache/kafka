@@ -142,11 +142,11 @@ def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_dat
     # Correctness of the set difference operation depends on using equivalent
     # message_validators in producer and consumer
     missing = set(acked) - set(consumed)
-    
+
     # Were all acked messages consumed?
     if len(missing) > 0:
         msg = annotate_missing_msgs(missing, acked, consumed, msg)
-        
+
         # Did we miss anything due to data loss?
         if check_lost_data:
             max_truncate_count = 100 if may_truncate_acked_records else 0

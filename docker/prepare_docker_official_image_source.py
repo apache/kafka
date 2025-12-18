@@ -26,8 +26,8 @@ Usage:
     Example command:-
         prepare_docker_official_image_source.py --image-type <image_type> --kafka-version <kafka_version>
 
-        This command will build a directory with the name as <kafka_version> housing the hardcoded static Dockerfile and scripts for 
-        the docker official image, <image_type> as image type (jvm by default), <kafka_version> for the kafka version for which the 
+        This command will build a directory with the name as <kafka_version> housing the hardcoded static Dockerfile and scripts for
+        the docker official image, <image_type> as image type (jvm by default), <kafka_version> for the kafka version for which the
         image is being built.
 """
 

@@ -78,11 +78,11 @@ class OffsetValidationTest(VerifiableConsumerTest):
     def await_conflict_consumers_fenced(self, conflict_consumer):
         # Rely on explicit shutdown_complete events from the verifiable consumer to guarantee each conflict member
         # reached the fenced path rather than remaining in the default DEAD state prior to startup.
-        wait_until(lambda: len(conflict_consumer.shutdown_complete_nodes()) == len(conflict_consumer.nodes) and 
+        wait_until(lambda: len(conflict_consumer.shutdown_complete_nodes()) == len(conflict_consumer.nodes) and
                            len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
                    timeout_sec=60,
                    err_msg="Timed out waiting for conflict consumers to report shutdown completion after fencing")
-        
+
     @cluster(num_nodes=7)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
@@ -192,9 +192,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
     )
     def test_static_consumer_bounce_with_eager_assignment(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.isolated_kraft, group_protocol=None):
         """
-        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make 
+        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
         sure the behavior of static members are different from dynamic ones, we take both static and dynamic
-        membership into this test suite. This test is based on the eager assignment strategy, where all dynamic consumers 
+        membership into this test suite. This test is based on the eager assignment strategy, where all dynamic consumers
         revoke their partitions when a global rebalance takes place (even if they are not being bounced). The test relies
         on that eager behaviour when making sure that there is no global rebalance when static members are bounced.
 
@@ -212,7 +212,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer.start()
         self.await_produced_messages(producer)
 
-        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol, 
+        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol,
                                        assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor")
 
         consumer.start()
@@ -228,7 +228,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
 
         num_revokes_after_bounce = consumer.num_revokes_for_alive() - num_revokes_before_bounce
-            
+
         # under static membership, the live consumer shall not revoke any current running partitions,
         # since there is no global rebalance being triggered.
         if static_membership:

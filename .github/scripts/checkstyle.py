@@ -42,7 +42,7 @@ def parse_report(workspace_path, fp) -> Tuple[int, int]:
     error_count = 0
     for (event, elem) in xml.etree.ElementTree.iterparse(fp, events=["start", "end"]):
         if event == "start":
-            stack.append(elem)   
+            stack.append(elem)
             if elem.tag == "file":
                 file_count += 1
                 errors.clear()
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
         exit(1)
-    
+
     reports = glob(pathname="**/checkstyle/*.xml", recursive=True)
     logger.debug(f"Found {len(reports)} checkstyle reports")
     total_file_count = 0

@@ -57,7 +57,7 @@ class NetworkDegradeTest(Test):
 
         quorum0 = self.kafka.controller_quorum.nodes[0]
         quorum1 = self.kafka.controller_quorum.nodes[1]
-        
+
 
         # Capture the ping times from the ping stdout
         # 64 bytes from ducker01 (172.24.0.2): icmp_seq=1 ttl=64 time=0.325 ms

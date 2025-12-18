@@ -24,7 +24,7 @@ import os
 class DockerSanityTest(unittest.TestCase):
     IMAGE="apache/kafka"
     FIXTURES_DIR="."
-    
+
     def resume_container(self):
         subprocess.run(["docker", "start", constants.BROKER_CONTAINER])
 
@@ -42,7 +42,7 @@ class DockerSanityTest(unittest.TestCase):
         self.update_file(filename, "image: {$IMAGE}", f"image: {self.IMAGE}")
         self.update_file(f"{self.FIXTURES_DIR}/{constants.SSL_CLIENT_CONFIG}", "{$DIR}", self.FIXTURES_DIR)
         subprocess.run(["docker-compose", "-f", filename, "up", "-d"])
-    
+
     def destroy_compose(self, filename) -> None:
         subprocess.run(["docker-compose", "-f", filename, "down"])
         self.update_file(filename, f"image: {self.IMAGE}", "image: {$IMAGE}")
@@ -58,24 +58,24 @@ class DockerSanityTest(unittest.TestCase):
         if topic in output.decode("utf-8"):
             return True
         return False
-        
+
     def produce_message(self, topic, producer_config, key, value):
         command = ["echo", f'"{key}:{value}"', "|", f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_PRODUCER}", "--topic", topic, "--reader-property", "'parse.key=true'", "--reader-property", "'key.separator=:'", "--timeout", f"{constants.CLIENT_TIMEOUT}"]
         command.extend(producer_config)
         subprocess.run(["bash", "-c", " ".join(command)])
-    
+
     def consume_message(self, topic, consumer_config):
         command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_CONSUMER}", "--topic", topic, "--formatter-property", "'print.key=true'", "--formatter-property", "'key.separator=:'", "--from-beginning", "--max-messages", "1", "--timeout-ms", f"{constants.CLIENT_TIMEOUT}"]
         command.extend(consumer_config)
         message = subprocess.check_output(["bash", "-c", " ".join(command)])
         return message.decode("utf-8").strip()
-    
+
     def get_metrics(self, jmx_tool_config):
         command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_RUN_CLASS}", constants.JMX_TOOL]
         command.extend(jmx_tool_config)
         message = subprocess.check_output(["bash", "-c", " ".join(command)])
         return message.decode("utf-8").strip().split()
-    
+
     def broker_metrics_flow(self):
         print(f"Running {constants.BROKER_METRICS_TESTS}")
         errors = []
@@ -102,7 +102,7 @@ class DockerSanityTest(unittest.TestCase):
         except AssertionError as e:
             errors.append(constants.BROKER_METRICS_ERROR_PREFIX + str(e))
             return errors
-        
+
         metrics_after_message = self.get_metrics(jmx_tool_config)
         try:
             self.assertEqual(len(metrics_before_message), 2)
@@ -142,19 +142,19 @@ class DockerSanityTest(unittest.TestCase):
             self.assertEqual(message, "key:message")
         except AssertionError as e:
             errors.append(test_error_prefix + str(e))
-        
+
         return errors
-    
+
     def broker_restart_flow(self):
         print(f"Running {constants.BROKER_RESTART_TESTS}")
         errors = []
-        
+
         try:
             self.assertTrue(self.create_topic(constants.BROKER_RESTART_TEST_TOPIC, ["--bootstrap-server", "localhost:9092"]))
         except AssertionError as e:
             errors.append(constants.BROKER_RESTART_ERROR_PREFIX + str(e))
             return errors
-        
+
         producer_config = ["--bootstrap-server", "localhost:9092", "--command-property", "client.id=host"]
         self.produce_message(constants.BROKER_RESTART_TEST_TOPIC, producer_config, "key", "message")
 
@@ -169,7 +169,7 @@ class DockerSanityTest(unittest.TestCase):
             self.assertEqual(message, "key:message")
         except AssertionError as e:
             errors.append(constants.BROKER_RESTART_ERROR_PREFIX + str(e))
-        
+
         return errors
 
     def execute(self):
@@ -194,7 +194,7 @@ class DockerSanityTest(unittest.TestCase):
         except Exception as e:
             print(constants.BROKER_RESTART_ERROR_PREFIX, str(e))
             total_errors.append(str(e))
-        
+
         self.assertEqual(total_errors, [])
 
 class DockerSanityTestCombinedMode(DockerSanityTest):
@@ -220,7 +220,7 @@ def run_tests(image, mode, fixtures_dir):
     test_classes_to_run = []
     if mode == "jvm" or mode == "native":
         test_classes_to_run = [DockerSanityTestCombinedMode, DockerSanityTestIsolatedMode]
-    
+
     loader = unittest.TestLoader()
     suites_list = []
     for test_class in test_classes_to_run:

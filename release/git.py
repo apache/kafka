@@ -135,6 +135,6 @@ def push_ref(ref, remote=push_remote_name, **kwargs):
     cmd(f"Pushing ref {ref} to {remote}", f"git push {remote} {ref}")
 
 
-def merge_ref(ref, **kwargs): 
+def merge_ref(ref, **kwargs):
     __defaults(kwargs)
     cmd(f"Merging ref {ref}", f"git merge {ref}")

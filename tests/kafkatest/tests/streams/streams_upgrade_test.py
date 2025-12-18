@@ -43,9 +43,9 @@ fk_join_versions = [str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATES
 
 
 """
-After each release one should first check that the released version has been uploaded to 
-https://s3-us-west-2.amazonaws.com/kafka-packages/ which is the url used by system test to download jars; 
-anyone can verify that by calling 
+After each release one should first check that the released version has been uploaded to
+https://s3-us-west-2.amazonaws.com/kafka-packages/ which is the url used by system test to download jars;
+anyone can verify that by calling
 curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
 and if it is not uploaded yet, ping the dev@kafka mailing list to request it being uploaded.
 
@@ -54,19 +54,19 @@ which are outlined here:
 
 1. Update all relevant versions in tests/kafkatest/version.py this will include adding a new version for the new
    release and bumping all relevant already released versions.
-   
-2. Add the new version to the "kafkatest.version" import above and include the version in the 
-   broker_upgrade_versions list above.  You'll also need to add the new version to the 
+
+2. Add the new version to the "kafkatest.version" import above and include the version in the
+   broker_upgrade_versions list above.  You'll also need to add the new version to the
    "StreamsUpgradeTestJobRunnerService" on line 484 to make sure the correct arguments are passed
    during the system test run.
-   
+
 3. Update the vagrant/base.sh file to include all new versions, including the newly released version
-   and all point releases for existing releases. You only need to list the latest version in 
+   and all point releases for existing releases. You only need to list the latest version in
    this file.
-   
+
 4. Then update all relevant versions in the tests/docker/Dockerfile
 
-5. Add a new upgrade-system-tests-XXXX module under streams. You can probably just copy the 
+5. Add a new upgrade-system-tests-XXXX module under streams. You can probably just copy the
    latest system test module from the last release. Just make sure to update the systout print
    statement in StreamsUpgradeTest to the version for the release. After you add the new module
    you'll need to update settings.gradle file to include the name of the module you just created
@@ -111,7 +111,7 @@ class StreamsUpgradeTest(Test):
         """
         This test verifies that the cluster successfully upgrades despite changes in the metadata and FK
         join protocols.
-        
+
         Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
         """
         to_version = str(DEV_VERSION)

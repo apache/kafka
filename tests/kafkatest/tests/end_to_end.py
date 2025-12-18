@@ -41,7 +41,7 @@ class EndToEndTest(Test):
         self.topic_config = topic_config
         self.records_consumed = []
         self.last_consumed_offsets = {}
-        
+
     def create_zookeeper_if_necessary(self, num_nodes=1, **kwargs):
         self.zk = ZookeeperService(self.test_context, num_nodes=num_nodes, **kwargs) if quorum.for_test(self.test_context) == quorum.zk else None
 
@@ -71,7 +71,7 @@ class EndToEndTest(Test):
                                            group_id=group_id,
                                            on_record_consumed=self.on_record_consumed,
                                            **kwargs)
-                                    
+
 
     def create_producer(self, num_nodes=1, throughput=1000, **kwargs):
         self.producer = VerifiableProducer(self.test_context,
@@ -138,7 +138,7 @@ class EndToEndTest(Test):
 
             self.await_consumed_offsets(self.producer.last_acked_offsets, consumer_timeout_sec)
             self.consumer.stop()
-            
+
             self.validate(enable_idempotence)
         except BaseException:
             self._collect_all_logs()

@@ -26,10 +26,10 @@ Usage:
     Example command:-
         extract_docker_official_image_artifact.py --path_to_downloaded_artifact <artifact_path>
 
-        This command will build an extract the downloaded artifact, and copy the contents to the 
-        docker_official_images directory. If the extracted artifact contents already exist in the 
+        This command will build an extract the downloaded artifact, and copy the contents to the
+        docker_official_images directory. If the extracted artifact contents already exist in the
         docker_official_images directory , they will be overwritten, else they will be created.
-        
+
 """
 import os
 import argparse
@@ -49,7 +49,7 @@ def extract_artifact(artifact_path):
     temp_dir = Path('temp_extracted')
     try:
         if temp_dir.exists():
-            shutil.rmtree(temp_dir)  
+            shutil.rmtree(temp_dir)
         temp_dir.mkdir()
         with zipfile.ZipFile(artifact_path, 'r') as zip_ref:
             zip_ref.extractall(temp_dir)
@@ -62,7 +62,7 @@ def extract_artifact(artifact_path):
         for image_type_dir in artifact_version_dir.iterdir():
             target_image_type_dir = Path(os.path.join(target_version_dir, image_type_dir.name))
             if target_image_type_dir.exists():
-                shutil.rmtree(target_image_type_dir)            
+                shutil.rmtree(target_image_type_dir)
             shutil.copytree(image_type_dir, target_image_type_dir)
             set_executable_permissions(target_image_type_dir)
     finally:

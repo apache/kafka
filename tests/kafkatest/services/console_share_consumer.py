@@ -25,7 +25,7 @@ from kafkatest.version import DEV_BRANCH, LATEST_4_1, get_version
 from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_tools
 
 """
-The console share consumer is a tool that reads data from Kafka via a share consumer and outputs 
+The console share consumer is a tool that reads data from Kafka via a share consumer and outputs
 it to standard output.
 """
 class ConsoleShareConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService):
@@ -61,7 +61,7 @@ class ConsoleShareConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadSer
                  message_validator=None, share_consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-share-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,
-                 jaas_override_variables=None, kafka_opts_override="", client_prop_file_override="", 
+                 jaas_override_variables=None, kafka_opts_override="", client_prop_file_override="",
                  share_consumer_properties={}, log_level="DEBUG"):
         """
         Args:

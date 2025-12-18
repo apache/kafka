@@ -54,7 +54,7 @@ class ConsumerRollingUpgradeTest(VerifiableConsumerTest):
     def rolling_update_test(self, metadata_quorum=quorum.zk):
         """
         Verify rolling updates of partition assignment strategies works correctly. In this
-        test, we use a rolling restart to change the group's assignment strategy from "range" 
+        test, we use a rolling restart to change the group's assignment strategy from "range"
         to "roundrobin." We verify after every restart that all members are still in the group
         and that the correct assignment strategy was used.
         """

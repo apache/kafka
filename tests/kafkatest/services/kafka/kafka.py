@@ -294,7 +294,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 use_share_groups = context.injected_args.get(arg_name)
             if use_share_groups is None:
                 use_share_groups = context.globals.get(arg_name)
-        
+
         # Assign the determined value.
         self.use_transactions_v2 = use_transactions_v2
         self.use_share_groups = use_share_groups
@@ -470,7 +470,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def node_id_as_isolated_controller(self, node):
         """
-        Generates the node id for a controller-only node, starting from config_property.FIRST_CONTROLLER_ID so as not  
+        Generates the node id for a controller-only node, starting from config_property.FIRST_CONTROLLER_ID so as not
         to overlap with broker id numbering.
         This method does not do any validation to check this node is actually part of an isolated controller quorum.
         """
@@ -1809,7 +1809,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 output += line
         self.logger.debug(output)
         return output
-    
+
     def describe_share_group(self, group, node=None, command_config=None):
         """ Describe a share group.
         """
@@ -1835,7 +1835,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 output += line
         self.logger.debug(output)
         return output
-    
+
     def describe_share_group_members(self, group, node=None, command_config=None):
         """ Describe members of a share group.
         """
@@ -1853,7 +1853,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
               (share_group_script,
                self.bootstrap_servers(self.security_protocol),
                command_config, group)
-        
+
         cmd += " --members"
 
         output_lines = []

@@ -184,6 +184,8 @@ allprojects {
         }
       }
     }
+
+    apply from: "$rootDir/gradle/spotless.gradle"
   }
 
   configurations.all {
@@ -865,14 +867,6 @@ subprojects {
     suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
-  }
-  apply plugin: 'com.diffplug.spotless'
-  spotless {
-    java {
-      targetExclude('**/generated/**/*.java','**/generated-test/**/*.java')
-      importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      removeUnusedImports()
-    }
   }
 
   tasks.register("checkJsonLicenseHeader") {
@@ -2881,15 +2875,6 @@ project(':streams:streams-scala') {
 
   jar {
     dependsOn 'copyDependantLibs'
-  }
-
-  apply plugin: 'com.diffplug.spotless'
-  spotless {
-    scala {
-      target '**/*.scala'
-      scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
-      licenseHeaderFile '../../checkstyle/java.header', 'package'
-    }
   }
 }
 

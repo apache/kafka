@@ -60,7 +60,7 @@ class ConsumerEventHandler(object):
         self.state = ConsumerState.Dead
         self.assignment = []
         self.position = {}
-        self.shutdown_complete = True 
+        self.shutdown_complete = True
 
         if node is not None and logger is not None:
             logger.debug("Shut down %s" % node.account.hostname)
@@ -155,7 +155,7 @@ class ConsumerEventHandler(object):
 class IncrementalAssignmentConsumerEventHandler(ConsumerEventHandler):
     def __init__(self, node, verify_offsets, idx, **kwargs):
         super().__init__(node, verify_offsets, idx, **kwargs)
-        
+
     def handle_partitions_revoked(self, event, node, logger):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
@@ -207,10 +207,10 @@ class ConsumerProtocolConsumerEventHandler(IncrementalAssignmentConsumerEventHan
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
-    system testing. 
-    
+    system testing.
+
     NOTE: this class should be treated as a PUBLIC API. Downstream users use
-    this service both directly and through class extension, so care must be 
+    this service both directly and through class extension, so care must be
     taken to ensure compatibility.
     """
 
@@ -349,7 +349,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def is_eager(self):
         return self.group_protocol == consumer_group.classic_group_protocol and self.assignment_strategy != "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"
-    
+
     def _update_global_position(self, consumed_event, node):
         for consumed_partition in consumed_event["partitions"]:
             tp = _create_partition_from_dict(consumed_partition)

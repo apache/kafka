@@ -113,7 +113,7 @@ class ConnectDistributedTest(Test):
         connector_config = dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
         connector_config.update(extra_config)
         self.cc.create_connector(connector_config)
-            
+
     def _connector_status(self, connector, node=None):
         try:
             return self.cc.get_connector_status(connector, node)
@@ -195,7 +195,7 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the FAILED state")
 
         self.cc.restart_connector(self.connector.name)
-        
+
         wait_until(lambda: self.connector_is_running(self.connector), timeout_sec=10,
                    err_msg="Failed to see connector transition to the RUNNING state")
 
@@ -218,7 +218,7 @@ class ConnectDistributedTest(Test):
             connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5, consumer_group_protocol=group_protocol)
         else:
             connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
-            
+
         connector.start()
 
         task_id = 0
@@ -226,7 +226,7 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the FAILED state")
 
         self.cc.restart_task(connector.name, task_id)
-        
+
         wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=10,
                    err_msg="Failed to see task transition to the RUNNING state")
 
@@ -306,7 +306,7 @@ class ConnectDistributedTest(Test):
 
         wait_until(lambda: self.is_running(self.source), timeout_sec=30,
                    err_msg="Failed to see connector transition to the RUNNING state")
-        
+
         self.cc.pause_connector(self.source.name)
 
         # wait until all nodes report the paused transition
@@ -358,7 +358,7 @@ class ConnectDistributedTest(Test):
 
         wait_until(lambda: self.is_running(self.sink), timeout_sec=30,
                    err_msg="Failed to see connector transition to the RUNNING state")
-        
+
         self.cc.pause_connector(self.sink.name)
 
         # wait until all nodes report the paused transition
@@ -403,7 +403,7 @@ class ConnectDistributedTest(Test):
 
         wait_until(lambda: self.is_running(self.source), timeout_sec=30,
                    err_msg="Failed to see connector transition to the RUNNING state")
-        
+
         self.cc.pause_connector(self.source.name)
 
         self.cc.restart()
@@ -604,7 +604,7 @@ class ConnectDistributedTest(Test):
     @cluster(num_nodes=6)
     @matrix(
         security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
-        exactly_once_source=[True, False], 
+        exactly_once_source=[True, False],
         connect_protocol=['sessioned', 'compatible', 'eager'],
         metadata_quorum=[quorum.isolated_kraft],
         group_protocol=consumer_group.all_group_protocols
@@ -628,7 +628,7 @@ class ConnectDistributedTest(Test):
             self._start_connector("connect-file-sink.properties", {"consumer.override.group.protocol" : group_protocol})
         else:
             self._start_connector("connect-file-sink.properties")
-        
+
         # Generating data on the source node should generate new records and create new output on the sink node. Timeouts
         # here need to be more generous than they are for standalone mode because a) it takes longer to write configs,
         # do rebalancing of the group, etc, and b) without explicit leave group support, rebalancing takes awhile
@@ -678,8 +678,8 @@ class ConnectDistributedTest(Test):
                 # Give additional time for the consumer groups to recover. Even if it is not a hard bounce, there are
                 # some cases where a restart can cause a rebalance to take the full length of the session timeout
                 # (e.g. if the client shuts down before it has received the memberId from its initial JoinGroup).
-                # If we don't give enough time for the group to stabilize, the next bounce may cause consumers to 
-                # be shut down before they have any time to process data and we can end up with zero data making it 
+                # If we don't give enough time for the group to stabilize, the next bounce may cause consumers to
+                # be shut down before they have any time to process data and we can end up with zero data making it
                 # through the test.
                 time.sleep(15)
 

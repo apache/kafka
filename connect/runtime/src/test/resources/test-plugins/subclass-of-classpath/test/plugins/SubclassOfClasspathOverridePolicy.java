@@ -18,7 +18,6 @@
 package test.plugins;
 
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
-import org.apache.kafka.connect.converters.ByteArrayConverter;
 
 /**
  * Fake plugin class for testing classloading isolation.

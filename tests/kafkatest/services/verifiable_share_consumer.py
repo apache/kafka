@@ -107,8 +107,8 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
                 "collect_default": True}
             }
 
-    def __init__(self, context, num_nodes, kafka, topic, group_id, max_messages=-1, 
-                 acknowledgement_mode="auto", version=DEV_BRANCH, stop_timeout_sec=60, 
+    def __init__(self, context, num_nodes, kafka, topic, group_id, max_messages=-1,
+                 acknowledgement_mode="auto", version=DEV_BRANCH, stop_timeout_sec=60,
                  log_level="INFO", jaas_override_variables=None, on_record_consumed=None):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
@@ -268,7 +268,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
     def total_consumed(self):
         with self.lock:
             return self.total_records_consumed
-        
+
     def total_unique_consumed(self):
         with self.lock:
             return len(self.consumed_records_offsets)
@@ -280,11 +280,11 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
     def total_acknowledged(self):
         with self.lock:
             return self.total_records_acknowledged + self.total_records_acknowledged_failed
-        
+
     def total_acknowledged_successfully(self):
         with self.lock:
             return self.total_records_acknowledged
-        
+
     def total_failed_acknowledged(self):
         with self.lock:
             return self.total_records_acknowledged_failed
@@ -296,11 +296,11 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
     def total_acknowledged_for_a_share_consumer(self, node):
         with self.lock:
             return self.event_handlers[node].total_acknowledged_successfully + self.event_handlers[node].total_acknowledged_failed
-        
+
     def total_acknowledged_sucessfully_for_a_share_consumer(self, node):
         with self.lock:
             return self.event_handlers[node].total_acknowledged_successfully
-        
+
     def total_failed_acknowledged_for_a_share_consumer(self, node):
         with self.lock:
             return self.event_handlers[node].total_acknowledged_failed

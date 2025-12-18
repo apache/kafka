@@ -51,7 +51,7 @@ class VerifiableShareConsumerTest(KafkaTest):
 
     def setup_share_group(self, topic, acknowledgement_mode="auto", group_id="test_group_id", **kwargs):
         return VerifiableShareConsumer(self.test_context, self.num_consumers, self.kafka,
-                                  topic, group_id, acknowledgement_mode=acknowledgement_mode, 
+                                  topic, group_id, acknowledgement_mode=acknowledgement_mode,
                                   log_level="TRACE", **kwargs)
 
     def setup_producer(self, topic, max_messages=-1, throughput=500):
@@ -80,7 +80,7 @@ class VerifiableShareConsumerTest(KafkaTest):
         wait_until(lambda: consumer.total_consumed_for_a_share_consumer(node) >= current_total + min_messages,
                    timeout_sec=timeout_sec,
                    err_msg="Timed out waiting for consumption")
-        
+
     def await_unique_consumed_messages(self, consumer, min_messages=1, timeout_sec=10):
         wait_until(lambda: consumer.total_unique_consumed() >= min_messages,
                    timeout_sec=timeout_sec,
@@ -90,7 +90,7 @@ class VerifiableShareConsumerTest(KafkaTest):
         wait_until(lambda: consumer.total_acknowledged() >=  min_messages,
                    timeout_sec=timeout_sec,
                    err_msg="Timed out waiting for consumption")
-        
+
     def await_unique_acknowledged_messages(self, consumer, min_messages=1, timeout_sec=10):
         wait_until(lambda: consumer.total_unique_acknowledged() >=  min_messages,
                    timeout_sec=timeout_sec,

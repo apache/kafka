@@ -80,6 +80,6 @@ if __name__ == '__main__':
             build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg kafka_url={args.kafka_url} --build-arg build_date={date.today()} --no-cache --progress=plain $DOCKER_DIR", args.image_type)
         elif args.kafka_archive:
             build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {args.image}:{args.tag} --build-arg build_date={date.today()} --no-cache --progress=plain $DOCKER_DIR", args.image_type, args.kafka_archive)
-    
+
     if args.test_only or not (args.build_only or args.test_only):
         run_docker_tests(args.image, args.tag, args.kafka_url, args.image_type)

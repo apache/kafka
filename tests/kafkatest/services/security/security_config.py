@@ -154,7 +154,7 @@ class SecurityConfig(TemplateRenderer):
                  kraft_tls=False):
         """
         Initialize the security properties for the node and copy
-        keystore and truststore to the remote node if the transport protocol 
+        keystore and truststore to the remote node if the transport protocol
         is SSL. If security_protocol is None, the protocol specified in the
         template properties file is used. If no protocol is specified in the
         template properties either, PLAINTEXT is used as default.

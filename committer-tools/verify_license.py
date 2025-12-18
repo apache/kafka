@@ -44,7 +44,7 @@ def get_tarball_path(project_dir):
     if not os.path.isdir(distributions_dir):
         print("Error: Distributions directory not found:", distributions_dir)
         sys.exit(1)
-    
+
     pattern = re.compile(r'^kafka_2\.13-(?!.*docs).+\.tgz$', re.IGNORECASE)
     candidates = [
         os.path.join(distributions_dir, f)
@@ -54,7 +54,7 @@ def get_tarball_path(project_dir):
     if not candidates:
         print("Error: No tarball matching 'kafka_2.13-*.tgz' found in:", distributions_dir)
         sys.exit(1)
-    
+
     tarball_path = max(candidates, key=os.path.getmtime)
     return tarball_path
 
@@ -91,7 +91,7 @@ def main():
         run_gradlew(project_dir)
     tarball = get_tarball_path(project_dir)
     print("Tarball created at:", tarball)
-    
+
     # Extract the tarball into a temporary directory.
     with tempfile.TemporaryDirectory() as tmp_dir:
         extract_tarball(tarball, tmp_dir)
@@ -101,17 +101,17 @@ def main():
             sys.exit(1)
         extracted = os.path.join(tmp_dir, extracted_dirs[0])
         print("Tarball extracted to:", extracted)
-        
+
         # Locate the LICENSE file and libs directory.
         license_path = os.path.join(extracted, "LICENSE")
         libs_dir = os.path.join(extracted, "libs")
         if not os.path.exists(license_path) or not os.path.exists(libs_dir):
             print("Error: LICENSE file or libs directory not found in the extracted project.")
             sys.exit(1)
-        
+
         with open(license_path, "r", encoding="utf-8") as f:
             license_text = f.read()
-        
+
         # Get dependency sets.
         libs = get_libs_set(libs_dir)
         license_deps = get_license_deps(license_text)
@@ -119,11 +119,11 @@ def main():
         print("\nDependencies from libs (extracted from jar names):")
         for dep in sorted(libs):
             print(" -", dep)
-        
+
         print("\nDependencies extracted from LICENSE file:")
         for dep in sorted(license_deps):
             print(" -", dep)
-        
+
         # Compare the sets.
         missing_in_license = libs - license_deps
         extra_in_license = license_deps - libs
@@ -134,7 +134,7 @@ def main():
                 print(" -", dep)
         else:
             print("\nAll libs from ./libs are present in the LICENSE file.")
-        
+
         if extra_in_license:
             print("\nThe following entries are in the LICENSE file but not present in ./libs. These should be removed from the LICENSE-binary file:")
             for dep in sorted(extra_in_license):
