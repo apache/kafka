@@ -145,7 +145,7 @@ class ControllerServer(
 
       authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.ControllerRole.toString)
 
-      metadataCache = new KRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
+      metadataCache = new KRaftMetadataCache(config.nodeId, () => raftManager.client.latestCommittedKRaftVersion())
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
@@ -160,7 +160,7 @@ class ControllerServer(
         config.unstableApiVersionsEnabled,
         () => featuresPublisher.features().setFinalizedLevel(
           KRaftVersion.FEATURE_NAME,
-          raftManager.client.kraftVersion().featureLevel())
+          raftManager.client.latestCommittedKRaftVersion().featureLevel())
       )
 
       //  metrics will be set to null when closing a controller, so we should recreate it for testing

@@ -3829,7 +3829,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public KRaftVersion kraftVersion() {
+    public KRaftVersion latestKRaftVersion() {
         if (!isInitialized()) {
             throw new IllegalStateException("Cannot read the kraft version before the replica has been initialized");
         }
@@ -3839,6 +3839,18 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             .flatMap(LeaderState::requestedKRaftVersion)
             .map(KRaftVersionUpgrade.Version::kraftVersion)
             .orElseGet(partitionState::lastKraftVersion);
+    }
+
+    @Override
+    public KRaftVersion latestCommittedKRaftVersion() {
+        if (!isInitialized()) {
+            throw new IllegalStateException("Cannot read the committed kraft version before the replica has been initialized");
+        }
+        if (quorum.highWatermark().isPresent()) {
+            return partitionState.kraftVersionAtOffset(quorum.highWatermark().get().offset() - 1);
+        } else {
+            return KRaftVersion.KRAFT_VERSION_0;
+        }
     }
 
     @Override

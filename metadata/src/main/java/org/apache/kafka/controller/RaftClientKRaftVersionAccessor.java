@@ -28,7 +28,7 @@ public final class RaftClientKRaftVersionAccessor implements KRaftVersionAccesso
     }
 
     public KRaftVersion kraftVersion() {
-        return raftClient.kraftVersion();
+        return raftClient.latestKRaftVersion();
     }
 
     public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {

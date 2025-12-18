@@ -250,7 +250,14 @@ public interface RaftClient<T> extends AutoCloseable {
      *
      * @return the current kraft.version.
      */
-    KRaftVersion kraftVersion();
+    KRaftVersion latestKRaftVersion();
+
+    /**
+     * Returns the latest committed kraft.version.
+     *
+     * @return the current kraft.version.
+     */
+    KRaftVersion latestCommittedKRaftVersion();
 
     /**
      * Request that the leader to upgrade the kraft version.

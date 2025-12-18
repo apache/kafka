@@ -129,7 +129,12 @@ public class SnapshotEmitterTest {
         }
 
         @Override
-        public KRaftVersion kraftVersion() {
+        public KRaftVersion latestKRaftVersion() {
+            return KRaftVersion.KRAFT_VERSION_0;
+        }
+
+        @Override
+        public KRaftVersion latestCommittedKRaftVersion() {
             return KRaftVersion.KRAFT_VERSION_0;
         }
 

@@ -797,7 +797,12 @@ public final class MockRaftClient implements RaftClient<ApiMessageAndVersion>, A
     }
 
     @Override
-    public KRaftVersion kraftVersion() {
+    public KRaftVersion latestKRaftVersion() {
+        return lastKRaftVersion;
+    }
+
+    @Override
+    public KRaftVersion latestCommittedKRaftVersion() {
         return lastKRaftVersion;
     }
 

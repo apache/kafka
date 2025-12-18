@@ -2443,7 +2443,7 @@ public class KafkaRaftClientReconfigTest {
         }
 
         context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false);
-        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.kraftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.latestKRaftVersion());
 
         var localLogEndOffset = context.log.endOffset().offset();
         context.client.poll();
@@ -2510,7 +2510,7 @@ public class KafkaRaftClientReconfigTest {
         }
 
         context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false);
-        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.kraftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.latestKRaftVersion());
 
         // Push the control records to the log
         context.client.poll();
@@ -2587,7 +2587,7 @@ public class KafkaRaftClientReconfigTest {
         var epoch = context.currentEpoch();
 
         // Upgrade not allowed since none of the remote voters support the new version
-        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestKRaftVersion());
         assertThrows(
             InvalidUpdateVersionException.class,
             () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false)
@@ -2618,7 +2618,7 @@ public class KafkaRaftClientReconfigTest {
         );
 
         // Upgrade not allowed since one of the voters doesn't support the new version
-        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestKRaftVersion());
         assertThrows(
             InvalidUpdateVersionException.class,
             () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false)
