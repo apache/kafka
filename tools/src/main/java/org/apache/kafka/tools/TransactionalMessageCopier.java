@@ -414,7 +414,7 @@ public class TransactionalMessageCopier {
                     } catch (KafkaException e) {
                         log.debug("Aborting transaction after catching exception", e);
                         abortTransactionAndResetPosition(producer, consumer);
-                    } 
+                    }
                 }
             }
         } catch (WakeupException e) {
