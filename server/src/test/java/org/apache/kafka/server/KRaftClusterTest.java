@@ -685,7 +685,7 @@ public class KRaftClusterTest {
             cluster.startup();
             cluster.waitForReadyBrokers();
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 // Create the topic.
                 Map<Integer, List<Integer>> assignments = Map.of(
                     0, List.of(0, 1, 2),
@@ -781,7 +781,7 @@ public class KRaftClusterTest {
             cluster.startup();
             cluster.waitForReadyBrokers();
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 Map<ConfigResource, Collection<AlterConfigOp>> brokerConfigs = Map.of(
                     new ConfigResource(Type.BROKER, ""),
                     List.of(
@@ -907,7 +907,7 @@ public class KRaftClusterTest {
             cluster.startup();
             cluster.waitForReadyBrokers();
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 log.debug("setting log4j");
                 LOG_2.debug("setting log4j");
 
@@ -982,7 +982,7 @@ public class KRaftClusterTest {
             cluster.startup();
             cluster.waitForReadyBrokers();
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 Map<String, KafkaFuture<Void>> createResults = admin.createTopics(List.of(
                     new NewTopic("foo", 1, (short) 3),
                     new NewTopic("bar", 2, (short) 3)
@@ -1136,7 +1136,7 @@ public class KRaftClusterTest {
             cluster.startup();
             cluster.waitForReadyBrokers();
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 admin.updateFeatures(
                     Map.of(MetadataVersion.FEATURE_NAME,
                         new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
@@ -1164,9 +1164,7 @@ public class KRaftClusterTest {
             cluster.startup();
             cluster.waitForReadyBrokers();
 
-            try (Admin admin = Admin.create(cluster.newClientPropertiesBuilder()
-                .setUsingBootstrapControllers(usingBootstrapControllers)
-                .build())) {
+            try (Admin admin = createAdminClient(cluster, usingBootstrapControllers)) {
                 FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
                 assertEquals(new SupportedVersionRange((short) 0, (short) 1),
                     featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME));
@@ -1197,7 +1195,7 @@ public class KRaftClusterTest {
             TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
                 "RaftManager was not initialized.");
 
-            try (Admin admin = Admin.create(cluster.clientProperties())) {
+            try (Admin admin = cluster.admin()) {
                 // Create a test topic
                 List<NewTopic> newTopic = List.of(new NewTopic("test-topic", 1, (short) 1));
                 CreateTopicsResult createTopicResult = admin.createTopics(newTopic);
