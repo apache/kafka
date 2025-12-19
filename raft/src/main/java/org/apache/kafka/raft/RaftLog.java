@@ -25,7 +25,7 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 
 import java.util.Optional;
 
-public interface ReplicatedLog extends AutoCloseable {
+public interface RaftLog extends AutoCloseable {
 
     /**
      * Write a set of records to the local leader log. These messages will either

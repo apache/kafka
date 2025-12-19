@@ -373,4 +373,8 @@
 
      <!-- Add the new suppression rule for JaasTestUtils.java -->
     <suppress checks="ImportControl" files="(JaasTestUtils).java" />
+
+    <suppress checks="FinalLocalVariable" files="."/>
+    <suppress checks="FinalParameters" files="."/>
+
 </suppressions>

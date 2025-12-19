@@ -19,8 +19,7 @@ package kafka.server
 import java.util.Properties
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.MetricsContext
-import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
