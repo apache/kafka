@@ -33,6 +33,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -134,6 +135,7 @@ public class TransactionManagerTest {
     private final int transactionTimeoutMs = 1121;
 
     private static final String SENDER_TIMEOUT_MSG = "The request has not been sent, or no server response has been received yet.";
+    private static final String NETWORK_DISCONNECTED_MSG = "Disconnected from node";
     private static final String TEST_TIMEOUT_MSG = "Unexpected time out during the test.";
     
     private final String topic = "test";
@@ -783,16 +785,18 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasInflightBatches(tp0));
         assertEquals(1, transactionManager.sequenceNumber(tp0));
 
-        time.sleep(5000); // delivery time out
-        sender.runOnce();
+        ProducerTestUtils.runUntil(sender, () -> {
+            time.sleep(5000); // advance the "now" so NetworkClient sees the request as expired
+            return responseFuture1.isDone();
+        });
 
         // The retried request will remain inflight until the request timeout
         // is reached even though the delivery timeout has expired and the
         // future has completed exceptionally.
         assertTrue(responseFuture1.isDone());
-        TestUtils.assertFutureThrowsWithMessageContaining(TimeoutException.class, responseFuture1, SENDER_TIMEOUT_MSG);
+        TestUtils.assertFutureThrowsWithMessageContaining(NetworkException.class, responseFuture1, NETWORK_DISCONNECTED_MSG);
         assertFalse(transactionManager.hasInFlightRequest());
-        assertEquals(1, client.inFlightRequestCount());
+        assertEquals(0, client.inFlightRequestCount());
 
         sender.runOnce(); // bump the epoch
         assertEquals(epoch + 1, transactionManager.producerIdAndEpoch().epoch);
@@ -806,10 +810,12 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.firstInFlightSequence(tp0));
         assertEquals(1, transactionManager.sequenceNumber(tp0));
 
-        time.sleep(5000); // request time out again
-        sender.runOnce();
-        assertTrue(transactionManager.hasInflightBatches(tp0)); // the latter batch failed and retried
-        assertFalse(responseFuture2.isDone());
+        ProducerTestUtils.runUntil(sender, () -> {
+            time.sleep(5000); // advance the "now" so NetworkClient sees the request as expired
+            return responseFuture2.isDone();
+        });
+        assertFalse(transactionManager.hasInflightBatches(tp0)); // the latter batch has expired and been removed from in-flight
+        assertTrue(responseFuture2.isDone());
     }
 
     private ProducerBatch writeIdempotentBatchWithValue(TransactionManager manager,
@@ -2963,8 +2969,10 @@ public class TransactionManagerTest {
 
         TransactionalRequestResult commitResult = transactionManager.beginCommit();
 
-        // Sleep 10 seconds to make sure that the batches in the queue would be expired if they can't be drained.
-        time.sleep(10000);
+        ProducerTestUtils.runUntil(sender, () -> {
+            time.sleep(10000); // advance "now" so NetworkClient sees request as expired
+            return responseFuture.isDone();
+        });
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
@@ -2974,16 +2982,16 @@ public class TransactionManagerTest {
 
         // make sure the produce was expired.
         var timeoutEx1 = assertInstanceOf(
-            TimeoutException.class,
+            NetworkException.class,
             assertThrows(ExecutionException.class, responseFuture::get).getCause(),
-            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
-        assertTrue(timeoutEx1.getMessage().contains(SENDER_TIMEOUT_MSG));
+            "Expected the produce request to fail due to network disconnect");
+        assertTrue(timeoutEx1.getMessage().contains(NETWORK_DISCONNECTED_MSG));
         
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
-        assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
-        var timeoutEx2 = assertInstanceOf(TimeoutException.class, assertThrows(TransactionAbortableException.class, 
+        assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed due to network disconnect.
+        var timeoutEx2 = assertInstanceOf(NetworkException.class, assertThrows(TransactionAbortableException.class, 
                 () -> commitResult.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS, TEST_TIMEOUT_MSG)).getCause());
-        assertTrue(timeoutEx2.getMessage().contains(SENDER_TIMEOUT_MSG));
+        assertTrue(timeoutEx2.getMessage().contains(NETWORK_DISCONNECTED_MSG));
 
         assertTrue(transactionManager.hasAbortableError());
         assertTrue(transactionManager.hasOngoingTransaction());
