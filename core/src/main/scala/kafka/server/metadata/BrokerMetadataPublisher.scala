@@ -341,7 +341,19 @@ class BrokerMetadataPublisher(
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
         metadataCache.getAllTopics().asScala,
-        isStray = log => JLogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
+        isStray = log => {
+          if (log.topicId().isEmpty) {
+            // Missing topic ID could result from storage failure or unclean shutdown after topic creation but before flushing
+            // data to the `partition.metadata` file. And before appending data to the log, the `partition.metadata` is always
+            // flushed to disk. So if the topic ID is missing, it mostly means no data was appended, and we can treat this as
+            // a stray log.
+            info(s"The topicId does not exist in $log, treat it as a stray log.")
+            true
+          } else {
+            val replicas = newImage.topics.partitionReplicas(log.topicId.get, log.topicPartition.partition)
+            JLogManager.isStrayReplica(replicas, brokerId, log)
+          }
+        }
       )
 
       // Rename all future replicas which are in the same directory as the

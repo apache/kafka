@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -178,9 +177,7 @@ public class StreamThreadStateStoreProviderTest {
         taskOne = createStreamsTask(
             streamsConfig,
             mockConsumer,
-            mockRestoreConsumer,
             mockProducer,
-            mockAdminClient,
             processorTopology,
             new TaskId(0, 0));
         taskOne.initializeIfNeeded();
@@ -189,9 +186,7 @@ public class StreamThreadStateStoreProviderTest {
         final StreamTask taskTwo = createStreamsTask(
             streamsConfig,
             mockConsumer,
-            mockRestoreConsumer,
             mockProducer,
-            mockAdminClient,
             processorTopology,
             new TaskId(0, 1));
         taskTwo.initializeIfNeeded();
@@ -420,9 +415,7 @@ public class StreamThreadStateStoreProviderTest {
 
     private StreamTask createStreamsTask(final StreamsConfig streamsConfig,
                                          final Consumer<byte[], byte[]> consumer,
-                                         final Consumer<byte[], byte[]> restoreConsumer,
                                          final Producer<byte[], byte[]> producer,
-                                         final Admin adminClient,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
         final Metrics metrics = new Metrics();

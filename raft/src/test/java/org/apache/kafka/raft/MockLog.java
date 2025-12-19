@@ -54,7 +54,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-public class MockLog implements ReplicatedLog {
+public class MockLog implements RaftLog {
     private static final AtomicLong ID_GENERATOR = new AtomicLong();
 
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();

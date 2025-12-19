@@ -27,9 +27,9 @@ import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{LeaderAndEpoch, QuorumConfig}
+import org.apache.kafka.raft.{KRaftConfigs, LeaderAndEpoch, QuorumConfig}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
