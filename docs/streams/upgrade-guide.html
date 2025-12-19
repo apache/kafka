@@ -151,6 +151,13 @@
         More details can be found in <a href="https://cwiki.apache.org/confluence/x/jQobFw">KIP-1221</a>.
     </p>
 
+    <p>The streams thread metrics <code>commit-ratio</code>, <code>process-ratio</code>, <code>punctuate-ratio</code>, and <code>poll-ratio</code> have been updated.
+        They now report, over a rolling measurement window,
+        the ratio of time this thread spends performing the given action (<code>{action}</code>) to the total elapsed time in that window.
+        The effective window duration is determined by the metrics configuration: <code>metrics.sample.window.ms</code> (per-sample window length)
+        and <code>metrics.num.samples</code> (number of rolling windows).
+    </p>
+
     <h3><a id="streams_api_changes_410" href="#streams_api_changes_410">Streams API changes in 4.1.0</a></h3>
 
     <p><b>Note:</b> Kafka Streams 4.1.0 contains a critical memory leak bug (<a href="https://issues.apache.org/jira/browse/KAFKA-19748">KAFKA-19748</a>) that affects users of range scans and certain DSL operators (session windows, sliding windows, stream-stream joins, foreign-key joins). Users running Kafka Streams should consider upgrading directly to 4.1.1, which includes the fix for it.</p>
