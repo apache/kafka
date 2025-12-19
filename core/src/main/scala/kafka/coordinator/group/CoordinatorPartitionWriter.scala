@@ -158,9 +158,7 @@ class CoordinatorPartitionWriter(
     val partitionResult = appendResults.getOrElse(topicIdPartition,
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
-    if (partitionResult.error != Errors.NONE) {
-      throw partitionResult.error.exception()
-    }
+    partitionResult.exception.foreach(e => throw e)
 
     // Required offset.
     partitionResult.info.lastOffset + 1

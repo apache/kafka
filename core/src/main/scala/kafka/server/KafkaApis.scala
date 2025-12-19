@@ -69,7 +69,7 @@ import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareParti
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.AppendOrigin
+import org.apache.kafka.storage.internals.log.{AppendOrigin, IdempotentTransactionMarkerException}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.time.Duration
@@ -1798,13 +1798,17 @@ class KafkaApis(val requestChannel: RequestChannel,
               val error = if (exception == null) {
                 Errors.NONE
               } else {
-                Errors.forException(exception) match {
-                  case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
-                    // The transaction coordinator does not expect those errors so we translate them
-                    // to NOT_LEADER_OR_FOLLOWER to signal to it that the coordinator is not ready yet.
-                    Errors.NOT_LEADER_OR_FOLLOWER
-                  case error =>
-                    error
+                if (Errors.maybeUnwrapException(exception).isInstanceOf[IdempotentTransactionMarkerException])
+                  Errors.NONE
+                else {
+                  Errors.forException(exception) match {
+                    case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
+                      // The transaction coordinator does not expect those errors so we translate them
+                      // to NOT_LEADER_OR_FOLLOWER to signal to it that the coordinator is not ready yet.
+                      Errors.NOT_LEADER_OR_FOLLOWER
+                    case error =>
+                      error
+                  }
                 }
               }
               addResultAndMaybeComplete(partition, error)
@@ -1831,7 +1835,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestLocal = requestLocal,
             responseCallback = errors => {
               errors.foreachEntry { (topicIdPartition, partitionResponse) =>
-                addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
+                val error = if (partitionResponse.error == Errors.NONE)
+                  Errors.NONE
+                else if (partitionResponse.exception().isInstanceOf[IdempotentTransactionMarkerException])
+                  Errors.NONE
+                else
+                  partitionResponse.error
+                addResultAndMaybeComplete(topicIdPartition.topicPartition(), error)
               }
             },
             transactionVersion = markerTransactionVersion
@@ -2825,11 +2835,11 @@ class KafkaApis(val requestChannel: RequestChannel,
               val timeoutMs = heartbeatIntervalMs * 2
 
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
-              
+
               // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
-              val hasMissingInternalTopicsStatus = responseData.status() != null && 
+              val hasMissingInternalTopicsStatus = responseData.status() != null &&
                 responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-              
+
               if (hasMissingInternalTopicsStatus) {
                 val currentTimeMs = time.milliseconds()
                 val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keys.toSet, currentTimeMs)
