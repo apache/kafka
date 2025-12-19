@@ -111,6 +111,27 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
   }
 
   @ClusterTest
+  def testStreamsGroupHeartbeatIsInaccessibleWhenOffsetTopicNotExist(): Unit = {
+    val topology = new StreamsGroupHeartbeatRequestData.Topology()
+      .setEpoch(1)
+      .setSubtopologies(List().asJava)
+
+    val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+      groupId = "test-group",
+      memberId = "test-member",
+      rebalanceTimeoutMs = 1000,
+      activeTasks = List.empty,
+      standbyTasks = List.empty,
+      warmupTasks = List.empty,
+      topology = topology,
+      expectedError = Errors.NOT_COORDINATOR
+    )
+
+    val expectedResponse = new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.NOT_COORDINATOR.code())
+    assertEquals(expectedResponse, streamsGroupHeartbeatResponse)
+  }
+
+  @ClusterTest
   def testStreamsGroupHeartbeatIsAccessibleWhenNewGroupCoordinatorIsEnabledTopicNotExistFirst(): Unit = {
     val admin = cluster.admin()
     val memberId = "test-member"
