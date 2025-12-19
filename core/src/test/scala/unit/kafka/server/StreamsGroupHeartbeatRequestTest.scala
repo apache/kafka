@@ -115,7 +115,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(List().asJava)
-
+    
     val streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
       groupId = "test-group",
       memberId = "test-member",
