@@ -2692,8 +2692,9 @@ public class SenderTest {
         appendToAccumulator(tp0, 0L, "key", "value");
 
         sender.runOnce();
+        long nowBeforeSecondRun = time.milliseconds();
         sender.runOnce();
-        time.setCurrentTimeMs(time.milliseconds() + accumulator.getDeliveryTimeoutMs() + 1);
+        this.time.setCurrentTimeMs(this.time.milliseconds() + accumulator.getDeliveryTimeoutMs() + 1);
         sender.runOnce();
 
         InOrder inOrder = inOrder(client);
@@ -2701,7 +2702,7 @@ public class SenderTest {
         inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(), any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
-        inOrder.verify(client).poll(geq(Long.MAX_VALUE - System.currentTimeMillis()), anyLong());
+        inOrder.verify(client).poll(eq(Long.MAX_VALUE - nowBeforeSecondRun), anyLong());
         inOrder.verify(client).poll(geq(1L), anyLong());
 
     }
