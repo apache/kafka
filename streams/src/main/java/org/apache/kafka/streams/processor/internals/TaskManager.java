@@ -58,7 +58,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -842,77 +841,6 @@ public class TaskManager {
 
     private StreamTask convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
         return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
-    }
-
-    /**
-     * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
-     *
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     * @return {@code true} if all tasks are fully restored
-     */
-    boolean tryToCompleteRestoration(final long now,
-                                     final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-        boolean allRunning = true;
-
-        // transit to restore active is idempotent so we can call it multiple times
-        changelogReader.enforceRestoreActive();
-
-        final List<Task> activeTasks = new LinkedList<>();
-        for (final Task task : tasks.allTasks()) {
-            try {
-                task.initializeIfNeeded();
-                task.clearTaskTimeout();
-            } catch (final LockException lockException) {
-                // it is possible that if there are multiple threads within the instance that one thread
-                // trying to grab the task from the other, while the other has not released the lock since
-                // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                log.debug("Could not initialize task {} since: {}; will retry", task.id(), lockException.getMessage());
-                allRunning = false;
-            } catch (final TimeoutException timeoutException) {
-                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                allRunning = false;
-            }
-
-            if (task.isActive()) {
-                activeTasks.add(task);
-            }
-        }
-
-        if (allRunning && !activeTasks.isEmpty()) {
-
-            final Set<TopicPartition> restored = changelogReader.completedChangelogs();
-
-            for (final Task task : activeTasks) {
-                if (restored.containsAll(task.changelogPartitions())) {
-                    try {
-                        task.completeRestoration(offsetResetter);
-                        task.clearTaskTimeout();
-                    } catch (final TimeoutException timeoutException) {
-                        task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                        log.debug(
-                            String.format(
-                                "Could not complete restoration for %s due to the following exception; will retry",
-                                task.id()),
-                            timeoutException
-                        );
-
-                        allRunning = false;
-                    }
-                } else {
-                    // we found a restoring task that isn't done restoring, which is evidence that
-                    // not all tasks are running
-                    allRunning = false;
-                }
-            }
-        }
-        if (allRunning) {
-            // we can call resume multiple times since it is idempotent.
-            mainConsumer.resume(mainConsumer.assignment());
-            changelogReader.transitToUpdateStandby();
-        }
-
-        return allRunning;
     }
 
     public boolean checkStateUpdater(final long now,
@@ -2165,15 +2093,6 @@ public class TaskManager {
                 throw e;
             },
             e -> log.debug("Ignoring error in unclean {}", name));
-    }
-
-    boolean needsInitializationOrRestoration() {
-        return activeTaskStream().anyMatch(Task::needsInitializationOrRestoration);
-    }
-
-    // for testing only
-    void addTask(final Task task) {
-        tasks.addTask(task);
     }
 
     private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {
