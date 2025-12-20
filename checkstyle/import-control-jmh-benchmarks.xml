@@ -55,4 +55,9 @@
     <allow class="org.apache.kafka.raft.QuorumConfig"/>
     <allow pkg="joptsimple"/>
 
+    <subpackage name="cache">
+    </subpackage>
+    <subpackage name="metadata">
+        <allow class="org.apache.kafka.raft.KRaftConfigs"/>
+    </subpackage>
 </import-control>
