@@ -33,6 +33,7 @@ type: docs
 ### Notable changes in 4.3.0
 
   * Two new configs have been introduced: `group.coordinator.cached.buffer.max.bytes` and `share.coordinator.cached.buffer.max.bytes`. They allow the respective coordinators to set the maximum buffer size retained for reuse. For further details, please refer to [KIP-1196](https://cwiki.apache.org/confluence/x/hA5JFg). 
+  * Support dynamically changing configs for a specific dynamic quorum controller. Previously only brokers and static quorum controllers were supported (<a href="https://issues.apache.org/jira/browse/KAFKA-18928">KAFKA-18928</a>).
 
 
 
