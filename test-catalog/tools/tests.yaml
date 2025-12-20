@@ -248,12 +248,14 @@ org.apache.kafka.tools.FeatureCommandTest:
 - testHandleFeatureDependenciesForInvalidVersionFormat
 - testHandleFeatureDependenciesForMultipleFeatures
 - testHandleFeatureDependenciesForUnknownFeature
+- testHandleRemoteCommandWithoutBootstrap
 - testHandleUpgradeToLowerVersion
 - testHandleUpgradeToLowerVersionDryRun
 - testHandleUpgradeToUnsupportedMetadataVersion
 - testHandleVersionMappingWithInvalidReleaseVersion
 - testHandleVersionMappingWithNoReleaseVersion
 - testHandleVersionMappingWithValidReleaseVersion
+- testHandleVersionMappingWithoutBootstrap
 - testIncompatibleUpgradeFlags
 - testInvalidReleaseVersion
 - testLevelToString
