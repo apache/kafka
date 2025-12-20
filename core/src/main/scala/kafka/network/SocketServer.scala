@@ -731,8 +731,12 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         s" sendBufferSize [actual|requested]: [${socketChannel.socket.getSendBufferSize}|$sendBufferSize]" +
         s" recvBufferSize [actual|requested]: [${socketChannel.socket.getReceiveBufferSize}|$recvBufferSize]")
       true
-    } else
+    } else{
+      // connection was rejected (likely due to processor shutdown) - close the socket.
+      val listenerName = ListenerName.normalised(endPoint.listener)
+      connectionQuotas.closeChannel(this, listenerName, socketChannel)
       false
+    }
   }
 
   /**
@@ -1154,6 +1158,10 @@ private[kafka] class Processor(
   def accept(socketChannel: SocketChannel,
              mayBlock: Boolean,
              acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Boolean = {
+    // reject new connections if the processor is shutting down
+    if (!shouldRun.get())
+      return false
+
     val accepted = {
       if (newConnections.offer(socketChannel))
         true
