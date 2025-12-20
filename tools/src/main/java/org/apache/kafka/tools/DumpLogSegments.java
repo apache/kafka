@@ -149,7 +149,7 @@ public class DumpLogSegments {
                     " lastStableOffset: " + abortedTxn.lastStableOffset());
             }
         } catch (IOException e) {
-            System.err.println("Error processing transaction index: " + e.getMessage());
+            sneakyThrow(e);
         }
     }
 
@@ -176,7 +176,7 @@ public class DumpLogSegments {
         } catch (CorruptSnapshotException e) {
             System.err.println(e.getMessage());
         } catch (IOException e) {
-            System.err.println("Error reading snapshot: " + e.getMessage());
+            sneakyThrow(e);
         }
     }
 
@@ -227,7 +227,7 @@ public class DumpLogSegments {
                 }
             }
         } catch (IOException e) {
-            System.err.println("Error processing index file: " + e.getMessage());
+            sneakyThrow(e);
         }
     }
 
@@ -301,7 +301,7 @@ public class DumpLogSegments {
                 prevTimestamp = entry.timestamp();
             }
         } catch (IOException e) {
-            System.err.println("Error processing time index file: " + e.getMessage());
+            sneakyThrow(e);
         }
     }
 
@@ -378,7 +378,7 @@ public class DumpLogSegments {
 
             printTrailingBytes(fileRecords, validBytes, maxBytes, file);
         } catch (IOException e) {
-            System.err.println("Error processing log file: " + e.getMessage());
+            sneakyThrow(e);
         }
     }
 
@@ -478,6 +478,11 @@ public class DumpLogSegments {
         if (trailingBytes > 0 && maxBytes == Integer.MAX_VALUE) {
             System.out.println("Found " + trailingBytes + " invalid bytes at the end of " + file.getName());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T extends Throwable> void sneakyThrow(Throwable throwable) throws T {
+        throw (T) throwable;
     }
 
     private static void printControlRecord(Record record) {
@@ -723,8 +728,10 @@ public class DumpLogSegments {
                     short version = accessor.readShort();
                     T data = reader.read(accessor, version);
                     ((ObjectNode) node).replace(field, writer.write(data, version));
-                } catch (RuntimeException | IOException e) {
+                } catch (RuntimeException e) {
                     // Swallow and keep the original bytes
+                } catch (IOException e) {
+                    sneakyThrow(e);
                 }
             }
         }
