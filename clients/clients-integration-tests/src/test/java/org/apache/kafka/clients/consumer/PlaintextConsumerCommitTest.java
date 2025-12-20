@@ -179,6 +179,31 @@ public class PlaintextConsumerCommitTest {
     }
 
     @ClusterTest
+    public void testClassicConsumerNoCommittedOffsets() {
+        testNoCommittedOffsets(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerNoCommittedOffsets() {
+        testNoCommittedOffsets(GroupProtocol.CONSUMER);
+    }
+
+    private void testNoCommittedOffsets(GroupProtocol groupProtocol) {
+        try (var consumer = createConsumer(groupProtocol, true)) {
+            consumer.assign(List.of(tp));
+            // commit for one partition
+            var metadata = new OffsetAndMetadata(5, Optional.of(15), "foo");
+            consumer.commitSync(Map.of(tp, metadata));
+
+            // fetch offset for two partitions
+            var committed = consumer.committed(Set.of(tp, tp1));
+            assertEquals(2, committed.size());
+            assertEquals(metadata, committed.get(tp));
+            assertNull(committed.get(tp1));
+        }
+    }
+
+    @ClusterTest
     public void testClassicConsumerAsyncCommit() throws InterruptedException {
         testAsyncCommit(GroupProtocol.CLASSIC);
     }
