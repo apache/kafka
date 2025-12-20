@@ -111,6 +111,14 @@ public class MockCoordinatorTimer<T, U> implements CoordinatorTimer<T, U> {
     }
 
     /**
+     * Checks if a timeout with the given key is scheduled.
+     */
+    @Override
+    public boolean isScheduled(String key) {
+        return timeoutMap.containsKey(key);
+    }
+
+    /**
      * @return True if a timeout with the key exists; false otherwise.
      */
     public boolean contains(String key) {

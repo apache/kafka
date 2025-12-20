@@ -58,6 +58,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -90,7 +91,7 @@ public class InternalMockProcessorContext<KOut, VOut>
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", "applicationId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null,
@@ -107,8 +108,6 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsMetricsImpl(
                 new Metrics(),
                 "mock",
-                "processId",
-                "applicationId",
                 new MockTime()
             ),
             config,
@@ -141,8 +140,6 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsMetricsImpl(
                 new Metrics(),
                 "mock",
-                "processId",
-                "applicationId",
                 new MockTime()
             ),
             config,
@@ -160,7 +157,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", "applicationId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             config,
             null,
             null,
@@ -180,7 +177,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock", "processId", "applicationId", new MockTime()),
+            new StreamsMetricsImpl(metrics, "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null,
@@ -197,7 +194,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", "processId", "applicationId", new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache,
@@ -319,6 +316,14 @@ public class InternalMockProcessorContext<KOut, VOut>
 
     @Override
     public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
+        throw new UnsupportedOperationException("schedule() not supported.");
+    }
+
+    @Override
+    public Cancellable schedule(final Instant startTime,
+                                final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("schedule() not supported.");

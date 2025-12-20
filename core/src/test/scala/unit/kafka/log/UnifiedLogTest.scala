@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -44,7 +44,7 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, AsyncOffsetReader, Cleaner, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
-import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, _}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
@@ -56,7 +56,7 @@ import org.mockito.Mockito.{doAnswer, doThrow, spy}
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
-import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.raft.KRaftConfigs
 
 import java.io._
 import java.nio.ByteBuffer
@@ -452,7 +452,8 @@ class UnifiedLogTest {
 
     // Test transactional producer state (closed transaction)
     val coordinatorEpoch = 15
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId1, producer1Epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), coordinatorEpoch)
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId1, producer1Epoch, ControlRecordType.COMMIT,
+      mockTime.milliseconds(), coordinatorEpoch, leaderEpoch = 0, transactionVersion = TransactionVersion.TV_0.featureLevel())
     assertProducerState(
       producerId1,
       producer1Epoch,
@@ -512,14 +513,16 @@ class UnifiedLogTest {
     log.updateHighWatermark(log.logEndOffset)
     assertLsoBoundedFetches()
 
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId1, epoch, ControlRecordType.COMMIT, mockTime.milliseconds())
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId1, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(),
+      transactionVersion = TransactionVersion.TV_0.featureLevel())
     assertEquals(0L, log.lastStableOffset)
 
     log.updateHighWatermark(log.logEndOffset)
     assertEquals(8L, log.lastStableOffset)
     assertLsoBoundedFetches()
 
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId2, epoch, ControlRecordType.ABORT, mockTime.milliseconds())
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId2, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+      transactionVersion = TransactionVersion.TV_0.featureLevel())
     assertEquals(8L, log.lastStableOffset)
 
     log.updateHighWatermark(log.logEndOffset)
@@ -1246,7 +1249,8 @@ class UnifiedLogTest {
       new SimpleRecord("bar".getBytes),
       new SimpleRecord("baz".getBytes))
     log.appendAsLeader(records, 0)
-    val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds())
+    val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel())
     log.updateHighWatermark(abortAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
@@ -2832,7 +2836,8 @@ class UnifiedLogTest {
     // Kind of a hack, but renaming the index to a directory ensures that the append
     // to the index will fail.
     log.activeSegment.txnIndex.renameTo(log.dir)
-    assertThrows(classOf[KafkaStorageException], () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1))
+    assertThrows(classOf[KafkaStorageException], () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
+      mockTime.milliseconds(), coordinatorEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel()))
     assertThrows(classOf[KafkaStorageException], () => log.appendAsLeader(TestUtils.singletonRecords(value = null), 0))
     assertThrows(classOf[KafkaStorageException], () => LogTestUtils.readLog(log, 0, 4096).records.records.iterator.next().offset)
   }
@@ -3014,6 +3019,378 @@ class UnifiedLogTest {
   def epochCache(log: UnifiedLog): LeaderEpochFileCache = log.leaderEpochCache
 
   @Test
+  def shouldDeleteSizeBasedSegments(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
+    val log = createLog(logDir, logConfig)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 15)
+      log.appendAsLeader(createRecords, 0)
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals(2,log.numberOfSegments, "should have 2 segments")
+  }
+
+  @Test
+  def shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 15)
+    val log = createLog(logDir, logConfig)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 15)
+      log.appendAsLeader(createRecords, 0)
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals(3,log.numberOfSegments, "should have 3 segments")
+  }
+
+  @Test
+  def shouldDeleteTimeBasedSegmentsReadyToBeDeleted(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, timestamp = 10)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000)
+    val log = createLog(logDir, logConfig)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 15)
+      log.appendAsLeader(createRecords, 0)
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals(1, log.numberOfSegments, "There should be 1 segment remaining")
+  }
+
+  @Test
+  def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, timestamp = mockTime.milliseconds)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000000)
+    val log = createLog(logDir, logConfig)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 15)
+      log.appendAsLeader(createRecords, 0)
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals(3, log.numberOfSegments, "There should be 3 segments remaining")
+  }
+
+  @Test
+  def shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = 10L)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000, cleanupPolicy = "compact")
+    val log = createLog(logDir, logConfig)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 15)
+      log.appendAsLeader(createRecords, 0)
+
+    // mark the oldest segment as older the retention.ms
+    log.logSegments.asScala.head.setLastModified(mockTime.milliseconds - 20000)
+
+    val segments = log.numberOfSegments
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals(segments, log.numberOfSegments, "There should be 3 segments remaining")
+  }
+
+  @Test
+  def shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithSizeRetention(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = 10L)
+    val recordSize = createRecords.sizeInBytes
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = recordSize * 2,
+      localRetentionBytes = recordSize / 2,
+      cleanupPolicy = "",
+      remoteLogStorageEnable = true
+    )
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    for (_ <- 0 until 10)
+      log.appendAsLeader(createRecords, 0)
+
+    val segmentsBefore = log.numberOfSegments
+    log.updateHighWatermark(log.logEndOffset)
+    log.updateHighestOffsetInRemoteStorage(log.logEndOffset - 1)
+    val deleteOldSegments = log.deleteOldSegments()
+
+    assertTrue(log.numberOfSegments < segmentsBefore, "Some segments should be deleted due to size retention")
+    assertTrue(deleteOldSegments > 0, "At least one segment should be deleted")
+  }
+
+  @Test
+  def shouldDeleteLocalLogSegmentsWhenPolicyIsEmptyWithMsRetention(): Unit = {
+    val oldTimestamp = mockTime.milliseconds - 20000
+    def oldRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = oldTimestamp)
+    val recordSize = oldRecords.sizeInBytes
+    val logConfig = LogTestUtils.createLogConfig(
+      segmentBytes = recordSize * 2,
+      localRetentionMs = 5000,
+      cleanupPolicy = "",
+      remoteLogStorageEnable = true
+    )
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    for (_ <- 0 until 10)
+      log.appendAsLeader(oldRecords, 0)
+
+    def newRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes(), timestamp = mockTime.milliseconds)
+    for (_ <- 0 until 5)
+      log.appendAsLeader(newRecords, 0)
+
+    val segmentsBefore = log.numberOfSegments
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.updateHighestOffsetInRemoteStorage(log.logEndOffset - 1)
+    val deleteOldSegments = log.deleteOldSegments()
+
+    assertTrue(log.numberOfSegments < segmentsBefore, "Some segments should be deleted due to time retention")
+    assertTrue(deleteOldSegments > 0, "At least one segment should be deleted")
+  }
+
+  @Test
+  def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000, cleanupPolicy = "compact,delete")
+    val log = createLog(logDir, logConfig)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 15)
+      log.appendAsLeader(createRecords, 0)
+
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals(1, log.numberOfSegments, "There should be 1 segment remaining")
+  }
+
+  @Test
+  def shouldDeleteStartOffsetBreachedSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
+    val recordsPerSegment = 5
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * recordsPerSegment, retentionMs = 10000, cleanupPolicy = "compact")
+    val log = createLog(logDir, logConfig, brokerTopicStats)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 15)
+      log.appendAsLeader(createRecords, 0)
+
+    // Three segments should be created
+    assertEquals(3, log.logSegments.asScala.count(_ => true))
+    log.updateHighWatermark(log.logEndOffset)
+    log.maybeIncrementLogStartOffset(recordsPerSegment, LogStartOffsetIncrementReason.ClientRecordDeletion)
+
+    // The first segment, which is entirely before the log start offset, should be deleted
+    // Of the remaining the segments, the first can overlap the log start offset and the rest must have a base offset
+    // greater than the start offset
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals(2, log.numberOfSegments, "There should be 2 segments remaining")
+    assertTrue(log.logSegments.asScala.head.baseOffset <= log.logStartOffset)
+    assertTrue(log.logSegments.asScala.tail.forall(s => s.baseOffset > log.logStartOffset))
+  }
+
+  @Test
+  def shouldApplyEpochToMessageOnAppendIfLeader(): Unit = {
+    val records = (0 until 50).toArray.map(id => new SimpleRecord(id.toString.getBytes))
+
+    //Given this partition is on leader epoch 72
+    val epoch = 72
+    val log = createLog(logDir, new LogConfig(new Properties))
+    log.assignEpochStartOffset(epoch, records.length)
+
+    //When appending messages as a leader (i.e. assignOffsets = true)
+    for (record <- records)
+      log.appendAsLeader(
+        MemoryRecords.withRecords(Compression.NONE, record),
+        epoch
+      )
+
+    //Then leader epoch should be set on messages
+    for (i <- records.indices) {
+      val read = LogTestUtils.readLog(log, i, 1).records.batches.iterator.next()
+      assertEquals(72, read.partitionLeaderEpoch, "Should have set leader epoch")
+    }
+  }
+
+  @Test
+  def followerShouldSaveEpochInformationFromReplicatedMessagesToTheEpochCache(): Unit = {
+    val messageIds = (0 until 50).toArray
+    val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
+
+    //Given each message has an offset & epoch, as msgs from leader would
+    def recordsForEpoch(i: Int): MemoryRecords = {
+      val recs = MemoryRecords.withRecords(messageIds(i), Compression.NONE, records(i))
+      recs.batches.forEach{record =>
+        record.setPartitionLeaderEpoch(42)
+        record.setLastOffset(i)
+      }
+      recs
+    }
+
+    val log = createLog(logDir, new LogConfig(new Properties))
+
+    //When appending as follower (assignOffsets = false)
+    for (i <- records.indices)
+      log.appendAsFollower(recordsForEpoch(i), i)
+
+    assertEquals(Optional.of(42), log.latestEpoch)
+  }
+
+  @Test
+  def shouldTruncateLeaderEpochsWhenDeletingSegments(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
+    val log = createLog(logDir, logConfig)
+    val cache = epochCache(log)
+
+    // Given three segments of 5 messages each
+    for (_ <- 0 until 15) {
+      log.appendAsLeader(createRecords, 0)
+    }
+
+    //Given epochs
+    cache.assign(0, 0)
+    cache.assign(1, 5)
+    cache.assign(2, 10)
+
+    //When first segment is removed
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+
+    //The oldest epoch entry should have been removed
+    assertEquals(util.List.of(new EpochEntry(1, 5), new EpochEntry(2, 10)), cache.epochEntries)
+  }
+
+  @Test
+  def shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments(): Unit = {
+    def createRecords = TestUtils.singletonRecords("test".getBytes)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
+    val log = createLog(logDir, logConfig)
+    val cache = epochCache(log)
+
+    // Given three segments of 5 messages each
+    for (_ <- 0 until 15) {
+      log.appendAsLeader(createRecords, 0)
+    }
+
+    //Given epochs
+    cache.assign(0, 0)
+    cache.assign(1, 7)
+    cache.assign(2, 10)
+
+    //When first segment removed (up to offset 5)
+    log.updateHighWatermark(log.logEndOffset)
+    log.deleteOldSegments()
+
+    //The first entry should have gone from (0,0) => (0,5)
+    assertEquals(util.List.of(new EpochEntry(0, 5), new EpochEntry(1, 7), new EpochEntry(2, 10)), cache.epochEntries)
+  }
+
+  @Test
+  def shouldTruncateLeaderEpochCheckpointFileWhenTruncatingLog(): Unit = {
+    def createRecords(startOffset: Long, epoch: Int): MemoryRecords = {
+      TestUtils.records(Seq(new SimpleRecord("value".getBytes)),
+        baseOffset = startOffset, partitionLeaderEpoch = epoch)
+    }
+
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 10 * createRecords(0, 0).sizeInBytes)
+    val log = createLog(logDir, logConfig)
+    val cache = epochCache(log)
+
+    def append(epoch: Int, startOffset: Long, count: Int): Unit = {
+      for (i <- 0 until count)
+        log.appendAsFollower(createRecords(startOffset + i, epoch), epoch)
+    }
+
+    //Given 2 segments, 10 messages per segment
+    append(epoch = 0, startOffset = 0, count = 10)
+    append(epoch = 1, startOffset = 10, count = 6)
+    append(epoch = 2, startOffset = 16, count = 4)
+
+    assertEquals(2, log.numberOfSegments)
+    assertEquals(20, log.logEndOffset)
+
+    //When truncate to LEO (no op)
+    log.truncateTo(log.logEndOffset)
+
+    //Then no change
+    assertEquals(3, cache.epochEntries.size)
+
+    //When truncate
+    log.truncateTo(11)
+
+    //Then no change
+    assertEquals(2, cache.epochEntries.size)
+
+    //When truncate
+    log.truncateTo(10)
+
+    //Then
+    assertEquals(1, cache.epochEntries.size)
+
+    //When truncate all
+    log.truncateTo(0)
+
+    //Then
+    assertEquals(0, cache.epochEntries.size)
+  }
+
+  @Test
+  def testFirstUnstableOffsetNoTransactionalData(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+
+    val records = MemoryRecords.withRecords(Compression.NONE,
+      new SimpleRecord("foo".getBytes),
+      new SimpleRecord("bar".getBytes),
+      new SimpleRecord("baz".getBytes))
+
+    log.appendAsLeader(records, 0)
+    assertEquals(Optional.empty, log.firstUnstableOffset)
+  }
+
+  @Test
+  def testFirstUnstableOffsetWithTransactionalData(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+
+    val pid = 137L
+    val epoch = 5.toShort
+    var seq = 0
+
+    // add some transactional records
+    val records = MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
+      new SimpleRecord("foo".getBytes),
+      new SimpleRecord("bar".getBytes),
+      new SimpleRecord("baz".getBytes))
+
+    val firstAppendInfo = log.appendAsLeader(records, 0)
+    assertEquals(Optional.of(firstAppendInfo.firstOffset), log.firstUnstableOffset)
+
+    // add more transactional records
+    seq += 3
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
+      new SimpleRecord("blah".getBytes)), 0)
+
+    // LSO should not have changed
+    assertEquals(Optional.of(firstAppendInfo.firstOffset), log.firstUnstableOffset)
+
+    // now transaction is committed
+    val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel())
+
+    // first unstable offset is not updated until the high watermark is advanced
+    assertEquals(Optional.of(firstAppendInfo.firstOffset), log.firstUnstableOffset)
+    log.updateHighWatermark(commitAppendInfo.lastOffset + 1)
+
+    // now there should be no first unstable offset
+    assertEquals(Optional.empty, log.firstUnstableOffset)
+  }
+
+  @Test
   def testReadCommittedWithConcurrentHighWatermarkUpdates(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
@@ -3037,7 +3414,8 @@ class UnifiedLogTest {
         if (readInfo.records.sizeInBytes() > 0)
           nonEmptyReads += 1
 
-        LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT, mockTime.milliseconds())
+        LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, producerEpoch, ControlRecordType.ABORT,
+          mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel())
       }
       nonEmptyReads
     }
@@ -3086,18 +3464,22 @@ class UnifiedLogTest {
     appendPid3(3) // 17
     LogTestUtils.appendNonTransactionalAsLeader(log, 2) // 19
     appendPid1(10) // 29
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 30
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 30
     appendPid2(6) // 36
     appendPid4(3) // 39
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 49
     appendPid3(9) // 58
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 59
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 59
     appendPid4(8) // 67
     appendPid2(7) // 74
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 75
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 75
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 85
     appendPid4(4) // 89
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 90
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 90
 
     val abortedTransactions = LogTestUtils.allAbortedTransactions(log)
     val expectedTransactions = List(
@@ -3217,14 +3599,17 @@ class UnifiedLogTest {
     val append = LogTestUtils.appendTransactionalAsLeader(log, pid, epoch, mockTime)
 
     append(10)
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1)
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+      coordinatorEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel())
 
     append(5)
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), coordinatorEpoch = 2)
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(),
+      coordinatorEpoch = 2, transactionVersion = TransactionVersion.TV_0.featureLevel())
 
     assertThrows(
       classOf[TransactionCoordinatorFencedException],
-      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1))
+      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+        coordinatorEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel()))
   }
 
   @Test
@@ -3242,22 +3627,196 @@ class UnifiedLogTest {
     buffer.flip()
     log.appendAsFollower(MemoryRecords.readableRecords(buffer), epoch)
 
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 2, 1)
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 2, 1)
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+      coordinatorEpoch = 2, leaderEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel())
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+      coordinatorEpoch = 2, leaderEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel())
     assertThrows(classOf[TransactionCoordinatorFencedException],
-      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 1))
+      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+        coordinatorEpoch = 1, leaderEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel()))
   }
 
-  @Test
-  def testEndTxnWithFencedProducerEpoch(): Unit = {
+  @ParameterizedTest(name = "testEndTxnWithFencedProducerEpoch with transactionVersion={0}")
+  @ValueSource(shorts = Array(1, 2))
+  def testEndTxnWithFencedProducerEpoch(transactionVersion: Short): Unit = {
     val producerId = 1L
     val epoch = 5.toShort
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1)
-
+    
+    // First, write some transactional records to establish the current epoch
+    val records = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, epoch, 0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)
+    
+    // Test 1: Old epoch (epoch - 1) should be rejected for both TV0/TV1 and TV2
+    // TV0/TV1: markerEpoch < currentEpoch is rejected
+    // TV2: markerEpoch <= currentEpoch is rejected (requires strict >)
     assertThrows(classOf[InvalidProducerEpochException],
-      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1))
+      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, 
+        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
+        leaderEpoch = 0, transactionVersion = transactionVersion))
+    
+    // Test 2: Same epoch behavior differs between TV0/TV1 and TV2
+    // TV0/TV1: same epoch is allowed (markerEpoch >= currentEpoch)
+    // TV2: same epoch is rejected (requires strict >, markerEpoch > currentEpoch)
+    if (transactionVersion >= 2) {
+      // TV2: same epoch should be rejected
+      assertThrows(classOf[InvalidProducerEpochException],
+        () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, 
+          ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
+          leaderEpoch = 0, transactionVersion = transactionVersion))
+    } else {
+      // TV0/TV1: same epoch should be allowed
+      assertDoesNotThrow(() => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, 
+        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
+        leaderEpoch = 0, transactionVersion = transactionVersion))
+    }
+  }
+
+  @Test
+  def testTV2MarkerWithBumpedEpochSucceeds(): Unit = {
+    // Test that TV2 markers with bumped epochs (epoch + 1) are accepted (positive case)
+    // TV2 (KIP-890): Coordinator bumps epoch before writing marker, so markerEpoch = currentEpoch + 1
+    val transactionVersion: Short = 2
+    val producerId = 1L
+    val epoch = 5.toShort
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+    
+    // First, write some transactional records to establish the current epoch
+    val records = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, epoch, 0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)
+    
+    // TV2: Verify that bumped epoch (epoch + 1) is accepted
+    val bumpedEpoch = (epoch + 1).toShort
+    assertDoesNotThrow(() => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, bumpedEpoch,
+      ControlRecordType.COMMIT, mockTime.milliseconds(), coordinatorEpoch = 1,
+      leaderEpoch = 0, transactionVersion = TransactionVersion.TV_2.featureLevel()))
+    
+    // Verify the marker was successfully appended by checking producer state
+    val producerState = log.producerStateManager.activeProducers.get(producerId)
+    assertNotNull(producerState)
+    // After a commit marker, the producer epoch should be updated to the bumped epoch for TV2
+    assertEquals(bumpedEpoch, producerState.producerEpoch)
+  }
+
+  @Test
+  def testReplicationWithTVUnknownAllowed(): Unit = {
+    // Test that TV_UNKNOWN is allowed for replication (REPLICATION origin) and uses TV_0 validation
+    // This simulates the scenario where:
+    // 1. Leader receives WriteTxnMarkersRequest with transactionVersion=2 and validates with strict TV2 rules
+    // 2. Leader writes MemoryRecords to log (transactionVersion is not stored in MemoryRecords)
+    // 3. Follower receives MemoryRecords via replication (without transactionVersion metadata)
+    // 4. Follower uses TV_UNKNOWN which defaults to TV_0 validation (more permissive, safe because leader already validated)
+    
+    val producerId = 1L
+    val epoch = 5.toShort
+    val coordinatorEpoch = 1
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+    
+    // Step 1: Write transactional records as leader to establish current epoch
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, epoch, 0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
+    
+    // Step 2: Simulate leader writing TV2 marker with bumped epoch (epoch + 1)
+    // This is what happens at the leader when WriteTxnMarkersRequest is received
+    val bumpedEpoch = (epoch + 1).toShort
+    val leaderMarker = MemoryRecords.withEndTransactionMarker(
+      mockTime.milliseconds(),
+      producerId,
+      bumpedEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+    )
+    // Leader validates with TV2 (strict: markerEpoch > currentEpoch)
+    log.appendAsLeader(leaderMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
+    
+    // Verify leader state
+    val leaderProducerState = log.producerStateManager.activeProducers.get(producerId)
+    assertNotNull(leaderProducerState)
+    assertEquals(bumpedEpoch, leaderProducerState.producerEpoch)
+    
+    // Step 3: Create a new log to simulate a follower
+    val followerLogDir = TestUtils.randomPartitionLogDir(tmpDir)
+    val followerLog = createLog(followerLogDir, logConfig)
+    
+    // Step 4: Follower replicates transactional records first
+    val followerTransactionalRecords = MemoryRecords.withTransactionalRecords(
+      0L,
+      Compression.NONE, producerId, epoch, 0,
+      0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    followerLog.appendAsFollower(followerTransactionalRecords, 0)
+    
+    // Step 5: Follower replicates the marker (appendAsFollower uses TV_UNKNOWN internally)
+    // This should succeed because TV_UNKNOWN is allowed for REPLICATION origin
+    // and defaults to TV_0 validation (markerEpoch >= currentEpoch), which is more permissive
+    // The marker should be at offset 1 (after the transactional record at offset 0)
+    val followerMarker = MemoryRecords.withEndTransactionMarker(
+      1L, // offset after the transactional record
+      mockTime.milliseconds(),
+      0, // partition leader epoch
+      producerId,
+      bumpedEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+    )
+    
+    // This should not throw an exception - TV_UNKNOWN is allowed for replication
+    assertDoesNotThrow(() => followerLog.appendAsFollower(followerMarker, 0))
+    
+    // Verify follower state matches leader state
+    val followerProducerState = followerLog.producerStateManager.activeProducers.get(producerId)
+    assertNotNull(followerProducerState)
+    assertEquals(bumpedEpoch, followerProducerState.producerEpoch)
+    assertEquals(coordinatorEpoch, followerProducerState.coordinatorEpoch)
+    
+    // Verify the marker was written to the follower log
+    assertEquals(2L, followerLog.logEndOffset) // 1 transactional record + 1 marker
+  }
+
+  @Test
+  def testLeaderRejectsTVUnknownForTransactionMarker(): Unit = {
+    // Test that TV_UNKNOWN is rejected for COORDINATOR origin (leader writing transaction markers)
+    // TV_UNKNOWN is only allowed for REPLICATION origin (followers)
+    val producerId = 1L
+    val epoch = 5.toShort
+    val coordinatorEpoch = 1
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+    
+    // Write transactional records as leader to establish current epoch
+    val transactionalRecords = MemoryRecords.withTransactionalRecords(
+      Compression.NONE, producerId, epoch, 0,
+      new SimpleRecord("key".getBytes, "value".getBytes)
+    )
+    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
+    
+    // Attempt to write a transaction marker with TV_UNKNOWN as COORDINATOR (leader)
+    // This should throw IllegalArgumentException because TV_UNKNOWN is not allowed for COORDINATOR origin
+    val marker = MemoryRecords.withEndTransactionMarker(
+      mockTime.milliseconds(),
+      producerId,
+      (epoch + 1).toShort, // bumped epoch for TV2
+      new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+    )
+    
+    val exception = assertThrows(classOf[IllegalArgumentException], () => {
+      log.appendAsLeader(marker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN)
+    })
+    
+    assertTrue(exception.getMessage.contains("transactionVersion must be explicitly specified"))
+    assertTrue(exception.getMessage.contains("TV_UNKNOWN"))
+    assertTrue(exception.getMessage.contains("COORDINATOR"))
   }
 
   @Test
@@ -3330,7 +3889,8 @@ class UnifiedLogTest {
     // The append will be written to the log successfully, but the write to the index will fail
     assertThrows(
       classOf[KafkaStorageException],
-      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1))
+      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+        coordinatorEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel()))
     assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
@@ -3339,7 +3899,8 @@ class UnifiedLogTest {
     // index.
     assertThrows(
       classOf[KafkaStorageException],
-      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1))
+      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(),
+        coordinatorEpoch = 1, transactionVersion = TransactionVersion.TV_0.featureLevel()))
     assertEquals(11L, log.logEndOffset)
     assertEquals(0L, log.lastStableOffset)
 
@@ -3419,14 +3980,16 @@ class UnifiedLogTest {
     assertEquals(Optional.of(firstAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // now first producer's transaction is aborted
-    val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds())
+    val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel())
     log.updateHighWatermark(abortAppendInfo.lastOffset + 1)
 
     // LSO should now point to one less than the first offset of the second transaction
     assertEquals(Optional.of(secondAppendInfo.firstOffset), log.firstUnstableOffset)
 
     // commit the second transaction
-    val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.COMMIT, mockTime.milliseconds())
+    val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.COMMIT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel())
     log.updateHighWatermark(commitAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
@@ -3460,7 +4023,8 @@ class UnifiedLogTest {
     assertEquals(3L, log.logEndOffsetMetadata.segmentBaseOffset)
 
     // now abort the transaction
-    val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds())
+    val abortAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT,
+      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel())
     log.updateHighWatermark(abortAppendInfo.lastOffset + 1)
     assertEquals(Optional.empty, log.firstUnstableOffset)
 
@@ -3829,7 +4393,8 @@ class UnifiedLogTest {
 
     // Now write the transactional records
     assertTrue(log.verificationGuard(producerId).verify(verificationGuard))
-    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard)
+    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard,
+      TransactionVersion.TV_2.featureLevel())
     assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     // VerificationGuard should be cleared now.
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
@@ -3837,13 +4402,16 @@ class UnifiedLogTest {
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
     assertEquals(VerificationGuard.SENTINEL, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true))
 
+    // For TV2, the coordinator bumps the epoch before writing the marker (KIP-890)
+    val bumpedEpoch = (producerEpoch + 1).toShort
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
-      producerEpoch,
+      bumpedEpoch,
       new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
 
-    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
     assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
@@ -3851,7 +4419,8 @@ class UnifiedLogTest {
       sequence = sequence + 1
 
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
-    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
+    // For TV2, after the marker is written with bumped epoch, the producer state now has the bumped epoch
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, bumpedEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
     assertFalse(verificationGuard.verify(newVerificationGuard))
@@ -3906,7 +4475,8 @@ class UnifiedLogTest {
 
     // Now write the transactional records
     assertTrue(log.verificationGuard(producerId).verify(verificationGuard))
-    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard)
+    log.appendAsLeader(transactionalRecords, 0, appendOrigin, RequestLocal.noCaching(), verificationGuard,
+      TransactionVersion.TV_1.featureLevel())
     assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     // VerificationGuard should be cleared now.
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
@@ -3920,7 +4490,8 @@ class UnifiedLogTest {
       new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
 
-    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_1.featureLevel())
     assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
@@ -3948,13 +4519,15 @@ class UnifiedLogTest {
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     val endMarkerProducerEpoch = if (supportsEpochBump) (producerEpoch + 1).toShort else producerEpoch
+    val transactionVersion = if (supportsEpochBump) TransactionVersion.TV_2.featureLevel() else TransactionVersion.TV_1.featureLevel()
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
       endMarkerProducerEpoch,
       new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
 
-    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(),
+      VerificationGuard.SENTINEL, transactionVersion)
     assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
@@ -3978,7 +4551,8 @@ class UnifiedLogTest {
       new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
 
-    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR)
+    log.appendAsLeader(endTransactionMarkerRecord, 0, AppendOrigin.COORDINATOR,
+      RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
     assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(verificationGuard, log.verificationGuard(producerId))
   }
@@ -4039,7 +4613,8 @@ class UnifiedLogTest {
     val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
-    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard)
+    log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching,
+      verificationGuard, TransactionVersion.TV_2.featureLevel())
     assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
@@ -4071,12 +4646,14 @@ class UnifiedLogTest {
       val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
       // Should reject non-zero sequences when there's no existing producer state
       assertThrows(classOf[OutOfOrderSequenceException], () => 
-        log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard))
+        log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard,
+          TransactionVersion.TV_0.featureLevel()))
     } else {
       // TV1 behavior: Create verification state with supportsEpochBump=false
       val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, false)
       // Should allow non-zero sequences with non-zero epoch
-      log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard)
+      log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard,
+        TransactionVersion.TV_0.featureLevel())
       assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     }
   }
@@ -4619,13 +5196,15 @@ class UnifiedLogTest {
       new SimpleRecord("previous-key".getBytes, "previous-value".getBytes)
     )
     val previousGuard = log.maybeStartTransactionVerification(producerId, 0, newEpoch, false)  // TV1 = supportsEpochBump = false
-    log.appendAsLeader(previousRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, previousGuard)
+    log.appendAsLeader(previousRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, previousGuard,
+      TransactionVersion.TV_1.featureLevel())
     
     // Complete the transaction normally (commits do update producer state with current epoch)
     val commitMarker = MemoryRecords.withEndTransactionMarker(
       producerId, newEpoch, new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
-    log.appendAsLeader(commitMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL)
+    log.appendAsLeader(commitMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL,
+      TransactionVersion.TV_1.featureLevel())
     
     // Step 2: TV1 client tries to write with stale cached epoch (before learning about epoch increment)  
     val staleEpochRecords = MemoryRecords.withTransactionalRecords(
@@ -4636,7 +5215,8 @@ class UnifiedLogTest {
     // Step 3: Verify our fix - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
     val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
       val staleGuard = log.maybeStartTransactionVerification(producerId, 0, oldEpoch, false)  
-      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard)
+      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard,
+        TransactionVersion.TV_1.featureLevel())
      })
      
      // Verify the error message indicates epoch mismatch  
@@ -4663,14 +5243,16 @@ class UnifiedLogTest {
       new SimpleRecord("ks-initial-key".getBytes, "ks-initial-value".getBytes)
     )
     val initialGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
-    log.appendAsLeader(initialRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, initialGuard)
+    log.appendAsLeader(initialRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, initialGuard,
+      TransactionVersion.TV_2.featureLevel())
     
     // Step 2: Coordinator times out and aborts transaction
     // TV2 (KIP-890): Coordinator bumps epoch from 3 → 4 and sends abort marker with epoch 4
     val abortMarker = MemoryRecords.withEndTransactionMarker(
       producerId, bumpedEpoch, new EndTransactionMarker(ControlRecordType.ABORT, 0)
     )
-    log.appendAsLeader(abortMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL)
+    log.appendAsLeader(abortMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL,
+      TransactionVersion.TV_2.featureLevel())
     
     // Step 3: TV2 transactional producer tries to append with stale epoch (timeout recovery scenario)
     val staleEpochRecords = MemoryRecords.withTransactionalRecords(
@@ -4681,7 +5263,8 @@ class UnifiedLogTest {
     // Step 4: Verify our fix works for TV2 - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
     val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
       val staleGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
-      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard)
+      log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard,
+        TransactionVersion.TV_2.featureLevel())
      })
      
      // Verify the error message indicates epoch mismatch (3 < 4)
