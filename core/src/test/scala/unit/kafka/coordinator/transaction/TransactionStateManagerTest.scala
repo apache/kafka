@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{TransactionLog, TransactionMetadata, TransactionState, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
@@ -918,11 +918,11 @@ class TransactionStateManagerTest {
       batches.foreach { records =>
         records.records.forEach { record =>
           TransactionLog.readTxnRecordKey(record.key) match {
-            case Right(transactionalId) =>
+            case transactionalId: String =>
               assertNull(record.value)
               expiredTransactionalIds += transactionalId
               assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
-            case Left(value) => fail(s"Failed to read transactional id from tombstone: $value")
+            case value => fail(s"Failed to read transactional id from tombstone: $value")
           }
         }
       }

@@ -29,7 +29,6 @@ import org.apache.kafka.server.common.TransactionVersion;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -56,7 +55,7 @@ public class TransactionLog {
      *
      * @return key bytes
      */
-    static byte[] keyToBytes(String transactionalId) {
+    public static byte[] keyToBytes(String transactionalId) {
         return MessageUtil.toCoordinatorTypePrefixedBytes(
                 new TransactionLogKey().setTransactionalId(transactionalId)
         );
@@ -67,8 +66,8 @@ public class TransactionLog {
      *
      * @return value payload bytes
      */
-    static byte[] valueToBytes(TxnTransitMetadata txnMetadata,
-                               TransactionVersion transactionVersionLevel) {
+    public static byte[] valueToBytes(TxnTransitMetadata txnMetadata,
+                                      TransactionVersion transactionVersionLevel) {
         if (txnMetadata.txnState() == TransactionState.EMPTY && !txnMetadata.topicPartitions().isEmpty()) {
             throw new IllegalStateException("Transaction is not expected to have any partitions since its state is "
                     + txnMetadata.txnState() + ": " + txnMetadata);
@@ -111,7 +110,7 @@ public class TransactionLog {
      *
      * @return Either: left with the version if the key is not a transaction log key, right with the transactional id otherwise
      */
-    static Object readTxnRecordKey(ByteBuffer buffer) {
+    public static Object readTxnRecordKey(ByteBuffer buffer) {
         short version = buffer.getShort();
         if (version == CoordinatorRecordType.TRANSACTION_LOG.id()) {
             return new TransactionLogKey(new ByteBufferAccessor(buffer), (short) 0).transactionalId();
@@ -125,7 +124,7 @@ public class TransactionLog {
      *
      * @return a transaction metadata object from the message, or null if tombstone
      */
-    static TransactionMetadata readTxnRecordValue(String transactionalId, ByteBuffer buffer) {
+    public static TransactionMetadata readTxnRecordValue(String transactionalId, ByteBuffer buffer) {
         if (buffer == null) {
             return null; // tombstone
         } else {

@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{TransactionLog, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
@@ -496,18 +496,21 @@ class TransactionStateManager(brokerId: Int,
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
                 TransactionLog.readTxnRecordKey(record.key) match {
-                  case Left(version) =>
+                  case version: java.lang.Short =>
                     warn(s"Unknown message key with version $version" +
                       s" while loading transaction state from $topicPartition. Ignoring it. " +
                       "It could be a left over from an aborted upgrade.")
-                  case Right(transactionalId) =>
+                  case transactionalId: String =>
                     // load transaction metadata along with transaction state
-                    TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
-                      case None =>
-                        loadedTransactions.remove(transactionalId)
-                      case Some(txnMetadata) =>
-                        loadedTransactions.put(transactionalId, txnMetadata)
+                    val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
+                    if (txnMetadata == null) {
+                      loadedTransactions.remove(transactionalId)
+                    } else {
+                      loadedTransactions.put(transactionalId, txnMetadata)
                     }
+                  case other =>
+                    warn(s"Unexpected key type ${other.getClass.getName} while loading transaction state " +
+                      s"from $topicPartition. Ignoring it.")
                 }
               }
               currOffset = batch.nextOffset
