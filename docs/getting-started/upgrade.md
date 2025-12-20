@@ -95,8 +95,12 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
   * A new implementation of `ConnectorClientConfigOverridePolicy`, `AllowlistConnectorClientConfigOverridePolicy`, has been added. This enables specifying the configurations that connectors can override via `connector.client.config.override.allowlist`. From Kafka 5.0.0, this will be the default [connector.client.config.override.policy](documentation/#connectconfigs_connector.client.config.override.policy) policy. The `PrincipalConnectorClientConfigOverridePolicy` policy is now deprecated and will be removed in Kafka 5.0.0. For further details, please refer to [KIP-1188](https://cwiki.apache.org/confluence/x/2IkvFg). 
   * It is now possible to specify the start time for a Kafka Streams punctuation, instead of relying on the non-deterministic time when you register it. For further details, please refer to [KIP-1146](https://cwiki.apache.org/confluence/x/9QqWF). 
   * Added an optional `--node-id` flag to the `FeatureCommand` command. It specifies the node to describe. If not provided, an arbitrary node is used. 
-
-
+  * Align the behavior of <code>Admin.incrementalAlterConfigs()</code> when using bootstrap servers vs. bootstrap controllers.
+    There are three changes:
+    * Under the bootstrap controller, a null config value is permitted only when used with `AlterConfigOp.OpType.DELETE`. If `null` is provided with any
+      other operation type, the request will fail with an `InvalidRequestException`.
+    * When using a bootstrap controller, specifying duplicate config names within the same resource will fail with an `InvalidRequestException`.
+    * When using a bootstrap controller, specifying an unknown resource type will fail with an `InvalidRequestException`.
 
 ## Upgrading to 4.1.0
 
