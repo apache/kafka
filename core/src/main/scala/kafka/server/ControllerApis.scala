@@ -734,6 +734,7 @@ class ControllerApis(
             .setErrorMessage(null))
         },
         configResource => {
+          ConfigAdminManager.validateBrokerConfigChange(resource, configResource, metadataCache, config)
           addConfigChangesOrHandleDuplicate(configResource, resource, duplicateResources, configChanges, response)
         },
         configResource => {

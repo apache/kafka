@@ -370,11 +370,11 @@ public class BootstrapControllersIntegrationTest {
     }
 
     private void testIncrementalAlterNullValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
-        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+        try (var admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             int nodeId = usingBootstrapControllers ?
                     clusterInstance.controllers().values().iterator().next().config().nodeId() :
                     clusterInstance.brokers().values().iterator().next().config().nodeId();
-            ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
+            var nodeResource = new ConfigResource(BROKER, "" + nodeId);
             Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
                 nodeResource,
                 List.of(
@@ -382,7 +382,7 @@ public class BootstrapControllersIntegrationTest {
                     new AlterConfigOp(new ConfigEntry("my.custom.config1", null), AlterConfigOp.OpType.SET)
                 )
             );
-            ExecutionException exception = assertThrows(
+            var exception = assertThrows(
                 ExecutionException.class,
                 () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
             );
@@ -405,11 +405,11 @@ public class BootstrapControllersIntegrationTest {
     }
 
     private void testIncrementalAlterDuplicateValueConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
-        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+        try (var admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             int nodeId = usingBootstrapControllers ?
                     clusterInstance.controllers().values().iterator().next().config().nodeId() :
                     clusterInstance.brokers().values().iterator().next().config().nodeId();
-            ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
+            var nodeResource = new ConfigResource(BROKER, "" + nodeId);
             Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
                 nodeResource,
                 List.of(
@@ -417,11 +417,10 @@ public class BootstrapControllersIntegrationTest {
                     new AlterConfigOp(new ConfigEntry("my.custom.config", "value1"), AlterConfigOp.OpType.SET)
                 )
             );
-            ExecutionException exception = assertThrows(
-                    ExecutionException.class,
-                    () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
+            var exception = assertThrows(
+                ExecutionException.class,
+                () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
             );
-            System.out.println(exception.getCause().getClass());
             assertEquals(
                 "org.apache.kafka.common.errors.InvalidRequestException: Error due to duplicate config keys",
                 exception.getMessage()
@@ -440,21 +439,55 @@ public class BootstrapControllersIntegrationTest {
     }
 
     private void testIncrementalAlterUnknownResourceType(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
-        try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
-            ConfigResource nodeResource = new ConfigResource(UNKNOWN, "unknown");
+        try (var admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            var nodeResource = new ConfigResource(UNKNOWN, "unknown");
             Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
                 nodeResource,
                 List.of(
                     new AlterConfigOp(new ConfigEntry("my.custom.config", "value"), AlterConfigOp.OpType.SET)
                 )
             );
-            ExecutionException exception = assertThrows(
+            var exception = assertThrows(
                 ExecutionException.class,
                 () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
             );
-            System.out.println(exception.getCause().getClass());
             assertEquals(
                 "org.apache.kafka.common.errors.InvalidRequestException: Unknown resource type 0.",
+                exception.getMessage()
+            );
+        }
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterInvalidDynamicConfigsByControllers(ClusterInstance clusterInstance) {
+        testIncrementalAlterInvalidDynamicConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest
+    public void testIncrementalAlterInvalidDynamicConfigs(ClusterInstance clusterInstance) {
+        testIncrementalAlterInvalidDynamicConfigs(clusterInstance, false);
+    }
+
+    private void testIncrementalAlterInvalidDynamicConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
+        try (var admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
+            int nodeId = usingBootstrapControllers ?
+                    clusterInstance.controllers().values().iterator().next().config().nodeId() :
+                    clusterInstance.brokers().values().iterator().next().config().nodeId();
+            var nodeResource = new ConfigResource(BROKER, "" + nodeId);
+            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                nodeResource,
+                List.of(
+                    new AlterConfigOp(new ConfigEntry("compression.lz4.level", "0"), AlterConfigOp.OpType.SET)
+                )
+            );
+            var exception = assertThrows(
+                    ExecutionException.class,
+                    () -> admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES)
+            );
+            assertEquals(
+                "org.apache.kafka.common.errors.InvalidRequestException: " +
+                    "Invalid value 0 for configuration compression.lz4.level: " +
+                    "Value must be in the range [1, 9]",
                 exception.getMessage()
             );
         }
