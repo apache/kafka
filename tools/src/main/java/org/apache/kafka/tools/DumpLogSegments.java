@@ -476,7 +476,7 @@ public class DumpLogSegments {
         }
 
         if (record instanceof AbstractLegacyRecordBatch r) {
-            System.out.print(" isValid: " + r.isValid() + " crc: " + r.checksum());
+            System.out.print(" isValid: " + r.isValid() + " crc: " + r.checksum() + "}");
         }
 
         if (batch.isControlBatch()) {
