@@ -1,0 +1,936 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.tools;
+
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
+import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
+import org.apache.kafka.common.message.ConsumerProtocolSubscriptionJsonConverter;
+import org.apache.kafka.common.message.KRaftVersionRecordJsonConverter;
+import org.apache.kafka.common.message.LeaderChangeMessageJsonConverter;
+import org.apache.kafka.common.message.SnapshotFooterRecordJsonConverter;
+import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter;
+import org.apache.kafka.common.message.VotersRecordJsonConverter;
+import org.apache.kafka.common.metadata.MetadataJsonConverters;
+import org.apache.kafka.common.metadata.MetadataRecordType;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.record.AbstractLegacyRecordBatch;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.EndTransactionMarker;
+import org.apache.kafka.common.record.FileLogInputStream;
+import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
+import org.apache.kafka.coordinator.common.runtime.Deserializer.UnknownRecordTypeException;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.GroupMetadataValueJsonConverter;
+import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
+import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
+import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
+import org.apache.kafka.server.util.CommandDefaultOptions;
+import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.snapshot.SnapshotPath;
+import org.apache.kafka.snapshot.Snapshots;
+import org.apache.kafka.storage.internals.log.CorruptSnapshotException;
+import org.apache.kafka.storage.internals.log.LogFileUtils;
+import org.apache.kafka.storage.internals.log.OffsetIndex;
+import org.apache.kafka.storage.internals.log.OffsetPosition;
+import org.apache.kafka.storage.internals.log.ProducerStateEntry;
+import org.apache.kafka.storage.internals.log.ProducerStateManager;
+import org.apache.kafka.storage.internals.log.TimeIndex;
+import org.apache.kafka.storage.internals.log.TimestampOffset;
+import org.apache.kafka.storage.internals.log.TransactionIndex;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
+import org.apache.kafka.tools.api.Decoder;
+import org.apache.kafka.tools.api.StringDecoder;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
+
+public class DumpLogSegments {
+    // Visible for testing
+    static final String RECORD_INDENT = "|";
+
+    public static void main(String[] args) {
+        DumpLogSegmentsOptions opts = new DumpLogSegmentsOptions(args);
+        CommandLineUtils.maybePrintHelpOrVersion(
+            opts,
+            "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment."
+        );
+        opts.checkArgs();
+
+        Map<String, List<Pair<Long, Long>>> misMatchesForIndexFilesMap = new HashMap<>();
+        TimeIndexDumpErrors timeIndexDumpErrors = new TimeIndexDumpErrors();
+        Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap = new HashMap<>();
+
+        for (String arg : opts.files()) {
+            File file = new File(arg);
+            System.out.println("Dumping " + file);
+
+            String filename = file.getName();
+            String suffix = filename.substring(filename.lastIndexOf("."));
+
+            switch (suffix) {
+                case UnifiedLog.LOG_FILE_SUFFIX, Snapshots.SUFFIX ->
+                    dumpLog(file, opts.shouldPrintDataLog(), nonConsecutivePairsForLogFilesMap,
+                        opts.isDeepIteration(), opts.messageParser(), opts.skipRecordMetadata(), opts.maxBytes());
+                case UnifiedLog.INDEX_FILE_SUFFIX -> dumpIndex(file, opts.indexSanityOnly(), opts.verifyOnly(),
+                    misMatchesForIndexFilesMap, opts.maxMessageSize());
+                case UnifiedLog.TIME_INDEX_FILE_SUFFIX ->
+                    dumpTimeIndex(file, opts.indexSanityOnly(), opts.verifyOnly(), timeIndexDumpErrors);
+                case LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX -> dumpProducerIdSnapshot(file);
+                case UnifiedLog.TXN_INDEX_FILE_SUFFIX -> dumpTxnIndex(file);
+                default -> System.err.println("Ignoring unknown file " + file);
+            }
+        }
+
+        misMatchesForIndexFilesMap.forEach((fileName, listOfMismatches) -> {
+            System.err.println("Mismatches in :" + fileName);
+            listOfMismatches.forEach(pair ->
+                    System.err.println("  Index offset: " + pair.first + ", log offset: " + pair.second));
+        });
+
+        timeIndexDumpErrors.printErrors();
+
+        nonConsecutivePairsForLogFilesMap.forEach((fileName, listOfNonConsecutivePairs) -> {
+            System.err.println("Non-consecutive offsets in " + fileName);
+            listOfNonConsecutivePairs.forEach(pair ->
+                    System.err.println("  " + pair.first + " is followed by " + pair.second));
+        });
+    }
+
+    private static void dumpTxnIndex(File file) {
+        try (TransactionIndex index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)) {
+            for (var abortedTxn : index.allAbortedTxns()) {
+                System.out.println("version: " + abortedTxn.version() +
+                    " producerId: " + abortedTxn.producerId() +
+                    " firstOffset: " + abortedTxn.firstOffset() +
+                    " lastOffset: " + abortedTxn.lastOffset() +
+                    " lastStableOffset: " + abortedTxn.lastStableOffset());
+            }
+        } catch (IOException e) {
+            System.err.println("Error processing transaction index: " + e.getMessage());
+        }
+    }
+
+    private static void dumpProducerIdSnapshot(File file) {
+        try {
+            List<ProducerStateEntry> entries = ProducerStateManager.readSnapshot(file);
+            for (ProducerStateEntry entry : entries) {
+                System.out.print("producerId: " + entry.producerId() +
+                    " producerEpoch: " + entry.producerEpoch() +
+                    " coordinatorEpoch: " + entry.coordinatorEpoch() +
+                    " currentTxnFirstOffset: " + entry.currentTxnFirstOffset().orElse(-1L) +
+                    " lastTimestamp: " + entry.lastTimestamp() + " ");
+
+                if (!entry.batchMetadata().isEmpty()) {
+                    var metadata = entry.batchMetadata().iterator().next();
+                    System.out.print("firstSequence: " + metadata.firstSeq() +
+                        " lastSequence: " + metadata.lastSeq() +
+                        " lastOffset: " + metadata.lastOffset() +
+                        " offsetDelta: " + metadata.offsetDelta() +
+                        " timestamp: " + metadata.timestamp());
+                }
+                System.out.println();
+            }
+        } catch (CorruptSnapshotException e) {
+            System.err.println(e.getMessage());
+        } catch (IOException e) {
+            System.err.println("Error reading snapshot: " + e.getMessage());
+        }
+    }
+
+    // Visible for testing
+    static void dumpIndex(File file,
+                          boolean indexSanityOnly,
+                          boolean verifyOnly,
+                          Map<String, List<Pair<Long, Long>>> misMatchesForIndexFilesMap,
+                          int maxMessageSize) {
+        long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
+        File logFile = new File(file.getAbsoluteFile().getParent(),
+            file.getName().split("\\.")[0] + UnifiedLog.LOG_FILE_SUFFIX);
+
+        try (FileRecords fileRecords = FileRecords.open(logFile, false);
+             OffsetIndex index = new OffsetIndex(file, startOffset, -1, false)) {
+
+            if (index.entries() == 0) {
+                System.out.println(file + " is empty.");
+                return;
+            }
+
+            // Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
+            if (indexSanityOnly) {
+                index.sanityCheck();
+                System.out.println(file + " passed sanity check.");
+                return;
+            }
+
+            for (int i = 0; i < index.entries(); i++) {
+                OffsetPosition entry = index.entry(i);
+
+                // since it is a sparse file, in the event of a crash there may be many zero entries,  stop if we see one
+                if (entry.offset() == index.baseOffset() && i > 0) {
+                    return;
+                }
+
+                FileRecords slice = fileRecords.slice(entry.position(), maxMessageSize);
+                long firstBatchLastOffset = slice.batches().iterator().next().lastOffset();
+                if (firstBatchLastOffset != entry.offset()) {
+                    List<Pair<Long, Long>> misMatchesSeq = misMatchesForIndexFilesMap
+                        .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
+                    // FIXME: add to head?
+                    misMatchesSeq.add(new Pair<>(entry.offset(), firstBatchLastOffset));
+                    misMatchesForIndexFilesMap.put(file.getAbsolutePath(), misMatchesSeq);
+                }
+                if (!verifyOnly) {
+                    System.out.println("offset: " + entry.offset() + " position: " + entry.position());
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error processing index file: " + e.getMessage());
+        }
+    }
+
+    // Visible for testing
+    static void dumpTimeIndex(File file,
+                              boolean indexSanityOnly,
+                              boolean verifyOnly,
+                              TimeIndexDumpErrors timeIndexDumpErrors) {
+        long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
+        File logFile = new File(file.getAbsoluteFile().getParent(),
+            file.getName().split("\\.")[0] + UnifiedLog.LOG_FILE_SUFFIX);
+        File indexFile = new File(file.getAbsoluteFile().getParent(),
+            file.getName().split("\\.")[0] + UnifiedLog.INDEX_FILE_SUFFIX);
+
+        try (FileRecords fileRecords = FileRecords.open(logFile, false);
+             OffsetIndex index = new OffsetIndex(indexFile, startOffset, -1, false);
+             TimeIndex timeIndex = new TimeIndex(file, startOffset, -1, false)) {
+
+            // Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
+            if (indexSanityOnly) {
+                timeIndex.sanityCheck();
+                System.out.println(file + " passed sanity check.");
+                return;
+            }
+
+            long prevTimestamp = RecordBatch.NO_TIMESTAMP;
+            for (int i = 0; i < timeIndex.entries(); i++) {
+                TimestampOffset entry = timeIndex.entry(i);
+
+                // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
+                if (entry.offset() == timeIndex.baseOffset() && i > 0) {
+                    return;
+                }
+
+                OffsetPosition offsetPosition = index.lookup(entry.offset());
+                FileRecords partialFileRecords = fileRecords.slice(offsetPosition.position(), Integer.MAX_VALUE);
+                List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>();
+                for (var batch : partialFileRecords.batches()) {
+                    batches.add(batch);
+                }
+
+                long maxTimestamp = RecordBatch.NO_TIMESTAMP;
+                // We first find the message by offset then check if the timestamp is correct.
+                Optional<FileLogInputStream.FileChannelRecordBatch> matchingBatch = batches.stream()
+                    .filter(batch -> batch.lastOffset() >= entry.offset())
+                    .findFirst();
+
+                if (matchingBatch.isEmpty()) {
+                    timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset(), -1L);
+                } else if (matchingBatch.get().lastOffset() != entry.offset()) {
+                    timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset(),
+                        matchingBatch.get().lastOffset());
+                } else {
+                    RecordBatch batch = matchingBatch.get();
+                    for (Record record : batch) {
+                        maxTimestamp = Math.max(maxTimestamp, record.timestamp());
+                    }
+
+                    if (maxTimestamp != entry.timestamp()) {
+                        timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp(), maxTimestamp);
+                    }
+
+                    if (prevTimestamp >= entry.timestamp()) {
+                        timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp(), prevTimestamp);
+                    }
+                }
+
+                if (!verifyOnly) {
+                    System.out.println("timestamp: " + entry.timestamp() + " offset: " + entry.offset());
+                }
+                prevTimestamp = entry.timestamp();
+            }
+        } catch (IOException e) {
+            System.err.println("Error processing time index file: " + e.getMessage());
+        }
+    }
+
+    interface MessageParser<K, V> {
+        ParseResult<K, V> parse(Record record);
+    }
+
+    static class ParseResult<K, V> {
+        private final Optional<K> key;
+        private final Optional<V> value;
+
+        public ParseResult(Optional<K> key, Optional<V> value) {
+            this.key = key;
+            this.value = value;
+        }
+
+        public Optional<K> key() {
+            return key;
+        }
+
+        public Optional<V> value() {
+            return value;
+        }
+    }
+
+    static class DecoderMessageParser<K, V> implements MessageParser<K, V> {
+        private final Decoder<K> keyDecoder;
+        private final Decoder<V> valueDecoder;
+
+        public DecoderMessageParser(Decoder<K> keyDecoder, Decoder<V> valueDecoder) {
+            this.keyDecoder = keyDecoder;
+            this.valueDecoder = valueDecoder;
+        }
+
+        @Override
+        public ParseResult<K, V> parse(Record record) {
+            Optional<K> key = record.hasKey()
+                ? Optional.of(keyDecoder.fromBytes(Utils.readBytes(record.key())))
+                : Optional.empty();
+
+            Optional<V> value;
+            if (!record.hasValue()) {
+                value = Optional.empty();
+            } else {
+                value = Optional.of(valueDecoder.fromBytes(Utils.readBytes(record.value())));
+            }
+
+            return new ParseResult<>(key, value);
+        }
+    }
+
+    /* print out the contents of the log */
+    @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
+    private static void dumpLog(File file,
+                                boolean printContents,
+                                Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap,
+                                boolean isDeepIteration,
+                                MessageParser<?, ?> parser,
+                                boolean skipRecordMetadata,
+                                int maxBytes) {
+        if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
+            long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
+            System.out.println("Log starting offset: " + startOffset);
+        } else if (file.getName().endsWith(Snapshots.SUFFIX)) {
+            if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+                System.out.println("KRaft bootstrap snapshot");
+            } else {
+                Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
+                pathOpt.ifPresent(path -> System.out.println("Snapshot end offset: " + path.snapshotId().offset() +
+                        ", epoch: " + path.snapshotId().epoch()));
+            }
+        }
+
+        try (FileRecords fileRecords = FileRecords.open(file, false).slice(0, maxBytes)) {
+            long validBytes = 0L;
+            long lastOffset = -1L;
+
+            for (FileLogInputStream.FileChannelRecordBatch batch : fileRecords.batches()) {
+                printBatchLevel(batch, validBytes);
+                if (isDeepIteration) {
+                    for (Record record : batch) {
+                        if (record.offset() != lastOffset + 1) {
+                            List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
+                                .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
+                            nonConsecutivePairsSeq.add(new Pair<>(lastOffset, record.offset()));
+                        }
+                        lastOffset = record.offset();
+
+                        String prefix = RECORD_INDENT + " ";
+                        if (!skipRecordMetadata) {
+                            System.out.print(prefix + "offset: " + record.offset() +
+                                " " + batch.timestampType() + ": " + record.timestamp() +
+                                " keySize: " + record.keySize() + " valueSize: " + record.valueSize());
+                            prefix = " ";
+
+                            if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+                                System.out.print(" sequence: " + record.sequence() +
+                                    " headerKeys: " + java.util.Arrays.stream(record.headers())
+                                        .map(Header::key)
+                                        .collect(Collectors.joining(",", "[", "]")));
+                            }
+
+                            if (record instanceof AbstractLegacyRecordBatch r) {
+                                System.out.print(" isValid: " + r.isValid() + " crc: " + r.checksum());
+                            }
+
+                            if (batch.isControlBatch()) {
+                                printControlRecord(record);
+                            }
+                        }
+
+                        if (printContents && !batch.isControlBatch()) {
+                            ParseResult<?, ?> result = parser.parse(record);
+                            if (result.key().isPresent()) {
+                                System.out.print(prefix + "key: " + result.key().get());
+                                prefix = " ";
+                            }
+                            if (result.value().isPresent()) {
+                                System.out.print(prefix + "payload: " + result.value().get());
+                            }
+                        }
+                        System.out.println();
+                    }
+                }
+                validBytes += batch.sizeInBytes();
+            }
+
+            long trailingBytes = fileRecords.sizeInBytes() - validBytes;
+            if (trailingBytes > 0 && maxBytes == Integer.MAX_VALUE) {
+                System.out.println("Found " + trailingBytes + " invalid bytes at the end of " + file.getName());
+            }
+        } catch (IOException e) {
+            System.err.println("Error processing log file: " + e.getMessage());
+        }
+    }
+
+    private static void printControlRecord(Record record) {
+        short controlTypeId = ControlRecordType.parseTypeId(record.key());
+        ControlRecordType controlType = ControlRecordType.fromTypeId(controlTypeId);
+
+        switch (controlType) {
+            case ABORT:
+            case COMMIT:
+                EndTransactionMarker endTxnMarker = EndTransactionMarker.deserialize(record);
+                System.out.print(" endTxnMarker: " + endTxnMarker.controlType() +
+                    " coordinatorEpoch: " + endTxnMarker.coordinatorEpoch());
+                break;
+            case LEADER_CHANGE:
+                var leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(record);
+                System.out.print(" LeaderChange: " +
+                    LeaderChangeMessageJsonConverter.write(leaderChangeMessage, leaderChangeMessage.version()));
+                break;
+            case SNAPSHOT_HEADER:
+                var header = ControlRecordUtils.deserializeSnapshotHeaderRecord(record);
+                System.out.print(" SnapshotHeader " +
+                    SnapshotHeaderRecordJsonConverter.write(header, header.version()));
+                break;
+            case SNAPSHOT_FOOTER:
+                var footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record);
+                System.out.print(" SnapshotFooter " +
+                    SnapshotFooterRecordJsonConverter.write(footer, footer.version()));
+                break;
+            case KRAFT_VERSION:
+                var kraftVersion = ControlRecordUtils.deserializeKRaftVersionRecord(record);
+                System.out.print(" KRaftVersion " +
+                    KRaftVersionRecordJsonConverter.write(kraftVersion, kraftVersion.version()));
+                break;
+            case KRAFT_VOTERS:
+                var voters = ControlRecordUtils.deserializeVotersRecord(record);
+                System.out.print(" KRaftVoters " +
+                    VotersRecordJsonConverter.write(voters, voters.version()));
+                break;
+            default:
+                System.out.print(" controlType: " + controlType + "(" + controlTypeId + ")");
+                break;
+        }
+    }
+
+    private static void printBatchLevel(FileLogInputStream.FileChannelRecordBatch batch, long accumulativeBytes) {
+        if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+            System.out.print("baseOffset: " + batch.baseOffset() +
+                " lastOffset: " + batch.lastOffset() +
+                " count: " + batch.countOrNull() +
+                " baseSequence: " + batch.baseSequence() +
+                " lastSequence: " + batch.lastSequence() +
+                " producerId: " + batch.producerId() +
+                " producerEpoch: " + batch.producerEpoch() +
+                " partitionLeaderEpoch: " + batch.partitionLeaderEpoch() +
+                " isTransactional: " + batch.isTransactional() +
+                " isControl: " + batch.isControlBatch() +
+                " deleteHorizonMs: " + batch.deleteHorizonMs());
+        } else {
+            System.out.print("offset: " + batch.lastOffset());
+        }
+
+        System.out.println(" position: " + accumulativeBytes +
+            " " + batch.timestampType() + ": " + batch.maxTimestamp() +
+            " size: " + batch.sizeInBytes() +
+            " magic: " + batch.magic() +
+            " compresscodec: " + batch.compressionType().name +
+            " crc: " + batch.checksum() +
+            " isvalid: " + batch.isValid());
+    }
+
+    static class TimeIndexDumpErrors {
+        final Map<String, List<Pair<Long, Long>>> misMatchesForTimeIndexFilesMap = new HashMap<>();
+        final Map<String, List<Pair<Long, Long>>> outOfOrderTimestamp = new HashMap<>();
+        final Map<String, List<Pair<Long, Long>>> shallowOffsetNotFound = new HashMap<>();
+
+        void recordMismatchTimeIndex(File file, long indexTimestamp, long logTimestamp) {
+            List<Pair<Long, Long>> misMatchesSeq = misMatchesForTimeIndexFilesMap
+                .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
+            if (misMatchesSeq.isEmpty()) {
+                misMatchesForTimeIndexFilesMap.put(file.getAbsolutePath(), misMatchesSeq);
+            }
+            misMatchesSeq.add(new Pair<>(indexTimestamp, logTimestamp));
+        }
+
+        void recordOutOfOrderIndexTimestamp(File file, long indexTimestamp, long prevIndexTimestamp) {
+            List<Pair<Long, Long>> outOfOrderSeq = outOfOrderTimestamp
+                .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
+            if (outOfOrderSeq.isEmpty())
+                outOfOrderTimestamp.put(file.getAbsolutePath(), outOfOrderSeq);
+            outOfOrderSeq.add(new Pair<>(indexTimestamp, prevIndexTimestamp));
+        }
+
+        void recordShallowOffsetNotFound(File file, long indexOffset, long logOffset) {
+            List<Pair<Long, Long>> shallowOffsetNotFoundSeq = shallowOffsetNotFound
+                .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
+            if (shallowOffsetNotFoundSeq.isEmpty()) {
+                shallowOffsetNotFound.put(file.getAbsolutePath(), shallowOffsetNotFoundSeq);
+            }
+            shallowOffsetNotFoundSeq.add(new Pair<>(indexOffset, logOffset));
+        }
+
+        void printErrors() {
+            misMatchesForTimeIndexFilesMap.forEach((fileName, listOfMismatches) -> {
+                System.err.println("Found timestamp mismatch in :" + fileName);
+                listOfMismatches.forEach(m ->
+                    System.err.printf("  Index timestamp: %d, log timestamp: %d%n", m.first, m.second)
+                );
+            });
+
+            outOfOrderTimestamp.forEach((fileName, outOfOrderTimestamps) -> {
+                System.err.println("Found out of order timestamp in :" + fileName);
+                outOfOrderTimestamps.forEach(m ->
+                    System.err.printf("  Index timestamp: %d, Previously indexed timestamp: %d%n",
+                        m.first, m.second)
+                );
+            });
+
+            shallowOffsetNotFound.values().forEach(listOfShallowOffsetNotFound -> {
+                System.err.println("The following indexed offsets are not found in the log.");
+                listOfShallowOffsetNotFound.forEach(pair ->
+                    System.err.println("Indexed offset: " + pair.first + ", found log offset: " + pair.second)
+                );
+            });
+        }
+    }
+
+    abstract static class CoordinatorRecordMessageParser implements MessageParser<String, String> {
+        private final CoordinatorRecordSerde serde;
+
+        protected CoordinatorRecordMessageParser(CoordinatorRecordSerde serde) {
+            this.serde = serde;
+        }
+
+        @Override
+        public ParseResult<String, String> parse(Record record) {
+            if (!record.hasKey()) {
+                throw new RuntimeException("Failed to decode message at offset " + record.offset() +
+                    " using the specified decoder (message had a missing key)");
+            }
+
+            try {
+                var r = serde.deserialize(record.key(), record.value());
+                return new ParseResult<>(
+                    Optional.of(prepareKey(r.key())),
+                    Optional.ofNullable(r.value())
+                        .map(v -> prepareValue(v.message(), v.version()))
+                        .or(() -> Optional.of("<DELETE>"))
+                );
+            } catch (UnknownRecordTypeException e) {
+                return new ParseResult<>(
+                    Optional.of("Unknown record type " + e.unknownType() + " at offset " +
+                        record.offset() + ", skipping."),
+                    Optional.empty()
+                );
+            } catch (Throwable e) {
+                return new ParseResult<>(
+                    Optional.of("Error at offset " + record.offset() + ", skipping. " + e.getMessage()),
+                    Optional.empty()
+                );
+            }
+        }
+
+        private String prepareKey(ApiMessage message) {
+            ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+            json.set("type", new TextNode(String.valueOf(message.apiKey())));
+            json.set("data", keyAsJson(message));
+            return json.toString();
+        }
+
+        private String prepareValue(ApiMessage message, short version) {
+            ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+            json.set("version", new TextNode(String.valueOf(version)));
+            json.set("data", valueAsJson(message, version));
+            return json.toString();
+        }
+
+        protected abstract JsonNode keyAsJson(ApiMessage message);
+        protected abstract JsonNode valueAsJson(ApiMessage message, short version);
+    }
+
+    // Package private for testing
+    static class OffsetsMessageParser extends CoordinatorRecordMessageParser {
+        public OffsetsMessageParser() {
+            super(new GroupCoordinatorRecordSerde());
+        }
+
+        @Override
+        protected JsonNode keyAsJson(ApiMessage message) {
+            return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
+        }
+
+        @Override
+        protected JsonNode valueAsJson(ApiMessage message, short version) {
+            if (message.apiKey() == CoordinatorRecordType.GROUP_METADATA.id()) {
+                return prepareGroupMetadataValue((GroupMetadataValue) message, version);
+            } else {
+                return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+            }
+        }
+
+        private JsonNode prepareGroupMetadataValue(GroupMetadataValue message, short version) {
+            JsonNode json = GroupMetadataValueJsonConverter.write(message, version);
+
+            JsonNode protocolTypeNode = json.get("protocolType");
+            if (protocolTypeNode != null && protocolTypeNode.asText().equals(ConsumerProtocol.PROTOCOL_TYPE)) {
+                JsonNode membersNode = json.get("members");
+                if (membersNode != null && membersNode.isArray()) {
+                    membersNode.forEach(memberNode -> {
+                        // Replace the subscription field
+                        replaceField(
+                            memberNode,
+                            "subscription",
+                            (readable, ver) -> new ConsumerProtocolSubscription(readable, ver),
+                            ConsumerProtocolSubscriptionJsonConverter::write
+                        );
+
+                        // Replace the assignment field
+                        replaceField(
+                            memberNode,
+                            "assignment",
+                            (readable, ver) -> new ConsumerProtocolAssignment(readable, ver),
+                            ConsumerProtocolAssignmentJsonConverter::write
+                        );
+                    });
+                }
+            }
+
+            return json;
+        }
+
+        private <T> void replaceField(
+            JsonNode node,
+            String field,
+            BinaryReader<T> reader,
+            JsonWriter<T> writer
+        ) {
+            JsonNode fieldNode = node.get(field);
+            if (fieldNode != null) {
+                try {
+                    byte[] bytes = fieldNode.binaryValue();
+                    ByteBuffer buffer = ByteBuffer.wrap(bytes);
+                    ByteBufferAccessor accessor = new ByteBufferAccessor(buffer);
+                    short version = accessor.readShort();
+                    T data = reader.read(accessor, version);
+                    ((ObjectNode) node).replace(field, writer.write(data, version));
+                } catch (RuntimeException | IOException e) {
+                    // Swallow and keep the original bytes
+                }
+            }
+        }
+
+        @FunctionalInterface
+        interface BinaryReader<T> {
+            T read(org.apache.kafka.common.protocol.Readable readable, short version);
+        }
+
+        @FunctionalInterface
+        interface JsonWriter<T> {
+            JsonNode write(T data, short version);
+        }
+    }
+
+    // Package private for testing
+    static class TransactionLogMessageParser extends CoordinatorRecordMessageParser {
+        public TransactionLogMessageParser() {
+            super(new TransactionCoordinatorRecordSerde());
+        }
+
+        @Override
+        protected JsonNode keyAsJson(ApiMessage message) {
+            return org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
+                .writeRecordKeyAsJson(message);
+        }
+
+        @Override
+        protected JsonNode valueAsJson(ApiMessage message, short version) {
+            return org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordJsonConverters
+                .writeRecordValueAsJson(message, version);
+        }
+    }
+
+    private static class ClusterMetadataLogMessageParser implements MessageParser<String, String> {
+        private final MetadataRecordSerde metadataRecordSerde = new MetadataRecordSerde();
+
+        @Override
+        public ParseResult<String, String> parse(Record record) {
+            String output;
+            try {
+                var messageAndVersion = metadataRecordSerde.read(
+                    new ByteBufferAccessor(record.value()), record.valueSize());
+                ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+                json.set("type", new TextNode(
+                    MetadataRecordType.fromId(messageAndVersion.message().apiKey()).toString()));
+                json.set("version", new IntNode(messageAndVersion.version()));
+                json.set("data", MetadataJsonConverters.writeJson(
+                    messageAndVersion.message(), messageAndVersion.version()));
+                output = json.toString();
+            } catch (Throwable e) {
+                output = "Error at " + record.offset() + ", skipping. " + e.getMessage();
+            }
+            // No keys for metadata records
+            return new ParseResult<>(Optional.empty(), Optional.of(output));
+        }
+    }
+
+    private static class RemoteMetadataLogMessageParser implements MessageParser<String, String> {
+        private final RemoteLogMetadataSerde metadataRecordSerde = new RemoteLogMetadataSerde();
+
+        @Override
+        public ParseResult<String, String> parse(Record record) {
+            String output;
+            try {
+                byte[] data = new byte[record.value().remaining()];
+                record.value().get(data);
+                output = metadataRecordSerde.deserialize(data).toString();
+            } catch (Throwable e) {
+                output = "Error at offset " + record.offset() + ", skipping. " + e.getMessage();
+            }
+            // No keys for metadata records
+            return new ParseResult<>(Optional.empty(), Optional.of(output));
+        }
+    }
+
+    // Package private for testing
+    static class ShareGroupStateMessageParser extends CoordinatorRecordMessageParser {
+        public ShareGroupStateMessageParser() {
+            super(new ShareCoordinatorRecordSerde());
+        }
+
+        @Override
+        protected JsonNode keyAsJson(ApiMessage message) {
+            return org.apache.kafka.coordinator.share.generated.CoordinatorRecordJsonConverters
+                .writeRecordKeyAsJson(message);
+        }
+
+        @Override
+        protected JsonNode valueAsJson(ApiMessage message, short version) {
+            return org.apache.kafka.coordinator.share.generated.CoordinatorRecordJsonConverters
+                .writeRecordValueAsJson(message, version);
+        }
+    }
+
+    static class Pair<F, S> {
+        final F first;
+        final S second;
+
+        Pair(F first, S second) {
+            this.first = first;
+            this.second = second;
+        }
+    }
+
+    private static class DumpLogSegmentsOptions extends CommandDefaultOptions {
+        private final OptionSpec<Void> printOpt;
+        private final OptionSpec<Void> verifyOpt;
+        private final OptionSpec<Void> indexSanityOpt;
+        private final OptionSpec<String> filesOpt;
+        private final OptionSpec<Integer> maxMessageSizeOpt;
+        private final OptionSpec<Integer> maxBytesOpt;
+        private final OptionSpec<Void> deepIterationOpt;
+        private final OptionSpec<String> valueDecoderOpt;
+        private final OptionSpec<String> keyDecoderOpt;
+        private final OptionSpec<Void> offsetsOpt;
+        private final OptionSpec<Void> transactionLogOpt;
+        private final OptionSpec<Void> clusterMetadataOpt;
+        private final OptionSpec<Void> remoteMetadataOpt;
+        private final OptionSpec<Void> shareStateOpt;
+        private final OptionSpec<Void> skipRecordMetadataOpt;
+        private final OptionSet options;
+
+        DumpLogSegmentsOptions(String[] args) {
+            super(args);
+
+            printOpt = parser.accepts("print-data-log",
+                "If set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.");
+            verifyOpt = parser.accepts("verify-index-only",
+                "If set, just verify the index log without printing its content.");
+            indexSanityOpt = parser.accepts("index-sanity-check",
+                "If set, just checks the index sanity without printing its content. " +
+                "This is the same check that is executed on broker startup to determine if an index needs rebuilding or not.");
+            filesOpt = parser.accepts("files",
+                    "REQUIRED: The comma separated list of data and index log files to be dumped.")
+                .withRequiredArg()
+                .describedAs("file1, file2, ...")
+                .ofType(String.class);
+            maxMessageSizeOpt = parser.accepts("max-message-size", "Size of largest message.")
+                .withRequiredArg()
+                .describedAs("size")
+                .ofType(Integer.class)
+                .defaultsTo(5 * 1024 * 1024);
+            maxBytesOpt = parser.accepts("max-bytes",
+                    "Limit the amount of total batches read in bytes avoiding reading the whole .log file(s).")
+                .withRequiredArg()
+                .describedAs("size")
+                .ofType(Integer.class)
+                .defaultsTo(Integer.MAX_VALUE);
+            deepIterationOpt = parser.accepts("deep-iteration",
+                "If set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.");
+            valueDecoderOpt = parser.accepts("value-decoder-class",
+                    "If set, used to deserialize the messages. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
+                .withOptionalArg()
+                .ofType(String.class)
+                .defaultsTo(StringDecoder.class.getName());
+            keyDecoderOpt = parser.accepts("key-decoder-class",
+                    "If set, used to deserialize the keys. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
+                .withOptionalArg()
+                .ofType(String.class)
+                .defaultsTo(StringDecoder.class.getName());
+            offsetsOpt = parser.accepts("offsets-decoder",
+                "If set, log data will be parsed as offset data from the __consumer_offsets topic.");
+            transactionLogOpt = parser.accepts("transaction-log-decoder",
+                "If set, log data will be parsed as transaction metadata from the __transaction_state topic.");
+            clusterMetadataOpt = parser.accepts("cluster-metadata-decoder",
+                "If set, log data will be parsed as cluster metadata records.");
+            remoteMetadataOpt = parser.accepts("remote-log-metadata-decoder",
+                "If set, log data will be parsed as TopicBasedRemoteLogMetadataManager (RLMM) metadata records. " +
+                "Instead, the value-decoder-class option can be used if a custom RLMM implementation is configured.");
+            shareStateOpt = parser.accepts("share-group-state-decoder",
+                "If set, log data will be parsed as share group state data from the __share_group_state topic.");
+            skipRecordMetadataOpt = parser.accepts("skip-record-metadata",
+                "Skip metadata when printing records. This flag also skips control records.");
+
+            try {
+                options = parser.parse(args);
+            } catch (Exception e) {
+                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+                throw new RuntimeException("Unreachable");
+            }
+        }
+
+        MessageParser<?, ?> messageParser() {
+            if (options.has(offsetsOpt)) {
+                return new OffsetsMessageParser();
+            } else if (options.has(transactionLogOpt)) {
+                return new TransactionLogMessageParser();
+            } else if (options.has(clusterMetadataOpt)) {
+                return new ClusterMetadataLogMessageParser();
+            } else if (options.has(remoteMetadataOpt)) {
+                return new RemoteMetadataLogMessageParser();
+            } else if (options.has(shareStateOpt)) {
+                return new ShareGroupStateMessageParser();
+            } else {
+                try {
+                    Decoder<?> valueDecoder = Utils.newInstance(options.valueOf(valueDecoderOpt), Decoder.class);
+                    Decoder<?> keyDecoder = Utils.newInstance(options.valueOf(keyDecoderOpt), Decoder.class);
+                    return new DecoderMessageParser<>(keyDecoder, valueDecoder);
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException("Failed to load decoder class", e);
+                }
+            }
+        }
+
+        @SuppressWarnings("BooleanExpressionComplexity")
+        boolean shouldPrintDataLog() {
+            return options.has(printOpt) ||
+                options.has(offsetsOpt) ||
+                options.has(transactionLogOpt) ||
+                options.has(clusterMetadataOpt) ||
+                options.has(remoteMetadataOpt) ||
+                options.has(valueDecoderOpt) ||
+                options.has(keyDecoderOpt) ||
+                options.has(shareStateOpt);
+        }
+
+        boolean skipRecordMetadata() {
+            return options.has(skipRecordMetadataOpt);
+        }
+
+        boolean isDeepIteration() {
+            return options.has(deepIterationOpt) || shouldPrintDataLog();
+        }
+
+        boolean verifyOnly() {
+            return options.has(verifyOpt);
+        }
+
+        boolean indexSanityOnly() {
+            return options.has(indexSanityOpt);
+        }
+
+        String[] files() {
+            return options.valueOf(filesOpt).split(",");
+        }
+
+        int maxMessageSize() {
+            return options.valueOf(maxMessageSizeOpt);
+        }
+
+        int maxBytes() {
+            return options.valueOf(maxBytesOpt);
+        }
+
+        void checkArgs() {
+            CommandLineUtils.checkRequiredArgs(parser, options, filesOpt);
+        }
+    }
+}
