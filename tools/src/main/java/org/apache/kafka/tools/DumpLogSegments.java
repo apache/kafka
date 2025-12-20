@@ -41,7 +41,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
-import org.apache.kafka.coordinator.common.runtime.Deserializer.UnknownRecordTypeException;
+import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
@@ -85,7 +85,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
 
 public class DumpLogSegments {
@@ -355,7 +354,6 @@ public class DumpLogSegments {
     }
 
     /* print out the contents of the log */
-    @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     private static void dumpLog(File file,
                                 boolean printContents,
                                 Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap,
@@ -363,18 +361,7 @@ public class DumpLogSegments {
                                 MessageParser<?, ?> parser,
                                 boolean skipRecordMetadata,
                                 int maxBytes) {
-        if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
-            long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
-            System.out.println("Log starting offset: " + startOffset);
-        } else if (file.getName().endsWith(Snapshots.SUFFIX)) {
-            if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
-                System.out.println("KRaft bootstrap snapshot");
-            } else {
-                Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
-                pathOpt.ifPresent(path -> System.out.println("Snapshot end offset: " + path.snapshotId().offset() +
-                        ", epoch: " + path.snapshotId().epoch()));
-            }
-        }
+        printLogHeader(file);
 
         try (FileRecords fileRecords = FileRecords.open(file, false).slice(0, maxBytes)) {
             long validBytes = 0L;
@@ -383,59 +370,113 @@ public class DumpLogSegments {
             for (FileLogInputStream.FileChannelRecordBatch batch : fileRecords.batches()) {
                 printBatchLevel(batch, validBytes);
                 if (isDeepIteration) {
-                    for (Record record : batch) {
-                        if (record.offset() != lastOffset + 1) {
-                            List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
-                                .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-                            nonConsecutivePairsSeq.add(new Pair<>(lastOffset, record.offset()));
-                        }
-                        lastOffset = record.offset();
-
-                        String prefix = RECORD_INDENT + " ";
-                        if (!skipRecordMetadata) {
-                            System.out.print(prefix + "offset: " + record.offset() +
-                                " " + batch.timestampType() + ": " + record.timestamp() +
-                                " keySize: " + record.keySize() + " valueSize: " + record.valueSize());
-                            prefix = " ";
-
-                            if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
-                                System.out.print(" sequence: " + record.sequence() +
-                                    " headerKeys: " + java.util.Arrays.stream(record.headers())
-                                        .map(Header::key)
-                                        .collect(Collectors.joining(",", "[", "]")));
-                            }
-
-                            if (record instanceof AbstractLegacyRecordBatch r) {
-                                System.out.print(" isValid: " + r.isValid() + " crc: " + r.checksum());
-                            }
-
-                            if (batch.isControlBatch()) {
-                                printControlRecord(record);
-                            }
-                        }
-
-                        if (printContents && !batch.isControlBatch()) {
-                            ParseResult<?, ?> result = parser.parse(record);
-                            if (result.key().isPresent()) {
-                                System.out.print(prefix + "key: " + result.key().get());
-                                prefix = " ";
-                            }
-                            if (result.value().isPresent()) {
-                                System.out.print(prefix + "payload: " + result.value().get());
-                            }
-                        }
-                        System.out.println();
-                    }
+                    lastOffset = dumpBatchRecords(batch, lastOffset, file, nonConsecutivePairsForLogFilesMap,
+                        skipRecordMetadata, printContents, parser);
                 }
                 validBytes += batch.sizeInBytes();
             }
 
-            long trailingBytes = fileRecords.sizeInBytes() - validBytes;
-            if (trailingBytes > 0 && maxBytes == Integer.MAX_VALUE) {
-                System.out.println("Found " + trailingBytes + " invalid bytes at the end of " + file.getName());
-            }
+            printTrailingBytes(fileRecords, validBytes, maxBytes, file);
         } catch (IOException e) {
             System.err.println("Error processing log file: " + e.getMessage());
+        }
+    }
+
+    private static void printLogHeader(File file) {
+        if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
+            long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
+            System.out.println("Log starting offset: " + startOffset);
+            return;
+        }
+
+        if (!isSnapshotFile(file)) {
+            return;
+        }
+
+        if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+            System.out.println("KRaft bootstrap snapshot");
+            return;
+        }
+
+        Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
+        pathOpt.ifPresent(path -> System.out.println("Snapshot end offset: " + path.snapshotId().offset() +
+            ", epoch: " + path.snapshotId().epoch()));
+    }
+
+    private static boolean isSnapshotFile(File file) {
+        return file.getName().endsWith(Snapshots.SUFFIX);
+    }
+
+    private static long dumpBatchRecords(FileLogInputStream.FileChannelRecordBatch batch,
+                                         long lastOffset,
+                                         File file,
+                                         Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap,
+                                         boolean skipRecordMetadata,
+                                         boolean printContents,
+                                         MessageParser<?, ?> parser) {
+        for (Record record : batch) {
+            if (record.offset() != lastOffset + 1) {
+                List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
+                    .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
+                nonConsecutivePairsSeq.add(new Pair<>(lastOffset, record.offset()));
+            }
+            lastOffset = record.offset();
+
+            String prefix = RECORD_INDENT + " ";
+            if (!skipRecordMetadata) {
+                prefix = printRecordMetadata(batch, record, prefix);
+            }
+
+            if (printContents && !batch.isControlBatch()) {
+                prefix = printRecordContents(parser, record, prefix);
+            }
+            System.out.println();
+        }
+        return lastOffset;
+    }
+
+    private static String printRecordMetadata(FileLogInputStream.FileChannelRecordBatch batch,
+                                              Record record,
+                                              String prefix) {
+        System.out.print(prefix + "offset: " + record.offset() +
+            " " + batch.timestampType() + ": " + record.timestamp() +
+            " keySize: " + record.keySize() + " valueSize: " + record.valueSize());
+        prefix = " ";
+
+        if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+            System.out.print(" sequence: " + record.sequence() +
+                " headerKeys: " + java.util.Arrays.stream(record.headers())
+                    .map(Header::key)
+                    .collect(Collectors.joining(",", "[", "]")));
+        }
+
+        if (record instanceof AbstractLegacyRecordBatch r) {
+            System.out.print(" isValid: " + r.isValid() + " crc: " + r.checksum());
+        }
+
+        if (batch.isControlBatch()) {
+            printControlRecord(record);
+        }
+
+        return prefix;
+    }
+
+    private static String printRecordContents(MessageParser<?, ?> parser, Record record, String prefix) {
+        ParseResult<?, ?> result = parser.parse(record);
+        if (result.key().isPresent()) {
+            System.out.print(prefix + "key: " + result.key().get());
+            prefix = " ";
+        }
+        if (result.value().isPresent()) {
+            System.out.print(prefix + "payload: " + result.value().get());
+        }
+        return prefix;
+    }
+
+    private static void printTrailingBytes(FileRecords fileRecords, long validBytes, int maxBytes, File file) {
+        long trailingBytes = fileRecords.sizeInBytes() - validBytes;
+        if (trailingBytes > 0 && maxBytes == Integer.MAX_VALUE) {
+            System.out.println("Found " + trailingBytes + " invalid bytes at the end of " + file.getName());
         }
     }
 
@@ -585,7 +626,7 @@ public class DumpLogSegments {
                         .map(v -> prepareValue(v.message(), v.version()))
                         .or(() -> Optional.of("<DELETE>"))
                 );
-            } catch (UnknownRecordTypeException e) {
+            } catch (Deserializer.UnknownRecordTypeException e) {
                 return new ParseResult<>(
                     Optional.of("Unknown record type " + e.unknownType() + " at offset " +
                         record.offset() + ", skipping."),
@@ -768,14 +809,12 @@ public class DumpLogSegments {
 
         @Override
         protected JsonNode keyAsJson(ApiMessage message) {
-            return org.apache.kafka.coordinator.share.generated.CoordinatorRecordJsonConverters
-                .writeRecordKeyAsJson(message);
+            return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
         }
 
         @Override
         protected JsonNode valueAsJson(ApiMessage message, short version) {
-            return org.apache.kafka.coordinator.share.generated.CoordinatorRecordJsonConverters
-                .writeRecordValueAsJson(message, version);
+            return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
         }
     }
 
@@ -805,7 +844,6 @@ public class DumpLogSegments {
         private final OptionSpec<Void> remoteMetadataOpt;
         private final OptionSpec<Void> shareStateOpt;
         private final OptionSpec<Void> skipRecordMetadataOpt;
-        private final OptionSet options;
 
         DumpLogSegmentsOptions(String[] args) {
             super(args);
@@ -860,7 +898,7 @@ public class DumpLogSegments {
                 "Skip metadata when printing records. This flag also skips control records.");
 
             try {
-                options = parser.parse(args);
+                this.options = parser.parse(args);
             } catch (Exception e) {
                 CommandLineUtils.printUsageAndExit(parser, e.getMessage());
                 throw new RuntimeException("Unreachable");
@@ -889,16 +927,26 @@ public class DumpLogSegments {
             }
         }
 
-        @SuppressWarnings("BooleanExpressionComplexity")
         boolean shouldPrintDataLog() {
-            return options.has(printOpt) ||
-                options.has(offsetsOpt) ||
-                options.has(transactionLogOpt) ||
-                options.has(clusterMetadataOpt) ||
-                options.has(remoteMetadataOpt) ||
-                options.has(valueDecoderOpt) ||
-                options.has(keyDecoderOpt) ||
-                options.has(shareStateOpt);
+            return hasAnyOption(
+                printOpt,
+                offsetsOpt,
+                transactionLogOpt,
+                clusterMetadataOpt,
+                remoteMetadataOpt,
+                valueDecoderOpt,
+                keyDecoderOpt,
+                shareStateOpt
+            );
+        }
+
+        private boolean hasAnyOption(OptionSpec<?>... specs) {
+            for (OptionSpec<?> spec : specs) {
+                if (options.has(spec)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         boolean skipRecordMetadata() {
