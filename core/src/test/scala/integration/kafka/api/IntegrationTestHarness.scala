@@ -34,8 +34,8 @@ import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.MetadataLogConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -307,14 +307,13 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     try {
-      val closeOptions = CloseOptions.timeout(Duration.ZERO)
       producers.foreach(_.close(Duration.ZERO))
       consumers.foreach(_.wakeup())
-      consumers.foreach(_.close(closeOptions))
+      consumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       shareConsumers.foreach(_.wakeup())
       shareConsumers.foreach(_.close(Duration.ZERO))
       streamsConsumers.foreach(_.wakeup())
-      streamsConsumers.foreach(_.close(closeOptions))
+      streamsConsumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       adminClients.foreach(_.close(Duration.ZERO))
 
       producers.clear()
