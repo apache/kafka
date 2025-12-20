@@ -211,7 +211,7 @@ public class DumpLogSegmentsTest {
             secondBatchRecords.add(new SimpleRecord(
                 now + i * 3L,
                 ("message key " + i).getBytes(),
-                (byte[]) null
+                    null
             ));
         }
         batches.add(new BatchInfo(secondBatchRecords, true, false));
@@ -220,7 +220,7 @@ public class DumpLogSegmentsTest {
         for (int i = 30; i < 50; i++) {
             thirdBatchRecords.add(new SimpleRecord(
                 now + i * 5L,
-                (byte[]) null,
+                    null,
                 ("message value " + i).getBytes()
             ));
         }
@@ -228,7 +228,7 @@ public class DumpLogSegmentsTest {
 
         List<SimpleRecord> fourthBatchRecords = new ArrayList<>();
         for (int i = 50; i < 60; i++) {
-            fourthBatchRecords.add(new SimpleRecord(now + i * 7L, (byte[]) null));
+            fourthBatchRecords.add(new SimpleRecord(now + i * 7L, null));
         }
         batches.add(new BatchInfo(fourthBatchRecords, false, false));
 

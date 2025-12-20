@@ -43,7 +43,9 @@
     <suppress checks="JavaNCSS"
               files="(SharePartitionManagerTest|SharePartitionTest|ShareConsumerTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
+    <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="DumpLogSegmentsTest"/>
     <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
+    <suppress checks="CyclomaticComplexity|NPathComplexity" files="DumpLogSegments.java"/>
 
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>

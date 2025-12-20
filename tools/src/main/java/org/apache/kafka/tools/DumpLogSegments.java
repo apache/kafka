@@ -43,10 +43,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
-import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
-import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.GroupMetadataValueJsonConverter;
 import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -160,7 +156,7 @@ public class DumpLogSegments {
                 System.out.print("producerId: " + entry.producerId() +
                     " producerEpoch: " + entry.producerEpoch() +
                     " coordinatorEpoch: " + entry.coordinatorEpoch() +
-                    " currentTxnFirstOffset: " + entry.currentTxnFirstOffset().orElse(-1L) +
+                    " currentTxnFirstOffset: " + entry.currentTxnFirstOffset() +
                     " lastTimestamp: " + entry.lastTimestamp() + " ");
 
                 if (!entry.batchMetadata().isEmpty()) {
@@ -218,8 +214,8 @@ public class DumpLogSegments {
                 if (firstBatchLastOffset != entry.offset()) {
                     List<Pair<Long, Long>> misMatchesSeq = misMatchesForIndexFilesMap
                         .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-                    // FIXME: add to head?
-                    misMatchesSeq.add(new Pair<>(entry.offset(), firstBatchLastOffset));
+                    // Prepend to match Scala behavior (::= operator)
+                    misMatchesSeq.add(0, new Pair<>(entry.offset(), firstBatchLastOffset));
                     misMatchesForIndexFilesMap.put(file.getAbsolutePath(), misMatchesSeq);
                 }
                 if (!verifyOnly) {
@@ -242,9 +238,13 @@ public class DumpLogSegments {
         File indexFile = new File(file.getAbsoluteFile().getParent(),
             file.getName().split("\\.")[0] + UnifiedLog.INDEX_FILE_SUFFIX);
 
-        try (FileRecords fileRecords = FileRecords.open(logFile, false);
-             OffsetIndex index = new OffsetIndex(indexFile, startOffset, -1, false);
-             TimeIndex timeIndex = new TimeIndex(file, startOffset, -1, false)) {
+        FileRecords fileRecords = null;
+        OffsetIndex index = null;
+        TimeIndex timeIndex = null;
+        try {
+            fileRecords = FileRecords.open(logFile, false);
+            index = new OffsetIndex(indexFile, startOffset, -1, false);
+            timeIndex = new TimeIndex(file, startOffset, -1, false);
 
             // Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
             if (indexSanityOnly) {
@@ -302,6 +302,20 @@ public class DumpLogSegments {
             }
         } catch (IOException e) {
             sneakyThrow(e);
+        } finally {
+            try {
+                if (fileRecords != null) {
+                    fileRecords.closeHandlers();
+                }
+                if (index != null) {
+                    index.closeHandler();
+                }
+                if (timeIndex != null) {
+                    timeIndex.closeHandler();
+                }
+            } catch (IOException e) {
+                sneakyThrow(e);
+            }
         }
     }
 
@@ -363,7 +377,9 @@ public class DumpLogSegments {
                                 int maxBytes) {
         printLogHeader(file);
 
-        try (FileRecords fileRecords = FileRecords.open(file, false).slice(0, maxBytes)) {
+        FileRecords fileRecords = null;
+        try {
+            fileRecords = FileRecords.open(file, false).slice(0, maxBytes);
             long validBytes = 0L;
             long lastOffset = -1L;
 
@@ -379,6 +395,14 @@ public class DumpLogSegments {
             printTrailingBytes(fileRecords, validBytes, maxBytes, file);
         } catch (IOException e) {
             sneakyThrow(e);
+        } finally {
+            if (fileRecords != null) {
+                try {
+                    fileRecords.closeHandlers();
+                } catch (IOException e) {
+                    sneakyThrow(e);
+                }
+            }
         }
     }
 
@@ -418,7 +442,8 @@ public class DumpLogSegments {
             if (record.offset() != lastOffset + 1) {
                 List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
                     .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-                nonConsecutivePairsSeq.add(new Pair<>(lastOffset, record.offset()));
+                // Prepend to match Scala behavior (::= operator)
+                nonConsecutivePairsSeq.add(0, new Pair<>(lastOffset, record.offset()));
             }
             lastOffset = record.offset();
 
@@ -671,20 +696,25 @@ public class DumpLogSegments {
 
         @Override
         protected JsonNode keyAsJson(ApiMessage message) {
-            return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
+            return org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters
+                .writeRecordKeyAsJson(message);
         }
 
         @Override
         protected JsonNode valueAsJson(ApiMessage message, short version) {
-            if (message.apiKey() == CoordinatorRecordType.GROUP_METADATA.id()) {
-                return prepareGroupMetadataValue((GroupMetadataValue) message, version);
+            if (message.apiKey() == org.apache.kafka.coordinator.group.generated.CoordinatorRecordType.GROUP_METADATA.id()) {
+                return prepareGroupMetadataValue(
+                    (org.apache.kafka.coordinator.group.generated.GroupMetadataValue) message, version);
             } else {
-                return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+                return org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters
+                    .writeRecordValueAsJson(message, version);
             }
         }
 
-        private JsonNode prepareGroupMetadataValue(GroupMetadataValue message, short version) {
-            JsonNode json = GroupMetadataValueJsonConverter.write(message, version);
+        private JsonNode prepareGroupMetadataValue(
+            org.apache.kafka.coordinator.group.generated.GroupMetadataValue message, short version) {
+            JsonNode json = org.apache.kafka.coordinator.group.generated.GroupMetadataValueJsonConverter
+                .write(message, version);
 
             JsonNode protocolTypeNode = json.get("protocolType");
             if (protocolTypeNode != null && protocolTypeNode.asText().equals(ConsumerProtocol.PROTOCOL_TYPE)) {
@@ -816,12 +846,14 @@ public class DumpLogSegments {
 
         @Override
         protected JsonNode keyAsJson(ApiMessage message) {
-            return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
+            return org.apache.kafka.coordinator.share.generated.CoordinatorRecordJsonConverters
+                .writeRecordKeyAsJson(message);
         }
 
         @Override
         protected JsonNode valueAsJson(ApiMessage message, short version) {
-            return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
+            return org.apache.kafka.coordinator.share.generated.CoordinatorRecordJsonConverters
+                .writeRecordValueAsJson(message, version);
         }
     }
 
