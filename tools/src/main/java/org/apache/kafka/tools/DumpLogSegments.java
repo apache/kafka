@@ -936,12 +936,7 @@ public class DumpLogSegments {
             skipRecordMetadataOpt = parser.accepts("skip-record-metadata",
                 "Skip metadata when printing records. This flag also skips control records.");
 
-            try {
-                this.options = parser.parse(args);
-            } catch (Exception e) {
-                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
-                throw new RuntimeException("Unreachable");
-            }
+            this.options = parser.parse(args);
         }
 
         MessageParser<?, ?> messageParser() {
