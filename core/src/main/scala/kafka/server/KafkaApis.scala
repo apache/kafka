@@ -1798,7 +1798,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               val error = if (exception == null) {
                 Errors.NONE
               } else {
-                if (Errors.maybeUnwrapException(exception).isInstanceOf[IdempotentTransactionMarkerException])
+                if (IdempotentTransactionMarkerException.isInstanceOf(exception))
                   Errors.NONE
                 else {
                   Errors.forException(exception) match {
@@ -1837,7 +1837,12 @@ class KafkaApis(val requestChannel: RequestChannel,
               errors.foreachEntry { (topicIdPartition, partitionResponse) =>
                 val error = if (partitionResponse.error == Errors.NONE)
                   Errors.NONE
-                else if (partitionResponse.exception().isInstanceOf[IdempotentTransactionMarkerException])
+                // Handle idempotent transaction marker retries (KAFKA-19999):
+                // For TV2, when a marker with the same epoch arrives and no transaction is ongoing,
+                // ProducerStateManager throws IdempotentTransactionMarkerException to signal this is
+                // a benign retry (e.g., coordinator recovery or network disconnection). We treat this
+                // as success to prevent hanging transactions.
+                else if (IdempotentTransactionMarkerException.isInstanceOf(partitionResponse.exception()))
                   Errors.NONE
                 else
                   partitionResponse.error

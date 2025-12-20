@@ -79,7 +79,7 @@ import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.{RichOption, RichOptional}
+import scala.jdk.OptionConverters.RichOptional
 
 /*
  * Result metadata of a log append operation on the log
@@ -881,7 +881,7 @@ class ReplicaManager(val config: KafkaConfig,
       topicIdPartition -> ProducePartitionStatus(
         result.info.lastOffset + 1, // required offset
         new PartitionResponse(
-          result.exception.toJava,
+          result.exception.orNull,
           result.info.firstOffset,
           result.info.logAppendTime,
           result.info.logStartOffset,

@@ -17,10 +17,28 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.protocol.Errors;
 
+/**
+ * Indicates that a transaction marker was received as part of an idempotent retry
+ * and should be treated as a successful no-op rather than an error.
+ *
+ * <p>This exception is thrown when:
+ * <ul>
+ *   <li>A TV2 transaction marker arrives with the same epoch as current</li>
+ *   <li>No transaction is currently ongoing (currentTxnFirstOffset is empty)</li>
+ * </ul>
+ *
+ * <p>Common scenarios include coordinator recovery and network-induced retries.
+ * Callers should catch this exception and treat it as a successful operation.
+ */
 public class IdempotentTransactionMarkerException extends KafkaException {
 
     public IdempotentTransactionMarkerException() {
         super();
+    }
+
+    public static boolean isInstanceOf(Throwable t) {
+        return Errors.maybeUnwrapException(t) instanceof IdempotentTransactionMarkerException;
     }
 }

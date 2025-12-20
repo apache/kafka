@@ -30,7 +30,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -165,7 +164,7 @@ public class ProduceResponse extends AbstractResponse {
         public List<RecordError> recordErrors;
         public String errorMessage;
         public ProduceResponseData.LeaderIdAndEpoch currentLeader;
-        private Optional<Throwable> exception;
+        private Throwable exception;
 
         public PartitionResponse(Errors error) {
             this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET);
@@ -187,9 +186,9 @@ public class ProduceResponse extends AbstractResponse {
             this(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, new ProduceResponseData.LeaderIdAndEpoch());
         }
 
-        public PartitionResponse(Optional<Throwable> exception, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
+        public PartitionResponse(Throwable exception, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
             this(
-                exception.isEmpty() ? Errors.NONE : Errors.forException(exception.get()),
+                exception == null ? Errors.NONE : Errors.forException(exception),
                 baseOffset,
                 logAppendTime,
                 logStartOffset,
@@ -219,7 +218,10 @@ public class ProduceResponse extends AbstractResponse {
         }
 
         public Throwable exception() {
-            return exception.orElse(error.exception(errorMessage));
+            if (exception != null) {
+                return exception;
+            }
+            return error.exception(errorMessage);
         }
 
         @Override
