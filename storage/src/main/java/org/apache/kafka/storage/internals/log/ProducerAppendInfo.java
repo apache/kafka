@@ -122,7 +122,7 @@ public class ProducerAppendInfo {
             // TV2 Idempotent Retry Detection:
             // When markerEpoch == currentEpoch and no transaction is ongoing, this is a retry
             // of a marker that was already successfully written. Common scenarios:
-            // 1. Coordinator recovery: reloading PREPARE_COMMIT/ABORT from transaction log
+            // 1. Coordinator recovery: reloading PREPARE_COMMIT/ABORT from the transaction log
             // 2. Network retry: marker was written but response was lost due to disconnection
             // In both cases, the transaction has already ended (currentTxnFirstOffset is empty),
             // so we can safely treat this as idempotent success.

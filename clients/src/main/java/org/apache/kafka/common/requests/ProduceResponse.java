@@ -235,12 +235,13 @@ public class ProduceResponse extends AbstractResponse {
                     error == that.error &&
                     Objects.equals(recordErrors, that.recordErrors) &&
                     Objects.equals(errorMessage, that.errorMessage) &&
-                    Objects.equals(currentLeader, that.currentLeader);
+                    Objects.equals(currentLeader, that.currentLeader) &&
+                    Objects.equals(exception, that.exception);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, currentLeader);
+            return Objects.hash(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, currentLeader, exception);
         }
 
         @Override
@@ -262,6 +263,12 @@ public class ProduceResponse extends AbstractResponse {
             b.append(", errorMessage: ");
             if (errorMessage != null) {
                 b.append(errorMessage);
+            } else {
+                b.append("null");
+            }
+            b.append("exception: ");
+            if (exception != null) {
+                b.append(exception);
             } else {
                 b.append("null");
             }

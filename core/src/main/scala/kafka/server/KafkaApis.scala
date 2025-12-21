@@ -1798,6 +1798,10 @@ class KafkaApis(val requestChannel: RequestChannel,
               val error = if (exception == null) {
                 Errors.NONE
               } else {
+                // Handle idempotent transaction marker retries (KAFKA-19999):
+                // The group coordinator may throw IdempotentTransactionMarkerException when detecting a marker retry
+                // (same epoch + transaction already completed). Treat this as success to prevent hanging 
+                // transactions during coordinator recovery or network retries
                 if (IdempotentTransactionMarkerException.isInstanceOf(exception))
                   Errors.NONE
                 else {
