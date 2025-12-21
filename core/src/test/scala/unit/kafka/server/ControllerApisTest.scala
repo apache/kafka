@@ -165,6 +165,8 @@ class ControllerApisTest {
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9092")
+    val config = new KafkaConfig(props)
+    config.dynamicConfig.initialize(Option.empty)
     new ControllerApis(
       requestChannel,
       authorizer,
@@ -172,7 +174,7 @@ class ControllerApisTest {
       time,
       controller,
       raftManager,
-      new KafkaConfig(props),
+      config,
       "JgxuGe9URy-E-ceaL04lEw",
       new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
