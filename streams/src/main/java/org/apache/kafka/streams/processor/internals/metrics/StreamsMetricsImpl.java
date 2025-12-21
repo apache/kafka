@@ -156,6 +156,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String LATENCY_DESCRIPTION_SUFFIX = " in milliseconds";
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
+    public static final String WINDOWED_RATE_DESCRIPTION_PREFIX = "The ratio, over a rolling measurement window, ";
 
     public static final String RECORD_E2E_LATENCY = "record-e2e-latency";
     public static final String RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX =
