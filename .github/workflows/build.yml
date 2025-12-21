@@ -400,7 +400,7 @@ jobs:
           exit 1
       - name: Check Dependency Outcomes
         run: |
-          if [[ "${{ needs.validate.result }}" == "success" && ("${{ needs.configure.outputs.docChangeOnly }}" == "true" || "${{ needs.test.result }}" == "success") ]]; then
+          if [[ "${{ needs.validate.result }}" == "success" && (${{ needs.configure.outputs.docChangeOnly }} || "${{ needs.test.result }}" == "success") ]]; then
             echo "Required jobs completed successfully!"
             exit 0
           else
