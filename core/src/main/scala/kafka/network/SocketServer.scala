@@ -733,8 +733,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       true
     } else{
       // connection was rejected (likely due to processor shutdown) - close the socket.
-      val listenerName = ListenerName.normalised(endPoint.listener)
-      connectionQuotas.closeChannel(this, listenerName, socketChannel)
+      connectionQuotas.closeChannel(this, ListenerName.normalised(endPoint.listener), socketChannel)
       false
     }
   }
