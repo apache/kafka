@@ -487,7 +487,7 @@ public class BootstrapControllersIntegrationTest {
             assertEquals(
                 "org.apache.kafka.common.errors.InvalidRequestException: " +
                     "Invalid value 0 for configuration compression.lz4.level: " +
-                    "Value must be in the range [1, 9]",
+                    "Value must be at least 1",
                 exception.getMessage()
             );
         }
