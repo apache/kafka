@@ -98,18 +98,18 @@ public class ProducerAppendInfo {
 
     /**
      * Validates the producer epoch for transaction markers based on the transaction version.
-     *
+     * 
      * <p>For Transaction Version 2 (TV2) and above, the coordinator always increments
      * the producer epoch by one before writing the final transaction marker. This establishes a
      * clear invariant: a valid TV2 marker must have an epoch strictly greater than the producer's
      * current epoch at the leader. Any marker with markerEpoch <= currentEpoch is a late or duplicate
      * marker and must be rejected to prevent conflating multiple transactions under the same epoch,
      * which would threaten exactly-once semantics (EOS) guarantees.
-     *
+     * 
      * <p>For legacy transaction versions (TV0/TV1), markers were written with the same epoch as
      * the transactional records, so we accept markers when markerEpoch >= currentEpoch. This
      * preserves backward compatibility but cannot distinguish between active and stale markers.
-     *
+     * 
      * @param producerEpoch the epoch from the transaction marker
      * @param offset the offset where the marker will be written
      * @param transactionVersion the transaction version (0/1 = legacy, 2 = TV2)
