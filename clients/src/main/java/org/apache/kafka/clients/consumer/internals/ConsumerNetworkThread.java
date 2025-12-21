@@ -242,7 +242,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     }
 
     /**
-     * Process the events—if any—that were produced by the application thread.
+     * Process the events-if any-that were produced by the application thread.
      */
     private void processApplicationEvents() {
         LinkedList<ApplicationEvent> events = new LinkedList<>();
