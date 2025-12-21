@@ -681,8 +681,8 @@ public final class Utils {
     }
 
     /**
-     * Converts a Properties object to a Map<String, String>, calling {@link #toString} to ensure all keys and values
-     * are Strings.
+     * Converts a Properties object to a {@code Map<String, String>}, calling {@link #toString} to ensure all keys and
+     * values are Strings.
      */
     public static Map<String, String> propsToStringMap(Properties props) {
         Map<String, String> result = new HashMap<>();
@@ -1406,7 +1406,7 @@ public final class Utils {
      * @param <K> The Map key type
      * @param <V> The Map value type
      * @param <M> The type of the Map itself.
-     * @return new Collector<Map.Entry<K, V>, M, M>
+     * @return new {@code Collector<Map.Entry<K, V>, M, M>}
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
         return new Collector<>() {
