@@ -62,7 +62,7 @@ import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util
-import java.util.concurrent.{Callable, ConcurrentHashMap, Executors, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import java.util.{Optional, OptionalLong, Properties}
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
