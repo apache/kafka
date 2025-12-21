@@ -38,6 +38,7 @@ jobs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
       sha: ${{ steps.configure-outputs.outputs.sha }}
+      docChangeOnly: ${{ steps.filter.outputs.docs == 'true' && steps.filter.outputs.code == 'false' }}
     steps:
       - name: Env
         run: printenv
@@ -59,9 +60,29 @@ jobs:
             echo "days=7" >> "$GITHUB_OUTPUT"
             echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Filter changed files
+        id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            docs:
+              - '**/*.html'
+              - '**/*.htm'
+              - '**/*.md'
+            code:
+              - '**'
+              - '!**/*.html'
+              - '!**/*.htm'
+              - '!**/*.md'
 
   load-catalog:
     needs: [configure]
+    if: ${{ !needs.configure.outputs.docChangeOnly }}
     runs-on: ubuntu-latest
     name: Load Test Catalog
     steps:
@@ -175,7 +196,7 @@ jobs:
 
   test:
     needs: [configure, validate, load-catalog]
-    if: ${{ ! needs.configure.outputs.is-draft }}
+    if: ${{ !needs.configure.outputs.is-draft && !needs.configure.outputs.docChangeOnly }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -380,7 +401,7 @@ jobs:
           exit 1
       - name: Check Dependency Outcomes
         run: |
-          if [[ "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
+          if [[ "${{ needs.validate.result }}" == "success" && ("${{ needs.configure.outputs.docChangeOnly }}" == "true" || "${{ needs.test.result }}" == "success") ]]; then
             echo "Required jobs completed successfully!"
             exit 0
           else

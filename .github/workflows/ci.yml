@@ -29,9 +29,6 @@ on:
     branches:
       - 'trunk'
       - '4.0'
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.html'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
