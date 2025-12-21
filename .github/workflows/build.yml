@@ -38,7 +38,7 @@ jobs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
       sha: ${{ steps.configure-outputs.outputs.sha }}
-      docChangeOnly: ${{ steps.filter.outputs.docs == 'true' && steps.filter.outputs.code == 'false' }}
+      docChangeOnly: ${{ steps.filter.outputs.docs && !steps.filter.outputs.code }}
     steps:
       - name: Env
         run: printenv
