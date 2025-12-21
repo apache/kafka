@@ -24,7 +24,6 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.RequestLocal;
-import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -47,16 +46,25 @@ public class LogTestUtils {
         return new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time);
     }
 
+
+    /**
+     * Append an end transaction marker (commit or abort) to the log as a leader.
+     *
+     * @param transactionVersion the transaction version (1 = TV1, 2 = TV2) etc. Must be explicitly specified.
+     *                          TV2 markers require strict epoch validation (markerEpoch > currentEpoch),
+     *                          while legacy markers use relaxed validation (markerEpoch >= currentEpoch).
+     */
     public static LogAppendInfo appendEndTxnMarkerAsLeader(UnifiedLog log,
                                                            long producerId,
                                                            short producerEpoch,
                                                            ControlRecordType controlType,
                                                            long timestamp,
                                                            int coordinatorEpoch,
-                                                           int leaderEpoch) {
+                                                           int leaderEpoch,
+                                                           short transactionVersion) {
         MemoryRecords records = endTxnRecords(controlType, producerId, producerEpoch, 0L, coordinatorEpoch, leaderEpoch, timestamp);
 
-        return log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
+        return log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion);
     }
 
     public static MemoryRecords endTxnRecords(ControlRecordType controlRecordType,

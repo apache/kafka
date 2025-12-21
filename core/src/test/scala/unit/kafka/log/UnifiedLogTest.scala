@@ -3339,58 +3339,6 @@ class UnifiedLogTest {
   }
 
   @Test
-  def testFirstUnstableOffsetNoTransactionalData(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
-    val log = createLog(logDir, logConfig)
-
-    val records = MemoryRecords.withRecords(Compression.NONE,
-      new SimpleRecord("foo".getBytes),
-      new SimpleRecord("bar".getBytes),
-      new SimpleRecord("baz".getBytes))
-
-    log.appendAsLeader(records, 0)
-    assertEquals(Optional.empty, log.firstUnstableOffset)
-  }
-
-  @Test
-  def testFirstUnstableOffsetWithTransactionalData(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
-    val log = createLog(logDir, logConfig)
-
-    val pid = 137L
-    val epoch = 5.toShort
-    var seq = 0
-
-    // add some transactional records
-    val records = MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
-      new SimpleRecord("foo".getBytes),
-      new SimpleRecord("bar".getBytes),
-      new SimpleRecord("baz".getBytes))
-
-    val firstAppendInfo = log.appendAsLeader(records, 0)
-    assertEquals(Optional.of(firstAppendInfo.firstOffset), log.firstUnstableOffset)
-
-    // add more transactional records
-    seq += 3
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, pid, epoch, seq,
-      new SimpleRecord("blah".getBytes)), 0)
-
-    // LSO should not have changed
-    assertEquals(Optional.of(firstAppendInfo.firstOffset), log.firstUnstableOffset)
-
-    // now transaction is committed
-    val commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT,
-      mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel())
-
-    // first unstable offset is not updated until the high watermark is advanced
-    assertEquals(Optional.of(firstAppendInfo.firstOffset), log.firstUnstableOffset)
-    log.updateHighWatermark(commitAppendInfo.lastOffset + 1)
-
-    // now there should be no first unstable offset
-    assertEquals(Optional.empty, log.firstUnstableOffset)
-  }
-
-  @Test
   def testReadCommittedWithConcurrentHighWatermarkUpdates(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)

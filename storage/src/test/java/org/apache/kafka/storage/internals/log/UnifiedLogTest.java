@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;
@@ -603,7 +604,7 @@ public class UnifiedLogTest {
 
         // now transaction is committed
         LogAppendInfo commitAppendInfo = LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch,
-                ControlRecordType.COMMIT, mockTime.milliseconds(), 0, 0);
+                ControlRecordType.COMMIT, mockTime.milliseconds(), 0, 0, TransactionVersion.TV_0.featureLevel());
 
         // first unstable offset is not updated until the high watermark is advanced
         assertEquals(Optional.of(firstAppendInfo.firstOffset()), log.firstUnstableOffset());
