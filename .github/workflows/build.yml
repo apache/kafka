@@ -60,7 +60,7 @@ jobs:
             echo "days=7" >> "$GITHUB_OUTPUT"
             echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
-      - name: Check changed files
+      - name: Checkout code
         uses: actions/checkout@v5
         with:
           persist-credentials: false
