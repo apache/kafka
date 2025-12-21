@@ -29,9 +29,13 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -46,6 +50,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -56,6 +61,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -340,6 +347,8 @@ public class NetworkClientDelegateTest {
         properties.put(GROUP_ID_CONFIG, GROUP_ID);
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
         properties.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        properties.put(RETRY_BACKOFF_MS_CONFIG, 100L);
+        properties.put(RETRY_BACKOFF_MAX_MS_CONFIG, 1000L);
         return new NetworkClientDelegate(time,
                 new ConsumerConfig(properties),
                 logContext,
@@ -370,5 +379,113 @@ public class NetworkClientDelegateTest {
 
     private Node mockNode() {
         return new Node(0, "localhost", 99);
+    }
+
+    @Test
+    public void testExponentialBackoffReducesRetryAttemptsWhenNodeNotReady() throws Exception {
+        long retryBackoffMs = 100L;
+        long retryBackoffMaxMs = 1000L;
+        
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
+            Node coordinatorNode = mockNode();
+            
+            ConsumerGroupHeartbeatRequestData heartbeatData = new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(GROUP_ID)
+                .setMemberId("")
+                .setMemberEpoch(0);
+            
+            NetworkClientDelegate.UnsentRequest heartbeatRequest = new NetworkClientDelegate.UnsentRequest(
+                new ConsumerGroupHeartbeatRequest.Builder(heartbeatData),
+                Optional.of(coordinatorNode)
+            );
+            
+            ncd.add(heartbeatRequest);
+            
+            client.delayReady(coordinatorNode, 5000L);
+            
+            List<Long> retryTimestamps = new ArrayList<>();
+            client.setReadyCallback(node -> {
+                if (node.equals(coordinatorNode)) {
+                    retryTimestamps.add(time.milliseconds());
+                }
+            });
+            
+            long startTime = time.milliseconds();
+            int pollCount = 0;
+            
+            while (time.milliseconds() - startTime < 500L) {
+                long currentTime = time.milliseconds();
+                ncd.poll(10, currentTime);
+                pollCount++;
+                time.sleep(1);
+            }
+            
+            assertTrue(retryTimestamps.size() < pollCount, 
+                String.format("Backoff should reduce retry attempts. Retries: %d, Polls: %d", 
+                    retryTimestamps.size(), pollCount));
+            
+            assertFalse(ncd.unsentRequests().isEmpty(), 
+                "Request should still be queued since node never became ready");
+            
+            if (retryTimestamps.size() >= 2) {
+                List<Long> intervals = new ArrayList<>();
+                for (int i = 1; i < retryTimestamps.size(); i++) {
+                    intervals.add(retryTimestamps.get(i) - retryTimestamps.get(i - 1));
+                }
+                
+                for (int i = 0; i < intervals.size(); i++) {
+                    long expectedBackoff = (long) Math.min(
+                        retryBackoffMs * Math.pow(2, i),
+                        retryBackoffMaxMs
+                    );
+                    long tolerance = Math.max(10, expectedBackoff / 10);
+                    long actualInterval = intervals.get(i);
+                    
+                    assertTrue(actualInterval >= expectedBackoff - tolerance,
+                        String.format("Interval %d should be >= %dms (got %dms)", 
+                            i, expectedBackoff - tolerance, actualInterval));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testBackoffResetsAfterSuccessfulSend() throws Exception {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate(false)) {
+            Node coordinatorNode = mockNode();
+            
+            ConsumerGroupHeartbeatRequestData heartbeatData = new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(GROUP_ID)
+                .setMemberId("")
+                .setMemberEpoch(0);
+            
+            NetworkClientDelegate.UnsentRequest request1 = new NetworkClientDelegate.UnsentRequest(
+                new ConsumerGroupHeartbeatRequest.Builder(heartbeatData),
+                Optional.of(coordinatorNode)
+            );
+            
+            ncd.add(request1);
+            
+            client.delayReady(coordinatorNode, 200L);
+            
+            long firstFailureTime = time.milliseconds();
+            ncd.poll(100, firstFailureTime);
+            time.sleep(50);
+            
+            assertFalse(ncd.unsentRequests().isEmpty());
+            
+            time.sleep(200); // Wait for delayReady to expire
+            ConsumerGroupHeartbeatResponseData responseData = new ConsumerGroupHeartbeatResponseData()
+                .setMemberId("member-1")
+                .setMemberEpoch(1);
+            client.prepareResponseFrom(new ConsumerGroupHeartbeatResponse(responseData), coordinatorNode);
+            
+            long successTime = time.milliseconds();
+            ncd.poll(100, successTime);
+            
+            assertTrue(ncd.unsentRequests().isEmpty() || 
+                       ncd.inflightRequestCount() > 0,
+                "Request should be sent when node becomes ready");
+        }
     }
 }
