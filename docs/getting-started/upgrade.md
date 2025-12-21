@@ -37,7 +37,6 @@ type: docs
 
 
 
-
 ## Upgrading to 4.2.0
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
