@@ -24,14 +24,14 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.RequestLocal;
-import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentMap;
 
 public class LogTestUtils {
@@ -115,115 +115,85 @@ public class LogTestUtils {
     }
 
     public static class LogConfigBuilder {
-        private long segmentMs = LogConfig.DEFAULT_SEGMENT_MS;
-        private int segmentBytes = LogConfig.DEFAULT_SEGMENT_BYTES;
-        private long retentionMs = LogConfig.DEFAULT_RETENTION_MS;
-        private long localRetentionMs = LogConfig.DEFAULT_LOCAL_RETENTION_MS;
-        private long retentionBytes = ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT;
-        private long localRetentionBytes = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES;
-        private long segmentJitterMs = LogConfig.DEFAULT_SEGMENT_JITTER_MS;
-        private String cleanupPolicy = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT;
-        private int maxMessageBytes = ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT;
-        private int indexIntervalBytes = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT;
-        private int segmentIndexBytes = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT;
-        private long fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT;
-        private boolean remoteLogStorageEnable = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE;
-        private boolean remoteLogCopyDisable = LogConfig.DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG;
-        private boolean remoteLogDeleteOnDisable = LogConfig.DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG;
+        private final Map<String, Object> configs = new HashMap<>();
 
-        public LogConfigBuilder withSegmentMs(long segmentMs) {
-            this.segmentMs = segmentMs;
+        public LogConfigBuilder segmentMs(long segmentMs) {
+            configs.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs);
             return this;
         }
 
-        public LogConfigBuilder withSegmentBytes(int segmentBytes) {
-            this.segmentBytes = segmentBytes;
+        public LogConfigBuilder segmentBytes(int segmentBytes) {
+            configs.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes);
             return this;
         }
 
-        public LogConfigBuilder withRetentionMs(long retentionMs) {
-            this.retentionMs = retentionMs;
+        public LogConfigBuilder retentionMs(long retentionMs) {
+            configs.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs);
             return this;
         }
 
-        public LogConfigBuilder withLocalRetentionMs(long localRetentionMs) {
-            this.localRetentionMs = localRetentionMs;
+        public LogConfigBuilder localRetentionMs(long localRetentionMs) {
+            configs.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs);
             return this;
         }
 
-        public LogConfigBuilder withRetentionBytes(long retentionBytes) {
-            this.retentionBytes = retentionBytes;
+        public LogConfigBuilder retentionBytes(long retentionBytes) {
+            configs.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
             return this;
         }
 
-        public LogConfigBuilder withLocalRetentionBytes(long localRetentionBytes) {
-            this.localRetentionBytes = localRetentionBytes;
+        public LogConfigBuilder localRetentionBytes(long localRetentionBytes) {
+            configs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes);
             return this;
         }
 
-        public LogConfigBuilder withSegmentJitterMs(long segmentJitterMs) {
-            this.segmentJitterMs = segmentJitterMs;
+        public LogConfigBuilder segmentJitterMs(long segmentJitterMs) {
+            configs.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, segmentJitterMs);
             return this;
         }
 
-        public LogConfigBuilder withCleanupPolicy(String cleanupPolicy) {
-            this.cleanupPolicy = cleanupPolicy;
+        public LogConfigBuilder cleanupPolicy(String cleanupPolicy) {
+            configs.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy);
             return this;
         }
 
-        public LogConfigBuilder withMaxMessageBytes(int maxMessageBytes) {
-            this.maxMessageBytes = maxMessageBytes;
+        public LogConfigBuilder maxMessageBytes(int maxMessageBytes) {
+            configs.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes);
             return this;
         }
 
-        public LogConfigBuilder withIndexIntervalBytes(int indexIntervalBytes) {
-            this.indexIntervalBytes = indexIntervalBytes;
+        public LogConfigBuilder indexIntervalBytes(int indexIntervalBytes) {
+            configs.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes);
             return this;
         }
 
-        public LogConfigBuilder withSegmentIndexBytes(int segmentIndexBytes) {
-            this.segmentIndexBytes = segmentIndexBytes;
+        public LogConfigBuilder segmentIndexBytes(int segmentIndexBytes) {
+            configs.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes);
             return this;
         }
 
-        public LogConfigBuilder withFileDeleteDelayMs(long fileDeleteDelayMs) {
-            this.fileDeleteDelayMs = fileDeleteDelayMs;
+        public LogConfigBuilder fileDeleteDelayMs(long fileDeleteDelayMs) {
+            configs.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs);
             return this;
         }
 
-        public LogConfigBuilder withRemoteLogStorageEnable(boolean remoteLogStorageEnable) {
-            this.remoteLogStorageEnable = remoteLogStorageEnable;
+        public LogConfigBuilder remoteLogStorageEnable(boolean remoteLogStorageEnable) {
+            configs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable);
             return this;
         }
 
-        public LogConfigBuilder withRemoteLogCopyDisable(boolean remoteLogCopyDisable) {
-            this.remoteLogCopyDisable = remoteLogCopyDisable;
+        public LogConfigBuilder remoteLogCopyDisable(boolean remoteLogCopyDisable) {
+            configs.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, remoteLogCopyDisable);
             return this;
         }
 
-        public LogConfigBuilder withRemoteLogDeleteOnDisable(boolean remoteLogDeleteOnDisable) {
-            this.remoteLogDeleteOnDisable = remoteLogDeleteOnDisable;
+        public LogConfigBuilder remoteLogDeleteOnDisable(boolean remoteLogDeleteOnDisable) {
+            configs.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, remoteLogDeleteOnDisable);
             return this;
         }
 
         public LogConfig build() {
-            Properties logProps = new Properties();
-            logProps.put(TopicConfig.SEGMENT_MS_CONFIG, String.valueOf(segmentMs));
-            logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, String.valueOf(segmentBytes));
-            logProps.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs));
-            logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, String.valueOf(localRetentionMs));
-            logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, String.valueOf(retentionBytes));
-            logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, String.valueOf(localRetentionBytes));
-            logProps.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, String.valueOf(segmentJitterMs));
-            logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy);
-            logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(maxMessageBytes));
-            logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, String.valueOf(indexIntervalBytes));
-            logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, String.valueOf(segmentIndexBytes));
-            logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, String.valueOf(fileDeleteDelayMs));
-            logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, String.valueOf(remoteLogStorageEnable));
-            logProps.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, String.valueOf(remoteLogCopyDisable));
-            logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, String.valueOf(remoteLogDeleteOnDisable));
-            return new LogConfig(logProps);
+            return new LogConfig(configs);
         }
     }
 }

@@ -137,8 +137,8 @@ public class UnifiedLogTest {
     public void shouldTruncateLeaderEpochsWhenDeletingSegments() throws IOException {
         Supplier<MemoryRecords>  records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withRetentionBytes(records.get().sizeInBytes() * 10L)
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionBytes(records.get().sizeInBytes() * 10L)
                 .build();
 
         log = createLog(logDir, config);
@@ -166,8 +166,8 @@ public class UnifiedLogTest {
     public void shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withRetentionBytes(records.get().sizeInBytes() * 10L)
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionBytes(records.get().sizeInBytes() * 10L)
                 .build();
 
         log = createLog(logDir, config);
@@ -195,7 +195,7 @@ public class UnifiedLogTest {
     public void shouldTruncateLeaderEpochCheckpointFileWhenTruncatingLog() throws IOException {
         Supplier<MemoryRecords> records = () -> records(List.of(new SimpleRecord("value".getBytes())), 0, 0);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(10 * records.get().sizeInBytes())
+                .segmentBytes(10 * records.get().sizeInBytes())
                 .build();
         log = createLog(logDir, config);
         LeaderEpochFileCache cache = epochCache(log);
@@ -231,8 +231,8 @@ public class UnifiedLogTest {
     public void shouldDeleteSizeBasedSegments() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withRetentionBytes(records.get().sizeInBytes() * 10L)
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionBytes(records.get().sizeInBytes() * 10L)
                 .build();
         log = createLog(logDir, config);
 
@@ -250,8 +250,8 @@ public class UnifiedLogTest {
     public void shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withRetentionBytes(records.get().sizeInBytes() * 15L)
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionBytes(records.get().sizeInBytes() * 15L)
                 .build();
 
         log = createLog(logDir, config);
@@ -270,8 +270,8 @@ public class UnifiedLogTest {
     public void shouldDeleteTimeBasedSegmentsReadyToBeDeleted() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), 10L);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 15)
-                .withRetentionMs(10000L)
+                .segmentBytes(records.get().sizeInBytes() * 15)
+                .retentionMs(10000L)
                 .build();
         log = createLog(logDir, config);
 
@@ -289,8 +289,8 @@ public class UnifiedLogTest {
     public void shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), mockTime.milliseconds());
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withRetentionMs(10000000)
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionMs(10000000)
                 .build();
         log = createLog(logDir, logConfig);
 
@@ -308,9 +308,9 @@ public class UnifiedLogTest {
     public void shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withRetentionMs(10000)
-                .withCleanupPolicy("compact")
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionMs(10000)
+                .cleanupPolicy("compact")
                 .build();
         log = createLog(logDir, config);
 
@@ -332,9 +332,9 @@ public class UnifiedLogTest {
     public void shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withRetentionBytes(records.get().sizeInBytes() * 10L)
-                .withCleanupPolicy("compact, delete")
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionBytes(records.get().sizeInBytes() * 10L)
+                .cleanupPolicy("compact, delete")
                 .build();
 
         log = createLog(logDir, config);
@@ -354,10 +354,10 @@ public class UnifiedLogTest {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         int recordSize = records.get().sizeInBytes();
         LogConfig config = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(recordSize * 2)
-                .withRetentionBytes(recordSize / 2)
-                .withCleanupPolicy("")
-                .withRemoteLogStorageEnable(true)
+                .segmentBytes(recordSize * 2)
+                .retentionBytes(recordSize / 2)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
                 .build();
         log = createLog(logDir, config, true);
 
@@ -380,10 +380,10 @@ public class UnifiedLogTest {
         Supplier<MemoryRecords> oldRecords = () -> singletonRecords("test".getBytes(), "test".getBytes(), oldTimestamp);
         int recordSize = oldRecords.get().sizeInBytes();
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(recordSize * 2)
-                .withLocalRetentionMs(5000)
-                .withCleanupPolicy("")
-                .withRemoteLogStorageEnable(true)
+                .segmentBytes(recordSize * 2)
+                .localRetentionMs(5000)
+                .cleanupPolicy("")
+                .remoteLogStorageEnable(true)
                 .build();
         log = createLog(logDir, logConfig, true);
 
@@ -410,7 +410,7 @@ public class UnifiedLogTest {
     public void testLogDeletionAfterDeleteRecords() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
+                .segmentBytes(records.get().sizeInBytes() * 5)
                 .build();
         log = createLog(logDir, logConfig);
 
@@ -442,9 +442,9 @@ public class UnifiedLogTest {
     public void testLogDeletionAfterClose() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000);
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withSegmentIndexBytes(1000)
-                .withRetentionMs(999)
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .segmentIndexBytes(1000)
+                .retentionMs(999)
                 .build();
         log = createLog(logDir, logConfig);
         // avoid close after test because it is closed in this test
@@ -466,9 +466,9 @@ public class UnifiedLogTest {
     public void testDeleteOldSegments() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), mockTime.milliseconds() - 1000);
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * 5)
-                .withSegmentIndexBytes(1000)
-                .withRetentionMs(999)
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .segmentIndexBytes(1000)
+                .retentionMs(999)
                 .build();
         log = createLog(logDir, logConfig);
         // avoid close after test because it is closed in this test
@@ -530,9 +530,9 @@ public class UnifiedLogTest {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes(), "test".getBytes(), 10L);
         int recordsPerSegment = 5;
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(records.get().sizeInBytes() * recordsPerSegment)
-                .withSegmentIndexBytes(1000)
-                .withCleanupPolicy("compact")
+                .segmentBytes(records.get().sizeInBytes() * recordsPerSegment)
+                .segmentIndexBytes(1000)
+                .cleanupPolicy("compact")
                 .build();
         log = createLog(logDir, logConfig);
 
@@ -562,7 +562,7 @@ public class UnifiedLogTest {
     @Test
     public void testFirstUnstableOffsetNoTransactionalData() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(1024 * 1024 * 5)
+                .segmentBytes(1024 * 1024 * 5)
                 .build();
         log = createLog(logDir, logConfig);
 
@@ -578,7 +578,7 @@ public class UnifiedLogTest {
     @Test
     public void testFirstUnstableOffsetWithTransactionalData() throws IOException {
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
-                .withSegmentBytes(1024 * 1024 * 5)
+                .segmentBytes(1024 * 1024 * 5)
                 .build();
         log = createLog(logDir, logConfig);
 
