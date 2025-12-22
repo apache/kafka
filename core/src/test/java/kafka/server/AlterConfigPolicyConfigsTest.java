@@ -20,6 +20,7 @@ import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
+import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -40,6 +41,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.server.config.ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG;
+import static org.apache.kafka.server.config.ServerLogConfigs.ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -56,8 +58,21 @@ public class AlterConfigPolicyConfigsTest {
         Policy.lastConfig = null;
     }
 
+    @ClusterTest(
+            types = {Type.ZK},
+            serverProperties = {
+                    @ClusterConfigProperty(key = ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG, value = "true"),
+            })
+    public void testPolicyAlterBrokerConfigSubtractCompatibityEnabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterBrokerConfigSubtract(clusterInstance, true);
+    }
+
     @ClusterTest
-    public void testPolicyAlterBrokerConfigSubtract(ClusterInstance clusterInstance) throws Exception {
+    public void testPolicyAlterBrokerConfigSubtractCompatibityDisabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterBrokerConfigSubtract(clusterInstance, false);
+    }
+
+    public void testPolicyAlterBrokerConfigSubtract(ClusterInstance clusterInstance, boolean compatibilityMode) throws Exception {
         try (Admin admin = clusterInstance.createAdminClient()) {
             clusterInstance.waitForReadyBrokers();
 
@@ -68,7 +83,12 @@ public class AlterConfigPolicyConfigsTest {
                     new ConfigResource(ConfigResource.Type.BROKER, "0"),
                     Collections.singletonList(alterConfigOp));
             admin.incrementalAlterConfigs(alterConfigs).all().get();
-            assertEquals("", Policy.lastConfig.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG));
+
+            if (clusterInstance.isKRaftTest() || compatibilityMode) {
+                assertEquals("", Policy.lastConfig.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG));
+            } else {
+                assertEquals("foo", Policy.lastConfig.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG));
+            }
         }
     }
 
@@ -104,8 +124,21 @@ public class AlterConfigPolicyConfigsTest {
         }
     }
 
+    @ClusterTest(
+            types = {Type.ZK},
+            serverProperties = {
+                    @ClusterConfigProperty(key = ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG, value = "true"),
+            })
+    public void testPolicyAlterBrokerConfigDeleteCompatibityEnabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterBrokerConfigDelete(clusterInstance, true);
+    }
+
     @ClusterTest
-    public void testPolicyAlterBrokerConfigDelete(ClusterInstance clusterInstance) throws Exception {
+    public void testPolicyAlterBrokerConfigDeleteCompatibityDisabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterBrokerConfigDelete(clusterInstance, false);
+    }
+
+    public void testPolicyAlterBrokerConfigDelete(ClusterInstance clusterInstance, boolean compatibilityMode) throws Exception {
         try (Admin admin = clusterInstance.createAdminClient()) {
             clusterInstance.waitForReadyBrokers();
 
@@ -117,12 +150,30 @@ public class AlterConfigPolicyConfigsTest {
                     Collections.singletonList(alterConfigOp));
             admin.incrementalAlterConfigs(alterConfigs).all().get();
             assertTrue(Policy.lastConfig.containsKey(SslConfigs.SSL_CIPHER_SUITES_CONFIG));
-            assertNull(Policy.lastConfig.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG));
+
+            if (clusterInstance.isKRaftTest() || compatibilityMode) {
+                assertNull(Policy.lastConfig.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG));
+            } else {
+                assertEquals("unused", Policy.lastConfig.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG));
+            }
         }
     }
 
+    @ClusterTest(
+            types = {Type.ZK},
+            serverProperties = {
+                    @ClusterConfigProperty(key = ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG, value = "true"),
+            })
+    public void testPolicyAlterTopicConfigSubtractCompatibityEnabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterTopicConfigSubtract(clusterInstance, true);
+    }
+
     @ClusterTest
-    public void testPolicyAlterTopicConfigSubtract(ClusterInstance clusterInstance) throws Exception {
+    public void testPolicyAlterTopicConfigSubtractCompatibityDisabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterTopicConfigSubtract(clusterInstance, false);
+    }
+
+    public void testPolicyAlterTopicConfigSubtract(ClusterInstance clusterInstance, boolean compatibilityMode) throws Exception {
         try (Admin admin = clusterInstance.createAdminClient()) {
             admin.createTopics(Collections.singleton(new NewTopic("topic1", 1, (short) 1))).all().get();
             clusterInstance.waitForTopic("topic1", 1);
@@ -134,12 +185,29 @@ public class AlterConfigPolicyConfigsTest {
                     new ConfigResource(ConfigResource.Type.TOPIC, "topic1"),
                     Collections.singletonList(alterConfigOp));
             admin.incrementalAlterConfigs(alterConfigs).all().get();
-            assertEquals("delete", Policy.lastConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+            if (clusterInstance.isKRaftTest() || compatibilityMode) {
+                assertEquals("delete", Policy.lastConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+            } else {
+                assertEquals("foo", Policy.lastConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+            }
         }
     }
 
+    @ClusterTest(
+            types = {Type.ZK},
+            serverProperties = {
+                    @ClusterConfigProperty(key = ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG, value = "true"),
+            })
+    public void testPolicyAlterTopicConfigAppendCompatibityEnabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterTopicConfigAppend(clusterInstance, true);
+    }
+
     @ClusterTest
-    public void testPolicyAlterTopicConfigAppend(ClusterInstance clusterInstance) throws Exception {
+    public void testPolicyAlterTopicConfigAppendCompatibityDisabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterTopicConfigAppend(clusterInstance, false);
+    }
+
+    public void testPolicyAlterTopicConfigAppend(ClusterInstance clusterInstance, boolean compatibilityMode) throws Exception {
         try (Admin admin = clusterInstance.createAdminClient()) {
             admin.createTopics(Collections.singleton(new NewTopic("topic1", 1, (short) 1))).all().get();
             clusterInstance.waitForTopic("topic1", 1);
@@ -151,7 +219,11 @@ public class AlterConfigPolicyConfigsTest {
                     new ConfigResource(ConfigResource.Type.TOPIC, "topic1"),
                     Collections.singletonList(alterConfigOp));
             admin.incrementalAlterConfigs(alterConfigs).all().get();
-            assertEquals("delete,compact", Policy.lastConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+            if (clusterInstance.isKRaftTest() || compatibilityMode) {
+                assertEquals("delete,compact", Policy.lastConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+            } else {
+                assertEquals("compact", Policy.lastConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+            }
         }
     }
 
@@ -172,8 +244,21 @@ public class AlterConfigPolicyConfigsTest {
         }
     }
 
+    @ClusterTest(
+            types = {Type.ZK},
+            serverProperties = {
+                    @ClusterConfigProperty(key = ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG, value = "true"),
+            })
+    public void testPolicyAlterTopicConfigDeleteCompatibityEnabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterTopicConfigDelete(clusterInstance, true);
+    }
+
     @ClusterTest
-    public void testPolicyAlterTopicConfigDelete(ClusterInstance clusterInstance) throws Exception {
+    public void testPolicyAlterTopicConfigDeleteCompatibityDisabled(ClusterInstance clusterInstance) throws Exception {
+        testPolicyAlterTopicConfigDelete(clusterInstance, false);
+    }
+
+    public void testPolicyAlterTopicConfigDelete(ClusterInstance clusterInstance, boolean compatibilityMode) throws Exception {
         try (Admin admin = clusterInstance.createAdminClient()) {
             admin.createTopics(Collections.singleton(new NewTopic("topic1", 1, (short) 1))).all().get();
             clusterInstance.waitForTopic("topic1", 1);
@@ -185,7 +270,11 @@ public class AlterConfigPolicyConfigsTest {
                     new ConfigResource(ConfigResource.Type.TOPIC, "topic1"),
                     Collections.singletonList(alterConfigOp));
             admin.incrementalAlterConfigs(alterConfigs).all().get();
-            assertFalse(Policy.lastConfig.containsKey(TopicConfig.CLEANUP_POLICY_CONFIG));
+            if (clusterInstance.isKRaftTest() || compatibilityMode) {
+                assertFalse(Policy.lastConfig.containsKey(TopicConfig.CLEANUP_POLICY_CONFIG));
+            } else {
+                assertTrue(Policy.lastConfig.containsKey(TopicConfig.CLEANUP_POLICY_CONFIG));
+            }
         }
     }
 
@@ -203,5 +292,4 @@ public class AlterConfigPolicyConfigsTest {
         @Override
         public void configure(Map<String, ?> configs) {}
     }
-
 }

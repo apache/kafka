@@ -178,6 +178,12 @@ public class ServerLogConfigs {
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG = "alter.config.policy.class.name";
     public static final String ALTER_CONFIG_POLICY_CLASS_NAME_DOC = "The alter configs policy class that should be used for validation. The class should " +
             "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface.";
+    public static final String ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG = "alter.config.policy.kraft.compatibility.enable";
+    public static final boolean ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_DEFAULT = false;
+    public static final String ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_DOC = "This configuration controls whether " +
+            "for incremental alter config operations of type SUBTRACT or DELETE on a config entry of type LIST, " +
+            "an incremental alter config policy will invoked consistently regardless of whether Kafka is running in KRaft or Zookeeper mode.";
+
     public static final String LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
     public static final boolean LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT = true;
     public static final String LOG_MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
