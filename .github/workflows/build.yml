@@ -38,7 +38,7 @@ jobs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
       sha: ${{ steps.configure-outputs.outputs.sha }}
-      doc-change-only: ${{ steps.filter.outputs.docs && !steps.filter.outputs.codes }}
+      doc-change-only:  ${{ steps.filter.outputs.docs == 'true' && steps.filter.outputs.codes == 'false' }}
     steps:
       - name: Env
         run: printenv
@@ -70,23 +70,17 @@ jobs:
         with:
           filters: |
             docs:
-              - '**/*.html'
+              - '**/*.yml'
               - '**/*.htm'
               - '**/*.md'
             codes:
-              - '**'
-              - '!**/*.html'
-              - '!**/*.htm'
-              - '!**/*.md'
+              - '**/*.java'
+              - '**/*.scale'
       - name: Print configure outputs
         run: |
           echo "=== Configure Job Outputs ==="
           echo "is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}"
-          echo "test-catalog-days: ${{ steps.configure-outputs.outputs.days }}"
-          echo "sha: ${{ steps.configure-outputs.outputs.sha }}"
-          echo "filter.docs: ${{ steps.filter.outputs.docs }}"
-          echo "filter.codes: ${{ steps.filter.outputs.codes }}"
-          echo "doc-change-only: ${{ steps.filter.outputs.docs && !steps.filter.outputs.codes }}"
+          echo "doc-change-only: ${{ steps.filter.outputs.docs == 'true' && steps.filter.outputs.codes == 'false' }}"
           echo "=============================="
 
   load-catalog:
@@ -410,7 +404,7 @@ jobs:
           exit 1
       - name: Check Dependency Outcomes
         run: |
-          if [[ "${{ needs.validate.result }}" == "success" && (${{ needs.configure.outputs.doc-change-only }} || "${{ needs.test.result }}" == "success") ]]; then
+          if [[ "${{ needs.validate.result }}" == "success" && ("${{ needs.configure.outputs.doc-change-only }}" == "true" || "${{ needs.test.result }}" == "success") ]]; then
             echo "Required jobs completed successfully!"
             exit 0
           else
