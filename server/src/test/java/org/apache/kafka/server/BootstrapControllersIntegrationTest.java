@@ -226,27 +226,29 @@ public class BootstrapControllersIntegrationTest {
     }
 
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        Collection<Integer> nodeIds = usingBootstrapControllers ?
+                clusterInstance.controllerIds() :
+                List.of(clusterInstance.brokers().values().iterator().next().config().nodeId());
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
-            int nodeId = usingBootstrapControllers ?
-                    clusterInstance.controllers().values().iterator().next().config().nodeId() :
-                    clusterInstance.brokers().values().iterator().next().config().nodeId();
-            ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
-            ConfigResource defaultResource = new ConfigResource(BROKER, "");
-            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
-                    nodeResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"), AlterConfigOp.OpType.SET)),
-                    defaultResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"), AlterConfigOp.OpType.SET))
-            );
-            admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
-            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                Config config = admin.describeConfigs(List.of(nodeResource)).
-                        all().get(1, TimeUnit.MINUTES).get(nodeResource);
-                ConfigEntry entry = config.entries().stream().
-                        filter(e -> e.name().equals("my.custom.config")).
-                        findFirst().orElseThrow();
-                assertEquals(DYNAMIC_BROKER_CONFIG, entry.source(),
-                        "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
-                                "Instead, the entry was: " + entry);
-            });
+            for (int nodeId : nodeIds) {
+                ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
+                ConfigResource defaultResource = new ConfigResource(BROKER, "");
+                Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                        nodeResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"), AlterConfigOp.OpType.SET)),
+                        defaultResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"), AlterConfigOp.OpType.SET))
+                );
+                admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
+                TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+                    Config config = admin.describeConfigs(List.of(nodeResource)).
+                            all().get(1, TimeUnit.MINUTES).get(nodeResource);
+                    ConfigEntry entry = config.entries().stream().
+                            filter(e -> e.name().equals("my.custom.config")).
+                            findFirst().orElseThrow();
+                    assertEquals(DYNAMIC_BROKER_CONFIG, entry.source(),
+                            "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
+                                    "Instead, the entry was: " + entry);
+                });
+            }
         }
     }
 
@@ -359,7 +361,12 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest(controllers = 1, standalone = true)
-    public void testIncrementalAlterConfigsByControllersWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
+    public void testIncrementalAlterConfigsBySingleControllerWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testIncrementalAlterConfigsByAllControllersWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
         testIncrementalAlterConfigs(clusterInstance, true);
     }
 }
