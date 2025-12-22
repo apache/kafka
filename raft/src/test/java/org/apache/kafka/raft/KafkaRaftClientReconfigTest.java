@@ -2444,6 +2444,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false);
         assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.latestKRaftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestCommittedKRaftVersion());
 
         var localLogEndOffset = context.log.endOffset().offset();
         context.client.poll();
@@ -2511,6 +2512,7 @@ public class KafkaRaftClientReconfigTest {
 
         context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false);
         assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.latestKRaftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestCommittedKRaftVersion());
 
         // Push the control records to the log
         context.client.poll();
@@ -2522,6 +2524,10 @@ public class KafkaRaftClientReconfigTest {
             context.pollUntilResponse();
             context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
         }
+
+        // the leader's latestCommittedKRaftVersion should be updated
+        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.latestKRaftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.latestCommittedKRaftVersion());
 
         // Check that it can still handle update voter request after upgrade
         Endpoints newVoter1Listeners = Endpoints.fromInetSocketAddresses(
@@ -2588,6 +2594,7 @@ public class KafkaRaftClientReconfigTest {
 
         // Upgrade not allowed since none of the remote voters support the new version
         assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestKRaftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestCommittedKRaftVersion());
         assertThrows(
             InvalidUpdateVersionException.class,
             () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false)
@@ -2619,6 +2626,7 @@ public class KafkaRaftClientReconfigTest {
 
         // Upgrade not allowed since one of the voters doesn't support the new version
         assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestKRaftVersion());
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.latestCommittedKRaftVersion());
         assertThrows(
             InvalidUpdateVersionException.class,
             () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false)
