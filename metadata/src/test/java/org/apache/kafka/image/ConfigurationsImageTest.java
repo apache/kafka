@@ -23,18 +23,24 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -114,6 +120,55 @@ public class ConfigurationsImageTest {
     @Test
     public void testImage2RoundTrip() {
         testToImage(IMAGE2);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        try {
+            Field field = ConfigurationDelta.class.getDeclaredField("VALID_CONFIGS_REF");
+            field.setAccessible(true);
+            ((AtomicReference<?>) field.get(null)).set(null);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to reset validConfigsRef", e);
+        }
+    }
+
+    @Test
+    public void testConfigurationDeltaFiltering() {
+        Set<String> validConfigs = Set.of("foo", "bar");
+        ConfigurationDelta.initializeValidConfigs(validConfigs);
+
+        Map<String, String> initialConfigs = Map.of("foo", "value1", "baz", "value2");
+        ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
+
+        ConfigurationDelta delta = new ConfigurationDelta(image);
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("bar").setValue("value3"));
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("qux").setValue("value4"));
+
+        ConfigurationImage result = delta.apply();
+
+        assertTrue(result.data().containsKey("foo"));
+        assertTrue(result.data().containsKey("bar"));
+        assertFalse(result.data().containsKey("baz"));
+        assertFalse(result.data().containsKey("qux"));
+    }
+
+    @Test
+    public void testConfigurationDeltaWithoutFiltering() {
+        Map<String, String> initialConfigs = Map.of("foo", "value1", "bar", "value2");
+        ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
+
+        ConfigurationDelta delta = new ConfigurationDelta(image);
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("baz").setValue("value3"));
+
+        ConfigurationImage result = delta.apply();
+
+        assertTrue(result.data().containsKey("foo"));
+        assertTrue(result.data().containsKey("bar"));
+        assertTrue(result.data().containsKey("baz"));
     }
 
     private static void testToImage(ConfigurationsImage image) {

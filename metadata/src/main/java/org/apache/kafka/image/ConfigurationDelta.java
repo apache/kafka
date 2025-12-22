@@ -19,10 +19,13 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ConfigRecord;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 
 /**
@@ -31,6 +34,12 @@ import java.util.Optional;
 public final class ConfigurationDelta {
     private final ConfigurationImage image;
     private final Map<String, Optional<String>> changes = new HashMap<>();
+    private static final AtomicReference<Set<String>> VALID_CONFIGS_REF = new AtomicReference<>(null);
+
+    public static void initializeValidConfigs(Set<String> validConfigs) {
+        Set<String> immutableValidConfigs = Collections.unmodifiableSet(validConfigs);
+        VALID_CONFIGS_REF.compareAndSet(null, immutableValidConfigs);
+    }
 
     public ConfigurationDelta(ConfigurationImage image) {
         this.image = image;
@@ -56,19 +65,28 @@ public final class ConfigurationDelta {
     }
 
     public ConfigurationImage apply() {
+        Set<String> whitelist = VALID_CONFIGS_REF.get();
         Map<String, String> newData = new HashMap<>(image.data().size());
         for (Entry<String, String> entry : image.data().entrySet()) {
-            Optional<String> change = changes.get(entry.getKey());
+            String configName = entry.getKey();
+            if (whitelist != null && !whitelist.contains(configName)) {
+                continue;
+            }
+            Optional<String> change = changes.get(configName);
             if (change == null) {
-                newData.put(entry.getKey(), entry.getValue());
+                newData.put(configName, entry.getValue());
             } else if (change.isPresent()) {
-                newData.put(entry.getKey(), change.get());
+                newData.put(configName, change.get());
             }
         }
         for (Entry<String, Optional<String>> entry : changes.entrySet()) {
-            if (!newData.containsKey(entry.getKey())) {
+            String configName = entry.getKey();
+            if (whitelist != null && !whitelist.contains(configName)) {
+                continue;
+            }
+            if (!newData.containsKey(configName)) {
                 if (entry.getValue().isPresent()) {
-                    newData.put(entry.getKey(), entry.getValue().get());
+                    newData.put(configName, entry.getValue().get());
                 }
             }
         }

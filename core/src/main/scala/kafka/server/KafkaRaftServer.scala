@@ -24,6 +24,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time, Utils}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.image.ConfigurationDelta
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
@@ -89,8 +90,22 @@ class KafkaRaftServer(
     None
   }
 
+  def getAllDynamicConfigNames: util.Set[String] = {
+    val topicConfigs = LogConfig.nonInternalConfigNames.asScala.toSet
+    val brokerConfigs = DynamicConfig.Broker.names.asScala.toSet
+    val userConfigs = QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs().names.asScala.toSet
+    val clientConfigs = QuotaConfig.userAndClientQuotaConfigs().names.asScala.toSet
+    val ipConfigs = QuotaConfig.ipConfigs.names.asScala.toSet
+    val clientMetricsConfigs = ClientMetricsConfigs.configDef().names.asScala.toSet
+    val groupConfigs = GroupConfig.configDef().names.asScala.toSet
+
+    (topicConfigs ++ brokerConfigs ++ userConfigs ++ clientConfigs ++ ipConfigs ++ clientMetricsConfigs ++ groupConfigs).asJava
+  }
+
   override def startup(): Unit = {
     Mx4jLoader.maybeLoad()
+    // Initialize the whitelist for ConfigurationDelta to filter deprecated/invalid configs
+    ConfigurationDelta.initializeValidConfigs(getAllDynamicConfigNames)
     // Controller component must be started before the broker component so that
     // the controller endpoints are passed to the KRaft manager
     controller.foreach(_.startup())
@@ -186,18 +201,6 @@ object KafkaRaftServer {
     val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir)
     val bootstrapMetadata = bootstrapDirectory.read()
     (metaPropsEnsemble, bootstrapMetadata)
-  }
-
-  def getAllDynamicConfigNames: util.Set[String] = {
-    val topicConfigs = LogConfig.nonInternalConfigNames.asScala.toSet
-    val brokerConfigs = DynamicConfig.Broker.names.asScala.toSet
-    val userConfigs = QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs().names.asScala.toSet
-    val clientConfigs = QuotaConfig.userAndClientQuotaConfigs().names.asScala.toSet
-    val ipConfigs = QuotaConfig.ipConfigs.names.asScala.toSet
-    val clientMetricsConfigs = ClientMetricsConfigs.configDef().names.asScala.toSet
-    val groupConfigs = GroupConfig.configDef().names.asScala.toSet
-
-    (topicConfigs ++ brokerConfigs ++ userConfigs ++ clientConfigs ++ ipConfigs ++ clientMetricsConfigs ++ groupConfigs).asJava
   }
 
   val configSchema = new KafkaConfigSchema(Map(
