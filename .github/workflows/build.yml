@@ -38,7 +38,7 @@ jobs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
       sha: ${{ steps.configure-outputs.outputs.sha }}
-      doc-change-only:  ${{ steps.filter.outputs.docs == 'true' && steps.filter.outputs.codes == 'false' }}
+      doc-change-only:  ${{ steps.filter.outputs.codes == 'false' }}
     steps:
       - name: Env
         run: printenv
@@ -68,19 +68,17 @@ jobs:
         id: filter
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
         with:
+          predicate-quantifier: 'every'
           filters: |
-            docs:
-              - '**/*.yml'
-              - '**/*.htm'
-              - '**/*.md'
             codes:
-              - '**/*.java'
-              - '**/*.scale'
+              - '**'
+              - '!**/*.yml'
+              - '!**/*.md'
       - name: Print configure outputs
         run: |
           echo "=== Configure Job Outputs ==="
           echo "is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}"
-          echo "doc-change-only: ${{ steps.filter.outputs.docs == 'true' && steps.filter.outputs.codes == 'false' }}"
+          echo "doc-change-only: ${{ steps.filter.outputs.codes == 'false' }}"
           echo "=============================="
 
   load-catalog:
