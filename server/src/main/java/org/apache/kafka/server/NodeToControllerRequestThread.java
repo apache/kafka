@@ -22,6 +22,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.util.InterBrokerSendThread;
@@ -107,7 +108,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
         return Collections.emptyList();
     }
 
-    private void handleResponse(NodeToControllerQueueItem queueItem, ClientResponse response) {
+    void handleResponse(NodeToControllerQueueItem queueItem, ClientResponse response) {
         log.debug("Request {} received {}", queueItem.request(), response);
         if(response.authenticationException() != null) {
             log.error("Request {} failed due to authentication error with controller. Disconnecting the " +
@@ -115,6 +116,37 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
                     queueItem.request(), activeControllerAddress().map(Node::idString).orElse("null"),
                     response.authenticationException()
             );
+            maybeDisconnectAndUpdateController();
+            queueItem.callback().onComplete(response);
+        } else if (response.versionMismatch() != null ) {
+            log.error("Request {} failed due to unsupported version error", queueItem.request(),
+                    response.versionMismatch());
+            queueItem.callback().onComplete(response);
+        } else if (response.wasDisconnected()) {
+            updateControllerAddress(null);
+            try {
+                requestQueue.putFirst(queueItem);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Thread interrupted while re-queuing request after disconnection", e);
+            }
+        } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+            log.debug("Request {} received NOT_CONTROLLER exception. Disconnecting the " +
+                            "connection to the stale controller {}",
+                    queueItem.request(),
+                    activeControllerAddress().map(Node::idString).orElse("null"));
+            maybeDisconnectAndUpdateController();
+            try {
+                requestQueue.putFirst(queueItem);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Thread interrupted while re-queuing request after NOT_CONTROLLER", e);
+            }
+        } else {
+            queueItem.callback().onComplete(response);
         }
+    }
+
+    private void maybeDisconnectAndUpdateController() {
     }
 }
