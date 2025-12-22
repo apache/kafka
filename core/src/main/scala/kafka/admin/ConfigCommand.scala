@@ -138,7 +138,6 @@ object ConfigCommand extends Logging {
   private def validatePropsKey(props: Properties): Unit = {
     props.keySet.forEach { propsKey =>
       // Allows the '$' symbol to support valid logger names for internal classes (e.g. org.apache.kafka.server.quota.ClientQuotaManager$ThrottledChannelReaper)
-      // Note: when using this via the command line (CLI), the '$' must be escaped (e.g. '\$')
       if (!propsKey.toString.matches("[$a-zA-Z0-9._-]*")) {
         throw new IllegalArgumentException(
           s"Invalid character found for config key: $propsKey"

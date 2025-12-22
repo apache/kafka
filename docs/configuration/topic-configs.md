@@ -38,6 +38,8 @@ Overrides can also be changed or set later using the alter configs command. This
     $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic
       --alter --add-config max.message.bytes=128000
 
+**Note**: When using `kafka-configs.sh` via the command line (CLI), the `$` symbol must be escaped (e.g. `\$`) to prevent shell expansion.
+
 To check overrides set on the topic you can do 
     
     
