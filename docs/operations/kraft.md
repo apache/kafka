@@ -326,7 +326,7 @@ Follow these steps to format and start a new standalone controller:
     
     
     # Save the previously retrieved cluster ID from ZooKeeper in a variable called zk-cluster-id
-    $ bin/kafka-storage.sh format --standalone -t <zk-cluster-id> -c config/kraft/controller.properties
+    $ bin/kafka-storage.sh format --standalone --cluster-id=<zk-cluster-id> -c config/kraft/controller.properties
     $ bin/kafka-server-start.sh config/kraft/controller.properties
 
 Note: The migration can stall if the ZooKeeper Security Migration Tool was previously executed (see [KAFKA-19480](https://issues.apache.org/jira/browse/KAFKA-19480) for more details). As a workaround, the malformed "/migration" node can be removed from ZooKeeper by running `delete /migration` with the `zookeeper-shell.sh` CLI tool.
