@@ -854,7 +854,7 @@ public class KRaftClusterTest {
                 values.get(resource).get();
                 return ApiError.NONE;
             } catch (ExecutionException e) {
-                return ApiError.fromThrowable(e.getCause());
+                return ApiError.fromThrowable(e);
             } catch (Throwable t) {
                 return ApiError.fromThrowable(t);
             }
@@ -868,29 +868,24 @@ public class KRaftClusterTest {
     ) throws Exception {
         Map<ConfigResource, Map<String, String>> results = new HashMap<>();
         TestUtils.retryOnExceptionWithTimeout(60000, () -> {
-            try {
-                var values = admin.describeConfigs(expected.keySet()).values();
-                results.clear();
-                assertEquals(expected.keySet(), values.keySet());
-                for (Map.Entry<ConfigResource, Map<String, String>> entry : expected.entrySet()) {
-                    ConfigResource resource = entry.getKey();
-                    Map<String, String> expectedPairs = entry.getValue();
-                    var config = values.get(resource).get();
-                    Map<String, String> actualMap = new TreeMap<>();
-                    Map<String, String> expectedMap = new TreeMap<>();
-                    config.entries().forEach(configEntry -> {
-                        actualMap.put(configEntry.name(), configEntry.value());
-                        if (!exhaustive) {
-                            expectedMap.put(configEntry.name(), configEntry.value());
-                        }
-                    });
-                    expectedMap.putAll(expectedPairs);
-                    assertEquals(expectedMap, actualMap);
-                    results.put(resource, actualMap);
-                }
-            } catch (Exception t) {
-                LOG.warn("Unable to describeConfigs({})", expected.keySet(), t);
-                throw t;
+            var values = admin.describeConfigs(expected.keySet()).values();
+            results.clear();
+            assertEquals(expected.keySet(), values.keySet());
+            for (Map.Entry<ConfigResource, Map<String, String>> entry : expected.entrySet()) {
+                ConfigResource resource = entry.getKey();
+                Map<String, String> expectedPairs = entry.getValue();
+                var config = values.get(resource).get();
+                Map<String, String> actualMap = new TreeMap<>();
+                Map<String, String> expectedMap = new TreeMap<>();
+                config.entries().forEach(configEntry -> {
+                    actualMap.put(configEntry.name(), configEntry.value());
+                    if (!exhaustive) {
+                        expectedMap.put(configEntry.name(), configEntry.value());
+                    }
+                });
+                expectedMap.putAll(expectedPairs);
+                assertEquals(expectedMap, actualMap);
+                results.put(resource, actualMap);
             }
         });
         return results;
