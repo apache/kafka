@@ -24,18 +24,24 @@ import java.util.Map;
 public class ShareFetchEvent extends ApplicationEvent {
 
     private final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap;
+    private final long pollTimeoutMs;
 
-    public ShareFetchEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    public ShareFetchEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap, long pollTimeoutMs) {
         super(Type.SHARE_FETCH);
         this.acknowledgementsMap = acknowledgementsMap;
+        this.pollTimeoutMs = pollTimeoutMs;
     }
 
     public Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap() {
         return acknowledgementsMap;
     }
 
+    public long pollTimeoutMs() {
+        return pollTimeoutMs;
+    }
+
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap;
+        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap + ", pollTimeoutMs=" + pollTimeoutMs;
     }
 }

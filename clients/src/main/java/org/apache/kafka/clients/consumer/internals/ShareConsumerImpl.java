@@ -656,7 +656,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = currentFetch.takeAcknowledgedRecords();
 
         // If data is available already, return it immediately
-        final ShareFetch<K, V> fetch = collect(acknowledgementsMap);
+        final ShareFetch<K, V> fetch = collect(acknowledgementsMap, pollTimeout);
         if (!fetch.isEmpty()) {
             return fetch;
         }
@@ -675,10 +675,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             wakeupTrigger.clearTask();
         }
 
-        return collect(Collections.emptyMap());
+        return collect(Collections.emptyMap(), pollTimeout);
     }
 
-    private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap, long pollTimeout) {
         Map<TopicIdPartition, NodeAcknowledgements> acksToSend = acknowledgementsMap;
 
         if (currentFetch.isEmpty() && !currentFetch.hasRenewals()) {
@@ -693,7 +693,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
                 // We only send one ShareFetchEvent per poll call.
                 if (shouldSendShareFetchEvent) {
-                    applicationEventHandler.add(new ShareFetchEvent(acksToSend));
+                    applicationEventHandler.add(new ShareFetchEvent(acksToSend, pollTimeout));
                     shouldSendShareFetchEvent = false;
                     // Notify the network thread to wake up and start the next round of fetching
                     applicationEventHandler.wakeupNetworkThread();
@@ -714,7 +714,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             if (currentFetch.hasRenewals()) {
                 // We only send one ShareFetchEvent per poll call.
                 if (shouldSendShareFetchEvent) {
-                    applicationEventHandler.add(new ShareFetchEvent(acksToSend));
+                    applicationEventHandler.add(new ShareFetchEvent(acksToSend, pollTimeout));
                     shouldSendShareFetchEvent = false;
                     // Notify the network thread to wake up and start the next round of fetching
                     applicationEventHandler.wakeupNetworkThread();

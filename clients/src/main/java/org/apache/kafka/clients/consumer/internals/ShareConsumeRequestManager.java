@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -95,6 +96,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final Map<Integer, Tuple<AcknowledgeRequestState>> acknowledgeRequestStates;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
+    private Timer pollTimer;
     private boolean closing = false;
     private final CompletableFuture<Void> closeFuture;
     private boolean isAcknowledgementCommitCallbackRegistered = false;
@@ -147,7 +149,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return pollResult;
         }
 
-        if (!fetchMoreRecords) {
+        // Update and check if poll timer has expired
+        if (pollTimer != null) {
+            pollTimer.update(currentTimeMs);
+        }
+        if (!fetchMoreRecords || (pollTimer != null && pollTimer.isExpired())) {
             return PollResult.EMPTY;
         }
 
@@ -309,7 +315,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
     }
 
-    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
+                      long pollTimeoutMs) {
         if (!fetchMoreRecords) {
             log.debug("Fetch more data");
             fetchMoreRecords = true;
@@ -317,6 +324,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         // Store the acknowledgements and send them in the next ShareFetch.
         processAcknowledgementsMap(acknowledgementsMap);
+
+        // Create or reset the poll timer with the timeout
+        if (pollTimer == null) {
+            pollTimer = time.timer(pollTimeoutMs);
+        } else {
+            pollTimer.updateAndReset(pollTimeoutMs);
+        }
+        log.debug("Set poll timer with timeout {} ms", pollTimeoutMs);
     }
 
     private void processAcknowledgementsMap(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
@@ -858,6 +873,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
                 if (!partitionData.acquiredRecords().isEmpty()) {
                     fetchMoreRecords = false;
+                    pollTimer = null;
                 }
             }
 
