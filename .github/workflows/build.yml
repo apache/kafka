@@ -72,8 +72,8 @@ jobs:
           filters: |
             codes:
               - '**'
-              - '!**/*.yml'
               - '!**/*.md'
+              - '!**/*.html'
       - name: Print configure outputs
         run: |
           echo "=== Configure Job Outputs ==="
