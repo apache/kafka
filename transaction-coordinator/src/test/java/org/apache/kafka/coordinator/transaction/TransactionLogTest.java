@@ -65,17 +65,12 @@ class TransactionLogTest {
     );
 
     private sealed interface TxnKeyResult {
-        record UnknownVersion(short version) implements TxnKeyResult { }
         record TransactionalId(String id) implements TxnKeyResult { }
     }
 
     private static TxnKeyResult readTxnRecordKey(ByteBuffer buf) {
         var result = TransactionLog.readTxnRecordKey(buf);
-        if (result instanceof String) {
-            return new TxnKeyResult.TransactionalId((String) result);
-        } else {
-            return new TxnKeyResult.UnknownVersion((Short) result);
-        }
+        return new TxnKeyResult.TransactionalId((String) result);
     }
 
     private static TransactionMetadata TransactionMetadata(TransactionState state) {
@@ -266,12 +261,11 @@ class TransactionLogTest {
     }
 
     @Test
-    void testReadTxnRecordKeyCanReadUnknownMessage() {
+    void testReadTxnRecordKeyThrowsOnUnknownVersion() {
         var unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MAX_VALUE, new TransactionLogKey());
-        var result = readTxnRecordKey(wrap(unknownRecord));
-        
-        var uv = assertInstanceOf(TxnKeyResult.UnknownVersion.class, result);
-        assertEquals(Short.MAX_VALUE, uv.version());
+        var exception = assertThrows(IllegalStateException.class,
+            () -> TransactionLog.readTxnRecordKey(wrap(unknownRecord)));
+        assertTrue(exception.getMessage().contains("Unknown version " + Short.MAX_VALUE));
     }
    
     @Test

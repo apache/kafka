@@ -495,22 +495,19 @@ class TransactionStateManager(brokerId: Int,
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                TransactionLog.readTxnRecordKey(record.key) match {
-                  case version: java.lang.Short =>
-                    warn(s"Unknown message key with version $version" +
-                      s" while loading transaction state from $topicPartition. Ignoring it. " +
-                      "It could be a left over from an aborted upgrade.")
-                  case transactionalId: String =>
-                    // load transaction metadata along with transaction state
-                    val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
-                    if (txnMetadata == null) {
-                      loadedTransactions.remove(transactionalId)
-                    } else {
-                      loadedTransactions.put(transactionalId, txnMetadata)
-                    }
-                  case other =>
-                    warn(s"Unexpected key type ${other.getClass.getName} while loading transaction state " +
-                      s"from $topicPartition. Ignoring it.")
+                try {
+                  val transactionalId = TransactionLog.readTxnRecordKey(record.key).asInstanceOf[String]
+                  // load transaction metadata along with transaction state
+                  val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
+                  if (txnMetadata == null) {
+                    loadedTransactions.remove(transactionalId)
+                  } else {
+                    loadedTransactions.put(transactionalId, txnMetadata)
+                  }
+                } catch {
+                  case e: IllegalStateException =>
+                    warn(s"Unknown message key version while loading transaction state from $topicPartition. " +
+                      s"Ignoring it. It could be a left over from an aborted upgrade. Error: ${e.getMessage}")
                 }
               }
               currOffset = batch.nextOffset

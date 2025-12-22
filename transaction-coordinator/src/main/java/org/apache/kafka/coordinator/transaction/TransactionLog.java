@@ -108,14 +108,15 @@ public class TransactionLog {
     /**
      * Decodes the transaction log messages' key
      *
-     * @return Either: left with the version if the key is not a transaction log key, right with the transactional id otherwise
+     * @return the transactional id
+     * @throws IllegalStateException if the version is not a valid transaction log key version
      */
     public static Object readTxnRecordKey(ByteBuffer buffer) {
         short version = buffer.getShort();
         if (version == CoordinatorRecordType.TRANSACTION_LOG.id()) {
             return new TransactionLogKey(new ByteBufferAccessor(buffer), (short) 0).transactionalId();
         } else {
-            return version; // like Scala Left(version)
+            throw new IllegalStateException("Unknown version " + version + " from the transaction log message key");
         }
     }
 
@@ -136,9 +137,9 @@ public class TransactionLog {
                 TransactionState state = TransactionState.fromId(value.transactionStatus());
 
                 Set<TopicPartition> tps = new HashSet<>();
-                if (!state.equals(TransactionState.EMPTY)) {
+                if (state != TransactionState.EMPTY) {
                     for (TransactionLogValue.PartitionsSchema partitionsSchema : value.transactionPartitions()) {
-                        for (Integer partitionId : partitionsSchema.partitionIds()) {
+                        for (int partitionId : partitionsSchema.partitionIds()) {
                             tps.add(new TopicPartition(partitionsSchema.topic(), partitionId));
                         }
                     }
