@@ -38,7 +38,7 @@ jobs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
       sha: ${{ steps.configure-outputs.outputs.sha }}
-      docChangeOnly: ${{ steps.filter.outputs.docs && !steps.filter.outputs.code }}
+      doc-change-only: ${{ steps.filter.outputs.docs && !steps.filter.outputs.codes }}
     steps:
       - name: Env
         run: printenv
@@ -66,22 +66,32 @@ jobs:
           persist-credentials: false
       - name: Filter changed files
         id: filter
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
         with:
           filters: |
             docs:
               - '**/*.html'
               - '**/*.htm'
               - '**/*.md'
-            code:
+            codes:
               - '**'
               - '!**/*.html'
               - '!**/*.htm'
               - '!**/*.md'
+      - name: Print configure outputs
+        run: |
+          echo "=== Configure Job Outputs ==="
+          echo "is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}"
+          echo "test-catalog-days: ${{ steps.configure-outputs.outputs.days }}"
+          echo "sha: ${{ steps.configure-outputs.outputs.sha }}"
+          echo "filter.docs: ${{ steps.filter.outputs.docs }}"
+          echo "filter.codes: ${{ steps.filter.outputs.codes }}"
+          echo "doc-change-only: ${{ steps.filter.outputs.docs && !steps.filter.outputs.codes }}"
+          echo "=============================="
 
   load-catalog:
     needs: [configure]
-    if: ${{ !needs.configure.outputs.docChangeOnly }}
+    if: ${{ needs.configure.outputs.doc-change-only != 'true' }}
     runs-on: ubuntu-latest
     name: Load Test Catalog
     steps:
@@ -195,7 +205,7 @@ jobs:
 
   test:
     needs: [configure, validate, load-catalog]
-    if: ${{ !needs.configure.outputs.is-draft && !needs.configure.outputs.docChangeOnly }}
+    if: ${{ !needs.configure.outputs.is-draft && needs.configure.outputs.doc-change-only != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -400,7 +410,7 @@ jobs:
           exit 1
       - name: Check Dependency Outcomes
         run: |
-          if [[ "${{ needs.validate.result }}" == "success" && (${{ needs.configure.outputs.docChangeOnly }} || "${{ needs.test.result }}" == "success") ]]; then
+          if [[ "${{ needs.validate.result }}" == "success" && (${{ needs.configure.outputs.doc-change-only }} || "${{ needs.test.result }}" == "success") ]]; then
             echo "Required jobs completed successfully!"
             exit 0
           else
