@@ -195,11 +195,16 @@ public class PlaintextConsumerCommitTest {
             var metadata = new OffsetAndMetadata(5, Optional.of(15), "foo");
             consumer.commitSync(Map.of(tp, metadata));
 
-            // fetch offset for two partitions
-            var committed = consumer.committed(Set.of(tp, tp1));
-            assertEquals(2, committed.size());
+            TopicPartition tp2 = new TopicPartition(topic, 2);
+            // fetch offset for three partitions:
+            // 1. tp: exists and has committed offset
+            // 2. tp1: exists but has NO committed offset
+            // 3. tp2: does not exist
+            var committed = consumer.committed(Set.of(tp, tp1, tp2));
+            assertEquals(3, committed.size());
             assertEquals(metadata, committed.get(tp));
             assertNull(committed.get(tp1));
+            assertNull(committed.get(tp2));
         }
     }
 
