@@ -118,7 +118,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Timeout(120)
 @Tag("integration")
 public class KRaftClusterTest {
-    private static final Logger log = LoggerFactory.getLogger(KRaftClusterTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KRaftClusterTest.class);
     private static final Logger LOG_2 = LoggerFactory.getLogger(KRaftClusterTest.class.getCanonicalName() + "2");
 
     @Test
@@ -633,7 +633,7 @@ public class KRaftClusterTest {
     public void testUnregisterBroker(boolean usingBootstrapControllers) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
-                .setNumBrokerNodes(4)
+                .setNumBrokerNodes(3)
                 .setNumControllerNodes(3)
                 .build()).build()) {
             cluster.format();
@@ -774,7 +774,7 @@ public class KRaftClusterTest {
     public void testIncrementalAlterConfigs() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
-                .setNumBrokerNodes(4)
+                .setNumBrokerNodes(3)
                 .setNumControllerNodes(3)
                 .build()).build()) {
             cluster.format();
@@ -889,7 +889,7 @@ public class KRaftClusterTest {
                     results.put(resource, actualMap);
                 }
             } catch (Exception t) {
-                log.warn("Unable to describeConfigs({})", expected.keySet(), t);
+                LOG.warn("Unable to describeConfigs({})", expected.keySet(), t);
                 throw t;
             }
         });
@@ -900,7 +900,7 @@ public class KRaftClusterTest {
     public void testSetLog4jConfigurations() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
-                .setNumBrokerNodes(4)
+                .setNumBrokerNodes(3)
                 .setNumControllerNodes(3)
                 .build()).build()) {
             cluster.format();
@@ -908,28 +908,28 @@ public class KRaftClusterTest {
             cluster.waitForReadyBrokers();
 
             try (Admin admin = cluster.admin()) {
-                log.debug("setting log4j");
+                LOG.debug("setting log4j");
                 LOG_2.debug("setting log4j");
 
+                ConfigResource broker1 = new ConfigResource(Type.BROKER_LOGGER, "1");
                 ConfigResource broker2 = new ConfigResource(Type.BROKER_LOGGER, "2");
-                ConfigResource broker3 = new ConfigResource(Type.BROKER_LOGGER, "3");
-                var initialLog4j = validateConfigs(admin, Map.of(broker2, Map.of()), false);
+                var initialLog4j = validateConfigs(admin, Map.of(broker1, Map.of()), false);
 
                 assertListEquals(List.of(ApiError.NONE,
                     new ApiError(Errors.INVALID_REQUEST, "APPEND operation is not allowed for the BROKER_LOGGER resource")),
                     incrementalAlter(admin, Map.of(
-                        broker2, List.of(
-                            new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SET),
+                        broker1, List.of(
+                            new AlterConfigOp(new ConfigEntry(LOG.getName(), "TRACE"), OpType.SET),
                             new AlterConfigOp(new ConfigEntry(LOG_2.getName(), "TRACE"), OpType.SET)),
-                        broker3, List.of(
-                            new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.APPEND),
+                        broker2, List.of(
+                            new AlterConfigOp(new ConfigEntry(LOG.getName(), "TRACE"), OpType.APPEND),
                             new AlterConfigOp(new ConfigEntry(LOG_2.getName(), "TRACE"), OpType.APPEND)))
                     )
                 );
 
                 validateConfigs(admin, Map.of(
-                    broker2, Map.of(
-                        log.getName(), "TRACE",
+                    broker1, Map.of(
+                        LOG.getName(), "TRACE",
                         LOG_2.getName(), "TRACE"
                     )
                 ), false);
@@ -937,19 +937,19 @@ public class KRaftClusterTest {
                 assertListEquals(List.of(ApiError.NONE,
                     new ApiError(Errors.INVALID_REQUEST, "SUBTRACT operation is not allowed for the BROKER_LOGGER resource")),
                     incrementalAlter(admin, Map.of(
-                        broker2, List.of(
-                            new AlterConfigOp(new ConfigEntry(log.getName(), ""), OpType.DELETE),
+                        broker1, List.of(
+                            new AlterConfigOp(new ConfigEntry(LOG.getName(), ""), OpType.DELETE),
                             new AlterConfigOp(new ConfigEntry(LOG_2.getName(), ""), OpType.DELETE)),
-                        broker3, List.of(
-                            new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SUBTRACT),
+                        broker2, List.of(
+                            new AlterConfigOp(new ConfigEntry(LOG.getName(), "TRACE"), OpType.SUBTRACT),
                             new AlterConfigOp(new ConfigEntry(LOG_2.getName(), "TRACE"), OpType.SUBTRACT)))
                     )
                 );
 
                 validateConfigs(admin, Map.of(
-                    broker2, Map.of(
-                        log.getName(), initialLog4j.get(broker2).get(log.getName()),
-                        LOG_2.getName(), initialLog4j.get(broker2).get(LOG_2.getName())
+                    broker1, Map.of(
+                        LOG.getName(), initialLog4j.get(broker1).get(LOG.getName()),
+                        LOG_2.getName(), initialLog4j.get(broker1).get(LOG_2.getName())
                     )
                 ), false);
             }
@@ -974,7 +974,7 @@ public class KRaftClusterTest {
     public void testCreatePartitions(String metadataVersionString) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
-                .setNumBrokerNodes(4)
+                .setNumBrokerNodes(3)
                 .setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString, true))
                 .setNumControllerNodes(3)
                 .build()).build()) {
@@ -1005,13 +1005,13 @@ public class KRaftClusterTest {
     public void testDescribeQuorumRequestToBrokers() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
-                .setNumBrokerNodes(4)
+                .setNumBrokerNodes(3)
                 .setNumControllerNodes(3)
                 .build()).build()) {
             cluster.format();
             cluster.startup();
 
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 3; i++) {
                 int brokerId = i;
                 TestUtils.waitForCondition(
                     () -> cluster.brokers().get(brokerId).brokerState() == BrokerState.RUNNING,
@@ -1077,13 +1077,13 @@ public class KRaftClusterTest {
     public void testDescribeQuorumRequestToControllers() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
-                .setNumBrokerNodes(4)
+                .setNumBrokerNodes(3)
                 .setNumControllerNodes(3)
                 .build()).build()) {
             cluster.format();
             cluster.startup();
 
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 3; i++) {
                 int brokerId = i;
                 TestUtils.waitForCondition(
                     () -> cluster.brokers().get(brokerId).brokerState() == BrokerState.RUNNING,
@@ -1129,7 +1129,7 @@ public class KRaftClusterTest {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION)
-                .setNumBrokerNodes(4)
+                .setNumBrokerNodes(3)
                 .setNumControllerNodes(3)
                 .build()).build()) {
             cluster.format();
