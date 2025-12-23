@@ -17,9 +17,14 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -368,6 +373,59 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         } finally {
             // Restore default exit procedure
             Exit.resetExitProcedure();
+        }
+    }
+
+    @ClusterTest
+    public void testRemoteLogMetadataTopicMinIsr() throws ExecutionException, InterruptedException {
+        // Initialize the manager which will create the __remote_log_metadata topic
+        TopicBasedRemoteLogMetadataManager rlmm = topicBasedRlmm();
+        verifyRemoteLogMetadataTopicMinIsr(rlmm, (short) 2, "default value");
+    }
+
+    @ClusterTest
+    public void testRemoteLogMetadataTopicMinIsrWithCustomValue() throws ExecutionException, InterruptedException, IOException {
+        // Create a manager with custom min.isr value
+        short customMinIsr = 3;
+        Map<String, Object> overrideProps = Map.of(
+            TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr
+        );
+        
+        TopicBasedRemoteLogMetadataManager customRlmm = RemoteLogMetadataManagerTestUtils.builder()
+            .bootstrapServers(clusterInstance.bootstrapServers())
+            .overrideRemoteLogMetadataManagerProps(overrideProps)
+            .build();
+        
+        try {
+            verifyRemoteLogMetadataTopicMinIsr(customRlmm, customMinIsr, "custom value");
+        } finally {
+            customRlmm.close();
+        }
+    }
+
+    private void verifyRemoteLogMetadataTopicMinIsr(TopicBasedRemoteLogMetadataManager rlmm, 
+                                                     short expectedMinIsr, 
+                                                     String valueDescription) 
+            throws ExecutionException, InterruptedException {
+        try (Admin admin = clusterInstance.admin()) {
+            String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
+            
+            // Wait for the topic to be created
+            clusterInstance.waitTopicCreation(metadataTopic, 50);
+            
+            // Verify the topic exists
+            assertTrue(rlmm.doesTopicExist(admin, metadataTopic));
+            
+            // Describe the topic configs to verify min.insync.replicas
+            ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, metadataTopic);
+            DescribeConfigsResult describeResult = admin.describeConfigs(List.of(topicResource));
+            Config config = describeResult.all().get().get(topicResource);
+            
+            assertTrue(config != null, "Topic config should not be null");
+            ConfigEntry minIsrEntry = config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
+            assertTrue(minIsrEntry != null, "min.insync.replicas config should exist");
+            assertEquals(String.valueOf(expectedMinIsr), minIsrEntry.value(), 
+                "min.insync.replicas should be " + expectedMinIsr + " (" + valueDescription + ")");
         }
     }
 }

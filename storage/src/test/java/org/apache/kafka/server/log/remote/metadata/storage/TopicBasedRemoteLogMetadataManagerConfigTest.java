@@ -35,6 +35,8 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
@@ -191,5 +193,21 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         };
         Arrays.stream(sensitiveConfigKeys)
                 .forEach(config -> assertTrue(configString.contains(config + "=(redacted)")));
+    }
+
+    @Test
+    public void testDefaultMinIsr() {
+        Map<String, Object> props = createValidConfigProps(new HashMap<>(), new HashMap<>(), new HashMap<>());
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertEquals(DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR, rlmmConfig.metadataTopicMinIsr());
+    }
+
+    @Test
+    public void testCustomMinIsr() {
+        Map<String, Object> props = createValidConfigProps(new HashMap<>(), new HashMap<>(), new HashMap<>());
+        short customMinIsr = 3;
+        props.put(REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr);
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertEquals(customMinIsr, rlmmConfig.metadataTopicMinIsr());
     }
 }
