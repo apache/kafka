@@ -36,12 +36,12 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
-import org.apache.kafka.metadata.{BrokerState, ListenerInfo, MetadataVersionConfigValidator}
+import org.apache.kafka.metadata.{BrokerState, ListenerInfo, KRaftMetadataCache, MetadataCache, MetadataVersionConfigValidator}
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, ScramPublisher}
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -49,7 +49,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandl
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.log.remote.metadata.storage.BrokerReadyCallback
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
-import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
@@ -95,6 +95,8 @@ class BrokerServer(
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
   private var assignmentsManager: AssignmentsManager = _
+
+  private var partitionMetadataClient: PartitionMetadataClient = _
 
   val lock: ReentrantLock = new ReentrantLock()
   val awaitShutdownCond: Condition = lock.newCondition()
@@ -189,9 +191,9 @@ class BrokerServer(
 
       info("Starting broker")
 
-      val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+      val clientTelemetryExporterPlugin = new ClientTelemetryExporterPlugin()
 
-      config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
+      config.dynamicConfig.initialize(Some(clientTelemetryExporterPlugin))
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-", ProcessRole.BrokerRole.toString)
       DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers, logContext)
 
@@ -244,7 +246,7 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
-      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
+      clientMetricsManager = new ClientMetricsManager(clientTelemetryExporterPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = new DefaultApiVersionManager(
         ListenerType.BROKER,
@@ -370,6 +372,8 @@ class BrokerServer(
 
       /* create persister */
       persister = createShareStatePersister()
+
+      partitionMetadataClient = createPartitionMetadataClient(metadataCache)
 
       groupCoordinator = createGroupCoordinator()
 
@@ -620,6 +624,22 @@ class BrokerServer(
     }
   }
 
+  private def createPartitionMetadataClient(metadataCache: MetadataCache): PartitionMetadataClient = {
+    new NetworkPartitionMetadataClient(
+      metadataCache,
+      () => NetworkUtils.buildNetworkClient(
+        "NetworkPartitionMetadataClient",
+        config,
+        metrics,
+        Time.SYSTEM,
+        new LogContext(s"[NetworkPartitionMetadataClient broker=${config.brokerId}]")
+      ),
+      Time.SYSTEM,
+      config.interBrokerListenerName(),
+      new SystemTimerReaper("network-partition-metadata-client-reaper", new SystemTimer("network-partition-metadata-client"))
+    )
+  }
+
   private def createGroupCoordinator(): GroupCoordinator = {
     // Create group coordinator, but don't start it until we've started replica manager.
     // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good
@@ -651,6 +671,7 @@ class BrokerServer(
       .withGroupConfigManager(groupConfigManager)
       .withPersister(persister)
       .withAuthorizerPlugin(authorizerPlugin.toJava)
+      .withPartitionMetadataClient(partitionMetadataClient)
       .build()
   }
 
@@ -799,8 +820,13 @@ class BrokerServer(
 
       if (groupConfigManager != null)
         CoreUtils.swallow(groupConfigManager.close(), this)
+
       if (groupCoordinator != null)
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
+
+      if (partitionMetadataClient != null)
+        CoreUtils.swallow(partitionMetadataClient.close(), this)
+
       if (shareCoordinator != null)
         CoreUtils.swallow(shareCoordinator.shutdown(), this)
 
