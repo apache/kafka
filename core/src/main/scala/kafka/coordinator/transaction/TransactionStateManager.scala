@@ -495,19 +495,21 @@ class TransactionStateManager(brokerId: Int,
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                try {
-                  val transactionalId = TransactionLog.readTxnRecordKey(record.key).asInstanceOf[String]
-                  // load transaction metadata along with transaction state
-                  val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
-                  if (txnMetadata == null) {
-                    loadedTransactions.remove(transactionalId)
-                  } else {
-                    loadedTransactions.put(transactionalId, txnMetadata)
-                  }
-                } catch {
+                val transactionalId = try Some(TransactionLog.readTxnRecordKey(record.key))
+                catch {
                   case e: IllegalStateException =>
                     warn(s"Unknown message key version while loading transaction state from $topicPartition. " +
                       s"Ignoring it. It could be a left over from an aborted upgrade. Error: ${e.getMessage}")
+                    None
+                }
+                transactionalId.foreach { txnId =>
+                  // load transaction metadata along with transaction state
+                  val txnMetadata = TransactionLog.readTxnRecordValue(txnId, record.value)
+                  if (txnMetadata == null) {
+                    loadedTransactions.remove(txnId)
+                  } else {
+                    loadedTransactions.put(txnId, txnMetadata)
+                  }
                 }
               }
               currOffset = batch.nextOffset

@@ -79,16 +79,9 @@ public class TransactionLog {
             transactionPartitions = txnMetadata.topicPartitions().stream()
                     .collect(Collectors.groupingBy(TopicPartition::topic))
                     .entrySet().stream()
-                    .map(entry -> {
-                        TransactionLogValue.PartitionsSchema schema = new TransactionLogValue.PartitionsSchema();
-                        schema.setTopic(entry.getKey());
-                        schema.setPartitionIds(
-                                entry.getValue().stream()
-                                        .map(TopicPartition::partition)
-                                        .toList()
-                        );
-                        return schema;
-                    }).toList();
+                    .map(entry ->
+                        new TransactionLogValue.PartitionsSchema().setTopic(entry.getKey())
+                            .setPartitionIds(entry.getValue().stream().map(TopicPartition::partition).toList())).toList();
         }
 
         return MessageUtil.toVersionPrefixedBytes(
@@ -111,7 +104,7 @@ public class TransactionLog {
      * @return the transactional id
      * @throws IllegalStateException if the version is not a valid transaction log key version
      */
-    public static Object readTxnRecordKey(ByteBuffer buffer) {
+    public static String readTxnRecordKey(ByteBuffer buffer) {
         short version = buffer.getShort();
         if (version == CoordinatorRecordType.TRANSACTION_LOG.id()) {
             return new TransactionLogKey(new ByteBufferAccessor(buffer), (short) 0).transactionalId();
