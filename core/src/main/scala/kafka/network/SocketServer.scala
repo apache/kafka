@@ -670,7 +670,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
               if (!accepted) {
                 debug(s"Refused connection from ${socketChannel.socket.getRemoteSocketAddress} on" +
                   s" ${socketChannel.socket.getLocalSocketAddress} because the server is shutting down.")
-                socketChannel.close()
+                connectionQuotas.closeChannel(this, ListenerName.normalised(endPoint.listener), socketChannel)
               }
             }
           } else
