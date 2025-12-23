@@ -288,33 +288,46 @@ before 3.2.x
     <td rowspan="3">0.x, 1.x, 2.0</td>
     <td>Client</td>
     <td>❌ Not Compatible</td>
-    <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 ([KIP-896](https://cwiki.apache.org/confluence/x/K5sODg)).</td>
+    <td>
+
+Pre-0.10.x protocols are fully removed in Kafka 4.0 ([KIP-896](https://cwiki.apache.org/confluence/x/K5sODg)).
+</td>
   </tr>
   <tr>
     <td>Streams</td>
     <td>❌ Not Compatible</td>
-    <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 ([KIP-896](https://cwiki.apache.org/confluence/x/K5sODg)).</td>
+    <td>
+
+Pre-0.10.x protocols are fully removed in Kafka 4.0 ([KIP-896](https://cwiki.apache.org/confluence/x/K5sODg)).</td>
   </tr>
   <tr>
     <td>Connect</td>
     <td>❌ Not Compatible</td>
-    <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 ([KIP-896](https://cwiki.apache.org/confluence/x/K5sODg)).</td>
+    <td>
+
+Pre-0.10.x protocols are fully removed in Kafka 4.0 ([KIP-896](https://cwiki.apache.org/confluence/x/K5sODg)).</td>
   </tr>
   <tr>
     <td rowspan="3">2.1 ~ 2.8</td>
     <td>Client</td>
     <td>⚠️ Partially Compatible</td>
-    <td>More details in the [Consumer](/40/documentation.html#upgrade_400_notable_consumer), [Producer](/40/documentation.html#upgrade_400_notable_producer), and [Admin Client](/40/documentation.html#upgrade_400_notable_admin_client) section.</td>
+    <td>
+
+More details in the [Consumer](/40/documentation.html#upgrade_400_notable_consumer), [Producer](/40/documentation.html#upgrade_400_notable_producer), and [Admin Client](/40/documentation.html#upgrade_400_notable_admin_client) section.</td>
   </tr>
   <tr>
     <td>Streams</td>
     <td>⚠️ Limited Compatibility</td>
-    <td>More details in the [Kafka Streams](/40/documentation.html#upgrade_400_notable_kafka_streams) section.</td>
+    <td>
+
+More details in the [Kafka Streams](/40/documentation.html#upgrade_400_notable_kafka_streams) section.</td>
   </tr>
   <tr>
     <td>Connect</td>
     <td>⚠️ Limited Compatibility</td>
-    <td>More details in the [Connect](/40/documentation.html#upgrade_400_notable_connect) section.</td>
+    <td>
+
+More details in the [Connect](/40/documentation.html#upgrade_400_notable_connect) section.</td>
   </tr>
   <tr>
     <td rowspan="3">3.x</td>
