@@ -782,9 +782,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     // return if we have no valid messages or if this is a duplicate of the last appended entry
     if (appendInfo.validBytes <= 0) appendInfo
     else {
-
+      val isLeader = origin != AppendOrigin.REPLICATION
       // trim any invalid bytes or partial messages before appending it to the on-disk log
-      var validRecords = trimInvalidBytes(records, appendInfo)
+      var validRecords = trimInvalidBytes(records, appendInfo, isLeader)
 
       // they are valid, insert them in the log
       lock synchronized {
@@ -1256,9 +1256,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * @param records The records to trim
    * @param info The general information of the message set
+   * @param isLeader whether the record set is from the leader
    * @return A trimmed message set. This may be the same as what was passed in or it may not.
    */
-  private def trimInvalidBytes(records: MemoryRecords, info: LogAppendInfo): MemoryRecords = {
+  private def trimInvalidBytes(records: MemoryRecords, info: LogAppendInfo, isLeader: Boolean): MemoryRecords = {
     val validBytes = info.validBytes
     if (validBytes < 0)
       throw new CorruptRecordException(s"Cannot append record batch with illegal length $validBytes to " +
@@ -1269,6 +1270,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // trim invalid bytes
       val validByteBuffer = records.buffer.duplicate()
       validByteBuffer.limit(validBytes)
+      if (isLeader) {
+        warn(s"Trimming invalid bytes from message set. Original size: ${records.sizeInBytes()} bytes, valid bytes: $validBytes, trimmed bytes: ${records.sizeInBytes() - validBytes}.")
+      }
       MemoryRecords.readableRecords(validByteBuffer)
     }
   }
