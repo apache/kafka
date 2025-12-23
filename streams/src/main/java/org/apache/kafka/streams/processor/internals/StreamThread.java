@@ -42,7 +42,9 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -374,6 +376,15 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean processingThreadsEnabled;
+
+    private final WindowedSum pollLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum totalCommitLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum processLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum punctuateLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum runOnceLatencyWindowedSum = new WindowedSum();
+    private final MetricConfig metricsConfig;
+
+    private boolean latencyWindowsInitialized = false;
 
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
@@ -786,6 +797,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
+        this.metricsConfig = streamsMetrics.metricsRegistry().config();
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -885,6 +897,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         boolean cleanRun = false;
         try {
             taskManager.init();
+            initLatencyWindowsIfNeeded(time.milliseconds());
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
@@ -1273,11 +1286,13 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
+
+        recordWindowedSum(now, pollLatency, totalCommitLatency, totalProcessLatency, totalPunctuateLatency, runOnceLatency);
+        recordRatio(now, pollLatencyWindowedSum, pollRatioSensor);
+        recordRatio(now, totalCommitLatencyWindowedSum, commitRatioSensor);
+        recordRatio(now, processLatencyWindowedSum, processRatioSensor);
+        recordRatio(now, punctuateLatencyWindowedSum, punctuateRatioSensor);
         processRecordsSensor.record(totalProcessed, now);
-        processRatioSensor.record((double) totalProcessLatency / runOnceLatency, now);
-        punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency, now);
-        pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
-        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
         final long timeSinceLastLog = now - lastLogSummaryMs;
         if (logSummaryIntervalMs > 0 && timeSinceLastLog > logSummaryIntervalMs) {
@@ -1360,8 +1375,10 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
-        pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
-        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
+
+        recordWindowedSum(now, pollLatency, totalCommitLatency, 0, 0, runOnceLatency);
+        recordRatio(now, pollLatencyWindowedSum, pollRatioSensor);
+        recordRatio(now, totalCommitLatencyWindowedSum, commitRatioSensor);
 
         if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Committed {} total tasks since the last update", totalCommittedSinceLastSummary);
@@ -2069,5 +2086,47 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Optional<StreamsRebalanceData> streamsRebalanceData() {
         return streamsRebalanceData;
+    }
+
+    /**
+     * Initialize both WindowedSum instances at exactly the same timestamp so
+     * their windows are aligned from the very beginning.
+     */
+    private void initLatencyWindowsIfNeeded(final long now) {
+        if (!latencyWindowsInitialized) {
+            // Start both windows at the same instant with a zero record
+            pollLatencyWindowedSum.record(metricsConfig, 0.0, now);
+            totalCommitLatencyWindowedSum.record(metricsConfig, 0, now);
+            processLatencyWindowedSum.record(metricsConfig, 0, now);
+            punctuateLatencyWindowedSum.record(metricsConfig, 0, now);
+            runOnceLatencyWindowedSum.record(metricsConfig, 0.0, now);
+            latencyWindowsInitialized = true;
+        }
+    }
+
+    private void recordWindowedSum(final long now,
+                                   final double pollLatency,
+                                   final double totalCommitLatency,
+                                   final double processLatency,
+                                   final double punctuateLatency,
+                                   final double runOnceLatency) {
+        pollLatencyWindowedSum.record(metricsConfig, pollLatency, now);
+        totalCommitLatencyWindowedSum.record(metricsConfig, totalCommitLatency, now);
+        processLatencyWindowedSum.record(metricsConfig, processLatency, now);
+        punctuateLatencyWindowedSum.record(metricsConfig, punctuateLatency, now);
+        runOnceLatencyWindowedSum.record(metricsConfig, runOnceLatency, now);
+    }
+
+    private void recordRatio(final long now, final WindowedSum windowedSum, final Sensor ratioSensor) {
+        final double runOnceLatencyWindow =
+            runOnceLatencyWindowedSum.measure(metricsConfig, now);
+
+        if (runOnceLatencyWindow > 0.0) {
+            final double latencyWindow =
+                windowedSum.measure(metricsConfig, now);
+            ratioSensor.record(latencyWindow / runOnceLatencyWindow);
+        } else {
+            ratioSensor.record(0.0, now);
+        }
     }
 }
