@@ -75,6 +75,11 @@ jobs:
               - '!**/*.md'
               - '!**/*.html'
               - '!**/*.js'
+              - '!**/*.css'
+              - '!**/*.png'
+              - '!**/*.jpg'
+              - '!**/*.bat'
+              - '!**/*.txt'
 
   load-catalog:
     needs: [configure]
