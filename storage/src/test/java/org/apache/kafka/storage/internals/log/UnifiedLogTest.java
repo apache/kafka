@@ -645,10 +645,24 @@ public class UnifiedLogTest {
             Optional<Uuid> topicId,
             boolean remoteStorageSystemEnable) throws IOException {
 
-        UnifiedLog log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, 0L, 0L,
-                3600000, producerStateManagerConfig,
-                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, true, topicId,
-            new ConcurrentHashMap<>(), remoteStorageSystemEnable, LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
+        UnifiedLog log = UnifiedLog.create(
+                dir,
+                config,
+                0L,
+                0L,
+                scheduler,
+                brokerTopicStats,
+                time,
+                3600000,
+                producerStateManagerConfig,
+                TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+                new LogDirFailureChannel(10),
+                true,
+                topicId,
+                new ConcurrentHashMap<>(),
+                remoteStorageSystemEnable,
+                LogOffsetsListener.NO_OP_OFFSETS_LISTENER
+        );
 
         this.logsToClose.add(log);
         return log;

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
@@ -24,15 +23,11 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.RequestLocal;
-import org.apache.kafka.server.util.Scheduler;
-import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentMap;
 
 public class LogTestUtils {
     public static LogSegment createSegment(long offset, File logDir, int indexIntervalBytes, Time time) throws IOException {
@@ -76,42 +71,6 @@ public class LogTestUtils {
                                               long timestamp) {
         EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch);
         return MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker);
-    }
-
-    @SuppressWarnings("ParameterNumber")
-    public static UnifiedLog createLog(File dir,
-                                       LogConfig config,
-                                       BrokerTopicStats brokerTopicStats,
-                                       Scheduler scheduler,
-                                       Time time,
-                                       long logStartOffset,
-                                       long recoveryPoint,
-                                       int maxTransactionTimeoutMs,
-                                       ProducerStateManagerConfig producerStateManagerConfig,
-                                       int producerIdExpirationCheckIntervalMs,
-                                       boolean lastShutdownClean,
-                                       Optional<Uuid> topicId,
-                                       ConcurrentMap<String, Integer> numRemainingSegments,
-                                       boolean remoteStorageSystemEnable,
-                                       LogOffsetsListener logOffsetsListener) throws IOException {
-        return UnifiedLog.create(
-                dir,
-                config,
-                logStartOffset,
-                recoveryPoint,
-                scheduler,
-                brokerTopicStats,
-                time,
-                maxTransactionTimeoutMs,
-                producerStateManagerConfig,
-                producerIdExpirationCheckIntervalMs,
-                new LogDirFailureChannel(10),
-                lastShutdownClean,
-                topicId,
-                numRemainingSegments,
-                remoteStorageSystemEnable,
-                logOffsetsListener
-        );
     }
 
     public static class LogConfigBuilder {
