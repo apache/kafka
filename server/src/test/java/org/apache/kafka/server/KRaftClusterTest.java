@@ -853,8 +853,6 @@ public class KRaftClusterTest {
             try {
                 values.get(resource).get();
                 return ApiError.NONE;
-            } catch (ExecutionException e) {
-                return ApiError.fromThrowable(e);
             } catch (Throwable t) {
                 return ApiError.fromThrowable(t);
             }
