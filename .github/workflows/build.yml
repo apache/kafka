@@ -74,7 +74,6 @@ jobs:
               - '**'
               - '!**/*.md'
               - '!**/*.html'
-              - '!**/*.yml'
               - '!**/*.js'
 
   load-catalog:
