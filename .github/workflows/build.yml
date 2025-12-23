@@ -74,12 +74,7 @@ jobs:
               - '**'
               - '!**/*.md'
               - '!**/*.html'
-      - name: Print configure outputs
-        run: |
-          echo "=== Configure Job Outputs ==="
-          echo "is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}"
-          echo "doc-change-only: ${{ steps.filter.outputs.codes == 'false' }}"
-          echo "=============================="
+              - '!**/*.js'
 
   load-catalog:
     needs: [configure]
