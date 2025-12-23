@@ -275,7 +275,7 @@ In general, the migration process passes through several phases.
   * After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.
   * During the migration, if a ZK broker is running with multiple log directories, any directory failure will cause the broker to shutdown. Brokers with broken log directories will only be able to migrate to KRaft once the directories are repaired. For further details refer to [KAFKA-16431](https://issues.apache.org/jira/browse/KAFKA-16431). 
   * As noted above, some features are not fully implemented in KRaft mode. If you are using one of those features, you will not be able to migrate to KRaft yet.
-  * There is a known inconsistency between ZK and KRaft modes in the arguments passed to an `AlterConfigPolicy`, when an `OpType.SUBTRACT` is processed. For further details refer to [KAFKA-19026](https://issues.apache.org/jira/browse/KAFKA-19026). 
+  * There is a known inconsistency between ZK and KRaft modes in the arguments passed to an `AlterConfigPolicy`, when operations of type `SUBTRACT`, `DELETE` or `APPEND` are processed. This has been addressed with a compatibility flag in version 3.9.2. For further details see [KIP-1252](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=399279475).
 
 
 

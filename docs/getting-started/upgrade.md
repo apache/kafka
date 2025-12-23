@@ -58,6 +58,12 @@ If you are upgrading from version 2.4.0 or above, and you have not overridden th
 
 
 
+### Notable changes in 3.9.2
+
+  * There is a new server configuration, `alter.config.policy.kraft.compatibility.enable`, which ensures that an AlterConfigPolicy is invoked consistently between KRaft and ZooKeeper modes. To enable this behavior, set the property to `true` in `server.properties`. For backward compatibility, the default value is `false`. See [KIP-1252](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=399279475) for more details.
+
+
+
 ### Notable changes in 3.9.1
 
   * We have added a system property ("org.apache.kafka.sasl.oauthbearer.allowed.urls") to set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. By default all URLs are allowed. Users should explicitly set the desired allowed list if necessary. 
