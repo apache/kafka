@@ -749,7 +749,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
 
             OffsetCommitRequest.Builder builder = canUseTopicIds
-                    ? OffsetCommitRequest.Builder.forTopicIdsOrNames(data, true)
+                    ? OffsetCommitRequest.Builder.forTopicIdsOrNames(data)
                     : OffsetCommitRequest.Builder.forTopicNames(data);
 
             return buildRequestWithResponseHandling(builder);
@@ -1033,7 +1033,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .setRequireStable(true)
                 .setGroups(List.of(groupData));
             OffsetFetchRequest.Builder builder = canUseTopicIds
-                ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported, true)
+                ? OffsetFetchRequest.Builder.forTopicIdsOrNames(data, throwOnFetchStableOffsetUnsupported)
                 : OffsetFetchRequest.Builder.forTopicNames(data, throwOnFetchStableOffsetUnsupported);
             return buildRequestWithResponseHandling(builder);
         }

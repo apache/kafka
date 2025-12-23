@@ -86,4 +86,16 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
      * @param sizeSupplier The size supplier.
      */
     void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier);
+
+    /**
+     * Register the cached buffer size gauge.
+     *
+     * @param bufferCacheSizeSupplier The buffer cache size supplier.
+     */
+    void registerBufferCacheSizeGauge(Supplier<Long> bufferCacheSizeSupplier);
+
+    /**
+     * Called when a buffer is discarded upon release instead of being cached.
+     */
+    void recordBufferCacheDiscarded();
 }

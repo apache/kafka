@@ -31,7 +31,6 @@ import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.FetchSessionHandler;
@@ -52,6 +51,7 @@ import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.PartitionRegistration;

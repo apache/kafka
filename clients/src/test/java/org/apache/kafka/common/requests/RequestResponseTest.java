@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.IsolationLevel;
@@ -810,7 +809,7 @@ public class RequestResponseTest {
     @Test
     public void testListGroupRequestV3FailsWithStates() {
         ListGroupsRequestData data = new ListGroupsRequestData()
-                .setStatesFilter(singletonList(ConsumerGroupState.STABLE.name()));
+                .setStatesFilter(singletonList(GroupState.STABLE.name()));
         assertThrows(UnsupportedVersionException.class, () -> new ListGroupsRequest.Builder(data).build((short) 3));
     }
 
@@ -1189,7 +1188,7 @@ public class RequestResponseTest {
                     .setGroupId("group")
                     .setErrorCode((short) 0)
                     .setErrorMessage(Errors.forCode((short) 0).message())
-                    .setGroupState(ConsumerGroupState.EMPTY.toString())
+                    .setGroupState(GroupState.EMPTY.toString())
                     .setGroupEpoch(0)
                     .setAssignmentEpoch(0)
                     .setAssignorName("range")
@@ -2424,8 +2423,7 @@ public class RequestResponseTest {
                                 .setPartitionIndexes(List.of(1))
                         ))
                 )),
-            false,
-            true
+            false
         ).build(version);
     }
 
@@ -2471,8 +2469,7 @@ public class RequestResponseTest {
                         .setGroupId("group5")
                         .setTopics(null)
                 )),
-            false,
-            true
+            false
         ).build(version);
     }
 
@@ -2487,8 +2484,7 @@ public class RequestResponseTest {
                         .setMemberEpoch(version >= 9 ? 10 : -1)
                         .setTopics(null)
                 )),
-            false,
-            true
+            false
         ).build(version);
     }
 

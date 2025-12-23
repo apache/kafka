@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -38,7 +39,7 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
     private final MetadataImage metadataImage;
 
     public KRaftCoordinatorMetadataImage(MetadataImage metadataImage) {
-        this.metadataImage = metadataImage;
+        this.metadataImage = Objects.requireNonNull(metadataImage, "metadataImage must be provided");
     }
 
     @Override

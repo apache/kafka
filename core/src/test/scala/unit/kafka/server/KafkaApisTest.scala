@@ -21,7 +21,6 @@ import kafka.cluster.Partition
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -83,15 +82,15 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{ConfigRepository, MetadataCache, MockConfigRepository}
+import org.apache.kafka.metadata.{ConfigRepository, KRaftMetadataCache, MetadataCache, MockConfigRepository}
 import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
@@ -1053,7 +1052,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(0)
               .setCommittedOffset(10)))))
 
-    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest, true).build(version))
+    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest).build(version))
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1114,7 +1113,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(0)
               .setCommittedOffset(10)))))
 
-    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest, true).build(version))
+    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest).build(version))
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
     when(groupCoordinator.commitOffsets(
@@ -1192,7 +1191,7 @@ class KafkaApisTest extends Logging {
               .setPartitionIndex(1)
               .setCommittedOffset(70)))))
 
-    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest, true).build())
+    val requestChannelRequest = buildRequest(OffsetCommitRequest.Builder.forTopicIdsOrNames(offsetCommitRequest).build())
 
     // This is the request expected by the group coordinator.
     val expectedOffsetCommitRequest = new OffsetCommitRequestData()
@@ -4777,12 +4776,6 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenThrow(
-      Errors.INVALID_REQUEST.exception()
-    ).thenReturn(new ShareSessionContext(1, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2
-    )))
-
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
@@ -4806,6 +4799,13 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenThrow(
+      Errors.INVALID_REQUEST.exception()
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId)
+    ))
+
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
@@ -5024,11 +5024,6 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(1, new ShareSession(
-        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-      )
-
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
@@ -5052,6 +5047,12 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any()))
+      .thenReturn(new ShareSessionContext(1, new ShareSession(
+        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId))
+      )
+
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
@@ -5083,11 +5084,6 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(1, new ShareSession(
-        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-      )
-
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
@@ -5111,6 +5107,12 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any()))
+      .thenReturn(new ShareSessionContext(1, new ShareSession(
+        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId))
+      )
+
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
@@ -5460,16 +5462,6 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, partitionIndex, topicName), false)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(0, util.List.of(
-        new TopicIdPartition(topicId, partitionIndex, topicName)
-      ))
-    ).thenReturn(new ShareSessionContext(1, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-    ).thenReturn(new ShareSessionContext(2, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 3))
-    )
-
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
@@ -5485,6 +5477,16 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(0, util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, topicName)
+      ))
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId))
+    ).thenReturn(new ShareSessionContext(2, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 3, request.context.connectionId))
+    )
 
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis()
@@ -5725,19 +5727,6 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId4, 0, topicName4), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(0, util.List.of(
-        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
-        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
-        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
-        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
-      ))
-    ).thenReturn(new ShareSessionContext(1, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 2))
-    ).thenReturn(new ShareSessionContext(2, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 3))
-    ).thenReturn(new FinalContext())
-
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)),
@@ -5808,6 +5797,20 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(0, util.List.of(
+        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
+        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
+        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
+        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
+      ))
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 2, request.context.connectionId))
+    ).thenReturn(new ShareSessionContext(2, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 3, request.context.connectionId))
+    ).thenReturn(new FinalContext())
+
     // First share fetch request is to establish the share session with the broker.
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
@@ -6688,14 +6691,6 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, 0, topicName), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(0, util.List.of(
-        new TopicIdPartition(topicId, partitionIndex, topicName)
-      ))
-    ).thenReturn(new ShareSessionContext(1, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-    )
-
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
@@ -6720,6 +6715,15 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(0, util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, topicName)
+      ))
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId))
+    )
+
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
@@ -6807,14 +6811,6 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, 0, topicName), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(0, util.List.of(
-        new TopicIdPartition(topicId, partitionIndex, topicName)
-      ))
-    ).thenReturn(new ShareSessionContext(1, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-    )
-
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
       CompletableFuture.completedFuture(util.Map.of[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
@@ -6837,6 +6833,15 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(0, util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, topicName)
+      ))
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId))
+    )
+
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
@@ -9007,8 +9012,7 @@ class KafkaApisTest extends Logging {
                 .setGroupId("group-4")
                 .setTopics(null),
             )),
-          false,
-          true
+          false
         ).build(version)
       )
     }
@@ -9033,7 +9037,7 @@ class KafkaApisTest extends Logging {
       )).thenReturn(group1Future)
 
       val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
+      when(groupCoordinator.fetchOffsets(
         requestChannelRequest.context,
         new OffsetFetchRequestData.OffsetFetchRequestGroup()
           .setGroupId("group-2")
@@ -9042,7 +9046,7 @@ class KafkaApisTest extends Logging {
       )).thenReturn(group2Future)
 
       val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
+      when(groupCoordinator.fetchOffsets(
         requestChannelRequest.context,
         new OffsetFetchRequestData.OffsetFetchRequestGroup()
           .setGroupId("group-3")
@@ -9051,7 +9055,7 @@ class KafkaApisTest extends Logging {
       )).thenReturn(group3Future)
 
       val group4Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
+      when(groupCoordinator.fetchOffsets(
         requestChannelRequest.context,
         new OffsetFetchRequestData.OffsetFetchRequestGroup()
           .setGroupId("group-4")
@@ -9170,8 +9174,7 @@ class KafkaApisTest extends Logging {
                 .setGroupId("group-2")
                 .setTopics(null)
             )),
-          false,
-          true
+          false
         ).build(version)
       )
     }
@@ -9192,7 +9195,7 @@ class KafkaApisTest extends Logging {
     )).thenReturn(group1Future)
 
     val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
+    when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-2")
@@ -9379,15 +9382,14 @@ class KafkaApisTest extends Logging {
               .setGroupId("group-1")
               .setTopics(null) // all offsets.
           )),
-        false,
-        true
+        false
       ).build(version))
     }
 
     val requestChannelRequest = makeRequest(version)
 
     val future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
+    when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-1")
@@ -9506,8 +9508,7 @@ class KafkaApisTest extends Logging {
                 .setGroupId("group-4")
                 .setTopics(null),
             )),
-          false,
-          true
+          false
         ).build(version)
       )
     }
@@ -9550,7 +9551,7 @@ class KafkaApisTest extends Logging {
 
     // group-3 is allowed and bar is allowed.
     val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
+    when(groupCoordinator.fetchOffsets(
       requestChannelRequest.context,
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-3")
@@ -9695,8 +9696,7 @@ class KafkaApisTest extends Logging {
                     .setPartitionIndexes(util.List.of[Integer](0))
                 ))
             )),
-          false,
-          true
+          false
         ).build(version)
       )
     }
@@ -14304,14 +14304,6 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, 0, topicName), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(0, util.List.of(
-        new TopicIdPartition(topicId, partitionIndex, topicName)
-      ))
-    ).thenReturn(new ShareSessionContext(1, new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-    )
-
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
@@ -14336,6 +14328,15 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
+
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
+      new ShareSessionContext(0, util.List.of(
+        new TopicIdPartition(topicId, partitionIndex, topicName)
+      ))
+    ).thenReturn(new ShareSessionContext(1, new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2, request.context.connectionId))
+    )
+
     kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)

@@ -8897,6 +8897,33 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeFeaturesWithNodeSuccess() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponseFrom(
+                body -> body instanceof ApiVersionsRequest,
+                prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
+                env.cluster().nodeById(0));
+            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(10000).nodeId(0)).featureMetadata();
+            final FeatureMetadata metadata = future.get();
+            assertEquals(defaultFeatureMetadata(), metadata);
+        }
+    }
+
+    @Test
+    public void testDescribeFeaturesWithNodeFailure() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponseFrom(
+                body -> body instanceof ApiVersionsRequest,
+                prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
+                env.cluster().nodeById(1));
+            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0)).featureMetadata();
+            assertThrows(ExecutionException.class, future::get);
+        }
+    }
+
+    @Test
     public void testDescribeMetadataQuorumSuccess() throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,

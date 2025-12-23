@@ -37,8 +37,8 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -221,10 +221,6 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "HOST://localhost:9091,LB://localhost:9092")
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "HOST://localhost:9091,LB://localhost:9091")
     KafkaConfig.fromProps(props)
-
-    // but not duplicate names
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "HOST://localhost:9091,HOST://localhost:9091")
-    assertBadConfigContainingMessage(props, "Configuration 'advertised.listeners' values must not be duplicated.")
   }
 
   @Test
@@ -247,10 +243,6 @@ class KafkaConfigTest {
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://[::1]:9096,PLAINTEXT://127.0.0.1:9096,SASL_SSL://:9096")
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
-
-    props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,PLAINTEXT://127.0.0.1:9092")
-    val exception = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    assertTrue(exception.getMessage.contains("values must not be duplicated."))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9092,SASL_SSL://127.0.0.1:9092")
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -302,7 +294,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
-    assertBadConfigContainingMessage(props, 
+    assertBadConfigContainingMessage(props,
       "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -323,7 +315,7 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
     assertFalse(isValidKafkaConfig(props))
-    assertBadConfigContainingMessage(props, 
+    assertBadConfigContainingMessage(props,
       "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -1040,6 +1032,7 @@ class KafkaConfigTest {
         /** New group coordinator configs */
         case GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -2, -0.5)
+        case GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1, 512 * 1024 - 1)
 
         /** Consumer groups configs */
         case GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)

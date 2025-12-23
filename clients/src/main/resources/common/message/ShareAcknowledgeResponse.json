@@ -43,7 +43,7 @@
       "about": "The top level response error code." },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The top-level error message, or null if there was no error." },
-    { "name": "AcquisitionLockTimeoutMs", "type": "int32", "versions": "2+",
+    { "name": "AcquisitionLockTimeoutMs", "type": "int32", "versions": "2+", "ignorable": true,
       "about": "The time in milliseconds for which the acquired records are locked." },
     { "name": "Responses", "type": "[]ShareAcknowledgeTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [

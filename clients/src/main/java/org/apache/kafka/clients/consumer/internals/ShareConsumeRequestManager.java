@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
@@ -136,6 +135,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     @Override
     public PollResult poll(long currentTimeMs) {
         if (memberId == null) {
+            if (closing && !closeFuture.isDone()) {
+                closeFuture.complete(null);
+            }
             return PollResult.EMPTY;
         }
 
@@ -251,23 +253,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             Node target = entry.getKey();
             ShareSessionHandler handler = entry.getValue();
 
-            log.trace("Building ShareFetch request to send to node {}", target.id());
-            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig);
-
             // For record_limit mode, we only send a full ShareFetch to a single node at a time.
             // We prepare to build ShareFetch requests for all nodes with session handlers to permit
             // piggy-backing of acknowledgements, and also to adjust the topic-partitions
-            // in the share session.
-            if (isShareAcquireModeRecordLimit() && target.id() != fetchRecordsNodeId.get()) {
-                ShareFetchRequestData data = requestBuilder.data();
-                // If there's nothing to send, just skip building the record.
-                if (data.topics().isEmpty() && data.forgottenTopicsData().isEmpty()) {
-                    return null;
-                } else {
-                    // There is something to send, but we don't want to fetch any records.
-                    requestBuilder.data().setMaxRecords(0);
-                }
+            // in the share session, but if the request would contain neither of those, it can be skipped.
+            boolean canSkipIfRequestEmpty = isShareAcquireModeRecordLimit() && target.id() != fetchRecordsNodeId.get();
+
+            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig, canSkipIfRequestEmpty);
+            if (requestBuilder == null) {
+                log.trace("Skipping ShareFetch request to send to node {}", target.id());
+                return null;
             }
+
+            log.trace("Building ShareFetch request to send to node {}", target.id());
 
             nodesWithPendingRequests.add(target.id());
 
@@ -764,15 +762,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return false;
         }
         return false;
-    }
-
-    @Override
-    public long maximumTimeToWait(long currentTimeMs) {
-        // When fetching records and there is no chosen node for fetching, we do not want to wait for the next poll in record_limit mode.
-        if (isShareAcquireModeRecordLimit() && fetchMoreRecords && subscriptions.numAssignedPartitions() > 0 && fetchRecordsNodeId.get() == -1) {
-            return 0L;
-        }
-        return Long.MAX_VALUE;
     }
 
     private void handleShareFetchSuccess(Node fetchTarget,

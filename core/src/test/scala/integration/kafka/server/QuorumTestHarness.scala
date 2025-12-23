@@ -38,10 +38,10 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.queue.KafkaEventQueue
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
 import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.junit.jupiter.api.Assertions._
