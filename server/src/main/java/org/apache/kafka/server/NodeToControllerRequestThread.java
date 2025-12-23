@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -46,7 +47,9 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
     // Used to testing
     volatile boolean started = false;
     private final Time time;
-    private long retryTimeoutMs;
+    private final long retryTimeoutMs;
+    private final ControllerNodeProvider controllerNodeProvider;
+    private final ManualMetadataUpdater metadataUpdater;
 
     public NodeToControllerRequestThread(KafkaClient initialNetworkClient,
                                          ManualMetadataUpdater metadataUpdater,
@@ -57,7 +60,9 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
                                          Long retryTimeoutMs) {
         super(threadName, initialNetworkClient, Math.min(Integer.MAX_VALUE, (int) Math.min(config.getLong(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), time, false);
         this.time = time;
-
+        this.controllerNodeProvider = controllerNodeProvider;
+        this.metadataUpdater = metadataUpdater;
+        this.retryTimeoutMs = retryTimeoutMs;
     }
 
     public Optional<Node> activeControllerAddress() {
@@ -84,15 +89,15 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
 
     @Override
     public Collection<RequestAndCompletionHandler> generateRequests() {
-        final var currentTimeMs = time.milliseconds();
-        final var requestIter = requestQueue.iterator();
+        final long currentTimeMs = time.milliseconds();
+        final Iterator<NodeToControllerQueueItem> requestIter = requestQueue.iterator();
         while (requestIter.hasNext()) {
             var request = requestIter.next();
             if (currentTimeMs - request.createdTimeMs() >= retryTimeoutMs) {
                 requestIter.remove();
                 request.callback().onTimeout();
             } else {
-                var controllerAddress = activeControllerAddress();
+                Optional<Node> controllerAddress = activeControllerAddress();
                 if (controllerAddress.isPresent()) {
                     requestIter.remove();
                     return Collections.singletonList(new RequestAndCompletionHandler(
@@ -110,15 +115,15 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
 
     void handleResponse(NodeToControllerQueueItem queueItem, ClientResponse response) {
         log.debug("Request {} received {}", queueItem.request(), response);
-        if(response.authenticationException() != null) {
+        if (response.authenticationException() != null) {
             log.error("Request {} failed due to authentication error with controller. Disconnecting the " +
-                    "connection to the stale controller {}",
+                            "connection to the stale controller {}",
                     queueItem.request(), activeControllerAddress().map(Node::idString).orElse("null"),
                     response.authenticationException()
             );
             maybeDisconnectAndUpdateController();
             queueItem.callback().onComplete(response);
-        } else if (response.versionMismatch() != null ) {
+        } else if (response.versionMismatch() != null) {
             log.error("Request {} failed due to unsupported version error", queueItem.request(),
                     response.versionMismatch());
             queueItem.callback().onComplete(response);
@@ -148,5 +153,42 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
     }
 
     private void maybeDisconnectAndUpdateController() {
+        // just close the controller connection and wait for metadata cache update in doWork
+        activeControllerAddress().ifPresent(controllerAddress -> {
+           try {
+               // We don't care if disconnect has an error, just log it and get a new network client
+               networkClient.disconnect(controllerAddress.idString());
+           } catch (Throwable t) {
+               log.error("Had an error while disconnecting from NetworkClient.", t);
+            }
+           updateControllerAddress(null);
+        });
+    }
+
+    @Override
+    public void doWork() {
+        final ControllerInformation controllerInformation = controllerNodeProvider.getControllerInfo();
+        if (activeControllerAddress().isPresent()) {
+            super.pollOnce(Long.MAX_VALUE);
+        } else {
+            log.debug("Controller isn't cached, looking for local metadata changes");
+            Optional<Node> nodeOptional = controllerInformation.node();
+            if (nodeOptional.isPresent()) {
+                Node controllerNode = nodeOptional.get();
+                log.info("Recorded new KRaft controller, from now on will use node {}",controllerNode);
+                updateControllerAddress(controllerNode);
+                metadataUpdater.setNodes(List.of(controllerNode));
+            } else {
+                // need to backoff to avoid tight loops
+                log.debug("No controller provided, retrying after backoff");
+                super.pollOnce(100);
+            }
+        }
+    }
+
+    @Override
+    public void start() {
+        super.start();
+        started = true;
     }
 }

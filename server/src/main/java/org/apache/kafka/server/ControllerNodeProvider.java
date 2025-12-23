@@ -19,5 +19,5 @@
 package org.apache.kafka.server;
 
 public interface ControllerNodeProvider {
-
+    ControllerInformation getControllerInfo();
 }
