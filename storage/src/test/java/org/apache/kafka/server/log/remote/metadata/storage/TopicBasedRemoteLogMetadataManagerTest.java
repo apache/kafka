@@ -411,7 +411,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
             
             // Wait for the topic to be created
-            clusterInstance.waitTopicCreation(metadataTopic, 50);
+            // RemoteLogMetadataManagerTestUtils uses 3 partitions for the metadata topic
+            clusterInstance.waitTopicCreation(metadataTopic, 3);
             
             // Verify the topic exists
             assertTrue(rlmm.doesTopicExist(admin, metadataTopic));
