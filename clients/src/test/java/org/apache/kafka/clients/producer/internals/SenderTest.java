@@ -2694,7 +2694,7 @@ public class SenderTest {
         sender.runOnce();
         long nowBeforeSecondRun = time.milliseconds();
         sender.runOnce();
-        this.time.setCurrentTimeMs(this.time.milliseconds() + accumulator.getDeliveryTimeoutMs() + 1);
+        time.setCurrentTimeMs(time.milliseconds() + accumulator.getDeliveryTimeoutMs() + 1);
         sender.runOnce();
 
         InOrder inOrder = inOrder(client);

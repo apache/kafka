@@ -789,11 +789,7 @@ public class TransactionManagerTest {
             time.sleep(5000); // advance the "now" so NetworkClient sees the request as expired
             return responseFuture1.isDone();
         });
-
-        // The retried request will remain inflight until the request timeout
-        // is reached even though the delivery timeout has expired and the
-        // future has completed exceptionally.
-        assertTrue(responseFuture1.isDone());
+        
         TestUtils.assertFutureThrowsWithMessageContaining(NetworkException.class, responseFuture1, NETWORK_DISCONNECTED_MSG);
         assertFalse(transactionManager.hasInFlightRequest());
         assertEquals(0, client.inFlightRequestCount());
