@@ -164,7 +164,8 @@ public class ProducerConfig extends AbstractConfig {
             + "either an unrecoverable error is encountered, the retries have been exhausted, "
             + "or the record is added to a batch which reached an earlier delivery expiration deadline. "
             + "The value of this config should be greater than or equal to the sum of <code>" + REQUEST_TIMEOUT_MS_CONFIG + "</code> "
-            + "and <code>" + LINGER_MS_CONFIG + "</code>.";
+            + "and <code>" + LINGER_MS_CONFIG + "</code>.  <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> applies only before a record batch is sent. "
+            + "After a request is in-flight, completion depends on broker responses or network failures, not on the delivery timeout.";
 
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
