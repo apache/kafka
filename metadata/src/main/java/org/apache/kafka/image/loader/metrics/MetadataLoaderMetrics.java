@@ -21,6 +21,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.metrics.TimeRatio;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
@@ -47,6 +48,8 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         "MetadataLoader", "HandleLoadSnapshotCount");
     private static final MetricName CURRENT_CONTROLLER_ID = getMetricName(
         "MetadataLoader", "CurrentControllerId");
+    private static final MetricName AVERAGE_IDLE_RATIO = getMetricName(
+        "MetadataLoader", "AvgIdleRatio");
     private static final String FINALIZED_LEVEL_METRIC_NAME = "FinalizedLevel";
     private static final String FEATURE_NAME_TAG = "featureName";
 
@@ -59,6 +62,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
     private final Consumer<Long> batchProcessingTimeNsUpdater;
     private final Consumer<Integer> batchSizesUpdater;
     private final AtomicReference<MetadataProvenance> lastAppliedProvenance;
+    private final TimeRatio avgIdleTimeRatio;
 
     /**
      * Create a new LoaderMetrics object.
@@ -78,6 +82,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         this.batchProcessingTimeNsUpdater = batchProcessingTimeNsUpdater;
         this.batchSizesUpdater = batchSizesUpdater;
         this.lastAppliedProvenance = lastAppliedProvenance;
+        this.avgIdleTimeRatio = new TimeRatio(1);
         registry.ifPresent(r -> r.newGauge(CURRENT_METADATA_VERSION, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -96,6 +101,20 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
                 return handleLoadSnapshotCount();
             }
         }));
+        registry.ifPresent(r -> r.newGauge(AVERAGE_IDLE_RATIO, new Gauge<Double>() {
+            @Override
+            public Double value() {
+                synchronized (avgIdleTimeRatio) {
+                    return avgIdleTimeRatio.measure();
+                }
+            }
+        }));
+    }
+
+    public void updateIdleTime(long idleDurationMs, long currentTimeMs) {
+        synchronized (avgIdleTimeRatio) {
+            avgIdleTimeRatio.record((double) idleDurationMs, currentTimeMs);
+        }
     }
 
     private void addFinalizedFeatureLevelMetric(String featureName) {
@@ -223,7 +242,8 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
         registry.ifPresent(r -> List.of(
             CURRENT_METADATA_VERSION,
             CURRENT_CONTROLLER_ID,
-            HANDLE_LOAD_SNAPSHOT_COUNT
+            HANDLE_LOAD_SNAPSHOT_COUNT,
+            AVERAGE_IDLE_RATIO
         ).forEach(r::removeMetric));
         for (var featureName : finalizedFeatureLevels.keySet()) {
             removeFinalizedFeatureLevelMetric(featureName);

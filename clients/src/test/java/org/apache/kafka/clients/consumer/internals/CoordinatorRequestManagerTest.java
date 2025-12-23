@@ -26,7 +26,6 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -99,7 +98,6 @@ public class CoordinatorRequestManagerTest {
      *
      * @see CoordinatorRequestManager#markCoordinatorUnknown(String, long)
      */
-    @Flaky("KAFKA-18776")
     @Test
     public void testMarkCoordinatorUnknownLoggingAccuracy() {
         long oneMinute = 60000;

@@ -821,7 +821,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 3),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 4),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 5)
-                )
+                ),
+                true
             )
         );
 
@@ -870,7 +871,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 2)
                 ),
                 Set.of(
-                )
+                ),
+                true
             )
         );
 
@@ -923,7 +925,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 3),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 4),
                     new StreamsRebalanceData.TaskId(SUBTOPOLOGY_NAME_1, 5)
-                )
+                ),
+                true
             )
         );
         StreamsGroupHeartbeatRequestData requestDataBeforeReset = heartbeatState.buildRequestData();
@@ -1504,6 +1507,35 @@ class StreamsGroupHeartbeatRequestManagerTest {
             verify(membershipManager).memberId();
             verify(membershipManager).maybeRejoinStaleMember();
             verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
+        }
+    }
+
+    @Test
+    public void testStreamsRebalanceDataHeartbeatIntervalMsUpdatedOnSuccess() {
+        try (
+                final MockedConstruction<HeartbeatRequestState> ignored = mockConstruction(
+                        HeartbeatRequestState.class,
+                        (mock, context) -> when(mock.canSendRequest(time.milliseconds())).thenReturn(true))
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.groupId()).thenReturn(GROUP_ID);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+            when(membershipManager.memberEpoch()).thenReturn(MEMBER_EPOCH);
+            when(membershipManager.groupInstanceId()).thenReturn(Optional.of(INSTANCE_ID));
+
+            // Initially, heartbeatIntervalMs should be -1
+            assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+
+            final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+
+            final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+            final ClientResponse response = buildClientResponse();
+            networkRequest.handler().onComplete(response);
+
+            // After successful response, heartbeatIntervalMs should be updated
+            assertEquals(RECEIVED_HEARTBEAT_INTERVAL_MS, streamsRebalanceData.heartbeatIntervalMs());
         }
     }
 

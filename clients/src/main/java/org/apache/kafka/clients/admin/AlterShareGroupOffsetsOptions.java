@@ -14,19 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /**
- * Options for the {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
+ * Options for {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)}.
  */
-@InterfaceStability.Evolving
 public class AlterShareGroupOffsetsOptions extends AbstractOptions<AlterShareGroupOffsetsOptions> {
-
 }

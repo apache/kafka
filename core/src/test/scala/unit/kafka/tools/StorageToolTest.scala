@@ -32,8 +32,8 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -835,6 +835,16 @@ Found problem:
     })
 
     assertEquals("Invalid version format: invalid for feature metadata.version", exception.getMessage)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForInvalidFormat(): Unit = {
+    val stream = new ByteArrayOutputStream()
+
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, Seq("metadata.version"))
+    })
+    assertEquals("Invalid feature format: metadata.version. Expected format: 'feature=version' (e.g. 'group.version=1')", exception.getMessage)
   }
 
   @Test

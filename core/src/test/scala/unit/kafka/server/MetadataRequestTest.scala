@@ -205,6 +205,22 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   }
 
   @Test
+  def testPartitionInfoPreferredReplica(): Unit = {
+    val replicaAssignment = Map(0 -> Seq(1, 2, 0))
+    val topic = "testPartitionInfoPreferredReplicaTopic"
+    createTopicWithAssignment(topic, replicaAssignment)
+
+    val response = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic).asJava, true).build())
+    val cluster = response.buildCluster()
+    val partitionInfos = cluster.partitionsForTopic(topic).asScala
+    assertEquals(1, partitionInfos.size)
+
+    val partitionInfo = partitionInfos.head
+    val preferredReplicaId = replicaAssignment(partitionInfo.partition()).head
+    assertEquals(preferredReplicaId, partitionInfo.replicas().head.id())
+  }
+
+  @Test
   def testReplicaDownResponse(): Unit = {
     val replicaDownTopic = "replicaDown"
     val replicaCount = 3

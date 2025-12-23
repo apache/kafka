@@ -174,6 +174,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
+
+    private static final String INIT_TXN_TIMEOUT_MSG =
+            "InitTransactions timed out - " +
+                    "did not complete coordinator discovery or " +
+                    "receive the InitProducerId response within max.block.ms.";
+    
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
@@ -1322,7 +1328,7 @@ public class KafkaProducerTest {
                 "Timed out while waiting for expected `InitProducerId` request to be sent");
 
             time.sleep(maxBlockMs);
-            TestUtils.assertFutureThrows(TimeoutException.class, future);
+            TestUtils.assertFutureThrowsWithMessageContaining(TimeoutException.class, future, INIT_TXN_TIMEOUT_MSG);
 
             client.respond(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
@@ -1352,7 +1358,8 @@ public class KafkaProducerTest {
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
-            assertThrows(TimeoutException.class, producer::initTransactions);
+            var timeoutEx = assertThrows(TimeoutException.class, producer::initTransactions);
+            assertTrue(timeoutEx.getMessage().contains(INIT_TXN_TIMEOUT_MSG));
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
@@ -1520,6 +1527,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendOffsetsNotAllowedInPreparedTransactionState() throws Exception {
         StringSerializer serializer = new StringSerializer();
@@ -1969,6 +1977,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupId() {
         Map<String, Object> configs = new HashMap<>();
@@ -2006,6 +2015,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupIdTransactionV2() {
         Properties properties = new Properties();
@@ -2132,6 +2142,7 @@ public class KafkaProducerTest {
         return value;
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testMeasureTransactionDurations() {
         Map<String, Object> configs = new HashMap<>();
@@ -2184,6 +2195,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupMetadata() {
         final short maxVersion = (short) 3;
@@ -2238,6 +2250,7 @@ public class KafkaProducerTest {
         verifyInvalidGroupMetadata(null);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
         verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
@@ -2358,7 +2371,8 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 metadata, client, null, time);
-        assertThrows(TimeoutException.class, producer::initTransactions);
+        var timeoutEx1 = assertThrows(TimeoutException.class, producer::initTransactions);
+        assertTrue(timeoutEx1.getMessage().contains(INIT_TXN_TIMEOUT_MSG));
         // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
             assertThrows(IllegalStateException.class, producer::beginTransaction);
