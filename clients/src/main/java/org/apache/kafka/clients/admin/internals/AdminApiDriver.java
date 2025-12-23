@@ -45,7 +45,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * The `KafkaAdminClient`'s internal `Call` primitive is not a good fit for multi-stage
+ * `KafkaAdminClient`'s internal `Call` primitive is not a good fit for multi-stage
  * request workflows such as we see with the group coordinator APIs or any request which
  * needs to be sent to a partition leader. Typically these APIs have two concrete stages:
  *
