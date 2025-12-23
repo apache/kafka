@@ -38,7 +38,7 @@ jobs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
       sha: ${{ steps.configure-outputs.outputs.sha }}
-      doc-change-only:  ${{ steps.filter.outputs.codes == 'false' }}
+      doc-change-only:  ${{ steps.filter.outputs.code-change == 'false' }}
     steps:
       - name: Env
         run: printenv
@@ -68,9 +68,8 @@ jobs:
         id: filter
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
         with:
-          predicate-quantifier: 'every'
           filters: |
-            codes:
+            code-change:
               - '**'
               - '!**/*.md'
               - '!**/*.html'
