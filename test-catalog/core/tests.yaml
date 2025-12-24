@@ -2432,6 +2432,9 @@ kafka.server.ListOffsetsRequestWithRemoteStoreTest:
 - testResponseDefaultOffsetAndLeaderEpochForAllVersions
 - testResponseIncludesLeaderEpoch
 kafka.server.LocalLeaderEndPointTest:
+- testEarliestPendingUploadOffsetWhenHighestRemoteOffsetKnown
+- testEarliestPendingUploadOffsetWhenLocalStartGreaterThanStart
+- testEarliestPendingUploadOffsetWhenNoSegmentsUploaded
 - testFetchEarliestLocalOffset
 - testFetchEarliestOffset
 - testFetchEpochEndOffsets
@@ -2567,6 +2570,7 @@ kafka.server.ReplicaFetcherThreadTest:
 - testBuildFetch
 - testLagIsUpdatedWhenNoRecords
 - testLocalFetchCompletionIfHighWatermarkUpdated
+- testShouldFetchFromLastTieredOffset
 - testTruncateOnFetchDoesNotUpdateHighWatermark
 kafka.server.ReplicaManagerConcurrencyTest:
 - testIsrExpandAndShrinkWithConcurrentProduce
