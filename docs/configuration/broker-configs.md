@@ -33,7 +33,8 @@ The essential configurations are the following:
   * `process.roles`
   * `controller.quorum.bootstrap.servers`
   * `controller.listener.names` 
-Topic configurations and defaults are discussed in more detail below. {{< include-html file="/static/43/generated/kafka_config.html" >}} 
+
+Broker configurations and defaults are discussed in more detail below. {{< include-html file="/static/43/generated/kafka_config.html" >}} 
 
 More details about broker configuration can be found in the scala class `kafka.server.KafkaConfig`.
 
@@ -59,6 +60,11 @@ To delete a config override and revert to the statically configured or default v
     
     
     $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type brokers --entity-name 0 --alter --delete-config log.cleaner.threads
+
+To update the log level for a logger on broker id 0:
+
+
+    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --broker-logger 0 --add-config org.apache.kafka.server.quota.ClientQuotaManager\$ThrottledChannelReaper=DEBUG --alter
 
 Some configs may be configured as a cluster-wide default to maintain consistent values across the whole cluster. All brokers in the cluster will process the cluster default update. For example, to update log cleaner threads on all brokers: 
     
