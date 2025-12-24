@@ -24,5 +24,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Optional;
 
-public record ControllerInformation(Optional<Node> node, ListenerName listenerName, SecurityProtocol securityProtocol, String saslMechanism ) {
+public record ControllerInformation(Optional<Node> node, ListenerName listenerName, SecurityProtocol securityProtocol,
+                                    String saslMechanism) {
 }

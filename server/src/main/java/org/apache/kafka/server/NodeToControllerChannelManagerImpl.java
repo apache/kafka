@@ -18,7 +18,12 @@
 
 package org.apache.kafka.server;
 
-import org.apache.kafka.clients.*;
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.ManualMetadataUpdater;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.*;
@@ -52,6 +57,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
     private final ManualMetadataUpdater manualMetadataUpdater = new ManualMetadataUpdater();
     private final ApiVersions apiVersions = new ApiVersions();
     private final NodeToControllerRequestThread requestThread;
+
     public NodeToControllerChannelManagerImpl(ControllerNodeProvider controllerNodeProvider, Time time, Metrics metrics, AbstractKafkaConfig config, String channelName, String threadNamePrefix, Long retryTimeoutMs) {
         this.controllerNodeProvider = controllerNodeProvider;
         this.time = time;
@@ -61,12 +67,12 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
         this.threadNamePrefix = threadNamePrefix;
         this.retryTimeoutMs = retryTimeoutMs;
         this.logContext = new LogContext(String.format("[NodeToControllerChannelManager id=%s name=%s] ",
-            config.getString(KRaftConfigs.NODE_ID_CONFIG), channelName));
+                config.getString(KRaftConfigs.NODE_ID_CONFIG), channelName));
         this.requestThread = newRequestThread();
     }
 
     NodeToControllerRequestThread newRequestThread() {
-        String threadName = String.format("%sto-controller-%s-channel-manager",threadNamePrefix,channelName);
+        String threadName = String.format("%sto-controller-%s-channel-manager", threadNamePrefix, channelName);
         ControllerInformation controllerInformation = controllerNodeProvider.getControllerInfo();
         return new NodeToControllerRequestThread(
                 buildNetworkClient(controllerInformation),
@@ -98,7 +104,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 metrics,
                 time,
                 channelName,
-                Map.of("BrokerId",String.valueOf(config.brokerId())),
+                Map.of("BrokerId", String.valueOf(config.brokerId())),
                 false,
                 channelBuilder,
                 logContext
@@ -120,7 +126,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 apiVersions,
                 logContext,
                 MetadataRecoveryStrategy.NONE
-                );
+        );
     }
 
     @Override
@@ -142,7 +148,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
 
     @Override
     public Optional<NodeApiVersions> controllerApiVersions() {
-        return requestThread.activeControllerAddress().flatMap( activeController ->
+        return requestThread.activeControllerAddress().flatMap(activeController ->
                 Optional.ofNullable(apiVersions.get(activeController.idString()))
         );
     }
@@ -150,8 +156,8 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
     /**
      * Send request to the controller.
      *
-     * @param request         The request to be sent.
-     * @param callback        Request completion callback.
+     * @param request  The request to be sent.
+     * @param callback Request completion callback.
      */
     @Override
     public void sendRequest(AbstractRequest.Builder<? extends AbstractRequest> request,

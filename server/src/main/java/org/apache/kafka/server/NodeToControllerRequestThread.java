@@ -17,6 +17,7 @@
  */
 
 package org.apache.kafka.server;
+
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.ManualMetadataUpdater;
@@ -155,13 +156,13 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
     private void maybeDisconnectAndUpdateController() {
         // just close the controller connection and wait for metadata cache update in doWork
         activeControllerAddress().ifPresent(controllerAddress -> {
-           try {
-               // We don't care if disconnect has an error, just log it and get a new network client
-               networkClient.disconnect(controllerAddress.idString());
-           } catch (Throwable t) {
-               log.error("Had an error while disconnecting from NetworkClient.", t);
+            try {
+                // We don't care if disconnect has an error, just log it and get a new network client
+                networkClient.disconnect(controllerAddress.idString());
+            } catch (Throwable t) {
+                log.error("Had an error while disconnecting from NetworkClient.", t);
             }
-           updateControllerAddress(null);
+            updateControllerAddress(null);
         });
     }
 
@@ -175,7 +176,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
             Optional<Node> nodeOptional = controllerInformation.node();
             if (nodeOptional.isPresent()) {
                 Node controllerNode = nodeOptional.get();
-                log.info("Recorded new KRaft controller, from now on will use node {}",controllerNode);
+                log.info("Recorded new KRaft controller, from now on will use node {}", controllerNode);
                 updateControllerAddress(controllerNode);
                 metadataUpdater.setNodes(List.of(controllerNode));
             } else {

@@ -40,7 +40,7 @@ public class RaftControllerNodeProvider implements ControllerNodeProvider {
     private final SecurityProtocol securityProtocol;
     private final String saslMechanism;
 
-    public static RaftControllerNodeProvider create (RaftManager<ApiMessageAndVersion> raftManager, AbstractKafkaConfig config) {
+    public static RaftControllerNodeProvider create(RaftManager<ApiMessageAndVersion> raftManager, AbstractKafkaConfig config) {
         final ListenerName controllerListenerName = new ListenerName(config.controllerListenerNames().getFirst());
         final SecurityProtocol controllerSecurityProtocol = Optional.of(config.effectiveListenerSecurityProtocolMap().get(controllerListenerName))
                 .orElse(SecurityProtocol.forName(controllerListenerName.value()));
