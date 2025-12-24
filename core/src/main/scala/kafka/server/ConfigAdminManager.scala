@@ -127,7 +127,7 @@ class ConfigAdminManager(nodeId: Int,
             if (configResource.name().nonEmpty) {
               validateResourceNameIsCurrentNodeId(resource.resourceName())
             }
-            validateBrokerConfigChange(resource, configResource, configRepository, conf)
+            validateBrokerConfigChange(resource, configResource)
           },
           _ => {
             // Nothing to do for TOPIC, CLIENT_METRICS or GROUP type in Broker,
@@ -143,6 +143,46 @@ class ConfigAdminManager(nodeId: Int,
     })
     results
   }
+
+  private def validateBrokerConfigChange(
+    resource: IAlterConfigsResource,
+    configResource: ConfigResource
+  ): Unit = {
+    val perBrokerConfig = configResource.name().nonEmpty
+    val persistentProps = configRepository.config(configResource)
+    val configProps = conf.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+    val alterConfigOps = resource.configs().asScala.map {
+      config =>
+        val opType = AlterConfigOp.OpType.forId(config.configOperation())
+        if (opType == null) {
+          throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
+        }
+        new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
+    }.toSeq
+    prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+    try {
+      validateBrokerConfigChange(configProps, configResource)
+    } catch {
+      case t: Throwable => error(s"validation of configProps $configProps for $configResource failed with exception", t)
+        throw t
+    }
+  }
+
+  private def validateBrokerConfigChange(
+    props: Properties,
+    configResource: ConfigResource
+  ): Unit = {
+    try {
+      conf.dynamicConfig.validate(props, configResource.name().nonEmpty)
+    } catch {
+      case e: ApiException => throw e
+      //KAFKA-13609: InvalidRequestException is not really the right exception here if the
+      // configuration fails validation. The configuration is still well-formed, but just
+      // can't be applied. It should probably throw InvalidConfigurationException. However,
+      // we should probably only change this in a KIP since it has compatibility implications.
+      case e: Throwable => throw new InvalidRequestException(e.getMessage)
+    }
+ }
 
   /**
    * Preprocess a legacy configuration operation on the broker.
@@ -186,7 +226,7 @@ class ConfigAdminManager(nodeId: Int,
               if (configResource.name().nonEmpty) {
                 validateResourceNameIsCurrentNodeId(resource.resourceName())
               }
-              validateBrokerConfigChange(resource, configResource, conf)
+              validateBrokerConfigChange(resource, configResource)
             case TOPIC | CLIENT_METRICS | GROUP =>
             // Nothing to do.
             case _ =>
@@ -203,6 +243,17 @@ class ConfigAdminManager(nodeId: Int,
       }
     })
     results
+  }
+
+  private def validateBrokerConfigChange(
+    resource: LAlterConfigsResource,
+    configResource: ConfigResource
+  ): Unit = {
+    val props = new Properties()
+    resource.configs().forEach {
+      config => props.setProperty(config.name(), config.value())
+    }
+    validateBrokerConfigChange(props, configResource)
   }
 
   def validateResourceNameIsCurrentNodeId(name: String): Unit = {
@@ -453,62 +504,6 @@ object ConfigAdminManager {
       case t: Exception =>
         log.error(s"validation of configProps $properties for $configResource failed with exception", t)
         throw new InvalidRequestException(t.getMessage)
-    }
-  }
-
-  def validateBrokerConfigChange(
-    resource: IAlterConfigsResource,
-    configResource: ConfigResource,
-    configRepository: ConfigRepository,
-    kafkaConfig: KafkaConfig
-  ): Unit = {
-    val perBrokerConfig = configResource.name().nonEmpty
-    val persistentProps = configRepository.config(configResource)
-    val configProps = kafkaConfig.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-    val alterConfigOps = resource.configs().asScala.map {
-      config =>
-        val opType = AlterConfigOp.OpType.forId(config.configOperation())
-        if (opType == null) {
-          throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
-        }
-        new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
-    }.toSeq
-    prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
-    try {
-      validateBrokerConfigChange(configProps, configResource, kafkaConfig)
-    } catch {
-      case t: Throwable =>
-        log.error(s"validation of configProps $configProps for $configResource failed with exception", t)
-        throw t
-    }
-  }
-
-  def validateBrokerConfigChange(
-    resource: LAlterConfigsResource,
-    configResource: ConfigResource,
-    kafkaConfig: KafkaConfig
-  ): Unit = {
-    val props = new Properties()
-    resource.configs().forEach {
-      config => props.setProperty(config.name(), config.value())
-    }
-    validateBrokerConfigChange(props, configResource, kafkaConfig)
-  }
-
-  def validateBrokerConfigChange(
-    props: Properties,
-    configResource: ConfigResource,
-    kafkaConfig: KafkaConfig
-  ): Unit = {
-    try {
-      kafkaConfig.dynamicConfig.validate(props, configResource.name().nonEmpty)
-    } catch {
-      case e: ApiException => throw e
-      //KAFKA-13609: InvalidRequestException is not really the right exception here if the
-      // configuration fails validation. The configuration is still well-formed, but just
-      // can't be applied. It should probably throw InvalidConfigurationException. However,
-      // we should probably only change this in a KIP since it has compatibility implications.
-      case e: Throwable => throw new InvalidRequestException(e.getMessage)
     }
   }
 }
