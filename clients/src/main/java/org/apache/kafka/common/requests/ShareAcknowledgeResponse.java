@@ -107,13 +107,13 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
     public static ShareAcknowledgeResponse of(Errors error,
                                               int throttleTimeMs,
                                               LinkedHashMap<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> responseData,
-                                              List<Node> nodeEndpoints) {
-        return new ShareAcknowledgeResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints));
+                                              List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        return new ShareAcknowledgeResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints, acquisitionLockTimeout));
     }
 
     public static ShareAcknowledgeResponseData toMessage(Errors error, int throttleTimeMs,
                                                          Iterator<Map.Entry<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> partIterator,
-                                                         List<Node> nodeEndpoints) {
+                                                         List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection topicResponses = new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponseCollection();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> entry = partIterator.next();
@@ -140,6 +140,7 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
                         .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
+                .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
                 .setResponses(topicResponses);
     }
 }

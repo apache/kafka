@@ -50,6 +50,8 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.kafka.server.common.TransactionVersion.TV_UNKNOWN;
+
 
 public class StressTestLog {
     private static final AtomicBoolean RUNNING = new AtomicBoolean(true);
@@ -164,7 +166,8 @@ public class StressTestLog {
                     0,
                     AppendOrigin.CLIENT,
                     RequestLocal.noCaching(),
-                    VerificationGuard.SENTINEL);
+                    VerificationGuard.SENTINEL,
+                    TV_UNKNOWN);
 
             if ((logAppendInfo.firstOffset() != -1 && logAppendInfo.firstOffset() != currentOffset)
                 || logAppendInfo.lastOffset() != currentOffset) {

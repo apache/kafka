@@ -362,7 +362,7 @@ public interface ClusterInstance {
 
     default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
         for (ControllerServer controller : controllers) {
-            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
+            long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");

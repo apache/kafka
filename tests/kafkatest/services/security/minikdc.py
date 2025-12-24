@@ -118,7 +118,7 @@ class MiniKdc(KafkaPathResolverMixin, Service):
         self.logger.debug("Attempting to start MiniKdc on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(MiniKdc.LOG_FILE) as monitor:
             node.account.ssh(cmd)
-            monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
+            monitor.wait_until("MiniKdc Running", timeout_sec=120, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
 
         node.account.copy_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
         node.account.copy_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
@@ -137,5 +137,3 @@ class MiniKdc(KafkaPathResolverMixin, Service):
             os.remove(MiniKdc.LOCAL_KEYTAB_FILE)
         if os.path.exists(MiniKdc.LOCAL_KRB5CONF_FILE):
             os.remove(MiniKdc.LOCAL_KRB5CONF_FILE)
-
-
