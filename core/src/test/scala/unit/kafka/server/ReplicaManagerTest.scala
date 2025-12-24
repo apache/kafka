@@ -5783,7 +5783,8 @@ class ReplicaManagerTest {
     assertEquals(1L, fetchInfo.fetchOffsetMetadata.messageOffset)
     assertEquals(UnifiedLog.UNKNOWN_OFFSET, fetchInfo.fetchOffsetMetadata.segmentBaseOffset)
     assertEquals(-1, fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
-    assertEquals(MemoryRecords.EMPTY, fetchInfo.records)
+    // placeholder records should use adjustedMaxBytes for size
+    assertEquals(100, fetchInfo.records.sizeInBytes)
     assertTrue(fetchInfo.delayedRemoteStorageFetch.isPresent)
 
     val allMetrics = metrics.metrics()
@@ -5791,6 +5792,57 @@ class ReplicaManagerTest {
     val maxMetric = allMetrics.get(metrics.metricName("remote-fetch-throttle-time-max", "RemoteLogManager"))
     assertEquals(Double.NaN, avgMetric.metricValue)
     assertEquals(Double.NaN, maxMetric.metricValue)
+  }
+
+  @Test
+  def testRemoteFetchSizeAccountingWithMultiplePartitions(): Unit = {
+    val fetchMaxBytes = 250
+    val partitionMaxBytes = 100
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      aliveBrokerIds = Seq(0, 1), enableRemoteStorage = true, shouldMockLog = true,
+      remoteFetchQuotaExceeded = Some(false))
+
+    try {
+      val tp0 = new TopicPartition(topic, 0)
+      val tp1 = new TopicPartition(topic, 1)
+      val tidp0 = new TopicIdPartition(topicId, tp0)
+      val tidp1 = new TopicIdPartition(topicId, tp1)
+
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints.asJava)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+      val replicas = Seq[Integer](0, 1).asJava
+      val leaderEpoch = 0
+
+      val delta0 = createLeaderDelta(topicId, tp0, replicas.get(0), replicas, replicas)
+      val delta1 = createLeaderDelta(topicId, tp1, replicas.get(0), replicas, replicas)
+      val image0 = imageFromTopics(delta0.apply())
+      val image1 = imageFromTopics(delta1.apply())
+      replicaManager.applyDelta(delta0, image0)
+      replicaManager.applyDelta(delta1, image1)
+
+      val params = new FetchParams(-1, 1, 100, 0, fetchMaxBytes, FetchIsolation.LOG_END, Optional.empty)
+      val results = replicaManager.readFromLog(params, Seq(
+        tidp0 -> new PartitionData(topicId, 1, 0, partitionMaxBytes, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch)),
+        tidp1 -> new PartitionData(topicId, 1, 0, partitionMaxBytes, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))),
+        UNBOUNDED_QUOTA, false)
+
+      assertEquals(2, results.size)
+      var totalSize = 0
+      results.foreach { case (tidp, result) =>
+        assertTrue(result.info.delayedRemoteStorageFetch.isPresent)
+        val fetchBytes = result.info.delayedRemoteStorageFetch.get().fetchMaxBytes
+        assertEquals(fetchBytes, result.info.records.sizeInBytes)
+        totalSize += result.info.records.sizeInBytes
+      }
+
+      // verify total size doesn't exceed fetchMaxBytes
+      assertTrue(totalSize <= fetchMaxBytes,
+        s"Total placeholder size $totalSize should not exceed fetchMaxBytes $fetchMaxBytes")
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test

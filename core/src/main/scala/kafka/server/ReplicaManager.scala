@@ -196,6 +196,26 @@ object ReplicaManager {
     timestamp < 0 &&
       (!timestampMinSupportedVersion.contains(timestamp) || version < timestampMinSupportedVersion(timestamp))
   }
+
+  /**
+   * Creates a placeholder Records instance that reports a specific size without allocating memory.
+   * This is used for tiered storage fetch placeholders to properly account for reserved fetch size
+   * in bytesReadable calculations without the memory overhead of allocating large buffers.
+   */
+  private[server] class PlaceholderRecords(size: Int) extends AbstractRecords {
+    override def sizeInBytes(): Int = size
+
+    override def batches(): java.lang.Iterable[RecordBatch] = java.util.Collections.emptyList()
+
+    override def batchIterator(): org.apache.kafka.common.utils.AbstractIterator[RecordBatch] =
+      new org.apache.kafka.common.utils.AbstractIterator[RecordBatch] {
+        override def makeNext(): RecordBatch = allDone()
+      }
+
+    override def writeTo(channel: org.apache.kafka.common.network.TransferableChannel, position: Int, length: Int): Int = 0
+
+    override def slice(position: Int, size: Int): Records = MemoryRecords.EMPTY
+  }
 }
 
 class ReplicaManager(val config: KafkaConfig,
@@ -1949,7 +1969,12 @@ class ReplicaManager(val config: KafkaConfig,
           } else {
             Optional.empty[RemoteStorageFetchInfo]()
           }
-          new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(), remoteStorageFetchInfoOpt)
+          // Use a placeholder Records with sizeInBytes = adjustedMaxBytes instead of EMPTY (which has size 0).
+          // This ensures bytesReadable accounts for the reserved remote fetch size, preventing fetch responses
+          // from exceeding fetch.max.bytes when combining local and tiered storage fetches.
+          // PlaceholderRecords avoids allocating memory for the fetch size accounting.
+          val placeholderRecords = new ReplicaManager.PlaceholderRecords(adjustedMaxBytes)
+          new FetchDataInfo(new LogOffsetMetadata(offset), placeholderRecords, false, Optional.empty(), remoteStorageFetchInfoOpt)
         }
 
         new LogReadResult(fetchDataInfo,
