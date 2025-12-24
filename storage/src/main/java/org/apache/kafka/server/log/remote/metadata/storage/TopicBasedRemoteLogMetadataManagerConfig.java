@@ -240,6 +240,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", consumeWaitMs=" + consumeWaitMs +
                 ", metadataTopicRetentionMs=" + metadataTopicRetentionMs +
                 ", metadataTopicReplicationFactor=" + metadataTopicReplicationFactor +
+                ", metadataTopicMinIsr=" + metadataTopicMinIsr +
                 ", initializationRetryMaxTimeoutMs=" + initializationRetryMaxTimeoutMs +
                 ", initializationRetryIntervalMs=" + initializationRetryIntervalMs +
                 ", commonProps=" + configMapToRedactedString(commonProps, AdminClientConfig.configDef()) +
