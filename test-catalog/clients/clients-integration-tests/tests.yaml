@@ -147,6 +147,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest:
 - testAsyncConsumerAutoCommitOnRebalance
 - testAsyncConsumerCommitMetadata
 - testAsyncConsumerCommitSpecifiedOffsets
+- testAsyncConsumerNoCommittedOffsets
 - testAsyncConsumerPositionAndCommit
 - testAsyncConsumerSubscribeAndCommitSync
 - testClassicConsumerAsyncCommit
@@ -156,6 +157,7 @@ org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest:
 - testClassicConsumerAutoCommitOnRebalance
 - testClassicConsumerCommitMetadata
 - testClassicConsumerCommitSpecifiedOffsets
+- testClassicConsumerNoCommittedOffsets
 - testClassicConsumerPositionAndCommit
 - testClassicConsumerSubscribeAndCommitSync
 - testCommitAsyncCompletedBeforeCommitSyncReturns
