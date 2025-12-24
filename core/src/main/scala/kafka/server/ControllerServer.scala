@@ -20,7 +20,7 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache, DynamicTopicClusterQuotaPublisher, KRaftMetadataCachePublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCachePublisher}
 
 import scala.collection.immutable
 import kafka.utils.{CoreUtils, Logging}
