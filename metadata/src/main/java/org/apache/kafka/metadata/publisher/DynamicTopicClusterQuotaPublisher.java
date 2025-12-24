@@ -17,32 +17,37 @@
 package org.apache.kafka.metadata.publisher;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.fault.FaultHandler;
+import org.apache.kafka.server.quota.ClientQuotaCallback;
 
 public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
     private final String clusterId;
     private final int nodeId;
     private final FaultHandler faultHandler;
     private final String nodeType;
-    private final QuotaManagersProvider quotaManagersProvider;
+    private final Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin;
+    private final Runnable updateQuotaMetricConfigs;
 
     public DynamicTopicClusterQuotaPublisher(
         String clusterId,
         int nodeId,
         FaultHandler faultHandler,
         String nodeType,
-        QuotaManagersProvider quotaManagers
+        Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin,
+        Runnable updateQuotaMetricConfigs
     ) {
         this.clusterId = clusterId;
         this.nodeId = nodeId;
         this.faultHandler = faultHandler;
         this.nodeType = nodeType;
-        this.quotaManagersProvider = quotaManagers;
+        this.clientQuotaCallbackPlugin = clientQuotaCallbackPlugin;
+        this.updateQuotaMetricConfigs = updateQuotaMetricConfigs;
     }
 
     @Override
@@ -53,17 +58,12 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
         try {
-            quotaManagersProvider.clientQuotaCallbackPlugin().ifPresent(plugin -> {
-                if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-                    Cluster cluster = MetadataCache.toCluster(clusterId, newImage);
-                    if (plugin.get().updateClusterMetadata(cluster)) {
-                        quotaManagersProvider.fetch().updateQuotaMetricConfigs();
-                        quotaManagersProvider.produce().updateQuotaMetricConfigs();
-                        quotaManagersProvider.request().updateQuotaMetricConfigs();
-                        quotaManagersProvider.controllerMutation().updateQuotaMetricConfigs();
-                    }
+            if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
+                Cluster cluster = MetadataCache.toCluster(clusterId, newImage);
+                if (clientQuotaCallbackPlugin.get().updateClusterMetadata(cluster)) {
+                    updateQuotaMetricConfigs.run();
                 }
-            });
+            }
         } catch (Exception e) {
             String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
             faultHandler.handleFault("Uncaught exception while publishing dynamic topic or cluster changes from " + deltaName, e);

@@ -507,7 +507,13 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          quotaManagers,
+          quotaManagers.clientQuotaCallbackPlugin().get(),
+          () -> {
+            quotaManagers.fetch.updateQuotaMetricConfigs()
+            quotaManagers.produce.updateQuotaMetricConfigs()
+            quotaManagers.request.updateQuotaMetricConfigs()
+            quotaManagers.controllerMutation.updateQuotaMetricConfigs()
+          }
         ),
         new ScramPublisher(
           config.nodeId,
