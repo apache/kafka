@@ -18,6 +18,7 @@ package org.apache.kafka.server;
 
 import kafka.network.SocketServer;
 import kafka.server.KafkaBroker;
+
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
