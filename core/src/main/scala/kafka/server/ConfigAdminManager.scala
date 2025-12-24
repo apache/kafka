@@ -439,6 +439,23 @@ object ConfigAdminManager {
     }
   }
 
+  def validateDynamicControllerConfigChange(
+    resource: IAlterConfigsResource,
+    configResource: ConfigResource
+  ): Unit = {
+    val properties = new Properties()
+    resource.configs().forEach(
+      config => properties.setProperty(config.name(), config.value())
+    )
+    try {
+      DynamicBrokerConfig.validateControllerConfigTypes(properties)
+    } catch {
+      case t: Exception =>
+        log.error(s"validation of configProps $properties for $configResource failed with exception", t)
+        throw new InvalidRequestException(t.getMessage)
+    }
+  }
+
   def validateBrokerConfigChange(
     resource: IAlterConfigsResource,
     configResource: ConfigResource,

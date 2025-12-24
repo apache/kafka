@@ -52,6 +52,19 @@ object DynamicConfig {
 
     def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(brokerConfigs, props, customPropsAllowed = true)
   }
+  
+  object Controller {
+    private val controllerConfigs = {
+      val configs = new ConfigDef()
+      // Filter and define all dynamic configurations
+      KafkaConfig.configKeys
+        .filter { case (configName, _) => AllDynamicConfigs.contains(configName) }
+        .foreach { case (_, config) => configs.define(config) }
+      configs
+    }
+
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(controllerConfigs, props, customPropsAllowed = true)
+  }
 
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {

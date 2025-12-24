@@ -182,6 +182,15 @@ object DynamicBrokerConfig {
     DynamicConfig.Broker.validate(baseProps)
   }
 
+  private[server] def validateControllerConfigTypes(props: Properties): Unit = {
+    val baseProps = new Properties
+    props.asScala.foreach {
+      case (ListenerConfigRegex(baseName), v) => baseProps.put(baseName, v)
+      case (k, v) => baseProps.put(k, v)
+    }
+    DynamicConfig.Controller.validate(baseProps)
+  }
+
   private[server] def dynamicConfigUpdateModes: util.Map[String, String] = {
     AllDynamicConfigs.map { name =>
       val mode = if (PerBrokerConfigs.contains(name)) "per-broker" else "cluster-wide"
