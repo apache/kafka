@@ -17,6 +17,7 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -207,4 +208,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
         return connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT);
     }
+    public void addReconfigurable(Reconfigurable reconfigurable) {
+        // Default no-op. Overridden by KafkaConfig to support dynamic configuration.
+    };
+
+    public void removeReconfigurable(Reconfigurable reconfigurable) {
+        // Default no-op. Overridden by KafkaConfig to support dynamic configuration.
+    };
 }
