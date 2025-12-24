@@ -51,7 +51,7 @@
             "about": "The share-partition start offset." },
           { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
             "about": "The leader epoch of the partition." },
-          { "name": "Lag", "type": "int64", "versions": "1+", "ignorable": "true", "default": -1,
+          { "name": "Lag", "type": "int64", "versions": "1+", "ignorable": true, "default": -1,
             "about": "The share-partition lag." },
           { "name": "ErrorCode", "type": "int16", "versions": "0+",
             "about": "The partition-level error code, or 0 if there was no error." },

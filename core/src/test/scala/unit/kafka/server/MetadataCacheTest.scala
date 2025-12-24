@@ -814,7 +814,6 @@ class MetadataCacheTest {
     checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
 
     // With start index and quota reached
-    System.out.println("here")
     response = metadataCache.describeTopicResponse(util.List.of(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
