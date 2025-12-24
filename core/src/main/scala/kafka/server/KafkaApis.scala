@@ -69,7 +69,7 @@ import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareParti
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.{AppendOrigin, IdempotentTransactionMarkerException}
+import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.time.Duration
@@ -1798,21 +1798,13 @@ class KafkaApis(val requestChannel: RequestChannel,
               val error = if (exception == null) {
                 Errors.NONE
               } else {
-                // Handle idempotent transaction marker retries (KAFKA-19999):
-                // The group coordinator may throw IdempotentTransactionMarkerException when detecting a marker retry
-                // (same epoch + transaction already completed). Treat this as success to prevent hanging 
-                // transactions during coordinator recovery or network retries
-                if (IdempotentTransactionMarkerException.isInstanceOf(exception))
-                  Errors.NONE
-                else {
-                  Errors.forException(exception) match {
-                    case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
-                      // The transaction coordinator does not expect those errors so we translate them
-                      // to NOT_LEADER_OR_FOLLOWER to signal to it that the coordinator is not ready yet.
-                      Errors.NOT_LEADER_OR_FOLLOWER
-                    case error =>
-                      error
-                  }
+                Errors.forException(exception) match {
+                  case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
+                    // The transaction coordinator does not expect those errors so we translate them
+                    // to NOT_LEADER_OR_FOLLOWER to signal to it that the coordinator is not ready yet.
+                    Errors.NOT_LEADER_OR_FOLLOWER
+                  case error =>
+                    error
                 }
               }
               addResultAndMaybeComplete(partition, error)
@@ -1839,18 +1831,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestLocal = requestLocal,
             responseCallback = errors => {
               errors.foreachEntry { (topicIdPartition, partitionResponse) =>
-                val error = if (partitionResponse.error == Errors.NONE)
-                  Errors.NONE
-                // Handle idempotent transaction marker retries (KAFKA-19999):
-                // For TV2, when a marker with the same epoch arrives and no transaction is ongoing,
-                // ProducerStateManager throws IdempotentTransactionMarkerException to signal this is
-                // a benign retry (e.g., coordinator recovery or network disconnection). We treat this
-                // as success to prevent hanging transactions.
-                else if (IdempotentTransactionMarkerException.isInstanceOf(partitionResponse.exception()))
-                  Errors.NONE
-                else
-                  partitionResponse.error
-                addResultAndMaybeComplete(topicIdPartition.topicPartition(), error)
+                addResultAndMaybeComplete(topicIdPartition.topicPartition(), partitionResponse.error)
               }
             },
             transactionVersion = markerTransactionVersion

@@ -164,7 +164,6 @@ public class ProduceResponse extends AbstractResponse {
         public List<RecordError> recordErrors;
         public String errorMessage;
         public ProduceResponseData.LeaderIdAndEpoch currentLeader;
-        private Throwable exception;
 
         public PartitionResponse(Errors error) {
             this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET);
@@ -186,19 +185,6 @@ public class ProduceResponse extends AbstractResponse {
             this(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, new ProduceResponseData.LeaderIdAndEpoch());
         }
 
-        public PartitionResponse(Throwable exception, long baseOffset, long logAppendTime, long logStartOffset, List<RecordError> recordErrors, String errorMessage) {
-            this(
-                exception == null ? Errors.NONE : Errors.forException(exception),
-                baseOffset,
-                logAppendTime,
-                logStartOffset,
-                recordErrors,
-                errorMessage,
-                new ProduceResponseData.LeaderIdAndEpoch()
-            );
-            this.exception = exception;
-        }
-
         public PartitionResponse(
             Errors error,
             long baseOffset,
@@ -217,13 +203,6 @@ public class ProduceResponse extends AbstractResponse {
             this.currentLeader = currentLeader;
         }
 
-        public Throwable exception() {
-            if (exception != null) {
-                return exception;
-            }
-            return error.exception(errorMessage);
-        }
-
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -235,13 +214,12 @@ public class ProduceResponse extends AbstractResponse {
                     error == that.error &&
                     Objects.equals(recordErrors, that.recordErrors) &&
                     Objects.equals(errorMessage, that.errorMessage) &&
-                    Objects.equals(currentLeader, that.currentLeader) &&
-                    Objects.equals(exception, that.exception);
+                    Objects.equals(currentLeader, that.currentLeader);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, currentLeader, exception);
+            return Objects.hash(error, baseOffset, logAppendTime, logStartOffset, recordErrors, errorMessage, currentLeader);
         }
 
         @Override
@@ -263,12 +241,6 @@ public class ProduceResponse extends AbstractResponse {
             b.append(", errorMessage: ");
             if (errorMessage != null) {
                 b.append(errorMessage);
-            } else {
-                b.append("null");
-            }
-            b.append("exception: ");
-            if (exception != null) {
-                b.append(exception);
             } else {
                 b.append("null");
             }

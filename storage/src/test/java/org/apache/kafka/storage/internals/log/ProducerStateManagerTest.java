@@ -1106,11 +1106,7 @@ public class ProducerStateManagerTest {
         ProducerAppendInfo appendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.COORDINATOR);
         EndTransactionMarker endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0);
 
-        // This should throw IdempotentTransactionMarkerException because:
-        // 1. markerEpoch (1) == currentEpoch (1)
-        // 2. currentTxnFirstOffset is empty (transaction completed)
-        assertThrows(
-                IdempotentTransactionMarkerException.class,
+        assertDoesNotThrow(
                 () -> appendInfo.appendEndTxnMarker(endTxnMarker, markerEpoch, 101, time.milliseconds(), transactionVersion)
         );
     }

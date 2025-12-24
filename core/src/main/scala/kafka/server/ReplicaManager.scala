@@ -881,7 +881,7 @@ class ReplicaManager(val config: KafkaConfig,
       topicIdPartition -> ProducePartitionStatus(
         result.info.lastOffset + 1, // required offset
         new PartitionResponse(
-          result.exception.orNull,
+          result.error,
           result.info.firstOffset,
           result.info.logAppendTime,
           result.info.logStartOffset,
