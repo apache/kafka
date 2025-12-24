@@ -80,7 +80,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics();
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", "processId", time);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", time);
     private final String threadId = Thread.currentThread().getName();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;

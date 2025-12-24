@@ -27,18 +27,26 @@ import java.nio.file.Paths;
 
 import static org.apache.kafka.message.checker.CheckerTestUtils.messageSpecStringToTempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class MetadataSchemaCheckerToolTest {
     @Test
     public void testVerifyEvolutionGit() throws Exception {
-        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-            Path rootKafkaDirectory = Paths.get("").toAbsolutePath();
-            while (!Files.exists(rootKafkaDirectory.resolve(".git"))) {
-                rootKafkaDirectory = rootKafkaDirectory.getParent();
-                if (rootKafkaDirectory == null) {
-                    throw new RuntimeException("Invalid directory, need to be within a Git repository");
-                }
+        // Try to find the Git root directory
+        Path rootKafkaDirectory = Paths.get("").toAbsolutePath();
+        boolean gitFound = false;
+        
+        while (rootKafkaDirectory != null) {
+            if (Files.exists(rootKafkaDirectory.resolve(".git"))) {
+                gitFound = true;
+                break;
             }
+            rootKafkaDirectory = rootKafkaDirectory.getParent();
+        }
+        
+        assumeTrue(gitFound, "Skipping test - not in a Git repository");
+        
+        try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
             Path schemaPath = rootKafkaDirectory.resolve("metadata/src/main/resources/common/metadata/AbortTransactionRecord.json");
             MetadataSchemaCheckerTool.run(
                 // In the CI environment because the CI fetch command only creates HEAD and refs/remotes/pull/... references.

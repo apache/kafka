@@ -80,11 +80,11 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
         successfulRebalanceSensor.add(rebalanceLatencyMax, new Max());
         successfulRebalanceSensor.add(rebalanceLatencyTotal, new CumulativeSum());
         successfulRebalanceSensor.add(rebalanceTotal, new CumulativeCount());
-        successfulRebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        successfulRebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
         failedRebalanceSensor = metrics.sensor("failed-rebalance");
         failedRebalanceSensor.add(failedRebalanceTotal, new CumulativeSum());
-        failedRebalanceSensor.add(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        failedRebalanceSensor.add(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
         Measurable lastRebalance = (config, now) -> {
             if (lastRebalanceEndMs == -1L)

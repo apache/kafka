@@ -18,8 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -203,7 +204,7 @@ public class ConsumerNetworkThreadTest {
     public void testSendUnsentRequests() {
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
         consumerNetworkThread.cleanup();
-        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
+        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong(), eq(true));
     }
 
     @ParameterizedTest
@@ -258,7 +259,7 @@ public class ConsumerNetworkThreadTest {
              )) {
             consumerNetworkThread.initializeResources();
 
-            PollEvent event = new PollEvent(0);
+            AsyncPollEvent event = new AsyncPollEvent(10, 0);
             event.setEnqueuedMs(time.milliseconds());
             applicationEventQueue.add(event);
             asyncConsumerMetrics.recordApplicationEventQueueSize(1);

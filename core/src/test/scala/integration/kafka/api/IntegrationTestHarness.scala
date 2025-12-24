@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.time.Duration
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
+import org.apache.kafka.clients.consumer.{CloseOptions, Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 
@@ -34,8 +34,8 @@ import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.MetadataLogConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -309,11 +309,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     try {
       producers.foreach(_.close(Duration.ZERO))
       consumers.foreach(_.wakeup())
-      consumers.foreach(_.close(Duration.ZERO))
+      consumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       shareConsumers.foreach(_.wakeup())
       shareConsumers.foreach(_.close(Duration.ZERO))
       streamsConsumers.foreach(_.wakeup())
-      streamsConsumers.foreach(_.close(Duration.ZERO))
+      streamsConsumers.foreach(_.close(CloseOptions.timeout(Duration.ZERO)))
       adminClients.foreach(_.close(Duration.ZERO))
 
       producers.clear()

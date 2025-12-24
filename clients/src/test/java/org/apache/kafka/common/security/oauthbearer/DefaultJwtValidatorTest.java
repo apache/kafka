@@ -17,20 +17,33 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
+import org.jose4j.jwk.JsonWebKey;
+import org.jose4j.jwk.JsonWebKeySet;
+import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class DefaultJwtValidatorTest extends OAuthBearerTest {
+
+    @AfterEach
+    public void tearDown() {
+        System.clearProperty(BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+    }
 
     @Test
     public void testConfigureWithVerificationKeyResolver() {
@@ -49,6 +62,26 @@ public class DefaultJwtValidatorTest extends OAuthBearerTest {
         DefaultJwtValidator jwtValidator = new DefaultJwtValidator();
         assertDoesNotThrow(() -> jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
         assertInstanceOf(ClientJwtValidator.class, jwtValidator.delegate());
+    }
+
+    @Test
+    public void testConfigureWithJwksUrl() throws Exception {
+        PublicJsonWebKey jwk = createRsaJwk();
+        AccessTokenBuilder builder = new AccessTokenBuilder()
+            .jwk(jwk)
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
+        String accessToken = builder.build();
+
+        JsonWebKeySet jwks = new JsonWebKeySet(jwk);
+        String jwksJson = jwks.toJson(JsonWebKey.OutputControlLevel.PUBLIC_ONLY);
+        String fileUrl = tempFile(jwksJson).toURI().toString();
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, fileUrl);
+        Map<String, ?> configs = getSaslConfigs(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, fileUrl);
+
+        DefaultJwtValidator jwtValidator = new DefaultJwtValidator();
+        assertDoesNotThrow(() -> jwtValidator.configure(configs, OAUTHBEARER_MECHANISM, getJaasConfigEntries()));
+        assertInstanceOf(BrokerJwtValidator.class, jwtValidator.delegate());
+        assertDoesNotThrow(() -> jwtValidator.validate(accessToken));
     }
 
     private CloseableVerificationKeyResolver createVerificationKeyResolver(AccessTokenBuilder builder) {
