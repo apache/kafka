@@ -495,8 +495,10 @@ object ConfigAdminManager {
     configResource: ConfigResource
   ): Unit = {
     val properties = new Properties()
-    resource.configs().forEach(
-      config => properties.setProperty(config.name(), config.value())
+    resource.configs().forEach(config =>
+      if (config.value() != null) {
+        properties.setProperty(config.name(), config.value())
+      }
     )
     val alterConfigOps = resource.configs().asScala.map {
       config =>
