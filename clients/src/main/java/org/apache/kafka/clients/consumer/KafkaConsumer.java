@@ -1306,7 +1306,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the last committed offsets for the given partitions (whether the commit happened by this process or
      * another). The returned offsets will be used as the position for the consumer in the event of a failure.
      * <p>
-     * If any of the partitions requested do not exist, an exception would be thrown.
+     * If any of the partitions requested do not exist, the result map will contain null as the value for that partition.
      * <p>
      * This call will do a remote call to get the latest committed offsets from the server, and will block until the
      * committed offsets are gotten successfully, an unrecoverable error is encountered (in which case it is thrown to
@@ -1338,7 +1338,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the last committed offsets for the given partitions (whether the commit happened by this process or
      * another). The returned offsets will be used as the position for the consumer in the event of a failure.
      * <p>
-     * If any of the partitions requested do not exist, an exception would be thrown.
+     * If any of the partitions requested do not exist, the result map will contain null as the value for that partition.
      * <p>
      * This call will block to do a remote call to get the latest committed offsets from the server.
      *
