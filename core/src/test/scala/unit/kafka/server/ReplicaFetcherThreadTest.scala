@@ -24,6 +24,7 @@ import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -38,12 +39,13 @@ import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndE
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.PartitionFetchState
-import org.apache.kafka.storage.internals.log.{LogAppendInfo, UnifiedLog}
+import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, times, verify, when}
@@ -51,7 +53,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
 import java.util
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, Properties}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -817,5 +819,68 @@ class ReplicaFetcherThreadTest {
     when(replicaManager.getPartitionOrException(t1p1)).thenReturn(partition)
     when(replicaManager.localLogOrException(t2p1)).thenReturn(log)
     when(replicaManager.getPartitionOrException(t2p1)).thenReturn(partition)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "false, false, compact, 0, 0, false",
+    "false, false, compact, 5, 0, false",
+    "false, false, compact, 5, 1, false",
+    "false, false, delete, 0, 0, false",
+    "false, false, delete, 5, 0, false",
+    "false, false, delete, 5, 1, false",
+    "false, true, compact, 0, 0, false",
+    "false, true, compact, 5, 0, false",
+    "false, true, compact, 5, 1, false",
+    "false, true, delete, 0, 0, false",
+    "false, true, delete, 5, 0, false",
+    "false, true, delete, 5, 1, false",
+    "true, false, compact, 0, 0, false",
+    "true, false, compact, 5, 0, false",
+    "true, false, compact, 5, 1, false",
+    "true, false, delete, 0, 0, false",
+    "true, false, delete, 5, 0, false",
+    "true, false, delete, 5, 1, false",
+    "true, true, compact, 0, 0, false",
+    "true, true, compact, 5, 0, false",
+    "true, true, compact, 5, 1, false",
+    "true, true, delete, 0, 0, false",
+    "true, true, delete, 5, 0, true",
+    "true, true, delete, 5, 1, false"))
+  def testShouldFetchFromLastTieredOffset(enableLastTieredOffsetFetch: Boolean,
+                                          remoteStorageEnabled: Boolean,
+                                          cleanUpPolicy: String,
+                                          leaderEndOffset: Long,
+                                          replicaEndOffset: Long,
+                                          expected: Boolean): Unit = {
+    val tp = new TopicPartition("t", 0)
+
+    val props = TestUtils.createBrokerConfig(1)
+    props.put(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, String.valueOf(enableLastTieredOffsetFetch))
+    val config = KafkaConfig.fromProps(props)
+
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
+    when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
+
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.brokerTopicStats).thenReturn(new BrokerTopicStats)
+
+    val lcOverrides = new Properties()
+    lcOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanUpPolicy)
+    val logConfig = LogConfig.fromProps(config.extractLogConfigMap, lcOverrides)
+
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    when(log.config).thenReturn(logConfig)
+    when(log.remoteLogEnabled()).thenReturn(remoteStorageEnabled)
+    when(replicaManager.localLog(tp)).thenReturn(Some(log))
+
+    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${mockBlockingSend.brokerEndPoint().id}, fetcherId=0] ")
+    val fetchSessionHandler = new FetchSessionHandler(logContext, mockBlockingSend.brokerEndPoint().id)
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler,
+      config, replicaManager, UNBOUNDED_QUOTA, () => MetadataVersion.MINIMUM_VERSION, () => 1)
+
+    val thread = new ReplicaFetcherThread("test-fetcher", leader, config, failedPartitions, replicaManager, UNBOUNDED_QUOTA, logContext.logPrefix)
+
+    assertEquals(expected, thread.shouldFetchFromLastTieredOffset(tp, leaderEndOffset, replicaEndOffset))
   }
 }
