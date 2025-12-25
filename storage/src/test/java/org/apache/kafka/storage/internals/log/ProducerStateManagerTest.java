@@ -1091,11 +1091,9 @@ public class ProducerStateManagerTest {
     }
 
     @Test
-    public void testIdempotentTransactionMarkerExceptionThrownTV2() {
+    public void testIdempotentTransactionMarkerRetryTV2() {
         short transactionVersion = 2;
         appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
-        assertEquals(OptionalLong.of(99L), stateManager.firstUndecidedOffset());
-
         short markerEpoch = (short) (epoch + 1);
         appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.COMMIT, 100, transactionVersion);
 
@@ -1103,12 +1101,13 @@ public class ProducerStateManagerTest {
         assertEquals(markerEpoch, entry.producerEpoch());
         assertEquals(OptionalLong.empty(), entry.currentTxnFirstOffset());
 
-        ProducerAppendInfo appendInfo = stateManager.prepareUpdate(producerId, AppendOrigin.COORDINATOR);
-        EndTransactionMarker endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0);
-
-        assertDoesNotThrow(
-                () -> appendInfo.appendEndTxnMarker(endTxnMarker, markerEpoch, 101, time.milliseconds(), transactionVersion)
+        assertDoesNotThrow(() ->
+                appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.COMMIT, 101, transactionVersion)
         );
+
+        ProducerStateEntry entryAfterRetry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
+        assertEquals(markerEpoch, entryAfterRetry.producerEpoch());
+        assertEquals(OptionalLong.empty(), entryAfterRetry.currentTxnFirstOffset());
     }
 
     @Test
