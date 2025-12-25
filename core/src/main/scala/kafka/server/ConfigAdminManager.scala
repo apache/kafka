@@ -496,7 +496,7 @@ object ConfigAdminManager {
   ): Unit = {
     val properties = new Properties()
     resource.configs().forEach(config =>
-      if (config.value() != null) {
+      if (config.configOperation() != OpType.DELETE.id) {
         properties.setProperty(config.name(), config.value())
       }
     )
