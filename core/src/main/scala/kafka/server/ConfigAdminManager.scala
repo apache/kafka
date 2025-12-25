@@ -498,6 +498,15 @@ object ConfigAdminManager {
     resource.configs().forEach(
       config => properties.setProperty(config.name(), config.value())
     )
+    val alterConfigOps = resource.configs().asScala.map {
+      config =>
+        val opType = AlterConfigOp.OpType.forId(config.configOperation())
+        if (opType == null) {
+          throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
+        }
+        new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
+    }.toSeq
+    prepareIncrementalConfigs(alterConfigOps, properties, KafkaConfig.configKeys)
     try {
       DynamicBrokerConfig.validateControllerConfigTypes(properties)
     } catch {
