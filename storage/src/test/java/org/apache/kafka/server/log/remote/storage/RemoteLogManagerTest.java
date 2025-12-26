@@ -2177,6 +2177,76 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @Test
+    public void testBuildRetentionSizeData() throws RemoteStorageException {
+        long retentionSize = 1000L;
+        long onlyLocalLogSegmentsSize = 500L;
+        long logEndOffset = 100L;
+        NavigableMap<Integer, Long> epochEntries = new TreeMap<>();
+        epochEntries.put(0, 0L);
+        long fullRemoteLogSizeBytesCopyFinishedSegments = 1600L;
+        RemoteLogManager.RLMExpirationTask expirationTask = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
+        assertFalse(expirationTask.isAllSegmentsValid());
+
+        // 1. retentionSize < 0
+        Optional<RemoteLogManager.RetentionSizeData> result = expirationTask
+                .buildRetentionSizeData(-1L, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullRemoteLogSizeBytesCopyFinishedSegments);
+        assertFalse(result.isPresent());
+        assertFalse(expirationTask.isAllSegmentsValid());
+
+        // Mock listRemoteLogSegments to return an empty iterator to avoid NPE or complex mocking for now
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
+                .thenReturn(Collections.emptyIterator());
+
+        // 2. totalSize <= retentionSize
+        // totalSize = 500 (local) + 0 (remote, as listRemoteLogSegments returns empty) = 500. retentionSize = 1000.
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullRemoteLogSizeBytesCopyFinishedSegments);
+        assertFalse(result.isPresent());
+        assertFalse(expirationTask.isAllSegmentsValid());
+
+        // 3. totalSize > retentionSize
+        // totalSize = 500 (local) + 1024 (remote) = 1524. retentionSize = 1000.
+        
+        // Mock a segment
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        RemoteLogSegmentMetadata segmentMetadata = createRemoteLogSegmentMetadata(0, 50, Collections.singletonMap(0, 0L));
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), eq(0)))
+                .thenAnswer(invocation -> {
+                    invocationCount.incrementAndGet();
+                    return Collections.singletonList(segmentMetadata).iterator();
+                });
+
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullRemoteLogSizeBytesCopyFinishedSegments);
+        assertTrue(result.isPresent());
+        assertEquals(1000L, result.get().retentionSize());
+        assertEquals(500L, result.get().remainingBreachedSize()); // (500 + 1000) - 1000 = 500
+        assertFalse(expirationTask.isAllSegmentsValid());
+        assertEquals(1, invocationCount.get());
+
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 1000L);
+        assertTrue(result.isPresent());
+        assertEquals(1000L, result.get().retentionSize());
+        assertEquals(500L, result.get().remainingBreachedSize()); // (500 + 1000) - 1000 = 500
+        assertTrue(expirationTask.isAllSegmentsValid());
+        assertEquals(2, invocationCount.get());
+
+        // Once all the segments are validated and the computed segmentSize for listRemoteLogSegments(tpId) and
+        // listRemoteLogSegments(tpId, epoch) are same, then the subsequent calls to buildRetentionSizeData should not
+        // invoke listRemoteLogSegments(tpId, epoch) again.
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 1000L);
+        assertTrue(result.isPresent());
+        assertEquals(500L, result.get().remainingBreachedSize());
+        assertEquals(2, invocationCount.get());
+        assertTrue(expirationTask.isAllSegmentsValid());
+
+        expirationTask.cancel();
+        assertFalse(expirationTask.isAllSegmentsValid());
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void testRemoteSizeTime() {
