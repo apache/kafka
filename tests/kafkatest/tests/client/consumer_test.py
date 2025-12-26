@@ -18,6 +18,7 @@ from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
+from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
 
 import signal
@@ -74,6 +75,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.mark_for_collect(consumer, 'verifiable_consumer_stdout')
         return consumer
 
+    def await_conflict_consumers_fenced(self, conflict_consumer):
+        # Rely on explicit shutdown_complete events from the verifiable consumer to guarantee each conflict member
+        # reached the fenced path rather than remaining in the default DEAD state prior to startup.
+        wait_until(lambda: len(conflict_consumer.shutdown_complete_nodes()) == len(conflict_consumer.nodes) and 
+                           len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
+                   timeout_sec=60,
+                   err_msg="Timed out waiting for conflict consumers to report shutdown completion after fencing")
+        
     @cluster(num_nodes=7)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
@@ -297,7 +306,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer = self.setup_producer(self.TOPIC)
 
         producer.start()
-        self.await_produced_messages(producer)
+        self.await_produced_messages(producer, timeout_sec=120)
 
         consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
 
@@ -313,7 +322,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             num_rebalances = consumer.num_rebalances()
             conflict_consumer.start()
             if group_protocol == consumer_group.classic_group_protocol:
-                # Classic protocol: conflicting members should join, and the intial ones with conflicting instance id should fail.
+                # Classic protocol: conflicting members should join, and the initial ones with conflicting instance id should fail.
                 self.await_members(conflict_consumer, num_conflict_consumers)
                 self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
@@ -324,18 +333,37 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 # Consumer protocol: Existing members should remain active and new conflicting ones should not be able to join.
                 self.await_consumed_messages(consumer)
                 assert num_rebalances == consumer.num_rebalances(), "Static consumers attempt to join with instance id in use should not cause a rebalance"
-                assert len(consumer.joined_nodes()) == len(consumer.nodes)
+                try:
+                    assert len(consumer.joined_nodes()) == len(consumer.nodes)
+                except AssertionError:
+                    self.logger.debug("All members not in group %s. Describe output is %s", self.group_id,
+                                      " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+                    raise
                 assert len(conflict_consumer.joined_nodes()) == 0
-                
+
+                # Conflict consumers will terminate due to a fatal UnreleasedInstanceIdException error.
+                # Wait for termination to complete to prevent conflict consumers from immediately re-joining the group while existing nodes are shutting down.
+                self.await_conflict_consumers_fenced(conflict_consumer)
+
                 # Stop existing nodes, so conflicting ones should be able to join.
                 consumer.stop_all()
                 wait_until(lambda: len(consumer.dead_nodes()) == len(consumer.nodes),
                            timeout_sec=60,
-                           err_msg="Timed out waiting for the consumer to shutdown")
-                conflict_consumer.start()
-                self.await_members(conflict_consumer, num_conflict_consumers)
+                           err_msg="Timed out waiting for the consumer to shutdown. Describe output is %s" % " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
 
-            
+                # Wait until the group becomes empty to ensure the instance ID is released.
+                # We use the 60-second timeout because the consumer session timeout is 45 seconds adding some time for latency.
+                wait_until(lambda: self.group_id in self.kafka.list_consumer_groups(state="empty"),
+                           timeout_sec=60,
+                           err_msg="Timed out waiting for the consumers to be removed from the group. Describe output is %s." % " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+
+                conflict_consumer.start()
+                try:
+                    self.await_members(conflict_consumer, num_conflict_consumers)
+                except TimeoutError:
+                    self.logger.debug("All conflict members not in group %s. Describe output is %s", self.group_id, " ".join(self.kafka.describe_consumer_group_members(self.group_id)))
+                    raise
+
         else:
             consumer.start()
             conflict_consumer.start()

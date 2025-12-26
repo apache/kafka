@@ -33,7 +33,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
@@ -41,6 +40,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
+import org.apache.kafka.streams.state.internals.MeteredStateStore;
 
 import org.slf4j.Logger;
 
@@ -138,6 +138,8 @@ public class StoreChangelogReader implements ChangelogReader {
         // either due to limit offset (standby) or committed end offset (active)
         private int bufferedLimitIndex;
 
+        private long restoreStartTimeNs;
+
         private ChangelogMetadata(final StateStoreMetadata storeMetadata, final ProcessorStateManager stateManager) {
             this.changelogState = ChangelogState.REGISTERED;
             this.storeMetadata = storeMetadata;
@@ -188,6 +190,10 @@ public class StoreChangelogReader implements ChangelogReader {
         int bufferedLimitIndex() {
             return bufferedLimitIndex;
         }
+
+        long calculateRestoreTime(final long restoreEndTimeNs) {
+            return restoreEndTimeNs - restoreStartTimeNs;
+        }
     }
 
     private static final long DEFAULT_OFFSET_UPDATE_MS = Duration.ofMinutes(5L).toMillis();
@@ -204,8 +210,6 @@ public class StoreChangelogReader implements ChangelogReader {
     // 3) we only remove an assigned partition when the corresponding task is being removed from the thread.
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener stateRestoreListener;
-
-    private final boolean stateUpdaterEnabled;
 
     // source of the truth of the current registered changelogs;
     // NOTE a changelog would only be removed when its corresponding task
@@ -235,8 +239,6 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
         this.standbyUpdateListener = standbyUpdateListener;
-
-        this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
 
         this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
@@ -484,15 +486,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private ConsumerRecords<byte[], byte[]> pollRecordsFromRestoreConsumer(final Map<TaskId, Task> tasks,
                                                                            final Set<TopicPartition> restoringChangelogs) {
-        // If we are updating only standby tasks, and are not using a separate thread, we should
-        // use a non-blocking poll to unblock the processing as soon as possible.
-        final boolean useNonBlockingPoll = state == ChangelogReaderState.STANDBY_UPDATING && !stateUpdaterEnabled;
         final ConsumerRecords<byte[], byte[]> polledRecords;
 
         try {
             pauseResumePartitions(tasks, restoringChangelogs);
 
-            polledRecords = restoreConsumer.poll(useNonBlockingPoll ? Duration.ZERO : pollTime);
+            polledRecords = restoreConsumer.poll(pollTime);
 
             // TODO (?) If we cannot fetch records during restore, should we trigger `task.timeout.ms` ?
             // TODO (?) If we cannot fetch records for standby task, should we trigger `task.timeout.ms` ?
@@ -695,6 +694,9 @@ public class StoreChangelogReader implements ChangelogReader {
 
             changelogMetadata.transitTo(ChangelogState.COMPLETED);
             pauseChangelogsFromRestoreConsumer(Collections.singleton(partition));
+            if (storeMetadata.store() instanceof MeteredStateStore) {
+                ((MeteredStateStore) storeMetadata.store()).recordRestoreTime(changelogMetadata.calculateRestoreTime(time.nanoseconds()));
+            }
 
             try {
                 stateRestoreListener.onRestoreEnd(partition, storeName, changelogMetadata.totalRestored);
@@ -1026,6 +1028,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 // no records to restore; in this case we just initialize the sensor to zero
                 final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
                 task.recordRestoration(time, recordsToRestore, true);
+                changelogMetadata.restoreStartTimeNs = time.nanoseconds();
             }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
                 try {
                     standbyUpdateListener.onUpdateStart(partition, storeName, startOffset);

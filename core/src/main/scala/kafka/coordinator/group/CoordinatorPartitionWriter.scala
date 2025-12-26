@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.group
 
-import kafka.cluster.PartitionListener
 import kafka.server.ReplicaManager
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
@@ -24,6 +23,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.partition.PartitionListener
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 
@@ -137,7 +137,8 @@ class CoordinatorPartitionWriter(
   override def append(
     tp: TopicPartition,
     verificationGuard: VerificationGuard,
-    records: MemoryRecords
+    records: MemoryRecords,
+    transactionVersion: Short
   ): Long = {
     // We write synchronously to the leader replica without waiting on replication.
     val topicIdPartition: TopicIdPartition = replicaManager.topicIdPartition(tp)
@@ -150,7 +151,8 @@ class CoordinatorPartitionWriter(
       verificationGuards = Map(tp -> verificationGuard),
       // We can directly complete the purgatories here because we don't hold
       // any conflicting locks.
-      actionQueue = directActionQueue
+      actionQueue = directActionQueue,
+      transactionVersion = transactionVersion
     )
 
     val partitionResult = appendResults.getOrElse(topicIdPartition,

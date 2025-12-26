@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -92,6 +93,7 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
         configs.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "abc");
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
     }
 
@@ -101,6 +103,7 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
@@ -110,6 +113,7 @@ public class ProducerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ProducerConfig producerConfig = new ProducerConfig(configs);
         assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, producerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
@@ -120,6 +124,7 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
         configs.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "abc");
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
@@ -131,6 +136,7 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         final ProducerConfig producerConfig = new ProducerConfig(configs);
         assertEquals(saslSslLowerCase, producerConfig.originals().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
@@ -142,6 +148,7 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
         configs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, inFlightConnection);
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         ConfigException configException = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertEquals("To use the idempotent producer, " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION +
                                 " must be set to at most 5. Current value is " + inFlightConnection + ".", configException.getMessage());
@@ -159,15 +166,16 @@ public class ProducerConfigTest {
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-txn-id");
         configs.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, true);
         configs.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60000);
-        
+        configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+
         ConfigException ce = assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
         assertTrue(ce.getMessage().contains(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG));
         assertTrue(ce.getMessage().contains(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG));
-        
+
         // Verify that setting one but not the other is valid
         configs.remove(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
         assertDoesNotThrow(() -> new ProducerConfig(configs));
-        
+
         configs.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60000);
         configs.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, false);
         assertDoesNotThrow(() -> new ProducerConfig(configs));

@@ -57,7 +57,7 @@ public class ProducerManager implements Closeable {
      * is considered complete.
      *
      * @param remoteLogMetadata RemoteLogMetadata to be published
-     * @return
+     * @return CompletableFuture that completes with RecordMetadata when the message is successfully published
      */
     CompletableFuture<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
         CompletableFuture<RecordMetadata> future = new CompletableFuture<>();

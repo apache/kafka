@@ -44,14 +44,14 @@ RUN if [ "$KAFKA_MODE" = "native" ]; then \
 
 FROM $jdk_version
 
-MAINTAINER Apache Kafka dev@kafka.apache.org
+LABEL org.opencontainers.image.authors="Apache Kafka dev@kafka.apache.org"
 VOLUME ["/opt/kafka-dev"]
 
 # Set the timezone.
 ENV TZ="/usr/share/zoneinfo/America/Los_Angeles"
 
 # Do not ask for confirmations when running apt-get, etc.
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Set the ducker.creator label so that we know that this is a ducker image.  This will make it
 # visible to 'ducker purge'.  The ducker.creator label also lets us know what UNIX user built this
@@ -94,7 +94,8 @@ RUN mkdir -p "/opt/kafka-3.6.2" && chmod a+rw /opt/kafka-3.6.2 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-3.7.2" && chmod a+rw /opt/kafka-3.7.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.7.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.7.2"
 RUN mkdir -p "/opt/kafka-3.8.1" && chmod a+rw /opt/kafka-3.8.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.8.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.8.1"
 RUN mkdir -p "/opt/kafka-3.9.1" && chmod a+rw /opt/kafka-3.9.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.9.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.1"
-RUN mkdir -p "/opt/kafka-4.0.0" && chmod a+rw /opt/kafka-4.0.0 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.0.0.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.0.0"
+RUN mkdir -p "/opt/kafka-4.0.1" && chmod a+rw /opt/kafka-4.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.0.1"
+RUN mkdir -p "/opt/kafka-4.1.1" && chmod a+rw /opt/kafka-4.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.1.1"
 
 
 # Streams test dependencies
@@ -116,7 +117,8 @@ RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.6.2-test.jar" -o /opt/kafka-3.6.2/lib
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.7.2-test.jar" -o /opt/kafka-3.7.2/libs/kafka-streams-3.7.2-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.8.1-test.jar" -o /opt/kafka-3.8.1/libs/kafka-streams-3.8.1-test.jar
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-3.9.1-test.jar" -o /opt/kafka-3.9.1/libs/kafka-streams-3.9.1-test.jar
-RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.0.0-test.jar" -o /opt/kafka-4.0.0/libs/kafka-streams-4.0.0-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.0.1-test.jar" -o /opt/kafka-4.0.1/libs/kafka-streams-4.0.1-test.jar
+RUN curl -s "$KAFKA_MIRROR/kafka-streams-4.1.1-test.jar" -o /opt/kafka-4.1.1/libs/kafka-streams-4.1.1-test.jar
 
 # To ensure the Kafka cluster starts successfully under JDK 17, we need to update the Zookeeper 
 # client from version 3.4.x to 3.5.7 in Kafka versions 2.1.1, 2.2.2, and 2.3.1, as the older Zookeeper 
@@ -147,10 +149,13 @@ RUN useradd -u $UID -ms /bin/bash ducker \
   && mkdir -p /home/ducker/ \
   && rsync -aiq /root/.ssh/ /home/ducker/.ssh \
   && chown -R ducker /home/ducker/ /mnt/ /var/log/ \
-  && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /home/ducker/.ssh/environment \
-  && echo 'PATH=$PATH:'"$JAVA_HOME/bin" >> /home/ducker/.profile \
   && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+# Symlink all JDK binaries (java, jcmd, jps, etc.) to /usr/bin.
+# We don't add PATH env to ~/.ssh/environment because on some Linux distributions,
+# PAM (Pluggable Authentication Modules) may re-read /etc/environment, overwriting PATH.
+RUN cp -sn $JAVA_HOME/bin/* /usr/bin/
 
 USER ducker
 
-CMD sudo service ssh start && tail -f /dev/null
+CMD ["sudo", "service", "ssh", "start", "-D"]

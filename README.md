@@ -13,7 +13,7 @@
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 17 and 24. The `release` parameter in javac is set to `11` for the clients 
+We build and test Apache Kafka with 17 and 25. The `release` parameter in javac is set to `11` for the clients 
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
 minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
 for the rest.
@@ -29,7 +29,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew srcJar
 
 ### Build aggregated javadoc ###
-    ./gradlew aggregatedJavadoc
+    ./gradlew aggregatedJavadoc --no-parallel
 
 ### Build javadoc and scaladoc ###
     ./gradlew javadoc
@@ -79,7 +79,7 @@ The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 t
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
 
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
+See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) and [build.yml](.github/workflows/build.yml) for more details.
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
@@ -89,7 +89,13 @@ Generate coverage reports for the whole project:
 Generate coverage for a single module, i.e.: 
 
     ./gradlew clients:reportCoverage -PenableTestCoverage=true -Dorg.gradle.parallel=false
-    
+
+Coverage reports are located within the module's build directory, categorized by module type:
+
+Core Module (:core): `core/build/reports/scoverageTest/index.html`
+
+Other Modules: `<module>/build/reports/jacoco/test/html/index.html`
+
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
 
@@ -232,7 +238,7 @@ Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterat
 These take the same arguments as the builtin variants.
 
 ### Determining if any dependencies could be updated ###
-    ./gradlew dependencyUpdates
+    ./gradlew dependencyUpdates --no-parallel
 
 ### Common build options ###
 
@@ -264,6 +270,10 @@ includes inlining of methods within the scala library (which avoids lambda alloc
 only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
 may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
 default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
+
+### Upgrading Gradle version ###
+
+See [gradle/wrapper/README.md](gradle/wrapper/README.md) for instructions on upgrading the Gradle version.
 
 ### Running system tests ###
 

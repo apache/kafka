@@ -17,12 +17,14 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.assignor.AssignorHelpers;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,12 +33,23 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AssignmentTest {
 
     @Test
     public void testPartitionsCannotBeNull() {
         assertThrows(NullPointerException.class, () -> new Assignment(null));
+    }
+
+    @Test
+    public void testPartitionsImmutable() {
+        // Assignments are used as input to assignors, which expect to receive immutable
+        // assignment maps, otherwise they will be modified in place.
+        Map<Uuid, Set<Integer>> partitions = new HashMap<>();
+        partitions.put(Uuid.randomUuid(), Set.of(1, 2, 3));
+        Assignment assignment = new Assignment(partitions);
+        assertTrue(AssignorHelpers.isImmutableMap(assignment.partitions()));
     }
 
     @Test

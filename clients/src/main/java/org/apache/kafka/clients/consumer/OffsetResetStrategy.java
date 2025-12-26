@@ -19,7 +19,8 @@ package org.apache.kafka.clients.consumer;
 import java.util.Locale;
 
 /**
- * @deprecated Since 4.0. Use {@link org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy} instead.
+ * @deprecated since 4.0; will be removed in a future release.
+ * Not required by Kafka client users; no replacement is provided.
  */
 @Deprecated
 public enum OffsetResetStrategy {

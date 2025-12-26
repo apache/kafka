@@ -36,11 +36,11 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -89,7 +89,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -409,39 +411,11 @@ public class StoreChangelogReaderTest {
 
     @ParameterizedTest
     @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
-    public void shouldPollWithRightTimeoutWithStateUpdater(final Task.TaskType type) {
+    public void shouldPollWithRightTimeout(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
-        shouldPollWithRightTimeout(true, type);
-    }
 
-    @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
-    public void shouldPollWithRightTimeoutWithoutStateUpdater(final Task.TaskType type) {
-        setupStateManagerMock(type);
-        setupStoreMetadata();
-        setupStore();
-        shouldPollWithRightTimeout(false, type);
-    }
-
-    private void shouldPollWithRightTimeout(final boolean stateUpdaterEnabled, final Task.TaskType type) {
-        final Properties properties = new Properties();
-        properties.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
-        shouldPollWithRightTimeout(properties, type);
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
-    public void shouldPollWithRightTimeoutWithStateUpdaterDefault(final Task.TaskType type) {
-        setupStateManagerMock(type);
-        setupStoreMetadata();
-        setupStore();
-        final Properties properties = new Properties();
-        shouldPollWithRightTimeout(properties, type);
-    }
-
-    private void shouldPollWithRightTimeout(final Properties properties, final Task.TaskType type) {
         final TaskId taskId = new TaskId(0, 0);
 
         when(storeMetadata.offset()).thenReturn(null).thenReturn(9L);
@@ -449,8 +423,6 @@ public class StoreChangelogReaderTest {
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
-
-        final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
 
         final StoreChangelogReader changelogReader =
                 new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
@@ -462,16 +434,8 @@ public class StoreChangelogReaderTest {
         }
 
         changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
-        if (type == ACTIVE) {
-            assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
-        } else {
-            if (!properties.containsKey(InternalConfig.STATE_UPDATER_ENABLED)
-                    || (boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED)) {
-                assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
-            } else {
-                assertEquals(Duration.ZERO, consumer.lastPollTimeout());
-            }
-        }
+
+        assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
     }
 
     @ParameterizedTest
@@ -1211,7 +1175,7 @@ public class StoreChangelogReaderTest {
         assertTrue(changelogReader.isEmpty());
         assertNull(changelogReader.changelogMetadata(tp1));
         assertNull(changelogReader.changelogMetadata(tp2));
-        assertEquals(changelogReader.state(), ACTIVE_RESTORING);
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
     }
 
     @Test
@@ -1362,6 +1326,58 @@ public class StoreChangelogReaderTest {
                     " it could be already cleaned up during the handling of task corruption and never restore again")
             );
         }
+    }
+
+    @Test
+    public void shouldCallRecordRestoreTimeAtTheEndOfRestore() {
+        setupActiveStateManager();
+
+        final MeteredKeyValueStore<?, ?> meteredStateStore = mock(MeteredKeyValueStore.class);
+
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        when(storeMetadata.store()).thenReturn(meteredStateStore);
+        when(meteredStateStore.name()).thenReturn(storeName);
+        final TaskId taskId = new TaskId(0, 0);
+
+        when(storeMetadata.offset()).thenReturn(0L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        setupConsumer(2, tp);
+        consumer.updateEndOffsets(Collections.singletonMap(tp, 2L));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 2L));
+
+        changelogReader.register(tp, activeStateManager);
+
+        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(1L, changelogReader.changelogMetadata(tp).totalRestored());
+        verify(meteredStateStore).recordRestoreTime(anyLong());
+    }
+
+    @Test
+    public void shouldNotCallRecordRestoreTimeIfRestoreDoesNotComplete() {
+        setupActiveStateManager();
+
+        final MeteredKeyValueStore<?, ?> meteredStateStore = mock(MeteredKeyValueStore.class);
+
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        when(storeMetadata.store()).thenReturn(meteredStateStore);
+        when(meteredStateStore.name()).thenReturn(storeName);
+        final TaskId taskId = new TaskId(0, 0);
+
+        when(storeMetadata.offset()).thenReturn(0L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+
+        setupConsumer(2, tp);
+        consumer.updateEndOffsets(Collections.singletonMap(tp, 3L));
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 3L));
+
+        changelogReader.register(tp, activeStateManager);
+
+        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+
+        assertEquals(1L, changelogReader.changelogMetadata(tp).totalRestored());
+        verify(meteredStateStore, never()).recordRestoreTime(anyLong());
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {
