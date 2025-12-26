@@ -52,16 +52,22 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
         brokers = 3,
         serverProperties = {
-                @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "5"),
-                @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-                @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack/0"),
-                @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack/1"),
-                @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack/2")
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "5"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+            @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack/0"),
+            @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack/1"),
+            @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack/2")
         }
 )
 
@@ -77,7 +83,7 @@ public class MetadataRequestTest {
         return clusterInstance.brokers().values().stream().toList();
     }
 
-    private SocketServer anySocketServer() throws IllegalStateException{
+    private SocketServer anySocketServer() throws IllegalStateException {
         Map<Integer, KafkaBroker> aliveBrokers = clusterInstance.aliveBrokers();
         if (aliveBrokers.isEmpty()) {
             throw new IllegalStateException("No alive brokers is available");
@@ -263,7 +269,7 @@ public class MetadataRequestTest {
         // from version 10, UUID will be included in MetadataResponse
         MetadataResponse resp2 = sendMetadataRequest(new MetadataRequest.Builder(List.of(topic1, topic2), true, (short) 10, (short) 10).build());
         assertEquals(2, resp2.topicMetadata().size());
-        resp2.topicMetadata().forEach( topicMetadata -> {
+        resp2.topicMetadata().forEach(topicMetadata -> {
             assertEquals(Errors.NONE, topicMetadata.error());
             assertNotEquals(Uuid.ZERO_UUID, topicMetadata.topicId());
             assertNotNull(topicMetadata.topicId());
@@ -282,13 +288,13 @@ public class MetadataRequestTest {
             sendMetadataRequest(new MetadataRequest.Builder(List.of("t1"), true).build(), brokers().get(0).socketServer()),
             sendMetadataRequest(new MetadataRequest.Builder(List.of("t1"), true).build(), brokers().get(1).socketServer())
         );
-        responses.forEach( response -> {
+        responses.forEach(response -> {
             assertEquals(1, response.topicMetadata().size());
             MetadataResponse.TopicMetadata topicMetadata = response.topicMetadata().iterator().next();
             assertEquals(Errors.NONE, topicMetadata.error());
             assertEquals("t1", topicMetadata.topic());
             assertEquals(Set.of(0, 1), topicMetadata.partitionMetadata().stream().map(MetadataResponse.PartitionMetadata::partition).collect(Collectors.toSet()));
-            topicMetadata.partitionMetadata().forEach( partitionMetadata -> {
+            topicMetadata.partitionMetadata().forEach(partitionMetadata -> {
                 List<Integer> assignment = replicaAssignment.get(partitionMetadata.partition());
                 assertEquals(assignment, partitionMetadata.replicaIds);
                 assertEquals(assignment, partitionMetadata.inSyncReplicaIds);
@@ -364,7 +370,7 @@ public class MetadataRequestTest {
         Set<Integer> expectedIsr = activeBrokers.stream().map(broker -> broker.config().brokerId()).collect(Collectors.toSet());
 
         // Assert that topic metadata at new brokers is updated correctly
-        activeBrokers.forEach( broker -> {
+        activeBrokers.forEach(broker -> {
             try {
                 TestUtils.waitForCondition(() -> {
                     MetadataResponse response = sendMetadataRequest(new MetadataRequest.Builder(List.of(topic), false).build(), broker.socketServer());
