@@ -72,7 +72,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
         this.threadNamePrefix = threadNamePrefix;
         this.retryTimeoutMs = retryTimeoutMs;
         this.logContext = new LogContext(String.format("[NodeToControllerChannelManager id=%s name=%s] ",
-                config.getString(KRaftConfigs.NODE_ID_CONFIG), channelName));
+                config.getInt(KRaftConfigs.NODE_ID_CONFIG), channelName));
         this.requestThread = newRequestThread();
     }
 
@@ -123,7 +123,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 50,
                 Selectable.USE_DEFAULT_BUFFER_SIZE,
                 Selectable.USE_DEFAULT_BUFFER_SIZE,
-                Math.min(Integer.MAX_VALUE, (int) Math.min(config.getLong(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
+                Math.min(Integer.MAX_VALUE, (int) Math.min(config.getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), // request timeout should not exceed the provided retry timeout
                 config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
                 config.getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
                 time,

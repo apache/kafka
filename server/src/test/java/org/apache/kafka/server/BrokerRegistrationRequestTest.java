@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.server;
 
-import kafka.server.ControllerInformation;
-import kafka.server.ControllerNodeProvider;
+
 import kafka.server.ControllerServer;
-import kafka.server.NodeToControllerChannelManagerImpl;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Node;
@@ -48,8 +46,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import scala.Option;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -237,8 +233,8 @@ class BrokerRegistrationRequestTest {
 
         @Override
         public ControllerInformation getControllerInfo() {
-            return ControllerInformation.apply(
-                    Option.apply(node().orElse(null)),
+            return new ControllerInformation(
+                    node(),
                     listenerName(),
                     securityProtocol(),
                     saslMechanism()

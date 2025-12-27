@@ -59,6 +59,8 @@ import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetric
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
+import org.apache.kafka.server.NodeToControllerChannelManagerImpl
+import org.apache.kafka.server.RaftControllerNodeProvider
 
 import java.time.Duration
 import java.util
@@ -233,16 +235,16 @@ class BrokerServer(
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
+      val controllerNodeProvider = RaftControllerNodeProvider.create(raftManager, config)
 
       clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
         metrics,
         config,
-        channelName = "forwarding",
+        "forwarding",
         s"broker-${config.nodeId}-",
-        retryTimeoutMs = 60000
+        60000
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
@@ -316,7 +318,7 @@ class BrokerServer(
         config,
         "directory-assignments",
         s"broker-${config.nodeId}-",
-        retryTimeoutMs = 60000
+        60000
       )
       assignmentsManager = new AssignmentsManager(
         time,

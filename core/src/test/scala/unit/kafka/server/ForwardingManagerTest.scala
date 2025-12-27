@@ -37,6 +37,8 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.ControllerNodeProvider
+import org.apache.kafka.server.ControllerInformation
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
@@ -66,11 +68,11 @@ class ForwardingManagerTest {
   }
 
   private def controllerInfo = {
-    ControllerInformation(Some(new Node(0, "host", 1234)), new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
+    new ControllerInformation(Optional.of(new Node(0, "host", 1234)), new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
   }
 
   private def emptyControllerInfo = {
-    ControllerInformation(None, new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
+    new ControllerInformation(Optional.empty(), new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
   }
 
   @Test

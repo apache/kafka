@@ -45,12 +45,17 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
     private final LinkedBlockingDeque<NodeToControllerQueueItem> requestQueue = new LinkedBlockingDeque<>();
     private final AtomicReference<Node> activeController = new AtomicReference<>(null);
 
-    // Used to testing
-    volatile boolean started = false;
+
     private final Time time;
     private final long retryTimeoutMs;
     private final ControllerNodeProvider controllerNodeProvider;
     private final ManualMetadataUpdater metadataUpdater;
+
+    // Used to testing
+    volatile boolean started = false;
+    public void setStarted(boolean started) {
+        this.started = started;
+    }
 
     public NodeToControllerRequestThread(KafkaClient initialNetworkClient,
                                          ManualMetadataUpdater metadataUpdater,
@@ -59,7 +64,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
                                          Time time,
                                          String threadName,
                                          Long retryTimeoutMs) {
-        super(threadName, initialNetworkClient, Math.min(Integer.MAX_VALUE, (int) Math.min(config.getLong(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), time, false);
+        super(threadName, initialNetworkClient, Math.min(Integer.MAX_VALUE, (int) Math.min(config.getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG), retryTimeoutMs)), time, false);
         this.time = time;
         this.controllerNodeProvider = controllerNodeProvider;
         this.metadataUpdater = metadataUpdater;
