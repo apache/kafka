@@ -1401,9 +1401,6 @@ kafka.network.SocketServerTest:
 - testUnmuteChannelWithBufferedReceives
 - testZeroMaxConnectionsPerIp
 - tooBigRequestIsRejected
-kafka.raft.DefaultExternalKRaftMetricsTest:
-- testDefaultExternalKRaftMetrics
-- testEmptyDefaultExternalKRaftMetrics
 kafka.raft.RaftManagerTest:
 - testLogDirLockWhenBrokerOnlyWithSeparateMetadataDir
 - testLogDirLockWhenControllerOnly
