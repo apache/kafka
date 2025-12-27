@@ -376,7 +376,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     @ClusterTest
     public void testRemoteLogMetadataTopicMinIsr() throws ExecutionException, InterruptedException {
         // Initialize the manager which will create the __remote_log_metadata topic
-        verifyRemoteLogMetadataTopicMinIsr(remoteLogMetadataManager, (short) 2, "default value");
+        verifyRemoteLogMetadataTopicMinIsr(remoteLogMetadataManager,
+                                           TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
+                             "default value");
     }
 
     @ClusterTest
@@ -395,14 +397,13 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     }
 
     private void verifyRemoteLogMetadataTopicMinIsr(TopicBasedRemoteLogMetadataManager rlmm, 
-                                                     short expectedMinIsr, 
-                                                     String valueDescription) 
+                                                    short expectedMinIsr,
+                                                    String valueDescription)
             throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
             
             // Wait for the topic to be created
-            // RemoteLogMetadataManagerTestUtils uses 3 partitions for the metadata topic
             clusterInstance.waitTopicCreation(metadataTopic, RemoteLogMetadataManagerTestUtils.METADATA_TOPIC_PARTITIONS_COUNT);
             
             // Verify the topic exists
