@@ -390,16 +390,11 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         Map<String, Object> overrideProps = Map.of(
             TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr
         );
-        
-        TopicBasedRemoteLogMetadataManager customRlmm = RemoteLogMetadataManagerTestUtils.builder()
-            .bootstrapServers(clusterInstance.bootstrapServers())
-            .overrideRemoteLogMetadataManagerProps(overrideProps)
-            .build();
-        
-        try {
+        try (TopicBasedRemoteLogMetadataManager customRlmm = RemoteLogMetadataManagerTestUtils.builder()
+                .bootstrapServers(clusterInstance.bootstrapServers())
+                .overrideRemoteLogMetadataManagerProps(overrideProps)
+                .build()) {
             verifyRemoteLogMetadataTopicMinIsr(customRlmm, customMinIsr, "custom value");
-        } finally {
-            customRlmm.close();
         }
     }
 
