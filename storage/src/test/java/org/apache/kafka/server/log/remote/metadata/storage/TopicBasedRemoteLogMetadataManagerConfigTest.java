@@ -197,7 +197,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
 
     @Test
     public void testDefaultMinIsr() {
-        Map<String, Object> props = createValidConfigProps(new HashMap<>(), new HashMap<>(), new HashMap<>());
+        Map<String, Object> props = createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
         TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
         assertEquals(DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR, rlmmConfig.metadataTopicMinIsr());
     }
