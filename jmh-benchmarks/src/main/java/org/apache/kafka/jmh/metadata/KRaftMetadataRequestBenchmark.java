@@ -48,6 +48,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -116,6 +117,7 @@ public class KRaftMetadataRequestBenchmark {
             clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
             replicaQuotaManager, replicaQuotaManager, Optional.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
+    private final ShareCoordinator shareCoordinator = Mockito.mock(ShareCoordinator.class);
     private final SharePartitionManager sharePartitionManager = Mockito.mock(SharePartitionManager.class);
     private final ClientMetricsManager clientMetricsManager = Mockito.mock(ClientMetricsManager.class);
     private final GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
@@ -186,6 +188,7 @@ public class KRaftMetadataRequestBenchmark {
                 setForwardingManager(forwardingManager).
                 setReplicaManager(replicaManager).
                 setGroupCoordinator(groupCoordinator).
+                setShareCoordinator(shareCoordinator).
                 setTxnCoordinator(transactionCoordinator).
                 setAutoTopicCreationManager(autoTopicCreationManager).
                 setBrokerId(brokerId).
