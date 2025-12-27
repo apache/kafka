@@ -25,10 +25,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.AbstractMap;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR;
@@ -142,6 +139,10 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         assertTrue(configString.contains("enable.auto.commit=false"));
     }
 
+    private Map<String, Object> createValidConfigProps() {
+        return this.createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+
     private Map<String, Object> createValidConfigProps(Map<String, Object> commonClientConfig,
                                                        Map<String, Object> producerConfig,
                                                        Map<String, Object> consumerConfig) {
@@ -197,14 +198,14 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
 
     @Test
     public void testDefaultMinIsr() {
-        Map<String, Object> props = createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+        Map<String, Object> props = createValidConfigProps();
         TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
         assertEquals(DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR, rlmmConfig.metadataTopicMinIsr());
     }
 
     @Test
     public void testCustomMinIsr() {
-        Map<String, Object> props = createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+        Map<String, Object> props = createValidConfigProps();
         short customMinIsr = 3;
         props.put(REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr);
         TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);

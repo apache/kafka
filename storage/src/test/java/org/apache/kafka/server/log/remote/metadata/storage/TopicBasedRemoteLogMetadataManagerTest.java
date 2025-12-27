@@ -52,10 +52,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doAnswer;
@@ -415,10 +412,10 @@ public class TopicBasedRemoteLogMetadataManagerTest {
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, metadataTopic);
             DescribeConfigsResult describeResult = admin.describeConfigs(List.of(topicResource));
             Config config = describeResult.all().get().get(topicResource);
-            
-            assertTrue(config != null, "Topic config should not be null");
+
+            assertNotNull(config, "Topic config should not be null");
             ConfigEntry minIsrEntry = config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
-            assertTrue(minIsrEntry != null, "min.insync.replicas config should exist");
+            assertNotNull(minIsrEntry, "min.insync.replicas config should exist");
             assertEquals(String.valueOf(expectedMinIsr), minIsrEntry.value(), 
                 "min.insync.replicas should be " + expectedMinIsr + " (" + valueDescription + ")");
         }
