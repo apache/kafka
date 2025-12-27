@@ -972,7 +972,7 @@ public class StateDirectoryTest {
                 true,
                 false);
 
-        final File processFile = new File(stateDir.getPath() + "/" + applicationId , PROCESS_FILE_NAME);
+        final File processFile = new File(stateDir.getPath() + "/" + applicationId, PROCESS_FILE_NAME);
         processFile.createNewFile();
         stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
         
