@@ -34,6 +34,7 @@ import org.apache.kafka.test.TestUtils;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -953,6 +954,47 @@ public class StateDirectoryTest {
         assertEquals(Set.of(dir2), new HashSet<>(files));
         files = directory.listNonEmptyTaskDirectories();
         assertEquals(Set.of(dir2), new HashSet<>(files));
+    }
+
+    @Test
+    public void shouldLogDebugAndNotWarnWhenOnlyProcessFileRemainsDuringClean() throws IOException {
+        // GIVEN
+        final File stateDir = TestUtils.tempDirectory();
+        final StateDirectory stateDirectory = new StateDirectory(
+                new StreamsConfig(new Properties() {
+                    {
+                        put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                        put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                        put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+                    }
+                }),
+                time,
+                true,
+                false);
+
+        final File processFile = new File(stateDir.getPath() + "/" + applicationId , PROCESS_FILE_NAME);
+        processFile.createNewFile();
+        stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0));
+        
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateDirectory.class)) {
+            appender.setClassLogger(StateDirectory.class, Level.DEBUG);
+            
+            // WHEN
+            stateDirectory.clean();
+
+            // THEN
+            assertTrue(processFile.exists());
+            assertTrue(stateDir.exists());
+            
+            final List<String> messages = appender.getMessages();
+            final boolean hasWarnLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("Failed to delete state store directory") && msg.contains("it is not empty"));
+            assertFalse(hasWarnLog);
+
+            final boolean hasDebugLog = messages.stream()
+                    .anyMatch(msg -> msg.contains("process metadata file") && msg.contains("required for stable task assignment"));
+            assertTrue(hasDebugLog);
+        }
     }
 
     private StateStore initializeStartupStores(final TaskId taskId, final boolean createTaskDir) {
