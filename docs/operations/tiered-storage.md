@@ -89,8 +89,12 @@ After build successfully, there should be a `kafka-storage-x.x.x-test.jar` file 
     # Note, please make sure the brokers need to have access to this directory
     rsm.config.dir=/tmp/kafka-remote-storage
     
-    # This needs to be changed if number of brokers in the cluster is more than 1
+    # For single broker cluster, set this to 1. Default is 3 for clusters with 3 or more brokers.
     rlmm.config.remote.log.metadata.topic.replication.factor=1
+    
+    # The minimum number of replicas that must acknowledge a write to remote log metadata topic.
+    # Default value is 2. For single broker cluster (replication factor = 1), set this to 1.
+    rlmm.config.remote.log.metadata.topic.min.isr=1
     
     # Try to speed up the log retention check interval for testing
     log.retention.check.interval.ms=1000
