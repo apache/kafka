@@ -61,14 +61,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
-        brokers = 3,
-        serverProperties = {
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "5"),
-            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-            @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack/0"),
-            @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack/1"),
-            @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack/2")
-        }
+    brokers = 3,
+    serverProperties = {
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "5"),
+        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(id = 0, key = "broker.rack", value = "rack/0"),
+        @ClusterConfigProperty(id = 1, key = "broker.rack", value = "rack/1"),
+        @ClusterConfigProperty(id = 2, key = "broker.rack", value = "rack/2")
+    }
 )
 
 public class MetadataRequestTest {
