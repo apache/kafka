@@ -380,7 +380,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     @ClusterTest
     public void testRemoteLogMetadataTopicWithDefaultMinIsr() throws ExecutionException, InterruptedException {
         // Initialize the manager which will create the __remote_log_metadata topic
-        verifyRemoteLogMetadataTopicMinIsr(remoteLogMetadataManager,
+        TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = topicBasedRlmm();
+        verifyRemoteLogMetadataTopicMinIsr(topicBasedRemoteLogMetadataManager,
                                            TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
                              "default value");
     }
