@@ -383,7 +383,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = topicBasedRlmm();
         verifyRemoteLogMetadataTopicMinIsr(topicBasedRemoteLogMetadataManager,
                                            TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
-                             "default value");
+                                           "default value");
     }
 
     @ClusterTest
