@@ -52,7 +52,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doAnswer;
@@ -374,7 +378,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     }
 
     @ClusterTest
-    public void testRemoteLogMetadataTopicMinIsr() throws ExecutionException, InterruptedException {
+    public void testRemoteLogMetadataTopicWithDefaultMinIsr() throws ExecutionException, InterruptedException {
         // Initialize the manager which will create the __remote_log_metadata topic
         verifyRemoteLogMetadataTopicMinIsr(remoteLogMetadataManager,
                                            TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
@@ -382,7 +386,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     }
 
     @ClusterTest
-    public void testRemoteLogMetadataTopicMinIsrWithCustomValue() throws ExecutionException, InterruptedException, IOException {
+    public void testRemoteLogMetadataTopicWithCustomMinIsr() throws ExecutionException, InterruptedException, IOException {
         // Create a manager with custom min.isr value
         short customMinIsr = 3;
         Map<String, Object> overrideProps = Map.of(
@@ -399,7 +403,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     private void verifyRemoteLogMetadataTopicMinIsr(TopicBasedRemoteLogMetadataManager rlmm, 
                                                     short expectedMinIsr,
                                                     String valueDescription)
-            throws ExecutionException, InterruptedException {
+                                                    throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
             
