@@ -382,7 +382,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // Initialize the manager which will create the __remote_log_metadata topic
         verifyRemoteLogMetadataTopicMinIsr(remoteLogMetadataManager,
                                            TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
-                             "default value");
+                                           "default value");
     }
 
     @ClusterTest
