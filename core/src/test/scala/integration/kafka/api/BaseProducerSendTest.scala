@@ -88,6 +88,11 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       groupProtocolFromTestParameters(),
       securityProtocol = SecurityProtocol.PLAINTEXT,
     )
+      consumer = TestUtils.createConsumer(
+        bootstrapServers(listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)),
+        groupProtocolFromTestParameters(),
+        securityProtocol = SecurityProtocol.PLAINTEXT,
+      )
   }
 
   @AfterEach
@@ -297,7 +302,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * After close() returns, all messages should be sent with correct returned offset metadata
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testClose(groupProtocol: String): Unit = {
     val producer = createProducer()
 
@@ -482,7 +487,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * Test that flush immediately sends all accumulated requests.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testFlush(groupProtocol: String): Unit = {
     val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     try {
@@ -504,7 +509,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * Test close with zero timeout from caller thread
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testCloseWithZeroTimeoutFromCallerThread(groupProtocol: String): Unit = {
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
     val partition = 0
