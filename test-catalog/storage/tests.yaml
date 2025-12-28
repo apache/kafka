@@ -433,6 +433,7 @@ org.apache.kafka.storage.internals.log.ProducerStateManagerTest:
 - testHasLateTransactionInitializedAfterReload
 - testHasLateTransactionUpdatedAfterFullTruncation
 - testHasLateTransactionUpdatedAfterPartialTruncation
+- testIdempotentTransactionMarkerRetryTV2
 - testLastStableOffsetCompletedTxn
 - testLoadFromCorruptSnapshotFile
 - testLoadFromEmptySnapshotFile
