@@ -350,7 +350,7 @@ class ControllerServer(
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        quotaManagers.clientQuotaCallbackPlugin().get(),
+        quotaManagers.clientQuotaCallbackPlugin(),
         () => {
           quotaManagers.fetch.updateQuotaMetricConfigs()
           quotaManagers.produce.updateQuotaMetricConfigs()

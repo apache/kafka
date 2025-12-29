@@ -26,12 +26,14 @@ import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 
+import java.util.Optional;
+
 public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
     private final String clusterId;
     private final int nodeId;
     private final FaultHandler faultHandler;
     private final String nodeType;
-    private final Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin;
+    private final Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin;
     private final Runnable updateQuotaMetricConfigs;
 
     public DynamicTopicClusterQuotaPublisher(
@@ -39,7 +41,7 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
         int nodeId,
         FaultHandler faultHandler,
         String nodeType,
-        Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin,
+        Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin,
         Runnable updateQuotaMetricConfigs
     ) {
         this.clusterId = clusterId;
@@ -58,12 +60,14 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
     @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage, LoaderManifest manifest) {
         try {
-            if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
-                Cluster cluster = MetadataCache.toCluster(clusterId, newImage);
-                if (clientQuotaCallbackPlugin.get().updateClusterMetadata(cluster)) {
-                    updateQuotaMetricConfigs.run();
+            clientQuotaCallbackPlugin.ifPresent(plugin -> {
+                if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
+                    Cluster cluster = MetadataCache.toCluster(clusterId, newImage);
+                    if (plugin.get().updateClusterMetadata(cluster)) {
+                        updateQuotaMetricConfigs.run();
+                    }
                 }
-            }
+            });
         } catch (Exception e) {
             String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
             faultHandler.handleFault("Uncaught exception while publishing dynamic topic or cluster changes from " + deltaName, e);

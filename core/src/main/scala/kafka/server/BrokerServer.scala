@@ -507,7 +507,7 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          quotaManagers.clientQuotaCallbackPlugin().get(),
+          quotaManagers.clientQuotaCallbackPlugin(),
           () => {
             quotaManagers.fetch.updateQuotaMetricConfigs()
             quotaManagers.produce.updateQuotaMetricConfigs()
