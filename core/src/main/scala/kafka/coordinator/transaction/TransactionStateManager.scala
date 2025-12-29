@@ -499,7 +499,7 @@ class TransactionStateManager(brokerId: Int,
                 catch {
                   case e: IllegalStateException =>
                     warn(s"Unknown message key version while loading transaction state from $topicPartition. " +
-                      s"Ignoring it. It could be a left over from an aborted upgrade. Error: ${e.getMessage}")
+                      s"Ignoring it. It could be a left over from an aborted upgrade", e)
                     None
                 }
                 transactionalId.foreach { txnId =>
