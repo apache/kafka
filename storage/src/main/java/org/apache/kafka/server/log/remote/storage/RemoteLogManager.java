@@ -1485,10 +1485,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                                            long logEndOffset,
                                                            NavigableMap<Integer, Long> epochEntries,
                                                            long fullRemoteLogSizeBytesCopyFinishedSegments) throws RemoteStorageException {
-            if (retentionSize < 0) {
+            if (retentionSize < 0 || (onlyLocalLogSegmentsSize + fullRemoteLogSizeBytesCopyFinishedSegments) <= retentionSize) {
                 return Optional.empty();
             }
-
+            // compute valid remote-log size in bytes for the current partition if the size of the partition exceeds
+            // the configured limit.
             long remoteLogSizeBytes = 0L;
             if (!isAllSegmentsValid) {
                 boolean isAllValid = true;

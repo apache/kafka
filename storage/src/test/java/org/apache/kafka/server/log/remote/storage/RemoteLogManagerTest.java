@@ -1139,7 +1139,7 @@ public class RemoteLogManagerTest {
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
         Map<String, Long> logProps = new HashMap<>();
-        logProps.put("retention.bytes", 1000000L);
+        logProps.put("retention.bytes", 5000L);
         logProps.put("retention.ms", -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(mockLog.config()).thenReturn(logConfig);
@@ -2194,17 +2194,23 @@ public class RemoteLogManagerTest {
         assertFalse(result.isPresent());
         assertFalse(expirationTask.isAllSegmentsValid());
 
+        // 2. When (onlyLocalLogSegmentsSize + fullRemoteLogSizeBytesCopyFinishedSegments) <= configure-retention-size
+        result = expirationTask
+                .buildRetentionSizeData(-1L, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 500L);
+        assertFalse(result.isPresent());
+        assertFalse(expirationTask.isAllSegmentsValid());
+
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
                 .thenReturn(Collections.emptyIterator());
 
-        // 2. totalSize <= retentionSize
+        // 3. totalSize <= retentionSize
         // totalSize = 500 (local) + 0 (remote, as listRemoteLogSegments returns empty) = 500. retentionSize = 1000.
         result = expirationTask
                 .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullRemoteLogSizeBytesCopyFinishedSegments);
         assertFalse(result.isPresent());
         assertFalse(expirationTask.isAllSegmentsValid());
 
-        // 3. totalSize > retentionSize
+        // 4. totalSize > retentionSize
         // totalSize = 500 (local) + 1000 (remote) = 1500. retentionSize = 1000.
         AtomicInteger invocationCount = new AtomicInteger(0);
         RemoteLogSegmentMetadata segmentMetadata = createRemoteLogSegmentMetadata(0, 50, Collections.singletonMap(0, 0L));
@@ -2222,7 +2228,7 @@ public class RemoteLogManagerTest {
         assertFalse(expirationTask.isAllSegmentsValid());
         assertEquals(1, invocationCount.get());
 
-        // Provide the valid `fullRemoteLogSizeBytesCopyFinishedSegments` size
+        // 5. Provide the valid `fullRemoteLogSizeBytesCopyFinishedSegments` size
         result = expirationTask
                 .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 1000L);
         assertTrue(result.isPresent());
