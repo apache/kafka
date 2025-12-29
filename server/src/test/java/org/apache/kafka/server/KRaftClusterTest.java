@@ -1003,14 +1003,8 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
+            cluster.waitForReadyBrokers();
 
-            for (int i = 0; i < 3; i++) {
-                int brokerId = i;
-                TestUtils.waitForCondition(
-                    () -> cluster.brokers().get(brokerId).brokerState() == BrokerState.RUNNING,
-                    "Broker Never started up"
-                );
-            }
             try (Admin admin = createAdminClient(cluster, false)) {
                 QuorumInfo quorumInfo = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo().get();
 
@@ -1075,14 +1069,7 @@ public class KRaftClusterTest {
                 .build()).build()) {
             cluster.format();
             cluster.startup();
-
-            for (int i = 0; i < 3; i++) {
-                int brokerId = i;
-                TestUtils.waitForCondition(
-                    () -> cluster.brokers().get(brokerId).brokerState() == BrokerState.RUNNING,
-                    "Broker " + brokerId + " Never started up"
-                );
-            }
+            cluster.waitForReadyBrokers();
 
             try (Admin admin = createAdminClient(cluster, true)) {
                 QuorumInfo quorumInfo = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions()).quorumInfo().get();
