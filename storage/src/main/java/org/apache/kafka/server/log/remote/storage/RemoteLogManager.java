@@ -1274,14 +1274,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private static class RemoteLogMetadataStats {
             private final Set<Integer> epochsSet;
             private final int metadataCount;
-            private final long remoteLogSizeBytes;
-            private final long remoteLogSizeBytesCopyFinishedSegments;
+            private final long sizeInBytes;
+            private final long copyFinishedSegmentsSizeInBytes;
 
-            private RemoteLogMetadataStats(Set<Integer> epochsSet, int metadataCount, long remoteLogSizeBytes, long remoteLogSizeBytesCopyFinishedSegments) {
+            private RemoteLogMetadataStats(Set<Integer> epochsSet, int metadataCount, long sizeInBytes, long copyFinishedSegmentsSizeInBytes) {
                 this.epochsSet = epochsSet;
                 this.metadataCount = metadataCount;
-                this.remoteLogSizeBytes = remoteLogSizeBytes;
-                this.remoteLogSizeBytesCopyFinishedSegments = remoteLogSizeBytesCopyFinishedSegments;
+                this.sizeInBytes = sizeInBytes;
+                this.copyFinishedSegmentsSizeInBytes = copyFinishedSegmentsSizeInBytes;
             }
         }
 
@@ -1290,21 +1290,23 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // instead of going through all the segments and building it here.
             Set<Integer> epochsSet = new HashSet<>();
             int metadataCount = 0;
-            long remoteLogSizeBytes = 0;
-            long remoteLogSizeBytesCopyFinishedSegments = 0;
+            long sizeInBytes = 0;
+            long copyFinishedSegmentsSizeInBytes = 0;
             while (segmentMetadataIter.hasNext()) {
                 RemoteLogSegmentMetadata segmentMetadata = segmentMetadataIter.next();
                 epochsSet.addAll(segmentMetadata.segmentLeaderEpochs().keySet());
                 metadataCount++;
                 RemoteLogSegmentState state = segmentMetadata.state();
+                // COPY_SEGMENT_STARTED state is excluded from the `sizeInBytes` calculation as it can pollute the
+                // metric during the upload retries.
                 if (state == RemoteLogSegmentState.COPY_SEGMENT_FINISHED) {
-                    remoteLogSizeBytesCopyFinishedSegments += segmentMetadata.segmentSizeInBytes();
-                    remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
+                    copyFinishedSegmentsSizeInBytes += segmentMetadata.segmentSizeInBytes();
+                    sizeInBytes += segmentMetadata.segmentSizeInBytes();
                 } else if (state == RemoteLogSegmentState.DELETE_SEGMENT_STARTED) {
-                    remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
+                    sizeInBytes += segmentMetadata.segmentSizeInBytes();
                 }
             }
-            return new RemoteLogMetadataStats(epochsSet, metadataCount, remoteLogSizeBytes, remoteLogSizeBytesCopyFinishedSegments);
+            return new RemoteLogMetadataStats(epochsSet, metadataCount, sizeInBytes, copyFinishedSegmentsSizeInBytes);
         }
 
         /**
@@ -1332,7 +1334,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
                 return;
             }
-            updateMetadataCountAndLogSizeWith(stats.metadataCount, stats.remoteLogSizeBytes);
+            updateMetadataCountAndLogSizeWith(stats.metadataCount, stats.sizeInBytes);
 
             // All the leader epochs in sorted order that exists in remote storage
             final List<Integer> remoteLeaderEpochs = new ArrayList<>(stats.epochsSet);
@@ -1345,7 +1347,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             long logStartOffset = log.logStartOffset();
             long logEndOffset = log.logEndOffset();
             Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(log.config().retentionSize,
-                    log.onlyLocalLogSegmentsSize(), logEndOffset, epochWithOffsets, stats.remoteLogSizeBytesCopyFinishedSegments);
+                    log.onlyLocalLogSegmentsSize(), logEndOffset, epochWithOffsets, stats.copyFinishedSegmentsSizeInBytes);
             Optional<RetentionTimeData> retentionTimeData = buildRetentionTimeData(log.config().retentionMs);
 
             RemoteLogRetentionHandler remoteLogRetentionHandler = new RemoteLogRetentionHandler(retentionSizeData, retentionTimeData);
@@ -1484,8 +1486,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                                            long onlyLocalLogSegmentsSize,
                                                            long logEndOffset,
                                                            NavigableMap<Integer, Long> epochEntries,
-                                                           long fullRemoteLogSizeBytesCopyFinishedSegments) throws RemoteStorageException {
-            if (retentionSize < 0 || (onlyLocalLogSegmentsSize + fullRemoteLogSizeBytesCopyFinishedSegments) <= retentionSize) {
+                                                           long fullCopyFinishedSegmentsSizeInBytes) throws RemoteStorageException {
+            if (retentionSize < 0 || (onlyLocalLogSegmentsSize + fullCopyFinishedSegmentsSizeInBytes) <= retentionSize) {
                 return Optional.empty();
             }
             // compute valid remote-log size in bytes for the current partition if the size of the partition exceeds
@@ -1521,11 +1523,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                         }
                     }
                 }
-                this.isAllSegmentsValid = isAllValid && fullRemoteLogSizeBytesCopyFinishedSegments == remoteLogSizeBytes;
+                this.isAllSegmentsValid = isAllValid && fullCopyFinishedSegmentsSizeInBytes == remoteLogSizeBytes;
                 brokerTopicStats.recordRemoteLogSizeComputationTime(topicIdPartition.topic(), topicIdPartition.partition(), time.milliseconds() - startTimeMs);
             } else {
                 // Once all the segments are valid, then the future segments to be uploaded by this leader are also valid.
-                remoteLogSizeBytes = fullRemoteLogSizeBytesCopyFinishedSegments;
+                remoteLogSizeBytes = fullCopyFinishedSegmentsSizeInBytes;
             }
             // This is the total size of segments in local log that have their base-offset > local-log-start-offset
             // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
