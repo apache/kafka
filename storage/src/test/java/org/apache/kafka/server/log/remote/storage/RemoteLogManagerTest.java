@@ -2194,7 +2194,6 @@ public class RemoteLogManagerTest {
         assertFalse(result.isPresent());
         assertFalse(expirationTask.isAllSegmentsValid());
 
-        // Mock listRemoteLogSegments to return an empty iterator to avoid NPE or complex mocking for now
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
                 .thenReturn(Collections.emptyIterator());
 
@@ -2206,9 +2205,7 @@ public class RemoteLogManagerTest {
         assertFalse(expirationTask.isAllSegmentsValid());
 
         // 3. totalSize > retentionSize
-        // totalSize = 500 (local) + 1024 (remote) = 1524. retentionSize = 1000.
-        
-        // Mock a segment
+        // totalSize = 500 (local) + 1000 (remote) = 1500. retentionSize = 1000.
         AtomicInteger invocationCount = new AtomicInteger(0);
         RemoteLogSegmentMetadata segmentMetadata = createRemoteLogSegmentMetadata(0, 50, Collections.singletonMap(0, 0L));
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), eq(0)))
@@ -2225,6 +2222,7 @@ public class RemoteLogManagerTest {
         assertFalse(expirationTask.isAllSegmentsValid());
         assertEquals(1, invocationCount.get());
 
+        // Provide the valid `fullRemoteLogSizeBytesCopyFinishedSegments` size
         result = expirationTask
                 .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 1000L);
         assertTrue(result.isPresent());
@@ -2234,7 +2232,7 @@ public class RemoteLogManagerTest {
         assertEquals(2, invocationCount.get());
 
         // Once all the segments are validated and the computed segmentSize for listRemoteLogSegments(tpId) and
-        // listRemoteLogSegments(tpId, epoch) are same, then the subsequent calls to buildRetentionSizeData should not
+        // listRemoteLogSegments(tpId, epoch) are same, then the next calls to `buildRetentionSizeData` should not
         // invoke listRemoteLogSegments(tpId, epoch) again.
         result = expirationTask
                 .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 1000L);
