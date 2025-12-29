@@ -74,6 +74,8 @@ org.apache.kafka.server.log.remote.metadata.storage.RemoteLogSegmentLifecycleTes
 - testRemoteLogSegmentLifeCycle
 org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfigTest:
 - testCommonProducerConsumerOverridesConfig
+- testCustomMinIsr
+- testDefaultMinIsr
 - testValidConfig
 - verifyToStringRedactsSensitiveConfigurations
 org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest:
@@ -85,6 +87,8 @@ org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataM
 - testDoesTopicExistWithAdminClientExecutionError
 - testInitializationFailure
 - testNewPartitionUpdates
+- testRemoteLogMetadataTopicWithCustomMinIsr
+- testRemoteLogMetadataTopicWithDefaultMinIsr
 - testRemoteLogSizeCalculationForUnknownTopicIdPartitionThrows
 - testRemoteLogSizeCalculationWithSegmentsHavingNonExistentEpochs
 - testRemoteLogSizeCalculationWithSegmentsOfDifferentEpochs
