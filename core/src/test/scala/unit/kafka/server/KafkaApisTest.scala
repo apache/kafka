@@ -3437,7 +3437,7 @@ class KafkaApisTest extends Logging {
     val currentEpoch = 5.toShort
     // For TV2, same epoch is ALSO invalid; for TV1, old epoch is invalid
     val oldEpoch = if (transactionVersion >= 2) currentEpoch else (currentEpoch - 1).toShort
-
+    
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
       util.List.of(
         new TxnMarkerEntry(
@@ -3450,22 +3450,22 @@ class KafkaApisTest extends Logging {
         )
       )
     ).build()
-
+    
     val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
-
+    
     // Set up partition and log
     val partition = mock(classOf[Partition])
     when(replicaManager.onlinePartition(topicPartition))
       .thenReturn(Some(partition))
     when(replicaManager.topicIdPartition(topicPartition))
       .thenReturn(new TopicIdPartition(topicId, topicPartition))
-
+    
     // Set up appendRecords to simulate epoch validation failure
     val entriesPerPartition: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
     val responseCallback: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
-
+    
     when(replicaManager.appendRecords(
       ArgumentMatchers.eq(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT.toLong),
       ArgumentMatchers.eq(-1),
@@ -3484,10 +3484,10 @@ class KafkaApisTest extends Logging {
         Map(topicIdPartition -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))
       )
     }
-
+    
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching)
-
+    
     // Verify the response contains INVALID_PRODUCER_EPOCH error
     val expectedResponse = new WriteTxnMarkersResponseData()
       .setMarkers(util.List.of(
@@ -3503,10 +3503,10 @@ class KafkaApisTest extends Logging {
               ))
           ))
       ))
-
+    
     val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
     assertEquals(normalize(expectedResponse), normalize(response.data))
-
+    
     // Verify appendRecords was called with the correct transactionVersion
     verify(replicaManager).appendRecords(
       anyLong,
