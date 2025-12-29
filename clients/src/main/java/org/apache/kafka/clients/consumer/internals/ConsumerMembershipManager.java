@@ -478,13 +478,13 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         Optional<KafkaException> error = event.error();
         CompletableFuture<Void> future = event.future();
 
-            if (error.isPresent()) {
-                Exception e = error.get();
-                log.warn(
-                    "Rebalance step failed in method={}, proceeding to next phase",
-                    methodName.fullyQualifiedMethodName(),
-                    e
-                );
+        if (error.isPresent()) {
+            Exception e = error.get();
+            log.warn(
+                "The {} method failed during rebalance; proceeding to the next phase",
+                methodName.fullyQualifiedMethodName(),
+                e
+            );
 
             future.completeExceptionally(e);
         } else {
