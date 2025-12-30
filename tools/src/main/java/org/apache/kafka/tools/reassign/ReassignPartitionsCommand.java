@@ -927,7 +927,7 @@ public class ReassignPartitionsCommand {
      */
     static String currentPartitionReplicaAssignmentToString(Admin adminClient,
                                                             Map<TopicPartition, List<Integer>> proposedParts,
-                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException, ExecutionException, InterruptedException {
+                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException {
         Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
@@ -1523,7 +1523,7 @@ public class ReassignPartitionsCommand {
     static Map<TopicPartitionReplica, String> getReplicaToLogDir(
         Admin adminClient,
         Map<TopicPartition, List<Integer>> topicPartitionToReplicas
-    ) throws InterruptedException {
+    ) {
         var replicaLogDirs = topicPartitionToReplicas
                 .entrySet()
                 .stream()
