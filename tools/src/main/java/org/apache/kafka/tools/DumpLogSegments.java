@@ -131,7 +131,7 @@ public class DumpLogSegments {
         nonConsecutivePairsForLogFilesMap.forEach((fileName, listOfNonConsecutivePairs) -> {
             System.err.println("Non-consecutive offsets in " + fileName);
             listOfNonConsecutivePairs.forEach(pair ->
-                    System.err.println("  " + pair.first + " is followed by " + pair.second));
+                System.err.println("  " + pair.first + " is followed by " + pair.second));
         });
     }
 
@@ -423,8 +423,8 @@ public class DumpLogSegments {
         }
 
         Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
-        pathOpt.ifPresent(path -> System.out.println("Snapshot end offset: " + path.snapshotId().offset() +
-            ", epoch: " + path.snapshotId().epoch()));
+        System.out.println("Snapshot end offset: " + pathOpt.get().snapshotId().offset() +
+            ", epoch: " + pathOpt.get().snapshotId().epoch());
     }
 
     private static boolean isSnapshotFile(File file) {
@@ -439,7 +439,9 @@ public class DumpLogSegments {
                                          boolean printContents,
                                          MessageParser<?, ?> parser) {
         for (Record record : batch) {
-            if (record.offset() != lastOffset + 1) {
+            if (lastOffset == -1) {
+                lastOffset = record.offset();
+            } else if (record.offset() != lastOffset + 1) {
                 List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
                     .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
                 // Prepend to match Scala behavior (::= operator)
