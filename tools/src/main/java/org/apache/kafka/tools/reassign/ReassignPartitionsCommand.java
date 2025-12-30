@@ -1532,22 +1532,27 @@ public class ReassignPartitionsCommand {
                     .map(id -> new TopicPartitionReplica(entry.getKey().topic(), entry.getKey().partition(), id)))
                 .collect(Collectors.toUnmodifiableSet());
 
-        try {
-            return adminClient.describeReplicaLogDirs(replicaLogDirs).all().get()
-                    .entrySet()
-                    .stream()
-                    .filter(entry -> entry.getValue().getCurrentReplicaLogDir() != null)
-                    .collect(Collectors.toMap(
+        var futureMap = adminClient.describeReplicaLogDirs(replicaLogDirs).values();
+
+        return futureMap.entrySet()
+                .stream()
+                .collect(Collectors.toMap(
                         Entry::getKey,
-                        entry -> entry.getValue().getCurrentReplicaLogDir()
-                    ));
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof TimeoutException) {
-                System.out.println("Timed out while trying to describe replica log dirs.");
-                return Map.of();
-            } else {
-                throw new AdminCommandFailedException("Failed to describe replica log dirs", e.getCause());
-            }
-        }
+                        entry -> {
+                            try {
+                                var logDir = entry.getValue().get().getCurrentReplicaLogDir();
+                                return logDir != null ? logDir : "any";
+                            } catch (ExecutionException e) {
+                                if (e.getCause() instanceof TimeoutException) {
+                                    System.out.println("Failed to get log dir for " + entry.getKey() + ": " + e.getMessage());
+                                    return "any";
+                                } else {
+                                    throw new AdminCommandFailedException("Failed to describe replica log dirs", e.getCause());
+                                }
+                            } catch (InterruptedException e) {
+                                throw new AdminCommandFailedException("Failed to describe replica log dirs", e.getCause());
+                            }
+                        }
+                ));
     }
 }
