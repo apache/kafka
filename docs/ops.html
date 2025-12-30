@@ -2252,7 +2252,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   </tr>
   <tr>
     <td>Average Poll Idle Ratio</td>
-    <td>The ratio of time the Raft IO thread is idle as opposed to doing work (e.g. handling requests or replicating from the leader)</td>
+    <td>The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.</td>
     <td>kafka.server:type=raft-metrics</td>
   </tr>
   <tr>

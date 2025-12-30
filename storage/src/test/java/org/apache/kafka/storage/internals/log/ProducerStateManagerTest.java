@@ -1091,6 +1091,26 @@ public class ProducerStateManagerTest {
     }
 
     @Test
+    public void testIdempotentTransactionMarkerRetryTV2() {
+        short transactionVersion = 2;
+        appendClientEntry(stateManager, producerId, epoch, defaultSequence, 99, true);
+        short markerEpoch = (short) (epoch + 1);
+        appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.COMMIT, 100, transactionVersion);
+
+        ProducerStateEntry entry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
+        assertEquals(markerEpoch, entry.producerEpoch());
+        assertEquals(OptionalLong.empty(), entry.currentTxnFirstOffset());
+
+        assertDoesNotThrow(() ->
+                appendEndTxnMarker(stateManager, producerId, markerEpoch, ControlRecordType.COMMIT, 101, transactionVersion)
+        );
+
+        ProducerStateEntry entryAfterRetry = getLastEntryOrElseThrownByProducerId(stateManager, producerId);
+        assertEquals(markerEpoch, entryAfterRetry.producerEpoch());
+        assertEquals(OptionalLong.empty(), entryAfterRetry.currentTxnFirstOffset());
+    }
+
+    @Test
     public void testRejectNonZeroSequenceForTransactionsV2WithEmptyState() {
         // Create a verification state entry that supports epoch bump (transactions v2)
         VerificationStateEntry verificationEntry = stateManager.maybeCreateVerificationStateEntry(

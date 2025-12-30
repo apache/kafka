@@ -247,7 +247,6 @@ public class StreamThreadTest {
     // task0 is unused
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
-    private final TaskId task3 = new TaskId(1, 1);
 
     private Properties configProps(final boolean enableEoS, final boolean processingThreadsEnabled) {
         return mkProperties(mkMap(

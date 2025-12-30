@@ -63,6 +63,17 @@ class ReplicaFetcherThread(name: String,
     replicaMgr.localLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
+  override protected[server] def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = {
+    val isCompactTopic = replicaMgr.localLog(topicPartition).exists(_.config.compact)
+    val remoteStorageEnabled = replicaMgr.localLog(topicPartition).exists(_.remoteLogEnabled())
+
+    brokerConfig.followerFetchLastTieredOffsetEnable &&
+      remoteStorageEnabled &&
+      !isCompactTopic &&
+      replicaEndOffset == 0 &&
+      leaderEndOffset != 0
+  }
+
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
     if (justShutdown) {

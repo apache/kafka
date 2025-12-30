@@ -82,13 +82,17 @@ public class ThreadMetrics {
     private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = "The average punctuate latency";
     private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = "The maximum punctuate latency";
     private static final String PROCESS_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on processing active tasks";
+        "The ratio, over a rolling measurement window, of the time this thread spent " +
+            "processing active tasks to the total elapsed time in that window.";
     private static final String PUNCTUATE_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on punctuating active tasks";
+        "The ratio, over a rolling measurement window, of the time this thread spent " +
+            "punctuating active tasks to the total elapsed time in that window.";
     private static final String POLL_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on polling records from consumer";
+        "The ratio, over a rolling measurement window, of the time this thread spent " +
+            "polling records from the consumer to the total elapsed time in that window.";
     private static final String COMMIT_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on committing all tasks";
+        "The ratio, over a rolling measurement window, of the time this thread spent " +
+            "committing all tasks to the total elapsed time in that window.";
     private static final String BLOCKED_TIME_DESCRIPTION =
         "The total time the thread spent blocked on kafka in nanoseconds";
     private static final String THREAD_START_TIME_DESCRIPTION =
