@@ -34,9 +34,16 @@ public abstract class RemoteLogMetadata {
      */
     private final long eventTimestampMs;
 
-    protected RemoteLogMetadata(int brokerId, long eventTimestampMs) {
+    /**
+     * The leader epoch of the broker (partition leader epoch) at the time this metadata is being published.
+     * This represents the current leader epoch of the partition, not the leader epochs within a segment.
+     */
+    private final int brokerLeaderEpoch;
+
+    protected RemoteLogMetadata(int brokerId, long eventTimestampMs, int brokerLeaderEpoch) {
         this.brokerId = brokerId;
         this.eventTimestampMs = eventTimestampMs;
+        this.brokerLeaderEpoch = brokerLeaderEpoch;
     }
 
     /**
@@ -51,6 +58,13 @@ public abstract class RemoteLogMetadata {
      */
     public int brokerId() {
         return brokerId;
+    }
+
+    /**
+     * @return The current leader epoch of the partition when this metadata is being published.
+     */
+    public int brokerLeaderEpoch() {
+        return brokerLeaderEpoch;
     }
 
     /**
