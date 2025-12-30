@@ -351,12 +351,7 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         "controller",
         quotaManagers.clientQuotaCallbackPlugin(),
-        () => {
-          quotaManagers.fetch.updateQuotaMetricConfigs()
-          quotaManagers.produce.updateQuotaMetricConfigs()
-          quotaManagers.request.updateQuotaMetricConfigs()
-          quotaManagers.controllerMutation.updateQuotaMetricConfigs()
-        }
+        quotaManagers.quotaConfigChangeListener()
       ))
 
       // Set up the SCRAM publisher.

@@ -34,7 +34,7 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
     private final FaultHandler faultHandler;
     private final String nodeType;
     private final Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin;
-    private final Runnable updateQuotaMetricConfigs;
+    private final QuotaConfigChangeListener quotaConfigChangeListener;
 
     public DynamicTopicClusterQuotaPublisher(
         String clusterId,
@@ -42,14 +42,14 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
         FaultHandler faultHandler,
         String nodeType,
         Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin,
-        Runnable updateQuotaMetricConfigs
+        QuotaConfigChangeListener quotaConfigChangeListener
     ) {
         this.clusterId = clusterId;
         this.nodeId = nodeId;
         this.faultHandler = faultHandler;
         this.nodeType = nodeType;
         this.clientQuotaCallbackPlugin = clientQuotaCallbackPlugin;
-        this.updateQuotaMetricConfigs = updateQuotaMetricConfigs;
+        this.quotaConfigChangeListener = quotaConfigChangeListener;
     }
 
     @Override
@@ -64,7 +64,7 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
                 if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
                     Cluster cluster = MetadataCache.toCluster(clusterId, newImage);
                     if (plugin.get().updateClusterMetadata(cluster)) {
-                        updateQuotaMetricConfigs.run();
+                        quotaConfigChangeListener.onChange();
                     }
                 }
             });
