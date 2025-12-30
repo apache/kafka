@@ -481,6 +481,10 @@ org.apache.kafka.storage.internals.log.RemoteIndexCacheTest:
 - shouldThrowErrorWhenAccessedAfterCacheClose
 - testCacheEntryExpiry
 - testCacheEntryIsDeletedOnRemoval
+- testCacheTtlCanBeDisabled
+- testCacheTtlEviction
+- testCacheTtlRefreshOnAccess
+- testCacheTtlWithMultipleEntries
 - testCleanerThreadShutdown
 - testClearCacheAndIndexFilesWhenResizeCache
 - testClose
@@ -504,6 +508,7 @@ org.apache.kafka.storage.internals.log.RemoteIndexCacheTest:
 - testRemoveItem
 - testRemoveMultipleItems
 - testRemoveNonExistentItem
+- testSizeAndTimeBasedEviction
 org.apache.kafka.storage.internals.log.TimeIndexTest:
 - testAppend
 - testEntry

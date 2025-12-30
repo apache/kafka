@@ -126,15 +126,24 @@ org.apache.kafka.server.KRaftClusterTest:
 - testCreateClusterAndClose
 - testCreateClusterAndCreateAndManyTopics
 - testCreateClusterAndCreateListDeleteTopic
+- testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation
+- testCreateClusterAndPerformReassignment
 - testCreateClusterAndRestartBrokerNode
 - testCreateClusterAndWaitForBrokerInRunningState
 - testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer
 - testCreateClusterWithAdvertisedPortZero
+- testCreatePartitions
 - testDefaultClientQuotas
+- testDescribeKRaftVersion
+- testDescribeQuorumRequestToBrokers
+- testDescribeQuorumRequestToControllers
+- testIncrementalAlterConfigs
 - testReconfigureControllerAuthorizer
 - testReconfigureControllerClientQuotas
 - testRemoteLogManagerInstantiation
+- testSetLog4jConfigurations
 - testUnregisterBroker
+- testUpdateMetadataVersion
 org.apache.kafka.server.LogManagerIntegrationTest:
 - testIOExceptionOnLogSegmentCloseResultsInRecovery
 - testRestartBrokerNoErrorIfMissingPartitionMetadata
