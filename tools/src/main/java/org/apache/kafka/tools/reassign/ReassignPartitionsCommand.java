@@ -33,6 +33,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
@@ -1522,7 +1523,7 @@ public class ReassignPartitionsCommand {
     static Map<TopicPartitionReplica, String> getReplicaToLogDir(
         Admin adminClient,
         Map<TopicPartition, List<Integer>> topicPartitionToReplicas
-    ) throws InterruptedException, ExecutionException {
+    ) throws InterruptedException {
         var replicaLogDirs = topicPartitionToReplicas
                 .entrySet()
                 .stream()
@@ -1531,13 +1532,22 @@ public class ReassignPartitionsCommand {
                     .map(id -> new TopicPartitionReplica(entry.getKey().topic(), entry.getKey().partition(), id)))
                 .collect(Collectors.toUnmodifiableSet());
 
-        return adminClient.describeReplicaLogDirs(replicaLogDirs).all().get()
-                .entrySet()
-                .stream()
-                .filter(entry -> entry.getValue().getCurrentReplicaLogDir() != null)
-                .collect(Collectors.toMap(
-                    Entry::getKey,
-                    entry -> entry.getValue().getCurrentReplicaLogDir()
-                ));
+        try {
+            return adminClient.describeReplicaLogDirs(replicaLogDirs).all().get()
+                    .entrySet()
+                    .stream()
+                    .filter(entry -> entry.getValue().getCurrentReplicaLogDir() != null)
+                    .collect(Collectors.toMap(
+                        Entry::getKey,
+                        entry -> entry.getValue().getCurrentReplicaLogDir()
+                    ));
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof TimeoutException) {
+                System.out.println("Timed out while trying to describe replica log dirs.");
+                return Map.of();
+            } else {
+                throw new AdminCommandFailedException("Failed to describe replica log dirs", e.getCause());
+            }
+        }
     }
 }
