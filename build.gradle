@@ -3403,6 +3403,22 @@ project(':streams:upgrade-system-tests-41') {
   }
 }
 
+project(':streams:upgrade-system-tests-42') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-42"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_42
+    testRuntimeOnly libs.junitJupiter
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.gradleup.shadow'
