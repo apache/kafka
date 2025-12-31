@@ -664,15 +664,15 @@ public class ReassignPartitionsCommand {
      * @return                A map from partitions to broker assignments.
      *                        If any topic or partition can't be found, an exception will be thrown.
      */
-    static Map<TopicPartition, List<Integer>> getReplicaAssignmentForPartitions(Admin adminClient,
-                                                                                Set<TopicPartition> partitions
+    static Map<TopicPartition, List<Node>> getReplicasForPartitions(Admin adminClient,
+                                                                    Set<TopicPartition> partitions
     ) throws ExecutionException, InterruptedException {
-        Map<TopicPartition, List<Integer>> res = new HashMap<>();
+        Map<TopicPartition, List<Node>> res = new HashMap<>();
         describeTopics(adminClient, partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet())).forEach((topicName, topicDescription) ->
             topicDescription.partitions().forEach(info -> {
                 TopicPartition tp = new TopicPartition(topicName, info.partition());
                 if (partitions.contains(tp))
-                    res.put(tp, info.replicas().stream().map(Node::id).collect(Collectors.toList()));
+                    res.put(tp, info.replicas());
             })
         );
 
@@ -683,6 +683,31 @@ public class ReassignPartitionsCommand {
                 missingPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", "))));
         }
         return res;
+    }
+
+    static Map<TopicPartition, List<Integer>> toReplicaIds(
+            Map<TopicPartition, List<Node>> replicaAssignmentForPartitions
+    ) {
+        return replicaAssignmentForPartitions.entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                    Entry::getKey,
+                    e -> e.getValue().stream().map(Node::id).collect(Collectors.toList())
+                ));
+    }
+
+    static Map<TopicPartition, List<Integer>> toAliveReplicaIds(
+            Map<TopicPartition, List<Node>> replicaAssignmentForPartitions
+    ) {
+        return replicaAssignmentForPartitions.entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                    Entry::getKey,
+                    e -> e.getValue()
+                        .stream()
+                        .filter(node -> !node.isEmpty())
+                        .map(Node::id).collect(Collectors.toList())
+                ));
     }
 
     /**
@@ -776,8 +801,11 @@ public class ReassignPartitionsCommand {
         proposedParts.values().forEach(brokers::addAll);
 
         verifyBrokerIds(adminClient, brokers);
-        Map<TopicPartition, List<Integer>> currentParts = getReplicaAssignmentForPartitions(adminClient, proposedParts.keySet());
-        System.out.println(currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts));
+        Map<TopicPartition, List<Node>> currentPartsToNode = getReplicasForPartitions(adminClient, proposedParts.keySet());
+        Map<TopicPartition, List<Integer>> currentParts = toReplicaIds(currentPartsToNode);
+        Map<TopicPartition, List<Integer>> currentAliveParts = toAliveReplicaIds(currentPartsToNode);
+
+        System.out.println(currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentAliveParts));
 
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
             System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
@@ -927,7 +955,7 @@ public class ReassignPartitionsCommand {
      */
     static String currentPartitionReplicaAssignmentToString(Admin adminClient,
                                                             Map<TopicPartition, List<Integer>> proposedParts,
-                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException {
+                                                            Map<TopicPartition, List<Integer>> currentParts) throws JsonProcessingException, ExecutionException, InterruptedException {
         Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
@@ -1523,7 +1551,7 @@ public class ReassignPartitionsCommand {
     static Map<TopicPartitionReplica, String> getReplicaToLogDir(
         Admin adminClient,
         Map<TopicPartition, List<Integer>> topicPartitionToReplicas
-    ) {
+    ) throws InterruptedException, ExecutionException {
         var replicaLogDirs = topicPartitionToReplicas
                 .entrySet()
                 .stream()
@@ -1532,27 +1560,13 @@ public class ReassignPartitionsCommand {
                     .map(id -> new TopicPartitionReplica(entry.getKey().topic(), entry.getKey().partition(), id)))
                 .collect(Collectors.toUnmodifiableSet());
 
-        var futureMap = adminClient.describeReplicaLogDirs(replicaLogDirs).values();
-
-        return futureMap.entrySet()
+        return adminClient.describeReplicaLogDirs(replicaLogDirs).all().get()
+                .entrySet()
                 .stream()
+                .filter(entry -> entry.getValue().getCurrentReplicaLogDir() != null)
                 .collect(Collectors.toMap(
-                        Entry::getKey,
-                        entry -> {
-                            try {
-                                var logDir = entry.getValue().get().getCurrentReplicaLogDir();
-                                return logDir != null ? logDir : "any";
-                            } catch (ExecutionException e) {
-                                if (e.getCause() instanceof TimeoutException) {
-                                    System.out.println("Failed to get log dir for " + entry.getKey() + ": " + e.getMessage());
-                                    return "any";
-                                } else {
-                                    throw new AdminCommandFailedException("Failed to describe replica log dirs", e.getCause());
-                                }
-                            } catch (InterruptedException e) {
-                                throw new AdminCommandFailedException("Failed to describe replica log dirs", e.getCause());
-                            }
-                        }
+                    Entry::getKey,
+                    entry -> entry.getValue().getCurrentReplicaLogDir()
                 ));
     }
 }

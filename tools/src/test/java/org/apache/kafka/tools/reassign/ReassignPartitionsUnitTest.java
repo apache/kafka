@@ -69,7 +69,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findLogD
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findPartitionReassignmentStates;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getBrokerMetadata;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForPartitions;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.toReplicaIds;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForTopics;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaToLogDir;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyInterBrokerThrottle;
@@ -297,13 +297,20 @@ public class ReassignPartitionsUnitTest {
             assignments.put(new TopicPartition("foo", 0), List.of(0, 1, 2));
             assignments.put(new TopicPartition("bar", 0), List.of(2, 3, 0));
 
-            assertEquals(assignments,
-                getReplicaAssignmentForPartitions(adminClient, Set.of(new TopicPartition("foo", 0), new TopicPartition("bar", 0))));
+            Map<TopicPartition, List<Integer>> actualAssignments = toReplicaIds(
+                ReassignPartitionsCommand.getReplicasForPartitions(
+                    adminClient,
+                    Set.of(new TopicPartition("foo", 0), new TopicPartition("bar", 0))
+            ));
+            assertEquals(
+                assignments,
+                actualAssignments
+            );
 
             UnknownTopicOrPartitionException exception =
                 assertInstanceOf(UnknownTopicOrPartitionException.class,
                     assertThrows(ExecutionException.class,
-                        () -> getReplicaAssignmentForPartitions(adminClient,
+                        () -> ReassignPartitionsCommand.getReplicasForPartitions(adminClient,
                             Set.of(new TopicPartition("foo", 0), new TopicPartition("foo", 10)))).getCause());
             assertEquals("Unable to find partition: foo-10", exception.getMessage());
         }
