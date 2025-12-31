@@ -2117,28 +2117,38 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetForLeaderEpoch = request.body[OffsetsForLeaderEpochRequest]
     val topics = offsetForLeaderEpoch.data.topics.asScala.toSeq
 
-    // Separate topics with unknown topic IDs when using version 5+
-    val (knownTopics, unknownTopicIdTopics) = if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
-      topics.partition { offsetForLeaderTopic =>
-        metadataCache.getTopicName(offsetForLeaderTopic.topicId).isPresent
-      }
-    } else {
-      (topics, Seq.empty[OffsetForLeaderTopic])
-    }
-
     // The OffsetsForLeaderEpoch API was initially only used for inter-broker communication and required
     // cluster permission. With KIP-320, the consumer now also uses this API to check for log truncation
     // following a leader change, so we also allow topic describe permission.
+    //
+    // We resolve topic names from topic IDs once here to avoid race conditions between checking for
+    // unknown topics and authorization.
+    val topicNamesCache = if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
+      topics.flatMap { offsetForLeaderTopic =>
+        val topicNameOpt = metadataCache.getTopicName(offsetForLeaderTopic.topicId)
+        if (topicNameOpt.isPresent) {
+          Some((offsetForLeaderTopic, topicNameOpt.get()))
+        } else {
+          None
+        }
+      }.toMap
+    } else {
+      topics.map(t => (t, t.topic)).toMap
+    }
+
+    val knownTopics = topicNamesCache.keys.toSeq
+    val unknownTopicIdTopics = if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
+      topics.filterNot(topicNamesCache.contains)
+    } else {
+      Seq.empty[OffsetForLeaderTopic]
+    }
+
     val (authorizedTopics, unauthorizedTopics) =
       if (authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME, logIfDenied = false))
         (knownTopics, Seq.empty[OffsetForLeaderTopic])
       else authHelper.partitionSeqByAuthorized(request.context, DESCRIBE, TOPIC, knownTopics) { offsetForLeaderTopic =>
-        // Resolve topic name from topicId if needed for authorization
-        if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
-          metadataCache.getTopicName(offsetForLeaderTopic.topicId).get()
-        } else {
-          offsetForLeaderTopic.topic
-        }
+        // Use cached topic name to avoid race condition
+        topicNamesCache(offsetForLeaderTopic)
       }
 
     val endOffsetsForAuthorizedPartitions = replicaManager.lastOffsetForLeaderEpoch(authorizedTopics)
@@ -2149,12 +2159,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
       }
 
-      // Resolve topic name from topicId if needed
-      val topicName = if (OffsetsForLeaderEpochRequest.useTopicIds(request.header.apiVersion)) {
-        metadataCache.getTopicName(offsetForLeaderTopic.topicId).get()
-      } else {
-        offsetForLeaderTopic.topic
-      }
+      // Use cached topic name to avoid race condition
+      val topicName = topicNamesCache(offsetForLeaderTopic)
 
       new OffsetForLeaderTopicResult()
         .setTopic(topicName)
