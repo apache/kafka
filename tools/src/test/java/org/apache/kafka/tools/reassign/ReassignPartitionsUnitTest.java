@@ -831,4 +831,45 @@ public class ReassignPartitionsUnitTest {
             assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 3)));
         }
     }
+
+    @Test
+    public void testGetReplicaToLogDirWithInactive() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder()
+                .numBrokers(4)
+                .brokerLogDirs(List.of(
+                    List.of("/tmp/broker0/logs0"),
+                    List.of("/tmp/broker1/logs0"),
+                    List.of("/tmp/broker2/logs0"),
+                    List.of("/tmp/broker3/logs0")
+                )).build()
+        ) {
+            addTopics(adminClient);
+
+            Map<TopicPartition, List<Integer>> topicPartitionToActiveBrokerReplicas = Map.of(
+                new TopicPartition("foo", 0), List.of(0, 1),
+                new TopicPartition("foo", 1), List.of(1, 2),
+                new TopicPartition("bar", 0), List.of(2)
+            );
+
+            Map<TopicPartition, List<Integer>> topicPartitionToInactiveBrokerReplicas = Map.of(
+                new TopicPartition("bar", 0), List.of(3)
+            );
+
+            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(
+                adminClient,
+                topicPartitionToActiveBrokerReplicas,
+                topicPartitionToInactiveBrokerReplicas
+            );
+
+            assertFalse(result.isEmpty());
+
+            assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 0)));
+            assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 1)));
+            assertEquals("/tmp/broker1/logs0", result.get(new TopicPartitionReplica("foo", 1, 1)));
+            assertEquals("/tmp/broker1/logs0", result.get(new TopicPartitionReplica("foo", 1, 2)));
+            assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 2)));
+
+            assertEquals("any", result.get(new TopicPartitionReplica("bar", 0, 3)));
+        }
+    }
 }

@@ -689,7 +689,7 @@ public class ReassignPartitionsCommand {
     }
 
     static Map<TopicPartition, List<Integer>> toReplicaIds(
-            Map<TopicPartition, List<Node>> replicaAssignmentForPartitions
+        Map<TopicPartition, List<Node>> replicaAssignmentForPartitions
     ) {
         return replicaAssignmentForPartitions.entrySet()
                 .stream()
@@ -987,9 +987,9 @@ public class ReassignPartitionsCommand {
                 .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
         
         Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(
-                adminClient, 
-                partitionsToBeReassigned,
-                inactivePartitionsToBeReassigned
+            adminClient, 
+            partitionsToBeReassigned,
+            inactivePartitionsToBeReassigned
         );
 
         return String.format("Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
@@ -1580,9 +1580,9 @@ public class ReassignPartitionsCommand {
     }
 
     static Map<TopicPartitionReplica, String> getReplicaToLogDir(
-            Admin adminClient,
-            Map<TopicPartition, List<Integer>> topicPartitionToActiveBrokerReplicas,
-            Map<TopicPartition, List<Integer>> topicPartitionToInactiveBrokerReplicas
+        Admin adminClient,
+        Map<TopicPartition, List<Integer>> topicPartitionToActiveBrokerReplicas,
+        Map<TopicPartition, List<Integer>> topicPartitionToInactiveBrokerReplicas
     ) throws InterruptedException, ExecutionException {
         Set<TopicPartitionReplica> replicaLogDirs = new HashSet<>();
         addReplicasToSet(topicPartitionToActiveBrokerReplicas, replicaLogDirs);
