@@ -185,7 +185,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
 
               <pre>
                   <code class="language-java">
-                    // Handle uncaught exceptions
+// Handle uncaught exceptions
                     streams.setUncaughtExceptionHandler((thread, e) -> {
                         log.error("Stream thread {} failed due to {}", thread, e.getMessage(), e);
                         return StreamThreadExceptionResponse.SHUTDOWN_APPLICATION;
