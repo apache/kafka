@@ -290,7 +290,10 @@ public class ReassignPartitionsUnitTest {
             assignments.put(new TopicPartition("foo", 0), List.of(0, 1, 2));
             assignments.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
 
-            assertEquals(assignments, getReplicaAssignmentForTopics(adminClient, List.of("foo")));
+            assertEquals(
+                assignments,
+                toReplicaIds(getReplicaAssignmentForTopics(adminClient, List.of("foo")))
+            );
 
             assignments.clear();
 
@@ -485,7 +488,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}]}",
                 "",
                 "Save this to use as the --reassignment-json-file option during rollback"),
-                currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts)
+                currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts, Map.of())
             );
         }
     }
@@ -814,7 +817,7 @@ public class ReassignPartitionsUnitTest {
                 new TopicPartition("bar", 0), List.of(2, 3, 0)
             );
 
-            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, topicPartitionToReplicas);
+            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, topicPartitionToReplicas, Map.of());
 
             assertFalse(result.isEmpty());
             assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 0)));
