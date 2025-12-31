@@ -33,7 +33,6 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;

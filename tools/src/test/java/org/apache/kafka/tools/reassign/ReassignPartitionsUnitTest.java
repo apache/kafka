@@ -69,7 +69,6 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findLogD
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findPartitionReassignmentStates;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getBrokerMetadata;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.toReplicaIds;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForTopics;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaToLogDir;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyInterBrokerThrottle;
@@ -79,6 +78,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseExe
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseGenerateAssignmentArgs;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.partitionReassignmentStatesToString;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.replicaMoveStatesToString;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.toReplicaIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
