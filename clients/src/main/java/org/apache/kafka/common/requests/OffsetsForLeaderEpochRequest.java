@@ -67,7 +67,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             data.setReplicaId(CONSUMER_REPLICA_ID);
             data.setTopics(epochsByPartition);
 
-            short latestVersion = canUseTopicId ? (short) 5 : (short) 4;
+            short latestVersion = canUseTopicId ? ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion() : (short) 4;
             return new Builder((short) 3, latestVersion, data);
         }
 
@@ -95,7 +95,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
             if (version >= 5) {
                 for (OffsetForLeaderEpochRequestData.OffsetForLeaderTopic topic : data.topics()) {
-                    if (topic.topicId() == null || topic.topicId() == Uuid.ZERO_UUID) {
+                    if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
                         throw new UnsupportedVersionException("The broker offsets for leader api version " +
                                 version + " does require usage of topic ids.");
                     }
