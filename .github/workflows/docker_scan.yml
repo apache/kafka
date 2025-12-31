@@ -26,7 +26,7 @@ jobs:
     strategy:
       matrix:
         # This is an array of supported tags. Make sure this array only contains the supported tags
-        supported_image_tag: ['latest', '3.9.1', '4.0.1', '4.1.1']
+        supported_image_tag: ['latest', '3.9.1', '4.0.1', '4.1.1', '4.2.0']
     steps:
       - name: Run CVE scan
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
