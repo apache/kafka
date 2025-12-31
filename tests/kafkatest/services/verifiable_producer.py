@@ -249,7 +249,10 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.repeating_keys is not None:
             cmd += " --repeating-keys %s " % str(self.repeating_keys)
 
-        cmd += " --command-config %s" % VerifiableProducer.CONFIG_FILE
+        if version.supports_command_config():
+            cmd += " --command-config %s" % VerifiableProducer.CONFIG_FILE
+        else:
+            cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
 
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd

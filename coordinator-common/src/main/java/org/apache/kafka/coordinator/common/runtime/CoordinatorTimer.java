@@ -84,4 +84,12 @@ public interface CoordinatorTimer<T, U> {
      * @param key The key.
      */
     void cancel(String key);
+
+    /**
+     * Check if an operation with the given key is scheduled.
+     *
+     * @param key The key.
+     * @return True if an operation with the key is scheduled, false otherwise.
+     */
+    boolean isScheduled(String key);
 }

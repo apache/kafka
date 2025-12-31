@@ -39,8 +39,8 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.AppendCallback;
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation;
@@ -85,7 +85,10 @@ public class AddPartitionsToTxnManagerTest {
     private final MockTime time = new MockTime();
     private final AbstractKafkaConfig config = new AbstractKafkaConfig(
             AbstractKafkaConfig.CONFIG_DEF,
-            Map.of(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker", KRaftConfigs.NODE_ID_CONFIG, "1"),
+            Map.of(
+                KRaftConfigs.PROCESS_ROLES_CONFIG, "broker", 
+                KRaftConfigs.NODE_ID_CONFIG, "1",
+                KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER"),
             Map.of(),
             false) { };
     private final AddPartitionsToTxnManager addPartitionsToTxnManager =

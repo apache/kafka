@@ -29,10 +29,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.server.util.Csv;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
@@ -395,10 +396,10 @@ public class MetadataQuorumCommand {
     ) throws Exception {
         Map<String, Endpoint> listeners = new HashMap<>();
         SocketServerConfigs.listenerListToEndPoints(
-            props.getOrDefault(SocketServerConfigs.LISTENERS_CONFIG, "").toString(),
+            Csv.parseCsvList(props.getOrDefault(SocketServerConfigs.LISTENERS_CONFIG, "").toString()),
             __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listener(), e));
         SocketServerConfigs.listenerListToEndPoints(
-            props.getOrDefault(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "").toString(),
+            Csv.parseCsvList(props.getOrDefault(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "").toString()),
             __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listener(), e));
         if (!props.containsKey(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)) {
             throw new TerseException(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG +

@@ -172,13 +172,6 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                       to production or deserialization errors at runtime. You can plug in custom
                       implementations to log, continue, or fail the application.
                   </li>
-
-                  <li>
-                      <b>ConsumerRebalanceListener</b><br/>
-                      When constructing a <code>KafkaConsumer</code> manually or in advanced usage,
-                      a custom <code>ConsumerRebalanceListener</code> can be supplied to observe
-                      partition assignment and revocation events.
-                  </li>
               </ul>
 
               <p>Example usage of exception and state restore listeners:</p>
@@ -191,7 +184,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp</code></pre>
                         return StreamThreadExceptionResponse.SHUTDOWN_APPLICATION;
                     });
 
-                    // Observe state restoration
+// Observe state restoration
                     streams.setGlobalStateRestoreListener(new StateRestoreListener() {
                         public void onRestoreStart(...) { ... }
                         public void onBatchRestored(...) { ... }

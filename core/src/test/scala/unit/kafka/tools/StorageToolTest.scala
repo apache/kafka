@@ -32,8 +32,8 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -315,7 +315,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val failure = assertThrows(classOf[TerseFailure], () =>
       runFormatCommand(stream, properties, Seq("--release-version", "3.3-IV1"))).getMessage
-    assertTrue(failure.contains("Unknown metadata.version 3.3-IV1"))
+    assertTrue(failure.contains("Unknown metadata.version '3.3-IV1'"))
     assertTrue(failure.contains(MetadataVersion.MINIMUM_VERSION.version))
     assertTrue(failure.contains(MetadataVersion.latestProduction().version))
   }
@@ -605,19 +605,14 @@ Found problem:
               Seq("--release-version", "3.9-IV0"))).getMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testFormatWithNoInitialControllersSucceedsOnController(setKraftVersionFeature: Boolean): Unit = {
+  @Test
+  def testFormatWithNoInitialControllersSucceedsOnController(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
-    if (setKraftVersionFeature) {
-      arguments += "--feature"
-      arguments += "kraft.version=1"
-    }
     assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().
       contains("Formatting metadata directory %s".format(availableDirs.head)),
@@ -735,18 +730,18 @@ Found problem:
       runVersionMappingCommand(stream, "2.9-IV2")
     })
 
-    assertEquals("Unknown release version '2.9-IV2'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.latestTesting().version, exception.getMessage
+    assertEquals("Unknown metadata.version '2.9-IV2'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()),
+      exception.getMessage
     )
 
     val exception2 = assertThrows(classOf[TerseFailure], () => {
       runVersionMappingCommand(stream, "invalid")
     })
 
-    assertEquals("Unknown release version 'invalid'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
-      " to " + MetadataVersion.latestTesting().version, exception2.getMessage
+    assertEquals("Unknown metadata.version 'invalid'. Supported metadata.version are: " +
+      MetadataVersion.metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting()),
+      exception2.getMessage
     )
   }
 
@@ -840,6 +835,16 @@ Found problem:
     })
 
     assertEquals("Invalid version format: invalid for feature metadata.version", exception.getMessage)
+  }
+
+  @Test
+  def testHandleFeatureDependenciesForInvalidFormat(): Unit = {
+    val stream = new ByteArrayOutputStream()
+
+    val exception = assertThrows(classOf[TerseFailure], () => {
+      runFeatureDependenciesCommand(stream, Seq("metadata.version"))
+    })
+    assertEquals("Invalid feature format: metadata.version. Expected format: 'feature=version' (e.g. 'group.version=1')", exception.getMessage)
   }
 
   @Test

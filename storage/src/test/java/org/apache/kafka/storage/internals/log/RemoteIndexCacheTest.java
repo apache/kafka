@@ -19,7 +19,6 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -122,12 +121,12 @@ public class RemoteIndexCacheTest {
         rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(),
                 brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
         cache = new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString());
-        cache.setFileDeleteDelayMs(0);
+        cache.setFileDeleteDelayMs(20);
         mockRsmFetchIndex(rsm);
     }
 
     @AfterEach
-    public void cleanup() {
+    public void cleanup() throws InterruptedException {
         reset(rsm);
         // the files created for the test will be deleted automatically on thread exit since we use temp dir
         Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
@@ -344,13 +343,13 @@ public class RemoteIndexCacheTest {
         }, "Failed to delete index file");
 
         // verify no index files on disk
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isEmpty(),
                 "Offset index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isEmpty(),
                 "Txn index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isEmpty(),
                 "Time index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty(),
                 "Index file marked for deletion should not be present on disk at " + tpDir.toPath());
     }
 
@@ -773,7 +772,6 @@ public class RemoteIndexCacheTest {
     }
 
     @Test
-    @Flaky("KAFKA-19286")
     public void testConcurrentRemoveReadForCache1() throws IOException, InterruptedException, ExecutionException {
         // Create a spy Cache Entry
         RemoteIndexCache.Entry spyEntry = generateSpyCacheEntry();

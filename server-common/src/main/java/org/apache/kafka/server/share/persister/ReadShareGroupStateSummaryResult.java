@@ -39,7 +39,8 @@ public class ReadShareGroupStateSummaryResult implements PersisterResult {
                                 readStateSummaryResult.partitions().stream()
                                         .map(partitionResult -> PartitionFactory.newPartitionStateSummaryData(
                                                 partitionResult.partition(), partitionResult.stateEpoch(), partitionResult.startOffset(),
-                                                partitionResult.leaderEpoch(), partitionResult.errorCode(), partitionResult.errorMessage()))
+                                                partitionResult.deliveryCompleteCount(), partitionResult.leaderEpoch(), partitionResult.errorCode(),
+                                                partitionResult.errorMessage()))
                                         .collect(Collectors.toList())))
                         .collect(Collectors.toList()))
                 .build();

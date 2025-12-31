@@ -25,7 +25,7 @@ import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogFetchInfo;
-import org.apache.kafka.raft.ReplicatedLog;
+import org.apache.kafka.raft.RaftLog;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -53,7 +53,7 @@ public final class KRaftControlRecordStateMachine {
     private static final long SMALLEST_LOG_OFFSET = 0;
 
     private final LogContext logContext;
-    private final ReplicatedLog log;
+    private final RaftLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;
     private final Logger logger;
@@ -88,7 +88,7 @@ public final class KRaftControlRecordStateMachine {
      */
     public KRaftControlRecordStateMachine(
         VoterSet staticVoterSet,
-        ReplicatedLog log,
+        RaftLog log,
         RecordSerde<?> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSizeBytes,
