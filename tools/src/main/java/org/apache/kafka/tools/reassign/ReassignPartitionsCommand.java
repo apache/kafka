@@ -570,7 +570,7 @@ public class ReassignPartitionsCommand {
         Map<TopicPartition, List<Integer>> currentActiveParts = new HashMap<>();
         Map<TopicPartition, List<Integer>> currentInactiveParts = new HashMap<>();
         splitReplicaIds(currentAssignments, currentActiveParts, currentInactiveParts);
-        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentParts, currentInactiveParts);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentActiveParts, currentInactiveParts);
         List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentParts, usableBrokers);
         System.out.printf("Current partition replica assignment%n%s%n%n",
@@ -1580,14 +1580,12 @@ public class ReassignPartitionsCommand {
     }
 
     static Map<TopicPartitionReplica, String> getReplicaToLogDir(
-        Admin adminClient,
-        Map<TopicPartition, List<Integer>> topicPartitionToActiveBrokerReplicas,
-        Map<TopicPartition, List<Integer>> topicPartitionToInactiveBrokerReplicas
+            Admin adminClient,
+            Map<TopicPartition, List<Integer>> topicPartitionToActiveBrokerReplicas,
+            Map<TopicPartition, List<Integer>> topicPartitionToInactiveBrokerReplicas
     ) throws InterruptedException, ExecutionException {
         Set<TopicPartitionReplica> replicaLogDirs = new HashSet<>();
         addReplicasToSet(topicPartitionToActiveBrokerReplicas, replicaLogDirs);
-        addReplicasToSet(topicPartitionToInactiveBrokerReplicas, replicaLogDirs);
-
         Map<TopicPartitionReplica, String> result = new HashMap<>();
         Map<TopicPartitionReplica, DescribeReplicaLogDirsResult.ReplicaLogDirInfo> logDirInfos =
                 adminClient.describeReplicaLogDirs(replicaLogDirs).all().get();
@@ -1603,9 +1601,7 @@ public class ReassignPartitionsCommand {
             TopicPartition tp = entry.getKey();
             for (Integer id : entry.getValue()) {
                 TopicPartitionReplica tpr = new TopicPartitionReplica(tp.topic(), tp.partition(), id);
-                if (!result.containsKey(tpr)) {
-                    result.put(tpr, "any");
-                }
+                result.put(tpr, "any");
             }
         }
 
