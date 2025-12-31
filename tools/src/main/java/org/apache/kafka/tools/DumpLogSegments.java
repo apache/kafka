@@ -439,9 +439,7 @@ public class DumpLogSegments {
                                          boolean printContents,
                                          MessageParser<?, ?> parser) {
         for (Record record : batch) {
-            if (lastOffset == -1) {
-                lastOffset = record.offset();
-            } else if (record.offset() != lastOffset + 1) {
+            if (record.offset() != lastOffset + 1) {
                 List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
                     .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
                 // Prepend to match Scala behavior (::= operator)
