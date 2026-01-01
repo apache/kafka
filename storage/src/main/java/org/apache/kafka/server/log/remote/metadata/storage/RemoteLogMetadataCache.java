@@ -25,12 +25,18 @@ import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundExceptio
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
@@ -276,6 +282,39 @@ public class RemoteLogMetadataCache {
     public Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegments() {
         // Return all the segments including unreferenced metadata.
         return Collections.unmodifiableCollection(idToSegmentMetadata.values()).iterator();
+    }
+
+    /**
+     * Returns all segments with the given end offset and broker leader epoch less than or equal to the specified epoch.
+     * This is used to find all metadata records that need to be tombstoned when deleting a segment.
+     *
+     * <p>When using a compacted metadata topic with keys like "topicId:partition:endOffset:brokerLeaderEpoch",
+     * we need to tombstone all historical entries for the same endOffset that have a lower or equal broker leader epoch.
+     * This ensures that after compaction, only the tombstone markers remain for deleted segments.</p>
+     *
+     * @param endOffset the end offset to match
+     * @param maxBrokerLeaderEpoch the maximum broker leader epoch to include (inclusive)
+     * @return iterator of all segments matching the criteria, sorted by broker leader epoch (ascending)
+     */
+    public Iterator<RemoteLogSegmentMetadata> listAllRemoteLogSegmentsForEndOffset(long endOffset, int maxBrokerLeaderEpoch) {
+        List<RemoteLogSegmentMetadata> matchingSegments = new ArrayList<>();
+
+        // Iterate through all segments in the cache
+        for (RemoteLogSegmentMetadata metadata : idToSegmentMetadata.values()) {
+            // Match segments with same endOffset and brokerLeaderEpoch <= max
+            if (metadata.endOffset() == endOffset &&
+                metadata.brokerLeaderEpoch() <= maxBrokerLeaderEpoch) {
+                matchingSegments.add(metadata);
+            }
+        }
+
+        // Sort by broker leader epoch (ascending) for consistent ordering
+        matchingSegments.sort(Comparator.comparingInt(RemoteLogSegmentMetadata::brokerLeaderEpoch));
+
+        log.debug("Found {} segments with endOffset={} and brokerLeaderEpoch<={}",
+            matchingSegments.size(), endOffset, maxBrokerLeaderEpoch);
+
+        return matchingSegments.iterator();
     }
 
     /**

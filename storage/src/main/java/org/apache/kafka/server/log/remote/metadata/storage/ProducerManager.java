@@ -53,6 +53,44 @@ public class ProducerManager implements Closeable {
     }
 
     /**
+     * Publishes a tombstone (null value) for the given metadata key.
+     * This is used to delete records from the compacted metadata topic.
+     *
+     * @param topicIdPartition the topic partition
+     * @param metadataKey the key to tombstone
+     * @return a CompletableFuture containing the record metadata
+     */
+    public CompletableFuture<RecordMetadata> publishTombstone(
+            TopicIdPartition topicIdPartition,
+            String metadataKey) {
+
+        log.debug("Publishing tombstone for key: {} to topic: {} partition: {}",
+                metadataKey, topicIdPartition.topic(), topicIdPartition.partition());
+
+        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+        int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
+
+        // Send tombstone (null value) to the topic
+        producer.send(
+                new ProducerRecord<>(
+                        rlmmConfig.remoteLogMetadataTopicName(),
+                        metadataPartitionNum,
+                        metadataKey,
+                        null  // ← Tombstone!
+                ),
+                (metadata, exception) -> {
+                    if (exception != null) {
+                        future.completeExceptionally(exception);
+                    } else {
+                        future.complete(metadata);
+                    }
+                }
+        );
+
+        return future;
+    }
+
+    /**
      * Returns {@link CompletableFuture} which will complete only after publishing of the given {@code remoteLogMetadata}
      * is considered complete.
      *

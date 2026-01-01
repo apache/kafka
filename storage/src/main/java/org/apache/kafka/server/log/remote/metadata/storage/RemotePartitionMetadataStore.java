@@ -31,8 +31,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -128,6 +130,16 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
         }
         return remoteLogMetadataCache;
+    }
+
+    public Iterator<String> listRemoteLogSegmentsByEndoffset(TopicIdPartition topicIdPartition, Long endOffset, int maxLeaderEpoch) throws RemoteResourceNotFoundException {
+        Iterator<RemoteLogSegmentMetadata> matchingEntries = getRemoteLogMetadataCache(topicIdPartition).listAllRemoteLogSegmentsForEndOffset(endOffset, maxLeaderEpoch);
+        List<String> metadataKeys = new ArrayList<>();
+        while (matchingEntries.hasNext()) {
+            metadataKeys.add(matchingEntries.next().metadataKey());
+        }
+
+        return metadataKeys.iterator();
     }
 
     public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,

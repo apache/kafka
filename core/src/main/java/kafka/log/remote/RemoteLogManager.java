@@ -1522,6 +1522,10 @@ public class RemoteLogManager implements Closeable {
             }
 
             // Publish delete segment finished event.
+
+            // TODO: tosavana, instead of calling updateRemoteLogSegmentMetadata, calling deleteRemoteLogSegmentMetadata, in which will also call
+            // updateRemoteLogSegmentMetadata and sending the tombstone message, or to avoid modifying the remoteLOgmetadataManager's interface,
+            // directly check the message type and the updateState inside the updateRemoteLogSegmentMetadata and send tombstone when true
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                 new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
                     segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId, topicIdPartitionToLeaderEpochMap.get(segmentMetadata.remoteLogSegmentId().topicIdPartition()), segmentMetadata.endOffset())).get();

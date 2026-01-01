@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -155,11 +156,47 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                                                            + RemoteLogSegmentState.COPY_SEGMENT_STARTED);
             }
 
+            if(segmentMetadataUpdate.state() == RemoteLogSegmentState.DELETE_SEGMENT_FINISHED) {
+                return tombstoneSegmentMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
+            }
+
             // Publish the message to the topic.
             return storeRemoteLogMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    private CompletableFuture<Void> tombstoneSegmentMetadata(TopicIdPartition topicIdPartition, RemoteLogSegmentMetadataUpdate segmentMetadataUpdate) {
+        Objects.requireNonNull(segmentMetadataUpdate, "segmentMetadataUpdate can not be null");
+
+        lock.readLock().lock();
+        try {
+            ensureInitializedAndNotClosed();
+
+            // Publish the message to the topic.
+            storeRemoteLogMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
+
+            List<CompletableFuture<RecordMetadata>> tombstoneFutures = new ArrayList<>();
+            // Get the cache to find all segments with the same endOffset
+            Iterator<String> toBeTombstonedKeys = remotePartitionMetadataStore.listRemoteLogSegmentsByEndoffset(topicIdPartition, segmentMetadataUpdate.endOffset(), segmentMetadataUpdate.brokerLeaderEpoch());
+            while(toBeTombstonedKeys.hasNext()) {
+                String metadataKey = toBeTombstonedKeys.next();
+                // Publish tombstone (null value) to the topic
+                CompletableFuture<RecordMetadata> future =
+                        producerManager.publishTombstone(topicIdPartition, metadataKey);
+                tombstoneFutures.add(future);
+            }
+            // Wait for all tombstones to complete
+            return CompletableFuture.allOf(
+                    tombstoneFutures.toArray(new CompletableFuture[0]));
+
+        } catch (RemoteStorageException e) {
+            throw new RuntimeException(e);
+        } finally {
+            lock.readLock().unlock();
+        }
+
     }
 
     @Override
