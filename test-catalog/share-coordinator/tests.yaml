@@ -68,7 +68,7 @@ org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
 - testDeletePartitionIdNonExistentInMetadataImage
 - testDeleteStateInvalidRequestData
 - testDeleteStateSuccess
-- testDeleteStateUnintializedRecord
+- testDeleteStateUninitializedRecord
 - testDeleteTopicIdNonExistentInMetadataImage
 - testInitializeNullMetadataImage
 - testInitializePartitionIdNonExistentInMetadataImage
