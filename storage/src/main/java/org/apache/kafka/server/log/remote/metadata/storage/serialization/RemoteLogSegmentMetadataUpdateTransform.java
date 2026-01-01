@@ -48,7 +48,7 @@ public class RemoteLogSegmentMetadataUpdateTransform implements RemoteLogMetadat
 
         Optional<CustomMetadata> customMetadata = Optional.ofNullable(record.customMetadata()).map(CustomMetadata::new);
         return new RemoteLogSegmentMetadataUpdate(new RemoteLogSegmentId(topicIdPartition, entry.id()),
-                record.eventTimestampMs(), customMetadata, RemoteLogSegmentState.forId(record.remoteLogSegmentState()), record.brokerId());
+                record.eventTimestampMs(), customMetadata, RemoteLogSegmentState.forId(record.remoteLogSegmentState()), record.brokerId(), record.brokerLeaderEpoch(), record.endOffset());
     }
 
     private RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadataUpdate data) {

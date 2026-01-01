@@ -45,7 +45,9 @@ class RemoteLogSegmentMetadataUpdateTransformTest {
                 123L,
                 customMetadata,
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                1
+                1,
+                0,
+                100L
         );
 
         RemoteLogSegmentMetadataUpdateTransform transform = new RemoteLogSegmentMetadataUpdateTransform();

@@ -36,6 +36,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                 .setStartOffset(segmentMetadata.startOffset())
                 .setEndOffset(segmentMetadata.endOffset())
                 .setBrokerId(segmentMetadata.brokerId())
+                .setBrokerLeaderEpoch(segmentMetadata.brokerLeaderEpoch())
                 .setEventTimestampMs(segmentMetadata.eventTimestampMs())
                 .setMaxTimestampMs(segmentMetadata.maxTimestampMs())
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
@@ -74,7 +75,8 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                                                     customMetadata,
                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
                                                     segmentLeaderEpochs,
-                                                    record.txnIndexEmpty());
+                                                    record.txnIndexEmpty(),
+                                                    record.brokerLeaderEpoch());
     }
 
 }

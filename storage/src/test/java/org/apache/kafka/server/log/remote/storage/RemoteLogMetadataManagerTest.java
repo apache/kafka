@@ -71,7 +71,7 @@ public class RemoteLogMetadataManagerTest {
             Map<Integer, Long> segmentLeaderEpochs = Collections.singletonMap(0, 101L);
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(
-                    segmentId, 101L, 200L, -1L, BROKER_ID_0, time.milliseconds(), SEG_SIZE, segmentLeaderEpochs);
+                    segmentId, 101L, 200L, -1L, BROKER_ID_0, time.milliseconds(), SEG_SIZE, segmentLeaderEpochs, 0);
             // Wait until the segment is added successfully.
             assertDoesNotThrow(() -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get());
 
@@ -80,7 +80,7 @@ public class RemoteLogMetadataManagerTest {
 
             // 2.Move that segment to COPY_SEGMENT_FINISHED state and this segment should be available.
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
-                    segmentId, time.milliseconds(), Optional.empty(), COPY_SEGMENT_FINISHED, BROKER_ID_1);
+                    segmentId, time.milliseconds(), Optional.empty(), COPY_SEGMENT_FINISHED, BROKER_ID_1, 0, 200L);
             // Wait until the segment is updated successfully.
             assertDoesNotThrow(() -> remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get());
             RemoteLogSegmentMetadata expectedSegmentMetadata = segmentMetadata.createWithUpdates(segmentMetadataUpdate);
@@ -110,12 +110,12 @@ public class RemoteLogMetadataManagerTest {
             segmentLeaderEpochs.put(3, 80L);
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(
-                    segmentId, 0L, 100L, -1L, BROKER_ID_0, time.milliseconds(), SEG_SIZE, segmentLeaderEpochs);
+                    segmentId, 0L, 100L, -1L, BROKER_ID_0, time.milliseconds(), SEG_SIZE, segmentLeaderEpochs, 3);
             // Wait until the segment is added successfully.
             assertDoesNotThrow(() -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get());
 
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
-                    segmentId, time.milliseconds(), Optional.empty(), COPY_SEGMENT_FINISHED, BROKER_ID_1);
+                    segmentId, time.milliseconds(), Optional.empty(), COPY_SEGMENT_FINISHED, BROKER_ID_1, 3, 100);
             // Wait until the segment is updated successfully.
             assertDoesNotThrow(() -> remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get());
 
@@ -154,6 +154,6 @@ public class RemoteLogMetadataManagerTest {
     }
 
     private RemotePartitionDeleteMetadata createRemotePartitionDeleteMetadata(RemotePartitionDeleteState state) {
-        return new RemotePartitionDeleteMetadata(TP0, state, time.milliseconds(), BROKER_ID_0);
+        return new RemotePartitionDeleteMetadata(TP0, state, time.milliseconds(), BROKER_ID_0, 0, 100);
     }
 }

@@ -53,6 +53,18 @@
       "about": "Broker (controller or leader) id from which this event is created. DELETE_PARTITION_MARKED is sent by the controller. DELETE_PARTITION_STARTED and DELETE_PARTITION_FINISHED are sent by remote log metadata topic partition leader."
     },
     {
+      "name": "BrokerLeaderEpoch",
+      "type": "int32",
+      "versions": "0+",
+      "about": "The leader epoch of the broker (partition leader epoch) at the time this delete metadata is being published."
+    },
+    {
+      "name": "EndOffset",
+      "type": "int64",
+      "versions": "0+",
+      "about": "End offset of the partition at the time of deletion."
+    },
+    {
       "name": "EventTimestampMs",
       "type": "int64",
       "versions": "0+",

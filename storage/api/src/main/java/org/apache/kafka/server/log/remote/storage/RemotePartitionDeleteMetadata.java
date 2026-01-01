@@ -40,8 +40,8 @@ public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
     public RemotePartitionDeleteMetadata(TopicIdPartition topicIdPartition,
                                          RemotePartitionDeleteState state,
                                          long eventTimestampMs,
-                                         int brokerId) {
-        super(brokerId, eventTimestampMs);
+                                         int brokerId, int brokerLeaderEpoch, long endOffset) {
+        super(brokerId, eventTimestampMs, brokerLeaderEpoch, endOffset);
         this.topicIdPartition = Objects.requireNonNull(topicIdPartition);
         this.state = Objects.requireNonNull(state);
     }

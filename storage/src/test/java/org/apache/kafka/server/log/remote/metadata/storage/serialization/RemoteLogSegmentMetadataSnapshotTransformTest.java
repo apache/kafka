@@ -44,7 +44,8 @@ class RemoteLogSegmentMetadataSnapshotTransformTest {
                 customMetadata,
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
                 segmentLeaderEpochs,
-                isTxnIdxEmpty
+                isTxnIdxEmpty,
+                0
         );
 
         RemoteLogSegmentMetadataSnapshotTransform transform = new RemoteLogSegmentMetadataSnapshotTransform();

@@ -40,10 +40,17 @@ public abstract class RemoteLogMetadata {
      */
     private final int brokerLeaderEpoch;
 
-    protected RemoteLogMetadata(int brokerId, long eventTimestampMs, int brokerLeaderEpoch) {
+    /**
+     * The end offset of the log segment or partition. This is deterministic when the broker decides to
+     * upload/update/delete the segment or partition.
+     */
+    private final long endOffset;
+
+    protected RemoteLogMetadata(int brokerId, long eventTimestampMs, int brokerLeaderEpoch, long endOffset) {
         this.brokerId = brokerId;
         this.eventTimestampMs = eventTimestampMs;
         this.brokerLeaderEpoch = brokerLeaderEpoch;
+        this.endOffset = endOffset;
     }
 
     /**
@@ -66,6 +73,22 @@ public abstract class RemoteLogMetadata {
     public int brokerLeaderEpoch() {
         return brokerLeaderEpoch;
     }
+
+    /**
+     * @return The end offset of the log segment or partition.
+     */
+    public long endOffset() {
+        return endOffset;
+    }
+
+    public String metadataKey() {
+        TopicIdPartition tip = this.topicIdPartition();
+        return tip.topicId() + ":" +
+                tip.partition() + ":" +
+                this.endOffset() + ":" +
+                this.brokerLeaderEpoch();
+    }
+
 
     /**
      * @return TopicIdPartition for which this event is generated.

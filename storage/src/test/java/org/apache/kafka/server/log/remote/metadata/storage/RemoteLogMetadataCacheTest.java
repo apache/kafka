@@ -50,6 +50,8 @@ public class RemoteLogMetadataCacheTest {
     private final int brokerId1 = 1;
     private final Time time = new MockTime(1);
     private final RemoteLogMetadataCache cache = new RemoteLogMetadataCache();
+    private final long endOffset = 100L;
+    private final int leaderEpoch = 0;
 
     @Test
     public void testCacheAddMetadataOnInvalidArgs() {
@@ -59,11 +61,11 @@ public class RemoteLogMetadataCacheTest {
         for (RemoteLogSegmentState state : RemoteLogSegmentState.values()) {
             if (state != RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
                 RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
-                RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0, 100L,
-                        -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+                RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0, endOffset,
+                        -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L), leaderEpoch);
                 RemoteLogSegmentMetadata updatedMetadata = segmentMetadata.createWithUpdates(
                         new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(), Optional.empty(),
-                                state, brokerId1));
+                                state, brokerId1, leaderEpoch, endOffset));
                 assertThrows(IllegalArgumentException.class, () -> cache.addCopyInProgressSegment(updatedMetadata));
             }
         }
@@ -80,7 +82,7 @@ public class RemoteLogMetadataCacheTest {
             if (state != RemoteLogSegmentState.COPY_SEGMENT_STARTED) {
                 RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
                 RemoteLogSegmentMetadataUpdate updatedMetadata = new RemoteLogSegmentMetadataUpdate(
-                        segmentId, time.milliseconds(), Optional.empty(), state, brokerId1);
+                        segmentId, time.milliseconds(), Optional.empty(), state, brokerId1, leaderEpoch, endOffset);
                 try {
                     cache.updateRemoteLogSegmentMetadata(updatedMetadata);
                     if (isInitialized) {
@@ -101,48 +103,48 @@ public class RemoteLogMetadataCacheTest {
         int leaderEpoch = 5;
         long offset = 10L;
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
-        RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, offset, 100L,
-                -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(leaderEpoch, offset));
+        RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, offset, endOffset,
+                -1L, brokerId0, time.milliseconds(), segmentSize, Collections.singletonMap(leaderEpoch, offset), leaderEpoch);
         cache.addCopyInProgressSegment(segmentMetadata);
 
         // invalid-transition-1. COPY_SEGMENT_STARTED -> DELETE_SEGMENT_FINISHED
         RemoteLogSegmentMetadataUpdate updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.COPY_SEGMENT_STARTED, leaderEpoch);
 
         // valid-transition-2: COPY_SEGMENT_STARTED -> COPY_SEGMENT_FINISHED
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, leaderEpoch);
 
         // invalid-transition-3: COPY_SEGMENT_FINISHED -> DELETE_SEGMENT_FINISHED
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, leaderEpoch);
 
         // invalid-transition-4: COPY_SEGMENT_FINISHED -> COPY_SEGMENT_STARTED
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, leaderEpoch);
 
         // valid-transition-5: COPY_SEGMENT_FINISHED -> DELETE_SEGMENT_STARTED
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.DELETE_SEGMENT_STARTED, leaderEpoch);
 
         // invalid-transition-6: DELETE_SEGMENT_STARTED -> COPY_SEGMENT_FINISHED
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.DELETE_SEGMENT_STARTED, leaderEpoch);
 
         // invalid-transition-7: DELETE_SEGMENT_STARTED -> COPY_SEGMENT_STARTED
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_STARTED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.DELETE_SEGMENT_STARTED, leaderEpoch);
 
         // valid-transition-8: DELETE_SEGMENT_STARTED -> DELETE_SEGMENT_FINISHED
         updatedMetadata = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1);
+                Optional.empty(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId1, leaderEpoch, endOffset);
         updateAndVerifyCacheContents(updatedMetadata, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, leaderEpoch);
     }
 

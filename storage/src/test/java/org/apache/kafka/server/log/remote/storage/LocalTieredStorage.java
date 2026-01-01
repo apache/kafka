@@ -277,7 +277,143 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             //    by adding kafka-storage-<version>-test.jar in the classpath, then enabling the INCLUDE_TEST_JARS flag
             //    before running the server
             //
-            // In mode-2, if the commented-out #L284 is enabled, then it creates the storageDirectory from the present
+            // In mode-2, if the commented-out #L284 is enabled, then it creatComplete Flow: Segment Upload, Metadata Updates, and Local Log Offset Changes
+            //
+            //  Phase 1: Segment Upload to Remote Storage
+            //
+            //  Trigger: RLMCopyTask runs periodically (RemoteLogManager.java:2000)
+            //
+            //  Step 1: Copy Segment (RemoteLogManager.java:1012-1097)
+            //
+            //  copyLogSegment(log, segment, segmentId, nextSegmentBaseOffset) {
+            //
+            //  1. Create metadata with state COPY_SEGMENT_STARTED (line 1028-1030)
+            //  RemoteLogSegmentMetadata copySegmentStartedRlsm =
+            //      new RemoteLogSegmentMetadata(segmentId, baseOffset, endOffset, ...);
+            //  2. Write metadata to RemoteLogMetadataManager (line 1032)
+            //  remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
+            //    - This records that upload has STARTED
+            //    - Other brokers can now see this segment is being uploaded
+            //    - Segment is NOT yet readable from remote
+            //  3. Upload actual data to remote storage (line 1043)
+            //  remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+            //    - Uploads .log file, .index, .timeindex, .txnindex, producer snapshot
+            //    - This can take significant time for large segments
+            //  4. Update metadata to COPY_SEGMENT_FINISHED (line 1055-1079)
+            //  RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm =
+            //      new RemoteLogSegmentMetadataUpdate(..., COPY_SEGMENT_FINISHED, ...);
+            //  remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
+            //    - NOW the segment is readable from remote storage
+            //    - All brokers can see state = COPY_SEGMENT_FINISHED
+            //  5. Update in-memory tracking (line 1087-1090)
+            //  copiedOffsetOption = Optional.of(new OffsetAndEpoch(endOffset, lastEpoch));
+            //  log.updateHighestOffsetInRemoteStorage(endOffset);
+            //    - Updates local tracking of what's been uploaded
+            //    - This prevents local segments from being deleted before upload completes
+            //
+            //  Phase 2: Local Segment Deletion (SEPARATE PROCESS)
+            //
+            //  Trigger: LogManager.cleanupLogs() runs periodically (LogManager.scala:1397)
+            //
+            //  Step 1: Find Deletable Segments (UnifiedLog.scala:1505-1554)
+            //
+            //  deletableSegments(predicate) {
+            //      // Key check (line 1513-1514):
+            //      (upperBoundOffset - 1 <= highestOffsetInRemoteStorage()) ||
+            //      allowDeletionDueToLogStartOffsetIncremented
+            //  }
+            //
+            //  Segments are deletable ONLY if:
+            //  - Segment's end offset <= highestOffsetInRemoteStorage (uploaded successfully)
+            //  - OR log-start-offset was explicitly incremented past this segment
+            //
+            //  Step 2: Delete Segments and Update Offsets (UnifiedLog.scala:1561-1586)
+            //
+            //  deleteSegments(deletable, reason) {
+            //      // CRITICAL: Update offset BEFORE deleting files (line 1577-1578)
+            //      val newLocalLogStartOffset = localLog.segments.higherSegment(...).get.baseOffset()
+            //      incrementStartOffset(newLocalLogStartOffset, SegmentDeletion)
+            //
+            //      // Then delete the files (line 1580)
+            //      localLog.removeAndDeleteSegments(segmentsToDelete, ...)
+            //  }
+            //
+            //  Step 3: Increment Local Log Start Offset (UnifiedLog.scala:970-977)
+            //
+            //  maybeIncrementLocalLogStartOffset(newLocalLogStartOffset, reason) {
+            //      if (newLocalLogStartOffset > localLogStartOffset()) {
+            //          _localLogStartOffset = newLocalLogStartOffset  // KEY UPDATE!
+            //          info(s"Incremented local log start offset to ${localLogStartOffset()}")
+            //      }
+            //  }
+            //
+            //  Phase 3: Remote Metadata Tracking
+            //
+            //  Metadata States:
+            //  1. COPY_SEGMENT_STARTED - Upload in progress, NOT readable
+            //  2. COPY_SEGMENT_FINISHED - Upload complete, IS readable
+            //  3. DELETE_SEGMENT_STARTED - Deletion in progress (from retention)
+            //  4. DELETE_SEGMENT_FINISHED - Deleted from remote storage
+            //
+            //  How Brokers Query Metadata:
+            //  - When fetching from remote, broker queries RemoteLogMetadataManager
+            //  - Only segments with state COPY_SEGMENT_FINISHED are considered
+            //  - Query by offset range to find which segment contains the requested offset
+            //
+            //  Timeline Example: 4 Segments (0, 1, 2, 3)
+            //
+            //  Time T0: Initial State
+            //    Local segments: [0, 1, 2, 3, 4-active]
+            //    logStartOffset = 0
+            //    localLogStartOffset = 0
+            //    highestOffsetInRemoteStorage = -1
+            //
+            //  Time T1: RLMCopyTask uploads segment 0
+            //    - Metadata: segment 0 → COPY_SEGMENT_STARTED (not readable)
+            //    - Upload to S3/storage
+            //    - Metadata: segment 0 → COPY_SEGMENT_FINISHED (readable!)
+            //    - highestOffsetInRemoteStorage = end of segment 0
+            //
+            //  Time T2: RLMCopyTask uploads segments 1, 2, 3 sequentially
+            //    - Same process for each segment
+            //    - highestOffsetInRemoteStorage = end of segment 3
+            //
+            //  Time T3: LogManager.cleanupLogs() runs
+            //    - Checks: segments 0,1,2,3 end offset <= highestOffsetInRemoteStorage? YES
+            //    - Deletes segments 0, 1, 2, 3
+            //    - BEFORE deletion: localLogStartOffset = 4
+            //    - Local segments: [4-active]
+            //
+            //  Time T4: Consumer fetches offset 2
+            //    - Check: 2 < localLogStartOffset(4)? YES → fetch from REMOTE
+            //    - Query metadata manager: which segment contains offset 2?
+            //    - Fetch from remote storage
+            //
+            //  Answer to Your Question
+            //
+            //  How does extra fetch happen?
+            //
+            //  If consumer tries to read during the upload/delete transition:
+            //
+            //  Time T2.5: Segment 3 uploaded, but cleanup hasn't run yet
+            //    Local: [0, 1, 2, 3, 4-active]
+            //    localLogStartOffset = 0 (not updated yet!)
+            //
+            //    Consumer fetches offset 3:
+            //    - 3 >= localLogStartOffset(0) → tries LOCAL first
+            //    - Reads from local segment 3 ✓ (FETCH #1)
+            //
+            //  Time T3: Cleanup runs
+            //    - Deletes segments 0, 1, 2, 3
+            //    - localLogStartOffset = 4
+            //
+            //  Time T4: Consumer re-fetches offset 3 (due to rebalance/error/retry)
+            //    - 3 < localLogStartOffset(4) → fetches from REMOTE
+            //    - (FETCH #2 for same offset!)
+            //
+            //  Result: 5 fetches instead of 4 if one offset gets fetched twice!
+            //
+            //  The log you added will show this by displaying the same offset being fetched with different startPos values or being called from different stack frames.es the storageDirectory from the present
             // kafka working directory which can cause confusion:
             //
             // (eg) Kafka is installed on /opt/kafka and storageDirectory is configured as /tmp/kafka-tiered-storage,
@@ -341,6 +477,9 @@ public final class LocalTieredStorage implements RemoteStorageManager {
     public InputStream fetchLogSegment(final RemoteLogSegmentMetadata metadata,
                                        final int startPos,
                                        final int endPos) throws RemoteStorageException {
+        logger.info("fetchLogSegment called: topicPartition={}, segmentId={}, startOffset={}, endOffset={}, startPos={}, endPos={}, caller={}",
+                metadata.topicIdPartition(), metadata.remoteLogSegmentId().id(), metadata.startOffset(), metadata.endOffset(),
+                startPos, endPos, Thread.currentThread().getStackTrace()[2]);
         checkArgument(startPos >= 0, "Start position must be positive", startPos);
         checkArgument(endPos >= startPos,
                 "End position cannot be less than startPosition", startPos, endPos);

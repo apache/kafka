@@ -79,6 +79,12 @@
       "about": "Broker id from which this event is generated."
     },
     {
+      "name": "BrokerLeaderEpoch",
+      "type": "int32",
+      "versions": "0+",
+      "about": "The leader epoch of the broker (partition leader epoch) at the time this segment is being uploaded."
+    },
+    {
       "name": "MaxTimestampMs",
       "type": "int64",
       "versions": "0+",

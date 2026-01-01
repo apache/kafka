@@ -78,6 +78,9 @@ class DumpLogSegmentsTest {
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
   val time = new MockTime(0, 0)
   var log: UnifiedLog = _
+  val endOffset = 100L
+  val brokerLeaderEpoch = 3
+
 
   @AfterEach
   def afterEach(): Unit = {
@@ -289,8 +292,8 @@ class DumpLogSegmentsTest {
     val topicId = Uuid.randomUuid
     val topicName = "foo"
     
-    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)), 
-        RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+    val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
+        RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0, brokerLeaderEpoch, endOffset))
 
     val records: Array[SimpleRecord] = metadata.map(message => {
       new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
@@ -321,8 +324,8 @@ class DumpLogSegmentsTest {
     val remoteLogSegmentId = new RemoteLogSegmentId(topicIdPartition, remoteSegmentId)
 
     val metadata = Seq(new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds,
-        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0),
-      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0, brokerLeaderEpoch, endOffset),
+      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0, brokerLeaderEpoch, endOffset))
 
     val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
       new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
@@ -358,8 +361,8 @@ class DumpLogSegmentsTest {
 
     val metadata = Seq(
       new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds,
-        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0),
-      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0)
+        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 0, brokerLeaderEpoch, endOffset),
+      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0, brokerLeaderEpoch, endOffset)
     )
 
     val records: Array[SimpleRecord] = metadata.map(message => {
@@ -390,9 +393,9 @@ class DumpLogSegmentsTest {
   def testDumpRemoteLogMetadataNonZeroStartingOffset(): Unit = {
     val topicId = Uuid.randomUuid
     val topicName = "foo"
-    
+
     val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0, brokerLeaderEpoch, endOffset))
 
     val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
       new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))
@@ -438,7 +441,7 @@ class DumpLogSegmentsTest {
     val topicName = "foo"
 
     val metadata = Seq(new RemotePartitionDeleteMetadata(new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0))
+      RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0, brokerLeaderEpoch, endOffset))
 
     val metadataRecords: Array[SimpleRecord] = metadata.map(message => {
       new SimpleRecord(null, new RemoteLogMetadataSerde().serialize(message))

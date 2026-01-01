@@ -89,7 +89,7 @@ public class RemoteLogSegmentLifecycleTest {
             leaderEpochSegment0.put(2, 80L);
             RemoteLogSegmentId segmentId0 = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata metadataSegment0 = new RemoteLogSegmentMetadata(segmentId0, 0L,
-                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0);
+                    100L, -1L, brokerId0, time.milliseconds(), segSize, leaderEpochSegment0, 2);
             metadataManager.addRemoteLogSegmentMetadata(metadataSegment0).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(metadataSegment0);
 
@@ -104,7 +104,7 @@ public class RemoteLogSegmentLifecycleTest {
 
             RemoteLogSegmentMetadataUpdate metadataUpdateSegment0 = new RemoteLogSegmentMetadataUpdate(
                     segmentId0, time.milliseconds(), Optional.empty(),
-                    COPY_SEGMENT_FINISHED, brokerId1);
+                    COPY_SEGMENT_FINISHED, brokerId1, 2, 100L);
             metadataManager.updateRemoteLogSegmentMetadata(metadataUpdateSegment0).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadataUpdate(metadataUpdateSegment0);
             metadataSegment0 = metadataSegment0.createWithUpdates(metadataUpdateSegment0);
@@ -174,7 +174,7 @@ public class RemoteLogSegmentLifecycleTest {
             // It should not be available when we search for that segment.
             RemoteLogSegmentMetadataUpdate metadataDeleteStartedSegment0 =
                     new RemoteLogSegmentMetadataUpdate(metadataSegment0.remoteLogSegmentId(), time.milliseconds(),
-                            Optional.empty(), DELETE_SEGMENT_STARTED, brokerId1);
+                            Optional.empty(), DELETE_SEGMENT_STARTED, brokerId1, 4, 400L);
             metadataManager.updateRemoteLogSegmentMetadata(metadataDeleteStartedSegment0).get();
             assertFalse(metadataManager.remoteLogSegmentMetadata(topicIdPartition, 0, 10).isPresent());
 
@@ -182,7 +182,7 @@ public class RemoteLogSegmentLifecycleTest {
             // It should not be available when we search for that segment.
             RemoteLogSegmentMetadataUpdate metadataDeleteFinishedSegment0 =
                     new RemoteLogSegmentMetadataUpdate(metadataSegment0.remoteLogSegmentId(), time.milliseconds(),
-                            Optional.empty(), DELETE_SEGMENT_FINISHED, brokerId1);
+                            Optional.empty(), DELETE_SEGMENT_FINISHED, brokerId1, 4, 400L);
             metadataManager.updateRemoteLogSegmentMetadata(metadataDeleteFinishedSegment0).get();
             assertFalse(metadataManager.remoteLogSegmentMetadata(topicIdPartition, 0, 10).isPresent());
 
@@ -217,13 +217,15 @@ public class RemoteLogSegmentLifecycleTest {
                                                         RemoteLogSegmentState state)
             throws RemoteStorageException, ExecutionException, InterruptedException {
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
+        // Get the highest leader epoch from segmentLeaderEpochs for brokerLeaderEpoch
+        int brokerLeaderEpoch = segmentLeaderEpochs.keySet().stream().max(Integer::compareTo).orElse(0);
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
-                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs);
+                -1L, brokerId0, time.milliseconds(), segSize, segmentLeaderEpochs, brokerLeaderEpoch);
         metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
         verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 
         RemoteLogSegmentMetadataUpdate segMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId,
-                time.milliseconds(), Optional.empty(), state, brokerId1);
+                time.milliseconds(), Optional.empty(), state, brokerId1, brokerLeaderEpoch, endOffset);
         metadataManager.updateRemoteLogSegmentMetadata(segMetadataUpdate).get();
         verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadataUpdate(segMetadataUpdate);
         return segmentMetadata.createWithUpdates(segMetadataUpdate);
@@ -253,7 +255,7 @@ public class RemoteLogSegmentLifecycleTest {
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L,
-                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                    -1L, brokerId0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L), 0);
             metadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(segmentMetadata);
 
@@ -317,7 +319,7 @@ public class RemoteLogSegmentLifecycleTest {
 
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
                     segmentMetadata.remoteLogSegmentId(), time.milliseconds(), Optional.empty(),
-                    DELETE_SEGMENT_FINISHED, brokerId1);
+                    DELETE_SEGMENT_FINISHED, brokerId1, 0, 400L);
             metadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadataUpdate(segmentMetadataUpdate);
 

@@ -70,19 +70,19 @@ public class RemoteLogMetadataSerdeTest {
         segLeaderEpochs.put(1, 20L);
         segLeaderEpochs.put(2, 80L);
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
-        return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1, 
+        return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
                 time.milliseconds(), 1024, Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})),
-                COPY_SEGMENT_STARTED, segLeaderEpochs);
+                COPY_SEGMENT_STARTED, segLeaderEpochs, 2);
     }
 
     private RemoteLogSegmentMetadataUpdate createRemoteLogSegmentMetadataUpdate() {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds(),
-                Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 2);
+                Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 2, 0, 100L);
     }
 
     private RemotePartitionDeleteMetadata createRemotePartitionDeleteMetadata() {
-        return new RemotePartitionDeleteMetadata(TP0, DELETE_PARTITION_MARKED, time.milliseconds(), 0);
+        return new RemotePartitionDeleteMetadata(TP0, DELETE_PARTITION_MARKED, time.milliseconds(), 0, 0, 100L);
     }
 
     private void doTestRemoteLogMetadataSerde(RemoteLogMetadata remoteLogMetadata) {
@@ -107,7 +107,7 @@ public class RemoteLogMetadataSerdeTest {
 
     private static class InvalidRemoteLogMetadata extends RemoteLogMetadata {
         public InvalidRemoteLogMetadata(int brokerId, long eventTimestampMs) {
-            super(brokerId, eventTimestampMs);
+            super(brokerId, eventTimestampMs, 0, 100L);
         }
 
         @Override

@@ -45,6 +45,12 @@
       "about": "Broker (controller or leader) id from which this event is created or updated."
     },
     {
+      "name": "BrokerLeaderEpoch",
+      "type": "int32",
+      "versions": "0+",
+      "about": "The leader epoch of the broker (partition leader epoch) at the time this snapshot is being created."
+    },
+    {
       "name": "MaxTimestampMs",
       "type": "int64",
       "versions": "0+",

@@ -41,7 +41,7 @@ public class ProducerManager implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ProducerManager.class);
 
     private final RemoteLogMetadataSerde serde = new RemoteLogMetadataSerde();
-    private final KafkaProducer<byte[], byte[]> producer;
+    private final KafkaProducer<String, byte[]> producer;
     private final RemoteLogMetadataTopicPartitioner topicPartitioner;
     private final TopicBasedRemoteLogMetadataManagerConfig rlmmConfig;
 
@@ -80,7 +80,7 @@ public class ProducerManager implements Closeable {
                     future.complete(metadata);
                 }
             };
-            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,
+            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, remoteLogMetadata.metadataKey(),
                                                serde.serialize(remoteLogMetadata)), callback);
         } catch (Exception ex) {
             future.completeExceptionally(ex);

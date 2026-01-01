@@ -676,7 +676,7 @@ public class RemoteLogManagerTest {
         // Check we attempt to delete the segment data providing the custom metadata back.
         RemoteLogSegmentMetadataUpdate expectedMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
                 remoteLogSegmentMetadataArg.getValue().remoteLogSegmentId(), time.milliseconds(),
-                Optional.of(customMetadata), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+                Optional.of(customMetadata), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId, 0, logEndOffset);
         RemoteLogSegmentMetadata expectedDeleteMetadata = remoteLogSegmentMetadataArg.getValue().createWithUpdates(expectedMetadataUpdate);
         verify(remoteStorageManager, times(1)).deleteLogSegmentData(eq(expectedDeleteMetadata));
 
@@ -1454,7 +1454,7 @@ public class RemoteLogManagerTest {
                     Map<Integer, Long> leaderEpochs = new TreeMap<>();
                     leaderEpochs.put(leaderEpoch, offset);
                     RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(segmentId,
-                            offset, offset + 100, time.milliseconds(), 0, time.milliseconds(), 1024, leaderEpochs, true);
+                            offset, offset + 100, time.milliseconds(), 0, time.milliseconds(), 1024, leaderEpochs, true, leaderEpoch);
                     return Optional.of(metadata);
                 });
 
@@ -1487,7 +1487,7 @@ public class RemoteLogManagerTest {
                         Map<Integer, Long> leaderEpochs = new TreeMap<>();
                         leaderEpochs.put(leaderEpoch, offset);
                         RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(segmentId,
-                                offset, offset + 100, time.milliseconds(), 0, time.milliseconds(), 1024, leaderEpochs, true);
+                                offset, offset + 100, time.milliseconds(), 0, time.milliseconds(), 1024, leaderEpochs, true, leaderEpoch);
                         metadataOpt = Optional.of(metadata);
                     }
                     return metadataOpt;
@@ -1521,7 +1521,7 @@ public class RemoteLogManagerTest {
 
         spyRemoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
-        verify(spyRemoteLogManager).doHandleLeaderPartition(eq(leaderTopicIdPartition), eq(false));
+        verify(spyRemoteLogManager).doHandleLeaderPartition(eq(leaderTopicIdPartition), eq(false), 1);
     }
 
     private MemoryRecords records(long timestamp,

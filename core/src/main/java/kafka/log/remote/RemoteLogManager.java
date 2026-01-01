@@ -197,6 +197,7 @@ public class RemoteLogManager implements Closeable {
 
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<TopicIdPartition, Integer> topicIdPartitionToLeaderEpochMap = new ConcurrentHashMap<>();
     private final String clusterId;
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
@@ -472,7 +473,14 @@ public class RemoteLogManager implements Closeable {
             throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
         }
 
+        // Capture leader epochs for leader partitions
+        Map<TopicIdPartition, Integer> leaderEpochMap = new HashMap<>();
+
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
+                .peek(p -> {
+                    TopicIdPartition tip = new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition());
+                    leaderEpochMap.put(tip, p.getLeaderEpoch());
+                })
                 .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
                         p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
 
@@ -494,7 +502,8 @@ public class RemoteLogManager implements Closeable {
             // background thread and might emit metrics. So, removing the metrics after marking this node as follower.
             followerPartitions.forEach((tp, __) -> removeRemoteTopicPartitionMetrics(tp));
 
-            leaderPartitions.forEach(this::doHandleLeaderPartition);
+            leaderPartitions.forEach((tp, remoteLogCopyDisable) ->
+                    doHandleLeaderPartition(tp, remoteLogCopyDisable, leaderEpochMap.get(tp)));
         }
     }
 
@@ -582,7 +591,7 @@ public class RemoteLogManager implements Closeable {
         List<RemoteLogSegmentMetadataUpdate> deleteSegmentStartedEvents = metadataList.stream()
                 .map(metadata ->
                         new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
-                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId))
+                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId, topicIdPartitionToLeaderEpochMap.get(partition), metadata.endOffset()))
                 .collect(Collectors.toList());
         publishEvents(deleteSegmentStartedEvents).get();
 
@@ -597,7 +606,7 @@ public class RemoteLogManager implements Closeable {
         List<RemoteLogSegmentMetadataUpdate> deleteSegmentFinishedEvents = metadataList.stream()
                 .map(metadata ->
                         new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
-                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId))
+                                metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId, topicIdPartitionToLeaderEpochMap.get(partition), metadata.endOffset()))
                 .collect(Collectors.toList());
         publishEvents(deleteSegmentFinishedEvents).get();
     }
@@ -1027,7 +1036,7 @@ public class RemoteLogManager implements Closeable {
             boolean isTxnIdxEmpty = segment.txnIndex().isEmpty();
             RemoteLogSegmentMetadata copySegmentStartedRlsm = new RemoteLogSegmentMetadata(segmentId, segment.baseOffset(), endOffset,
                     segment.largestTimestamp(), brokerId, time.milliseconds(), segment.log().sizeInBytes(),
-                    segmentLeaderEpochs, isTxnIdxEmpty);
+                    segmentLeaderEpochs, isTxnIdxEmpty, topicIdPartitionToLeaderEpochMap.get(segmentId.topicIdPartition()));
 
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
 
@@ -1053,7 +1062,7 @@ public class RemoteLogManager implements Closeable {
             }
 
             RemoteLogSegmentMetadataUpdate copySegmentFinishedRlsm = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
-                    customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+                    customMetadata, RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId, topicIdPartitionToLeaderEpochMap.get(segmentId.topicIdPartition()), endOffset);
 
             if (customMetadata.isPresent()) {
                 long customMetadataSize = customMetadata.get().value().length;
@@ -1498,7 +1507,7 @@ public class RemoteLogManager implements Closeable {
             // Publish delete segment started event.
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                 new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
-                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId)).get();
+                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId, topicIdPartitionToLeaderEpochMap.get(segmentMetadata.remoteLogSegmentId().topicIdPartition()), segmentMetadata.endOffset())).get();
 
             brokerTopicStats.topicStats(topic).remoteDeleteRequestRate().mark();
             brokerTopicStats.allTopicsStats().remoteDeleteRequestRate().mark();
@@ -1515,7 +1524,7 @@ public class RemoteLogManager implements Closeable {
             // Publish delete segment finished event.
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                 new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
-                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
+                    segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId, topicIdPartitionToLeaderEpochMap.get(segmentMetadata.remoteLogSegmentId().topicIdPartition()), segmentMetadata.endOffset())).get();
             LOGGER.debug("Deleted remote log segment {}", segmentMetadata.remoteLogSegmentId());
             return true;
         }
@@ -1984,12 +1993,15 @@ public class RemoteLogManager implements Closeable {
                 new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer));
     }
 
-    void doHandleLeaderPartition(TopicIdPartition topicPartition, Boolean remoteLogCopyDisable) {
+    void doHandleLeaderPartition(TopicIdPartition topicPartition, Boolean remoteLogCopyDisable, int leaderEpoch) {
         RLMTaskWithFuture followerRLMTaskWithFuture = followerRLMTasks.remove(topicPartition);
         if (followerRLMTaskWithFuture != null) {
             LOGGER.info("Cancelling the follower task: {}", followerRLMTaskWithFuture.rlmTask);
             followerRLMTaskWithFuture.cancel();
         }
+
+        // Store the leader epoch for this partition
+        topicIdPartitionToLeaderEpochMap.put(topicPartition, leaderEpoch);
 
         // Only create copy task when remoteLogCopyDisable is disabled
         if (!remoteLogCopyDisable) {
@@ -2019,6 +2031,7 @@ public class RemoteLogManager implements Closeable {
 
         RLMTaskWithFuture expirationRLMTaskWithFuture = leaderExpirationRLMTasks.remove(topicPartition);
         if (expirationRLMTaskWithFuture != null) {
+            // maybe re
             LOGGER.info("Cancelling the expiration task: {}", expirationRLMTaskWithFuture.rlmTask);
             expirationRLMTaskWithFuture.cancel();
         }

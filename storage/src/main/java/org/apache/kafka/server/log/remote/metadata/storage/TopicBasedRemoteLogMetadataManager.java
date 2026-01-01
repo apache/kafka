@@ -192,12 +192,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             throws RemoteStorageException {
         log.debug("Storing the partition: {} metadata: {}", topicIdPartition, remoteLogMetadata);
         try {
-            String key = buildMetadataKey(remoteLogMetadata);
-            ProducerRecord<String, byte[]> record = new ProducerRecord<>(
-                    REMOTE_LOG_METADATA_TOPIC,
-                    key,
-                    serialize(metadata)
-            );
             // Publish the message to the metadata topic.
             CompletableFuture<RecordMetadata> produceFuture = producerManager.publishMessage(remoteLogMetadata);
             // Create and return a `CompletableFuture` instance which completes when the consumer is caught up with the produced record's offset.
@@ -533,15 +527,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return new NewTopic(rlmmConfig.remoteLogMetadataTopicName(),
                             rlmmConfig.metadataTopicPartitionsCount(),
                             rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
-    }
-
-    private String buildMetadataKey(RemoteLogSegmentMetadata metadata) {
-        TopicIdPartition tip = metadata.topicIdPartition();
-        return tip.topicId() + ":" +
-                tip.partition() + ":" +
-                metadata.endOffset() + ":" +
-                metadata.brokerLeaderEpoch() + ":" +
-                metadata.state().name();
     }
 
     /**

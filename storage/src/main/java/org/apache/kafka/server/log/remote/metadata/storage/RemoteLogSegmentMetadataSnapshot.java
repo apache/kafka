@@ -109,9 +109,10 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
                                             int segmentSizeInBytes,
                                             Optional<CustomMetadata> customMetadata,
                                             RemoteLogSegmentState state,
-                                            Map<Integer, Long> segmentLeaderEpochs) {
+                                            Map<Integer, Long> segmentLeaderEpochs,
+                                            int brokerLeaderEpoch) {
         this(segmentId, startOffset, endOffset, maxTimestampMs, brokerId, eventTimestampMs, segmentSizeInBytes,
-                customMetadata, state, segmentLeaderEpochs, false);
+                customMetadata, state, segmentLeaderEpochs, false, brokerLeaderEpoch);
     }
 
     /**
@@ -142,8 +143,9 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
                                             Optional<CustomMetadata> customMetadata,
                                             RemoteLogSegmentState state,
                                             Map<Integer, Long> segmentLeaderEpochs,
-                                            boolean txnIdxEmpty) {
-        super(brokerId, eventTimestampMs);
+                                            boolean txnIdxEmpty,
+                                            int brokerLeaderEpoch) {
+        super(brokerId, eventTimestampMs, brokerLeaderEpoch, endOffset);
         this.segmentId = Objects.requireNonNull(segmentId, "remoteLogSegmentId can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
 
@@ -164,7 +166,7 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
     public static RemoteLogSegmentMetadataSnapshot create(RemoteLogSegmentMetadata metadata) {
         return new RemoteLogSegmentMetadataSnapshot(metadata.remoteLogSegmentId().id(), metadata.startOffset(), metadata.endOffset(),
                                                     metadata.maxTimestampMs(), metadata.brokerId(), metadata.eventTimestampMs(),
-                                                    metadata.segmentSizeInBytes(), metadata.customMetadata(), metadata.state(), metadata.segmentLeaderEpochs(), metadata.isTxnIdxEmpty()
+                                                    metadata.segmentSizeInBytes(), metadata.customMetadata(), metadata.state(), metadata.segmentLeaderEpochs(), metadata.isTxnIdxEmpty(), metadata.brokerLeaderEpoch()
         );
     }
 
