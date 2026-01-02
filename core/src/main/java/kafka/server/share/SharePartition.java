@@ -2315,6 +2315,9 @@ public class SharePartition {
                     // mapping between bytes and record state type. All ack types have been added except for RENEW which
                     // has been handled above.
                     RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
+                    if (recordState == null) {
+                        return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
+                    }
 
                     InFlightState updateResult = offsetState.getValue().startStateTransition(
                         recordState,
@@ -2386,6 +2389,9 @@ public class SharePartition {
             // either released or moved to a state where member id existence is not important. The member id
             // is only important when the batch is acquired.
             RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
+            if (recordState == null) {
+                return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
+            }
 
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                 recordState,
