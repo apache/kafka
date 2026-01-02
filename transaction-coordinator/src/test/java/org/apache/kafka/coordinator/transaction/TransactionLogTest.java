@@ -50,8 +50,9 @@ import static org.apache.kafka.server.common.TransactionVersion.LATEST_PRODUCTIO
 import static org.apache.kafka.server.common.TransactionVersion.TV_0;
 import static org.apache.kafka.server.common.TransactionVersion.TV_2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 class TransactionLogTest {
@@ -250,7 +251,7 @@ class TransactionLogTest {
         buffer.rewind();
         var metadata = TransactionLog.readTxnRecordValue("transaction-id", buffer);
 
-        assertFalse(metadata == null, "Expected transaction metadata but got none");
+        assertNotNull(metadata, "Expected transaction metadata but got none");
         assertEquals(1000L, metadata.producerId());
         assertEquals(100, metadata.producerEpoch());
         assertEquals(1000, metadata.txnTimeoutMs());
@@ -270,6 +271,6 @@ class TransactionLogTest {
    
     @Test
     void shouldReturnNullForTombstoneRecord() {
-        assertEquals(null, TransactionLog.readTxnRecordValue("transaction-id", null));
+        assertNull(TransactionLog.readTxnRecordValue("transaction-id", null));
     }
 }
