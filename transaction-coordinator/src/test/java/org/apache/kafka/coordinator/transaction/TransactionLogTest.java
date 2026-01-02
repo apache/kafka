@@ -71,7 +71,7 @@ class TransactionLogTest {
 
     private static TxnKeyResult readTxnRecordKey(ByteBuffer buf) {
         var result = TransactionLog.readTxnRecordKey(buf);
-        return new TxnKeyResult.TransactionalId((String) result);
+        return new TxnKeyResult.TransactionalId(result);
     }
 
     private static TransactionMetadata TransactionMetadata(TransactionState state) {
