@@ -355,15 +355,15 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     /**
-     * Test that GROUP_ID_NOT_FOUND error while leaving a group is not treated as fatal.
+     * Test that GROUP_ID_NOT_FOUND error while unsubscribed is not treated as fatal.
      * This can happen when the consumer never successfully joined the group
      * (e.g., due to an InvalidTopicException during poll() and close() sends
      * a leave heartbeat for a group that was never created.
      */
     @Test
-    public void testGroupIdNotFoundExceptionWhileLeaving() {
-        // Setup: member is in LEAVING state with epoch -1
-        when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+    public void testGroupIdNotFoundExceptionWhileUnsubscribed() {
+        // Setup: member is in UNSUBSCRIBED state with epoch -1
+        when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
         when(membershipManager.memberEpoch()).thenReturn(-1);
 
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
