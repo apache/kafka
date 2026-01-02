@@ -1150,7 +1150,7 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            deallocateWithoutReuse(batch);
+            deallocate(batch);
         }
     }
 
@@ -1170,7 +1170,7 @@ public class RecordAccumulator {
             }
             if (aborted) {
                 batch.abort(reason);
-                deallocateWithoutReuse(batch);
+                deallocate(batch);
             }
         }
     }
