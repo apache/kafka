@@ -91,6 +91,7 @@
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
       <allow class="org.apache.kafka.controller.QuorumFeatures" />
+      <allow class="org.apache.kafka.controller.metrics.ControllerMetadataMetrics" />
       <allow pkg="org.apache.kafka.server.telemetry" />
     </subpackage>
     <subpackage name="share">

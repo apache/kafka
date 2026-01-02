@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.coordinator.transaction;
 
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse;
@@ -61,43 +64,82 @@ public class ProducerIdManagerTest {
         private final ExecutorService brokerToControllerRequestExecutor = Executors.newSingleThreadExecutor();
         private final int idLen;
         private Long idStart;
+        private boolean hasAuthenticationException;
+        private boolean hasVersionMismatch;
+        private boolean hasNoResponse;
 
         MockProducerIdManager(int brokerId,
                               long idStart,
                               int idLen,
                               Queue<Errors> errorQueue,
                               boolean isErroneousBlock,
-                              Time time) {
+                              Time time,
+                              boolean hasAuthenticationException,
+                              boolean hasVersionMismatch,
+                              boolean hasNoResponse) {
             super(brokerId, time, () -> 1L, brokerToController);
             this.idStart = idStart;
             this.idLen = idLen;
             this.errorQueue = errorQueue;
             this.isErroneousBlock = isErroneousBlock;
+            this.hasAuthenticationException = hasAuthenticationException;
+            this.hasVersionMismatch = hasVersionMismatch;
+            this.hasNoResponse = hasNoResponse;
+        }
+
+        private ClientResponse createClientResponse(
+                AuthenticationException authenticationException,
+                UnsupportedVersionException versionException,
+                AllocateProducerIdsResponse response
+        ) {
+            return new ClientResponse(null, null, null, time.milliseconds(), time.milliseconds(),
+                    false, versionException, authenticationException, response);
         }
 
         @Override
         protected void sendRequest() {
             brokerToControllerRequestExecutor.submit(() -> {
+                if (hasAuthenticationException) {
+                    handleAllocateProducerIdsResponse(createClientResponse(new AuthenticationException("Auth Failure"), null, null));
+                    hasAuthenticationException = false; // reset so retry works
+                    return;
+                }
+                if (hasVersionMismatch) {
+                    handleAllocateProducerIdsResponse(createClientResponse(null, new UnsupportedVersionException("Version Mismatch"), null));
+                    hasVersionMismatch = false; // reset so retry works
+                    return;
+                }
+                if (hasNoResponse) {
+                    handleAllocateProducerIdsResponse(createClientResponse(null, null, null));
+                    hasNoResponse = false; // reset so retry works
+                    return;
+                }
                 Errors error = errorQueue.poll();
                 if (error == null || error == Errors.NONE) {
-                    handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
-                            new AllocateProducerIdsResponseData()
-                                    .setProducerIdStart(idStart)
-                                    .setProducerIdLen(idLen)
-                    ));
+                    handleAllocateProducerIdsResponse(createClientResponse(
+                            null,
+                            null,
+                            new AllocateProducerIdsResponse(
+                                    new AllocateProducerIdsResponseData()
+                                            .setProducerIdStart(idStart)
+                                            .setProducerIdLen(idLen)
+                            )));
                     if (!isErroneousBlock) {
                         idStart += idLen;
                     }
                 } else {
-                    handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
-                            new AllocateProducerIdsResponseData().setErrorCode(error.code())
-                    ));
+                    handleAllocateProducerIdsResponse(createClientResponse(
+                            null,
+                            null,
+                            new AllocateProducerIdsResponse(
+                                    new AllocateProducerIdsResponseData().setErrorCode(error.code())
+                            )));
                 }
             }, 0);
         }
 
         @Override
-        protected void handleAllocateProducerIdsResponse(AllocateProducerIdsResponse response) {
+        protected void handleAllocateProducerIdsResponse(ClientResponse response) {
             super.handleAllocateProducerIdsResponse(response);
             capturedFailure.set(nextProducerIdBlock.get() == null);
         }
@@ -112,7 +154,7 @@ public class ProducerIdManagerTest {
         var numThreads = 5;
         var latch = new CountDownLatch(idBlockLen * 3);
         var manager = new MockProducerIdManager(0, 0, idBlockLen,
-                new ConcurrentLinkedQueue<>(), false, Time.SYSTEM);
+                new ConcurrentLinkedQueue<>(), false, Time.SYSTEM, false, false, false);
         var requestHandlerThreadPool = Executors.newFixedThreadPool(numThreads);
         Map<Long, Integer> pidMap = new ConcurrentHashMap<>();
 
@@ -149,7 +191,7 @@ public class ProducerIdManagerTest {
     @EnumSource(value = Errors.class, names = {"UNKNOWN_SERVER_ERROR", "INVALID_REQUEST"})
     public void testUnrecoverableErrors(Errors error) throws Exception {
         var time = new MockTime();
-        var manager = new MockProducerIdManager(0, 0, 1, queue(Errors.NONE, error), false, time);
+        var manager = new MockProducerIdManager(0, 0, 1, queue(Errors.NONE, error), false, time, false, false, false);
         verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0);
         verifyFailureWithoutGenerateProducerId(manager);
 
@@ -159,20 +201,56 @@ public class ProducerIdManagerTest {
 
     @Test
     public void testInvalidRanges() throws InterruptedException {
-        var manager = new MockProducerIdManager(0, -1, 10, new ConcurrentLinkedQueue<>(), true, Time.SYSTEM);
+        var manager = new MockProducerIdManager(0, -1, 10, new ConcurrentLinkedQueue<>(), true, Time.SYSTEM, false, false, false);
         verifyFailure(manager);
 
-        manager = new MockProducerIdManager(0, 0, -1, new ConcurrentLinkedQueue<>(), true, Time.SYSTEM);
+        manager = new MockProducerIdManager(0, 0, -1, new ConcurrentLinkedQueue<>(), true, Time.SYSTEM, false, false, false);
         verifyFailure(manager);
 
-        manager = new MockProducerIdManager(0, Long.MAX_VALUE - 1, 10, new ConcurrentLinkedQueue<>(), true, Time.SYSTEM);
+        manager = new MockProducerIdManager(0, Long.MAX_VALUE - 1, 10, new ConcurrentLinkedQueue<>(), true, Time.SYSTEM, false, false, false);
         verifyFailure(manager);
     }
 
     @Test
     public void testRetryBackoff() throws Exception {
         var time = new MockTime();
-        var manager = new MockProducerIdManager(0, 0, 1, queue(Errors.UNKNOWN_SERVER_ERROR), false, time);
+        var manager = new MockProducerIdManager(0, 0, 1, queue(Errors.UNKNOWN_SERVER_ERROR), false, time, false, false, false);
+
+        verifyFailure(manager);
+
+        assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
+        time.sleep(RETRY_BACKOFF_MS);
+        verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0);
+    }
+
+    @Test
+    public void testRetryBackoffOnAuthException() throws Exception {
+        var time = new MockTime();
+        var manager = new MockProducerIdManager(0, 0, 1, new ConcurrentLinkedQueue<>(), false, time, true, false, false);
+
+        verifyFailure(manager);
+
+        assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
+        time.sleep(RETRY_BACKOFF_MS);
+        verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0);
+    }
+
+    @Test
+    public void testRetryBackoffOnVersionMismatch() throws Exception {
+        var time = new MockTime();
+        var manager = new MockProducerIdManager(0, 0, 1, new ConcurrentLinkedQueue<>(), false, time, false, true, false);
+
+        verifyFailure(manager);
+
+        assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
+        time.sleep(RETRY_BACKOFF_MS);
+        verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0);
+    }
+
+    @Test
+    public void testRetryBackoffOnNoResponse() throws Exception {
+        var time = new MockTime();
+        var manager = new MockProducerIdManager(0, 0, 1, new ConcurrentLinkedQueue<>(), false, time, false, false, true);
 
         verifyFailure(manager);
 
