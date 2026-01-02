@@ -86,6 +86,7 @@ public class LeaderStateTest {
             voters.voterIds(),
             accumulator,
             fetchTimeoutMs,
+            Optional.empty(),
             logContext,
             new KafkaRaftMetrics(new Metrics(), "raft")
         );
@@ -137,6 +138,7 @@ public class LeaderStateTest {
                 Set.of(),
                 null,
                 fetchTimeoutMs,
+                Optional.empty(),
                 logContext,
                 new KafkaRaftMetrics(new Metrics(), "raft")
             )

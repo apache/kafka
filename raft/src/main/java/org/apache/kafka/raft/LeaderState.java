@@ -119,6 +119,7 @@ public class LeaderState<T> implements EpochState {
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
         int fetchTimeoutMs,
+        Optional<LogOffsetMetadata> leaderHighWatermark,
         LogContext logContext,
         KafkaRaftMetrics kafkaRaftMetrics
     ) {
@@ -139,6 +140,7 @@ public class LeaderState<T> implements EpochState {
         this.localVoterNode = localVoterNode;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
+        this.highWatermark = leaderHighWatermark;
 
         for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
             boolean hasAcknowledgedLeader = voterNode.isVoter(localVoterNode.voterKey());

@@ -227,7 +227,7 @@ public class QuorumStateTest {
         assertTrue(candidateState.epochElection().isVoteGranted());
 
         state.transitionToLeader(10L, accumulator);
-        assertEquals(Optional.empty(), state.highWatermark());
+        assertEquals(highWatermark, state.highWatermark());
     }
 
     @ParameterizedTest

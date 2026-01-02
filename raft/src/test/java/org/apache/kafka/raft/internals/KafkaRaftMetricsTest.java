@@ -220,7 +220,7 @@ public class KafkaRaftMetricsTest {
             getMetric(metrics, "current-vote-directory-id").metricValue()
         );
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue()); // todo, bug fix
+        assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
         // leader with updated HW
         state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(10L), voters);

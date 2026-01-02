@@ -718,6 +718,7 @@ public class QuorumState {
             candidateState.epochElection().grantingVoters(),
             accumulator,
             fetchTimeoutMs,
+            this.state.highWatermark(),
             logContext,
             kafkaRaftMetrics
         );
