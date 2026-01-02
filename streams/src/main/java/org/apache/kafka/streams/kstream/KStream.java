@@ -531,6 +531,9 @@ public interface KStream<K, V> {
      * The topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
+     * <p>The records will be serialized using the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration).
+     *
      * <p>To explicitly set key/value serdes or the partitioning strategy, use {@link #to(String, Produced)}.
      *
      * @param topic
@@ -550,6 +553,9 @@ public interface KStream<K, V> {
      * Materialize the record of this stream to different topics.
      * The provided {@link TopicNameExtractor} is applied to each input record to compute the output topic name.
      * All topics should be manually created before they are used (i.e., before the Kafka Streams application is started).
+     *
+     * <p>The records will be serialized using the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration).
      *
      * <p>To explicitly set key/value serdes or the partitioning strategy, use {@link #to(TopicNameExtractor, Produced)}.
      *
@@ -627,6 +633,9 @@ public interface KStream<K, V> {
      * By default, the current key is used as grouping key, but a new grouping key can be set via
      * {@link #groupBy(KeyValueMapper)}.
      * In either case, if the grouping key is {@code null}, the record will be dropped.
+     *
+     * <p>The records will be serialized using the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration).
      *
      * <p>If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
@@ -968,6 +977,19 @@ public interface KStream<K, V> {
      * For more details, about co-partitioning requirements, (auto-)repartitioning, and more see
      * {@link #join(KStream, ValueJoiner, JoinWindows)}.
      *
+     * <p>If repartitioning happens, the records will be serialized using the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration).
+     *
+     * @param otherStream
+     * the {@link KStream} to be joined with this stream
+     * @param joiner
+     * a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param windows
+     * the specification of the {@link JoinWindows}
+     *
+     * @param <VRight> the value type of the other stream
+     * @param <VOut> the value type of the result stream
+     *
      * @return A {@code KStream} that contains join-records, one for each matched record-pair plus one for each
      *         non-matching record of either input {@code KStream}, with the corresponding key and a value computed
      *         by the given {@link ValueJoiner}.
@@ -1075,6 +1097,9 @@ public interface KStream<K, V> {
      * {@code KStream}, i.e., it will create an internal repartitioning topic in Kafka and write and re-read
      * the data via this topic such that data is correctly partitioned by the {@link KTable}'s key.
      *
+     * <p>If repartitioning happens, the records will be serialized using the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration).
+     *
      * <p>The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition",
      * where "applicationId" is user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
@@ -1148,7 +1173,22 @@ public interface KStream<K, V> {
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      *
      * <p>You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     * To customize the name of the changelog topic, use {@link Joined} input parameter.
+     * To customize the name of the changelog topic or to explicitly set key/value serdes, use the {@link Joined} input parameter.
+     * If the key or value serdes are not specified in the {@link Joined} instance, the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration) will be used.
+     *
+     * @param table
+     * the {@link KTable} to be joined with this stream
+     * @param joiner
+     * a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param joined
+     * a {@link Joined} that allows to define the grace-period, serdes, and the name of the repartition topic
+     *
+     * @param <TableValue> the value type of the table
+     * @param <VOut> the value type of the result stream
+     *
+     * @return A {@code KStream} that contains join-records, one for each matched stream record, with the corresponding
+     * key and a value computed by the given {@link ValueJoiner}.
      */
     <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
                                              final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner,
@@ -1223,8 +1263,46 @@ public interface KStream<K, V> {
      * See {@link #leftJoin(KTable, ValueJoiner, Joined)} on how to configure a stream-table join to handle out-of-order
      * data.
      *
-     * <p>For more details, about co-partitioning requirements, (auto-)repartitioning, and more see
-     * {@link #join(KStream, ValueJoiner, JoinWindows)}.
+     * <p>{@code KStream} and {@link KTable} (or to be more precise, their underlying source topics) need to have the
+     * same number of partitions (cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * If this is not the case (and if no auto-repartitioning happens for the {@code KStream}, see further below),
+     * you would need to call {@link #repartition(Repartitioned)} for this {@code KStream} before doing the join,
+     * specifying the same number of partitions via {@link Repartitioned} parameter as the given {@link KTable}.
+     * Furthermore, {@code KStream} and {@link KTable} need to be co-partitioned on the join key
+     * (i.e., use the same partitioner).
+     * Note: Kafka Streams cannot verify the used partitioner, so it is the user's responsibility to ensure
+     * that the same partitioner is used for both inputs of the join.
+     *
+     * <p>If a key changing operator was used on this {@code KStream} before this operation
+     * (e.g., {@link #selectKey(KeyValueMapper)}, {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
+     * {@link #process(ProcessorSupplier, String...)}) Kafka Streams will automatically repartition the data of this
+     * {@code KStream}, i.e., it will create an internal repartitioning topic in Kafka and write and re-read
+     * the data via this topic such that data is correctly partitioned by the {@link KTable}'s key.
+     *
+     * <p>If repartitioning happens, the records will be serialized using the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration).
+     *
+     * <p>The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition",
+     * where "applicationId" is user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
+     * The number of partitions for the repartition topic is determined based on number of partitions of the
+     * {@link KTable}.
+     * Furthermore, the topic(s) will be created with infinite retention time and data will be automatically purged
+     * by Kafka Streams.
+     *
+     * <p>You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * To explicitly set key/value serdes or to customize the names of the repartition topic,
+     * use {@link #leftJoin(KTable, ValueJoiner, Joined)}.
+     * For more control over the repartitioning, use {@link #repartition(Repartitioned)} before {@code leftJoin()}.
+     *
+     * @param table
+     * the {@link KTable} to be joined with this stream
+     * @param joiner
+     * a {@link ValueJoiner} that computes the join result for a pair of matching records
+     *
+     * @param <VTable> the value type of the table
+     * @param <VOut> the value type of the result stream
      *
      * @return A {@code KStream} that contains join-records, one for each matched stream record plus one for each
      *         non-matching stream record, with the corresponding key and a value computed by the given {@link ValueJoiner}.
@@ -1252,6 +1330,23 @@ public interface KStream<K, V> {
      * <p>For details about left-stream-table-join semantics see {@link #leftJoin(KTable, ValueJoiner)}.
      * For co-partitioning requirements, (auto-)repartitioning, and more see {@link #join(KTable, ValueJoiner)}.
      * If you specify a grace-period to handle out-of-order data, see {@link #join(KTable, ValueJoiner, Joined)}.
+     *
+     * <p>To customize the name of the changelog topic or to explicitly set key/value serdes, use the {@link Joined} input parameter.
+     * If the key or value serdes are not specified in the {@link Joined} instance, the <b>current key and value serdes</b>
+     * (from the upstream operator or default configuration) will be used.
+     *
+     * @param table
+     * the {@link KTable} to be joined with this stream
+     * @param joiner
+     * a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param joined
+     * a {@link Joined} that allows to define the grace-period, serdes, and the name of the repartition topic
+     *
+     * @param <VTable> the value type of the table
+     * @param <VOut> the value type of the result stream
+     *
+     * @return A {@code KStream} that contains join-records, one for each matched stream record plus one for each
+     * non-matching stream record, with the corresponding key and a value computed by the given {@link ValueJoiner}.
      */
     <VTable, VOut> KStream<K, VOut> leftJoin(final KTable<K, VTable> table,
                                              final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner,

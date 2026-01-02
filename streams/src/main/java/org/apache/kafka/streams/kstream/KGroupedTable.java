@@ -562,12 +562,15 @@ public interface KGroupedTable<K, V> {
 
     /**
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
-     * mapped} to the same key into a new instance of {@link KTable} using default serializers and deserializers.
+     * mapped} to the same key into a new instance of {@link KTable}.
      * Records with {@code null} key are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, Reducer) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
-     * If the result value type does not match the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value
-     * serde} you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
+     * <p>
+     * The <b>default value serde</b> from the config will be used for serializing the result.
+     * The <b>key serde</b> is derived from the upstream operator (i.e., the one used for the grouping).
+     * If a different serde is required then you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
+     * <p>
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
