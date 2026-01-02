@@ -228,7 +228,7 @@ public class BootstrapControllersIntegrationTest {
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
         Collection<Integer> nodeIds = usingBootstrapControllers ?
                 clusterInstance.controllerIds() :
-                List.of(clusterInstance.brokers().values().iterator().next().config().nodeId());
+                clusterInstance.brokers().keySet();
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             for (int nodeId : nodeIds) {
                 ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
