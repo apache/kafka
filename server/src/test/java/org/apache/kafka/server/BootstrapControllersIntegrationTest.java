@@ -234,19 +234,33 @@ public class BootstrapControllersIntegrationTest {
             for (int nodeId : nodeIds) {
                 ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
                 ConfigResource defaultResource = new ConfigResource(BROKER, "");
-                String nodeConfigValue = String.valueOf(1000 + nodeId);
-                String defaultConfigValue = String.valueOf(2000 + nodeId);
+                String nodeMaxConnectionsValue = String.valueOf(1000 + nodeId);
+                String defaultMaxConnectionsValue = String.valueOf(2000 + nodeId);
+                String defaultConnectionRateValue = String.valueOf(2000 + nodeId);
 
-                String changedConfigName = SocketServerConfigs.MAX_CONNECTIONS_CONFIG;
+                // Set configs: MAX_CONNECTIONS_CONFIG for per-broker, both configs for default
                 Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
-                        nodeResource, List.of(new AlterConfigOp(new ConfigEntry(changedConfigName, nodeConfigValue), AlterConfigOp.OpType.SET)),
-                        defaultResource, List.of(new AlterConfigOp(new ConfigEntry(changedConfigName, defaultConfigValue), AlterConfigOp.OpType.SET))
+                        nodeResource, List.of(
+                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, nodeMaxConnectionsValue), AlterConfigOp.OpType.SET)
+                        ),
+                        defaultResource, List.of(
+                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, defaultMaxConnectionsValue), AlterConfigOp.OpType.SET),
+                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, defaultConnectionRateValue), AlterConfigOp.OpType.SET)
+                        )
                 );
                 admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
-                verifyConfigValue(admin, nodeResource, changedConfigName,
-                        DYNAMIC_BROKER_CONFIG, nodeConfigValue);
-                verifyConfigValue(admin, defaultResource, changedConfigName,
-                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConfigValue);
+                
+                // Verify per-broker configs: MAX_CONNECTIONS_CONFIG and MAX_CONNECTION_CREATION_RATE_CONFIG
+                verifyConfigValue(admin, nodeResource, SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+                        DYNAMIC_BROKER_CONFIG, nodeMaxConnectionsValue);
+                verifyConfigValue(admin, nodeResource, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
+                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
+                
+                // Verify default broker configs: MAX_CONNECTIONS_CONFIG and MAX_CONNECTION_CREATION_RATE_CONFIG
+                verifyConfigValue(admin, defaultResource, SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultMaxConnectionsValue);
+                verifyConfigValue(admin, defaultResource, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
+                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
             }
         }
     }
