@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.LeastLoadedNode;
@@ -563,8 +565,10 @@ public class KafkaProducerTest {
     public void testConstructorFailureCloseResource() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar.local:9999");
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        // Use invalid interceptor class to cause constructor failure after metrics initialization
+        props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "non.existent.Interceptor");
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
@@ -1107,6 +1111,9 @@ public class KafkaProducerTest {
         long nowMs = Time.SYSTEM.milliseconds();
         String topic = "topic";
         ProducerMetadata metadata = newMetadata(0, 0, 90000);
+        // Bootstrap the metadata to mark it as configured (required for lazy bootstrapping)
+        metadata.bootstrap(ClientUtils.parseAndValidateAddresses(
+            Collections.singletonList("localhost:9999"), ClientDnsLookup.USE_ALL_DNS_IPS));
         metadata.add(topic, nowMs);
 
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
