@@ -2464,21 +2464,6 @@ kafka.server.MetadataCacheTest:
 - testGetPartitionReplicaEndpoints
 - testIsBrokerFenced
 - testIsBrokerInControlledShutdown
-kafka.server.MetadataRequestTest:
-- testAliveBrokersWithNoTopics
-- testAllTopicsRequest
-- testAutoCreateTopicWithInvalidReplicationFactor
-- testAutoTopicCreation
-- testClusterIdIsValid
-- testClusterIdWithRequestVersion1
-- testIsInternal
-- testIsrAfterBrokerShutDownAndJoinsBack
-- testNoTopicsRequest
-- testPartitionInfoPreferredReplica
-- testPreferredReplica
-- testRack
-- testReplicaDownResponse
-- testTopicIdsInResponse
 kafka.server.MultipleListenersWithAdditionalJaasContextTest:
 - testProduceConsume
 kafka.server.MultipleListenersWithDefaultJaasContextTest:

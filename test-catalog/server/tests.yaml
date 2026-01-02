@@ -147,6 +147,21 @@ org.apache.kafka.server.KRaftClusterTest:
 org.apache.kafka.server.LogManagerIntegrationTest:
 - testIOExceptionOnLogSegmentCloseResultsInRecovery
 - testRestartBrokerNoErrorIfMissingPartitionMetadata
+org.apache.kafka.server.MetadataRequestTest:
+- testAliveBrokersWithNoTopics
+- testAllTopicsRequest
+- testAutoCreateTopicWithInvalidReplicationFactor
+- testAutoTopicCreation
+- testClusterIdIsValid
+- testClusterIdWithRequestVersion1
+- testIsInternal
+- testIsrAfterBrokerShutDownAndJoinsBack
+- testNoTopicsRequest
+- testPartitionInfoPreferredReplica
+- testPreferredReplica
+- testRack
+- testReplicaDownResponse
+- testTopicIdsInResponse
 org.apache.kafka.server.MonitorablePluginsIntegrationTest:
 - testMonitorableServerPlugins
 org.apache.kafka.server.ReconfigurableQuorumIntegrationTest:
