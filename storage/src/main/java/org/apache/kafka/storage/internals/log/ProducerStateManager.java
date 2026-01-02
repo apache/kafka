@@ -649,9 +649,12 @@ public class ProducerStateManager {
             long currentTxnFirstOffset = producerEntry.currentTxnFirstOffset();
 
             OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
-            Optional<BatchMetadata> batchMetadata =
-                    (lastOffset >= 0) ? Optional.of(new BatchMetadata(lastSequence, lastOffset, offsetDelta, timestamp)) : Optional.empty();
-            entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata));
+            ProducerStateEntry stateEntry = new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal);
+
+            if (lastOffset >= 0)
+                stateEntry.addBatch(producerEpoch, lastSequence, lastOffset, offsetDelta, timestamp);
+
+            entries.add(stateEntry);
         }
 
         return entries;

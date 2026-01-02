@@ -3425,6 +3425,7 @@ project(':jmh-benchmarks') {
     implementation project(':group-coordinator')
     implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')
+    implementation project(':share-coordinator')
     implementation project(':storage')
     implementation project(':streams')
     implementation project(':transaction-coordinator')
