@@ -435,8 +435,8 @@ public final class ProducerBatch {
         return "ProducerBatch(topicPartition=" + topicPartition + ", recordCount=" + recordCount + ")";
     }
 
-    boolean hasReachedDeliveryTimeout(long deliveryTimeoutMs, long now) {
-        return deliveryTimeoutMs <= now - this.createdMs;
+    boolean hasReachedTimeout(long timeoutMs, long now) {
+        return timeoutMs <= now - this.createdMs;
     }
 
     public FinalState finalState() {

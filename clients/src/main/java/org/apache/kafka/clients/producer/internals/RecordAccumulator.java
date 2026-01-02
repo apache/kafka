@@ -470,7 +470,7 @@ public class RecordAccumulator {
                 synchronized (deque) {
                     while (!deque.isEmpty()) {
                         ProducerBatch batch = deque.getFirst();
-                        if (batch.hasReachedDeliveryTimeout(deliveryTimeoutMs, now)) {
+                        if (batch.hasReachedTimeout(deliveryTimeoutMs, now)) {
                             deque.poll();
                             batch.abortRecordAppends();
                             expiredBatches.add(batch);
@@ -1030,7 +1030,8 @@ public class RecordAccumulator {
      * Deallocate the record batch
      */
     private void deallocateBatch(ProducerBatch batch, boolean deallocateWithoutReuse) {
-        incomplete.remove(batch);
+        if (!deallocateWithoutReuse)
+            incomplete.remove(batch);
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
         if (!batch.isSplitBatch()) {
@@ -1053,6 +1054,13 @@ public class RecordAccumulator {
      */
     public void deallocateWithoutReuse(ProducerBatch batch) {
         deallocateBatch(batch, true);
+    }
+
+    /**
+     * Remove from the incomplete list but do not free memory yet
+     */
+    public void deallocateLater(ProducerBatch batch) {
+        incomplete.remove(batch);
     }
 
     /**

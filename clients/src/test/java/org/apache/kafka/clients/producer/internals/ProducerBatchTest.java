@@ -207,21 +207,21 @@ public class ProducerBatchTest {
 
     /**
      * A {@link ProducerBatch} configured using a timestamp preceding its create time is interpreted correctly
-     * as not expired by {@link ProducerBatch#hasReachedDeliveryTimeout(long, long)}.
+     * as not expired by {@link ProducerBatch#hasReachedTimeout(long, long)}.
      */
     @Test
     public void testBatchExpiration() {
         long deliveryTimeoutMs = 10240;
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set `now` to 2ms before the create time.
-        assertFalse(batch.hasReachedDeliveryTimeout(deliveryTimeoutMs, now - 2));
+        assertFalse(batch.hasReachedTimeout(deliveryTimeoutMs, now - 2));
         // Set `now` to deliveryTimeoutMs.
-        assertTrue(batch.hasReachedDeliveryTimeout(deliveryTimeoutMs, now + deliveryTimeoutMs));
+        assertTrue(batch.hasReachedTimeout(deliveryTimeoutMs, now + deliveryTimeoutMs));
     }
 
     /**
      * A {@link ProducerBatch} configured using a timestamp preceding its create time is interpreted correctly
-     * * as not expired by {@link ProducerBatch#hasReachedDeliveryTimeout(long, long)}.
+     * * as not expired by {@link ProducerBatch#hasReachedTimeout(long, long)}.
      */
     @Test
     public void testBatchExpirationAfterReenqueue() {
@@ -229,7 +229,7 @@ public class ProducerBatchTest {
         // Set batch.retry = true
         batch.reenqueued(now);
         // Set `now` to 2ms before the create time.
-        assertFalse(batch.hasReachedDeliveryTimeout(10240, now - 2L));
+        assertFalse(batch.hasReachedTimeout(10240, now - 2L));
     }
 
     @Test
