@@ -566,12 +566,9 @@ public class ReassignPartitionsCommand {
         List<String> topicsToReassign = t0.getValue();
 
         Map<TopicPartition, List<Node>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
-        Map<TopicPartition, List<Integer>> currentParts = toReplicaIds(currentAssignments);
-        Map<TopicPartition, List<Integer>> currentActiveParts = new HashMap<>();
-        Map<TopicPartition, List<Integer>> currentInactiveParts = new HashMap<>();
-        splitReplicaIds(currentAssignments, currentActiveParts, currentInactiveParts);
-        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentActiveParts, currentInactiveParts);
+        Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(adminClient, currentAssignments);
         List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
+        Map<TopicPartition, List<Integer>> currentParts = toReplicaIds(currentAssignments);
         Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentParts, usableBrokers);
         System.out.printf("Current partition replica assignment%n%s%n%n",
             formatAsReassignmentJson(currentParts, currentReplicaLogDirs));
@@ -699,34 +696,6 @@ public class ReassignPartitionsCommand {
                 ));
     }
 
-    static void splitReplicaIds(
-        Map<TopicPartition, List<Node>> replicaAssignment,
-        Map<TopicPartition, List<Integer>> activeParts,
-        Map<TopicPartition, List<Integer>> inactiveParts
-    ) {
-        for (Map.Entry<TopicPartition, List<Node>> entry : replicaAssignment.entrySet()) {
-            TopicPartition tp = entry.getKey();
-            List<Integer> aliveIds = new ArrayList<>();
-            List<Integer> invalidIds = new ArrayList<>();
-
-            for (Node node : entry.getValue()) {
-                if (node.isEmpty()) {
-                    invalidIds.add(node.id());
-                } else {
-                    aliveIds.add(node.id());
-                }
-            }
-
-            if (!aliveIds.isEmpty()) {
-                activeParts.put(tp, aliveIds);
-            }
-            if (!invalidIds.isEmpty()) {
-                inactiveParts.put(tp, invalidIds);
-            }
-        }
-    }
-    
-
     /**
      * Find the rack information for some brokers.
      *
@@ -820,11 +789,8 @@ public class ReassignPartitionsCommand {
         verifyBrokerIds(adminClient, brokers);
         Map<TopicPartition, List<Node>> currentPartsToNode = getReplicasForPartitions(adminClient, proposedParts.keySet());
         Map<TopicPartition, List<Integer>> currentParts = toReplicaIds(currentPartsToNode);
-        Map<TopicPartition, List<Integer>> currentActiveParts = new HashMap<>();
-        Map<TopicPartition, List<Integer>> currentInactiveParts = new HashMap<>();
-        splitReplicaIds(currentPartsToNode, currentActiveParts, currentInactiveParts);
 
-        System.out.println(currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentActiveParts, currentInactiveParts));
+        System.out.println(currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentPartsToNode));
 
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
             System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
@@ -967,8 +933,7 @@ public class ReassignPartitionsCommand {
      *
      * @param adminClient                 The admin client object to use.
      * @param proposedParts               The proposed partition assignment.
-     * @param currentParts                The current partition assignment which broker is alive.
-     * @param currentInactiveParts         The current partition assignment which broker is invalid.  
+     * @param currentAssignments          The current partition assignment with Node information.
      *
      * @return                            The string to print.  We will only print information about
      *                                    partitions that appear in the proposed partition assignment.
@@ -976,24 +941,23 @@ public class ReassignPartitionsCommand {
     static String currentPartitionReplicaAssignmentToString(
         Admin adminClient,
         Map<TopicPartition, List<Integer>> proposedParts,
-        Map<TopicPartition, List<Integer>> currentParts,
-        Map<TopicPartition, List<Integer>> currentInactiveParts
+        Map<TopicPartition, List<Node>> currentAssignments
     ) throws JsonProcessingException, ExecutionException, InterruptedException {
-        Map<TopicPartition, List<Integer>> partitionsToBeReassigned = currentParts.entrySet().stream()
+
+        Map<TopicPartition, List<Node>> partitionsToBeReassigned = currentAssignments.entrySet()
+            .stream()
             .filter(e -> proposedParts.containsKey(e.getKey()))
             .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-        Map<TopicPartition, List<Integer>> inactivePartitionsToBeReassigned = currentInactiveParts.entrySet().stream()
-                .filter(e -> proposedParts.containsKey(e.getKey()))
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-        
+
         Map<TopicPartitionReplica, String> currentReplicaLogDirs = getReplicaToLogDir(
-            adminClient, 
-            partitionsToBeReassigned,
-            inactivePartitionsToBeReassigned
+            adminClient,
+            partitionsToBeReassigned
         );
 
+        Map<TopicPartition, List<Integer>> currentParts = toReplicaIds(partitionsToBeReassigned);
+
         return String.format("Current partition replica assignment%n%n%s%n%nSave this to use as the %s",
-            formatAsReassignmentJson(partitionsToBeReassigned, currentReplicaLogDirs),
+            formatAsReassignmentJson(currentParts, currentReplicaLogDirs),
             "--reassignment-json-file option during rollback");
     }
 
@@ -1579,44 +1543,48 @@ public class ReassignPartitionsCommand {
         return results;
     }
 
+    /**
+     * Get the log directory for each replica.
+     *
+     * @param adminClient The admin client object to use.
+     * @param current The current partition assignment with Node information.
+     * @return Map of TopicPartitionReplica to log directory path.
+     */
     static Map<TopicPartitionReplica, String> getReplicaToLogDir(
         Admin adminClient,
-        Map<TopicPartition, List<Integer>> topicPartitionToActiveBrokerReplicas,
-        Map<TopicPartition, List<Integer>> topicPartitionToInactiveBrokerReplicas
-    ) throws InterruptedException, ExecutionException {
-        Set<TopicPartitionReplica> replicaLogDirs = new HashSet<>();
-        addReplicasToSet(topicPartitionToActiveBrokerReplicas, replicaLogDirs);
-        Map<TopicPartitionReplica, String> result = new HashMap<>();
-        Map<TopicPartitionReplica, DescribeReplicaLogDirsResult.ReplicaLogDirInfo> logDirInfos =
-                adminClient.describeReplicaLogDirs(replicaLogDirs).all().get();
+        Map<TopicPartition, List<Node>> current
+    ) throws ExecutionException, InterruptedException {
+        List<TopicPartitionReplica> availableReplicas = available(current);
 
-        for (Map.Entry<TopicPartitionReplica, DescribeReplicaLogDirsResult.ReplicaLogDirInfo> entry : logDirInfos.entrySet()) {
-            String logDir = entry.getValue().getCurrentReplicaLogDir();
-            if (logDir != null) {
-                result.put(entry.getKey(), logDir);
-            }
+        if (availableReplicas.isEmpty()) {
+            return Map.of();
         }
 
-        for (Map.Entry<TopicPartition, List<Integer>> entry : topicPartitionToInactiveBrokerReplicas.entrySet()) {
-            TopicPartition tp = entry.getKey();
-            for (Integer id : entry.getValue()) {
-                TopicPartitionReplica tpr = new TopicPartitionReplica(tp.topic(), tp.partition(), id);
-                result.put(tpr, "any");
-            }
-        }
-
-        return result;
+        return adminClient.describeReplicaLogDirs(availableReplicas).all().get()
+                .entrySet()
+                .stream()
+                .filter(e -> e.getValue().getCurrentReplicaLogDir() != null)
+                .collect(Collectors.toMap(
+                    Entry::getKey,
+                    e -> e.getValue().getCurrentReplicaLogDir())
+                );
     }
 
-    private static void addReplicasToSet(
-        Map<TopicPartition, List<Integer>> topicPartitionToReplicas,
-        Set<TopicPartitionReplica> replicaLogDirs
-    ) {
-        for (Map.Entry<TopicPartition, List<Integer>> entry : topicPartitionToReplicas.entrySet()) {
-            TopicPartition tp = entry.getKey();
-            for (Integer id : entry.getValue()) {
-                replicaLogDirs.add(new TopicPartitionReplica(tp.topic(), tp.partition(), id));
-            }
-        }
+    /**
+     * Extract available (non-empty) replicas from the assignment.
+     */
+    private static List<TopicPartitionReplica> available(Map<TopicPartition, List<Node>> current) {
+        return current.entrySet()
+                .stream()
+                .flatMap(entry -> entry.getValue()
+                    .stream()
+                    .filter(node -> !node.isEmpty())
+                    .map(node -> new TopicPartitionReplica(
+                        entry.getKey().topic(),
+                        entry.getKey().partition(),
+                        node.id()
+                    ))
+                )
+                .toList();
     }
 }

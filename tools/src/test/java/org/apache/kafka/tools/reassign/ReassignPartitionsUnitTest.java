@@ -461,25 +461,31 @@ public class ReassignPartitionsUnitTest {
         ) {
 
             List<Node> brokers = adminClient.brokers();
+            Node broker1 = brokers.get(1);
+            Node broker2 = brokers.get(2);
+            Node broker3 = brokers.get(3);
+            Node broker4 = brokers.get(4);
+            Node broker5 = brokers.get(5);
+
             adminClient.addTopic(false, "foo", List.of(
-                new TopicPartitionInfo(1, brokers.get(1),
-                    List.of(brokers.get(1), brokers.get(2), brokers.get(3)),
-                    List.of(brokers.get(1), brokers.get(2), brokers.get(3)))
+                new TopicPartitionInfo(1, broker1,
+                    List.of(broker1, broker2, broker3),
+                    List.of(broker1, broker2, broker3))
             ), Map.of());
 
             adminClient.addTopic(false, "bar", List.of(
-                new TopicPartitionInfo(0, brokers.get(4),
-                    List.of(brokers.get(4), brokers.get(5)),
-                    List.of(brokers.get(4), brokers.get(5)))
+                new TopicPartitionInfo(0, broker4,
+                    List.of(broker4, broker5),
+                    List.of(broker4, broker5))
             ), Map.of());
 
             Map<TopicPartition, List<Integer>> proposedParts = new HashMap<>();
             proposedParts.put(new TopicPartition("foo", 1), List.of(0, 1, 2));
             proposedParts.put(new TopicPartition("bar", 0), List.of(3, 4, 5));
 
-            Map<TopicPartition, List<Integer>> currentParts = new HashMap<>();
-            currentParts.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
-            currentParts.put(new TopicPartition("bar", 0), List.of(4, 5));
+            Map<TopicPartition, List<Node>> currentParts = new HashMap<>();
+            currentParts.put(new TopicPartition("foo", 1), List.of(broker1, broker2, broker3));
+            currentParts.put(new TopicPartition("bar", 0), List.of(broker4, broker5));
 
             assertEquals(String.join(System.lineSeparator(),
                 "Current partition replica assignment",
@@ -488,7 +494,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}]}",
                 "",
                 "Save this to use as the --reassignment-json-file option during rollback"),
-                currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts, Map.of())
+                currentPartitionReplicaAssignmentToString(adminClient, proposedParts, currentParts)
             );
         }
     }
@@ -811,13 +817,19 @@ public class ReassignPartitionsUnitTest {
         ) {
             addTopics(adminClient);
 
-            Map<TopicPartition, List<Integer>> topicPartitionToReplicas = Map.of(
-                new TopicPartition("foo", 0), List.of(0, 1, 2),
-                new TopicPartition("foo", 1), List.of(1, 2, 3),
-                new TopicPartition("bar", 0), List.of(2, 3, 0)
+            List<Node> brokers = adminClient.brokers();
+            Node broker0 = brokers.get(0);
+            Node broker1 = brokers.get(1);
+            Node broker2 = brokers.get(2);
+            Node broker3 = brokers.get(3);
+
+            Map<TopicPartition, List<Node>> topicPartitionToReplicas = Map.of(
+                new TopicPartition("foo", 0), List.of(broker0, broker1, broker2),
+                new TopicPartition("foo", 1), List.of(broker1, broker2, broker3),
+                new TopicPartition("bar", 0), List.of(broker2, broker3, broker0)
             );
 
-            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, topicPartitionToReplicas, Map.of());
+            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, topicPartitionToReplicas);
 
             assertFalse(result.isEmpty());
             assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 0)));
@@ -829,47 +841,6 @@ public class ReassignPartitionsUnitTest {
             assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 0)));
             assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 2)));
             assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 3)));
-        }
-    }
-
-    @Test
-    public void testGetReplicaToLogDirWithInactive() throws Exception {
-        try (MockAdminClient adminClient = new MockAdminClient.Builder()
-                .numBrokers(4)
-                .brokerLogDirs(List.of(
-                    List.of("/tmp/broker0/logs0"),
-                    List.of("/tmp/broker1/logs0"),
-                    List.of("/tmp/broker2/logs0"),
-                    List.of("/tmp/broker3/logs0")
-                )).build()
-        ) {
-            addTopics(adminClient);
-
-            Map<TopicPartition, List<Integer>> topicPartitionToActiveBrokerReplicas = Map.of(
-                new TopicPartition("foo", 0), List.of(0, 1),
-                new TopicPartition("foo", 1), List.of(1, 2),
-                new TopicPartition("bar", 0), List.of(2)
-            );
-
-            Map<TopicPartition, List<Integer>> topicPartitionToInactiveBrokerReplicas = Map.of(
-                new TopicPartition("bar", 0), List.of(3)
-            );
-
-            Map<TopicPartitionReplica, String> result = getReplicaToLogDir(
-                adminClient,
-                topicPartitionToActiveBrokerReplicas,
-                topicPartitionToInactiveBrokerReplicas
-            );
-
-            assertFalse(result.isEmpty());
-
-            assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 0)));
-            assertEquals("/tmp/broker0/logs0", result.get(new TopicPartitionReplica("foo", 0, 1)));
-            assertEquals("/tmp/broker1/logs0", result.get(new TopicPartitionReplica("foo", 1, 1)));
-            assertEquals("/tmp/broker1/logs0", result.get(new TopicPartitionReplica("foo", 1, 2)));
-            assertEquals("/tmp/broker2/logs0", result.get(new TopicPartitionReplica("bar", 0, 2)));
-
-            assertEquals("any", result.get(new TopicPartitionReplica("bar", 0, 3)));
         }
     }
 }
