@@ -58,6 +58,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
@@ -233,23 +234,38 @@ public class BootstrapControllersIntegrationTest {
             for (int nodeId : nodeIds) {
                 ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
                 ConfigResource defaultResource = new ConfigResource(BROKER, "");
+                String nodeConfigValue = String.valueOf(1000 + nodeId);
+                String defaultConfigValue = String.valueOf(2000 + nodeId);
+
+                String changedConfigName = SocketServerConfigs.MAX_CONNECTIONS_CONFIG;
                 Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
-                        nodeResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"), AlterConfigOp.OpType.SET)),
-                        defaultResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"), AlterConfigOp.OpType.SET))
+                        nodeResource, List.of(new AlterConfigOp(new ConfigEntry(changedConfigName, nodeConfigValue), AlterConfigOp.OpType.SET)),
+                        defaultResource, List.of(new AlterConfigOp(new ConfigEntry(changedConfigName, defaultConfigValue), AlterConfigOp.OpType.SET))
                 );
                 admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
-                TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    Config config = admin.describeConfigs(List.of(nodeResource)).
-                            all().get(1, TimeUnit.MINUTES).get(nodeResource);
-                    ConfigEntry entry = config.entries().stream().
-                            filter(e -> e.name().equals("my.custom.config")).
-                            findFirst().orElseThrow();
-                    assertEquals(DYNAMIC_BROKER_CONFIG, entry.source(),
-                            "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
-                                    "Instead, the entry was: " + entry);
-                });
+                verifyConfigValue(admin, nodeResource, changedConfigName,
+                        DYNAMIC_BROKER_CONFIG, nodeConfigValue);
+                verifyConfigValue(admin, defaultResource, changedConfigName,
+                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConfigValue);
             }
         }
+    }
+
+    private void verifyConfigValue(Admin admin, ConfigResource resource, String configName,
+                                   ConfigEntry.ConfigSource expectedSource, String expectedValue) throws Exception {
+        TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+            Config config = admin.describeConfigs(List.of(resource)).
+                    all().get(1, TimeUnit.MINUTES).get(resource);
+            ConfigEntry entry = config.entries().stream().
+                    filter(e -> e.name().equals(configName)).
+                    findFirst().orElseThrow(() -> new AssertionError("Config entry " + configName + " not found for resource " + resource));
+            assertEquals(expectedSource, entry.source(),
+                    "Expected entry for " + configName + " to come from " + expectedSource + ". " +
+                            "Instead, the entry was: " + entry);
+            assertEquals(expectedValue, entry.value(),
+                    "Expected entry value to be " + expectedValue + ", but was: " + entry.value() + ". " +
+                            "Entry: " + entry);
+        });
     }
 
     @ClusterTest(brokers = 3)
