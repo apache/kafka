@@ -42,17 +42,31 @@ import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_EXACT;
 import static org.apache.kafka.common.requests.DescribeClientQuotasRequest.MATCH_TYPE_SPECIFIED;
 
-
 /**
  * Represents the client quotas in the metadata image.
  * <p>
  * This class is thread-safe.
  */
-public record ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
+public class ClientQuotasImage {
     public static final ClientQuotasImage EMPTY = new ClientQuotasImage(Map.of());
+
+    private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
+    private final Map<String, Map<String, Set<ClientQuotaEntity>>> index;
 
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
         this.entities = Collections.unmodifiableMap(entities);
+        this.index = new HashMap<>();
+        for (ClientQuotaEntity entity : this.entities.keySet()) {
+            for (Entry<String, String> entry : entity.entries().entrySet()) {
+                index.computeIfAbsent(entry.getKey(), k -> new HashMap<>())
+                        .computeIfAbsent(entry.getValue(), k -> new HashSet<>())
+                        .add(entity);
+            }
+        }
+    }
+
+    public Map<ClientQuotaEntity, ClientQuotaImage> entities() {
+        return entities;
     }
 
     public boolean isEmpty() {
@@ -112,18 +126,74 @@ public record ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entitie
         }
         if (exactMatch.containsKey(IP) || typeMatch.contains(IP)) {
             if ((exactMatch.containsKey(USER) || typeMatch.contains(USER)) ||
-                (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
+                    (exactMatch.containsKey(CLIENT_ID) || typeMatch.contains(CLIENT_ID))) {
                 throw new InvalidRequestException("Invalid entity filter component " +
                     "combination. IP filter component should not be used with " +
                     "user or clientId filter component.");
             }
         }
-        // TODO: this is O(N). We should add indexing here to speed it up. See KAFKA-13022.
-        for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
-            ClientQuotaEntity entity = entry.getKey();
-            ClientQuotaImage quotaImage = entry.getValue();
-            if (matches(entity, exactMatch, typeMatch, request.strict())) {
-                response.entries().add(toDescribeEntry(entity, quotaImage));
+        Set<ClientQuotaEntity> candidates = null;
+
+        // 1. Filter by exact matches
+        for (Entry<String, String> entry : exactMatch.entrySet()) {
+            Map<String, Set<ClientQuotaEntity>> nameMap = index.get(entry.getKey());
+            Set<ClientQuotaEntity> matches = (nameMap == null) ? Collections.emptySet()
+                    : nameMap.getOrDefault(entry.getValue(), Collections.emptySet());
+
+            if (matches.isEmpty()) {
+                return response;
+            }
+
+            if (candidates == null) {
+                candidates = new HashSet<>(matches);
+            } else {
+                candidates.retainAll(matches);
+            }
+
+            if (candidates.isEmpty()) {
+                return response;
+            }
+        }
+
+        // 2. Filter by type matches
+        for (String type : typeMatch) {
+            Map<String, Set<ClientQuotaEntity>> nameMap = index.get(type);
+            Set<ClientQuotaEntity> matches = new HashSet<>();
+            if (nameMap != null) {
+                for (Set<ClientQuotaEntity> s : nameMap.values()) {
+                    matches.addAll(s);
+                }
+            }
+
+            if (matches.isEmpty()) {
+                return response;
+            }
+
+            if (candidates == null) {
+                candidates = new HashSet<>(matches);
+            } else {
+                candidates.retainAll(matches);
+            }
+
+            if (candidates.isEmpty()) {
+                return response;
+            }
+        }
+
+        if (candidates == null) {
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
+                ClientQuotaEntity entity = entry.getKey();
+                ClientQuotaImage quotaImage = entry.getValue();
+                if (matches(entity, exactMatch, typeMatch, request.strict())) {
+                    response.entries().add(toDescribeEntry(entity, quotaImage));
+                }
+            }
+        } else {
+            for (ClientQuotaEntity entity : candidates) {
+                ClientQuotaImage quotaImage = entities.get(entity);
+                if (matches(entity, exactMatch, typeMatch, request.strict())) {
+                    response.entries().add(toDescribeEntry(entity, quotaImage));
+                }
             }
         }
         return response;
@@ -164,6 +234,21 @@ public record ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entitie
         }
         data.setValues(quotaImage.toDescribeValues());
         return data;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        ClientQuotasImage that = (ClientQuotasImage) o;
+        return Objects.equals(entities, that.entities);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(entities);
     }
 
     @Override
