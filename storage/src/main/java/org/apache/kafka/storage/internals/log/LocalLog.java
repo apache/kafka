@@ -883,10 +883,10 @@ public class LocalLog {
      * resulting segments will contain the exact same messages that are present in the input segment. On successful
      * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
      * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
-     * <br/>
+     * <p>
      * Note that this method assumes we have already determined that the segment passed in contains records that cause
      * offset overflow.
-     * <br/>
+     * <p>
      * The split logic overloads the use of .clean files that LogCleaner typically uses to make the process of replacing
      * the input segment with multiple new segments atomic and recoverable in the event of a crash. See replaceSegments
      * and completeSwapOperations for the implementation to make this operation recoverable on crashes.

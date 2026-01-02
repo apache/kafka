@@ -28,7 +28,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
 
 /**
  * The deserializer that is used for {@link TimestampedKeyAndJoinSide}, which is a combo key format of
- * {@code <timestamp, left/right flag, raw-key>}
+ * {@code <timestamp, left/right flag, raw-key>}.
  * @param <K> the raw key type
  */
 public class TimestampedKeyAndJoinSideDeserializer<K> implements WrappingNullableDeserializer<TimestampedKeyAndJoinSide<K>, K, Void> {

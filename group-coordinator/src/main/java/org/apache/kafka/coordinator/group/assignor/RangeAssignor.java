@@ -53,7 +53,7 @@ import java.util.Set;
  *
  * <p>The co-partitioned assignment will be:
  * <ul>
- * <li><code>    M0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
+ * <li><code>   M0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
  * <li><code>   M1: [T1P2, T2P2]                </code></li>
  * </ul>
  *

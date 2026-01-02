@@ -170,8 +170,9 @@ public class Fetcher<K, V> extends AbstractFetch {
     }
 
     /**
-     * Creates the {@link FetchRequest.Builder fetch request}, {@link NetworkClient#send(ClientRequest, long)}
-     * enqueues/sends it, and adds the {@link RequestFuture} callback for the response.
+     * Creates the {@link FetchRequest.Builder fetch request},
+     * {@link NetworkClient#send(ClientRequest, long)} enqueues/sends it, and adds the {@link RequestFuture callback}
+     * for the response.
      *
      * @param fetchRequests  {@link Map} of {@link Node nodes} to their
      *                       {@link FetchSessionHandler.FetchRequestData request data}
