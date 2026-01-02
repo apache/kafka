@@ -324,9 +324,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach(builder::setConfigProp);
-                if (clusterConfig.standalone()) {
-                    builder.setStandalone(true);
-                }
+                builder.setStandalone(clusterConfig.standalone());
                 this.clusterTestKit = builder.build();
                 this.clusterTestKit.format();
             }
