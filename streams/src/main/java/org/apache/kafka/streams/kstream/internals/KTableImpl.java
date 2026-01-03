@@ -516,7 +516,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             name,
             processorParameters
         );
-        toStreamNode.forbidRepartition();
+        toStreamNode.disableRepartition();
 
         builder.addGraphNode(this.graphNode, toStreamNode);
 

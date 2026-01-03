@@ -210,7 +210,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                      final String queryableName) {
         for (final KGroupedStreamImpl<K, ?> repartitionReqs : groupPatterns.keySet()) {
 
-            if (repartitionReqs.isRepartitionRequired()) {
+            if (repartitionReqs.repartitioningRequired()) {
 
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 

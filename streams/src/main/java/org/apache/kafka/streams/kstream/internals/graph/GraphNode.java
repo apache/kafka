@@ -24,10 +24,6 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.Optional;
-import java.util.Queue;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.function.Predicate;
 
@@ -37,8 +33,7 @@ public abstract class GraphNode {
 
     private final Collection<Label> labels = new LinkedList<>();
     private final String nodeName;
-    private boolean repartitionForbidden = false;
-    private boolean repartitionRequired = false;
+    private boolean repartitionDisabled = false;
     private boolean keyChangingOperation;
     private boolean valueChangingOperation;
     private boolean mergeNode;
@@ -99,21 +94,21 @@ public abstract class GraphNode {
         return nodeName;
     }
 
-    public boolean canDetermineRepartition() {
-        return keyChangingOperation || repartitionForbidden || repartitionRequired;
-    }
-
-    public boolean isRepartitionRequired() {
-        final GraphNode find = findNearestParentNodeMatching(GraphNode::canDetermineRepartition);
+    public boolean repartitioningRequired() {
+        final GraphNode find = findParentNodeMatching(GraphNode::isRepartitionDetermining);
         if (find == null) {
             return false;
         }
 
-        if (find.repartitionForbidden) {
+        if (find.repartitionDisabled) {
             return false;
         }
 
-        return find.keyChangingOperation || repartitionRequired;
+        return find.keyChangingOperation;
+    }
+
+    private boolean isRepartitionDetermining() {
+        return keyChangingOperation || repartitionDisabled;
     }
 
     public boolean isKeyChangingOperation() {
@@ -128,14 +123,8 @@ public abstract class GraphNode {
         return mergeNode;
     }
 
-    public void forbidRepartition() {
-        repartitionForbidden = true;
-        repartitionRequired = false;
-    }
-
-    public void mustRepartition() {
-        repartitionRequired = true;
-        repartitionForbidden = false;
+    public void disableRepartition() {
+        repartitionDisabled = true;
     }
 
     public void setMergeNode(final boolean mergeNode) {
@@ -180,38 +169,15 @@ public abstract class GraphNode {
         if (parentNodePredicate.test(this)) {
             return this;
         }
-        GraphNode foundParentNode = null;
 
-        for (final GraphNode parentNode : this.parentNodes()) {
+        GraphNode foundParentNode = null;
+        for (final GraphNode parentNode : parentNodes()) {
             if (parentNodePredicate.test(parentNode)) {
                 return parentNode;
             }
             foundParentNode = parentNode.findParentNodeMatching(parentNodePredicate);
         }
         return foundParentNode;
-    }
-
-    private GraphNode findNearestParentNodeMatching(final Predicate<GraphNode> parentNodePredicate) {
-        if (parentNodePredicate.test(this)) {
-            return this;
-        }
-
-        final Set<GraphNode> visited = new HashSet<>();
-        final Queue<GraphNode> queue = new ArrayDeque<>(this.parentNodes());
-        visited.add(this);
-
-        while (!queue.isEmpty()) {
-            final GraphNode current = queue.poll();
-            if (!visited.add(current)) {
-                continue;
-            }
-            if (parentNodePredicate.test(current)) {
-                return current;
-            }
-            queue.addAll(current.parentNodes());
-        }
-
-        return null;
     }
 
     @Override

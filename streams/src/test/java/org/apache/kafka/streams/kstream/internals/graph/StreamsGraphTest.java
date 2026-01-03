@@ -125,8 +125,9 @@ public class StreamsGraphTest {
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "test-application");
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        properties.setProperty(TopologyConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX, "true");
 
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(properties)));
         initializer = () -> "";
         aggregator = (aggKey, value, aggregate) -> aggregate + value.length();
         final ProcessorSupplier<String, String, String, String> processorSupplier =
@@ -546,20 +547,20 @@ public class StreamsGraphTest {
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [retryTopic])\n" +
             "      --> KSTREAM-PROCESSOR-0000000001\n" +
             "    Processor: KSTREAM-PROCESSOR-0000000001 (stores: [])\n" +
-            "      --> KSTREAM-FILTER-0000000005\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
             "      <-- KSTREAM-SOURCE-0000000000\n" +
-            "    Processor: KSTREAM-FILTER-0000000005 (stores: [])\n" +
-            "      --> KSTREAM-SINK-0000000004\n" +
+            "    Processor: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter (stores: [])\n" +
+            "      --> KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink\n" +
             "      <-- KSTREAM-PROCESSOR-0000000001\n" +
-            "    Sink: KSTREAM-SINK-0000000004 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
-            "      <-- KSTREAM-FILTER-0000000005\n" +
+            "    Sink: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-sink (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition)\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-filter\n" +
             "\n" +
             "  Sub-topology: 1\n" +
-            "    Source: KSTREAM-SOURCE-0000000006 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
+            "    Source: KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition])\n" +
             "      --> KSTREAM-AGGREGATE-0000000003\n" +
             "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
             "      --> KTABLE-SUPPRESS-0000000007\n" +
-            "      <-- KSTREAM-SOURCE-0000000006\n" +
+            "      <-- KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition-source\n" +
             "    Source: KSTREAM-SOURCE-0000000019 (topics: [internal-topic-command])\n" +
             "      --> KSTREAM-PEEK-0000000020\n" +
             "    Processor: KTABLE-SUPPRESS-0000000007 (stores: [KTABLE-SUPPRESS-STATE-STORE-0000000008])\n" +

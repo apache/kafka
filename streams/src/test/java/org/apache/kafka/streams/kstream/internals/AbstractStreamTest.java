@@ -92,7 +92,7 @@ public class AbstractStreamTest {
             final ProcessorGraphNode<K, V> processorNode = new ProcessorGraphNode<>(
                 name,
                 new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name));
-            processorNode.forbidRepartition();
+            processorNode.disableRepartition();
             builder.addGraphNode(this.graphNode, processorNode);
             return new KStreamImpl<>(name, null, null, subTopologySourceNodes, processorNode, builder);
         }

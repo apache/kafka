@@ -121,7 +121,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         String sourceName = this.name;
         GraphNode parentNode = graphNode;
 
-        if (graphNode.isRepartitionRequired()) {
+        if (graphNode.repartitioningRequired()) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
             final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeName;

@@ -138,8 +138,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         super(name, keySerde, valueSerde, subTopologySourceNodes, graphNode, builder);
     }
 
-    private boolean isRepartitionRequired() {
-        return graphNode.isRepartitionRequired();
+    private boolean repartitioningRequired() {
+        return graphNode.repartitioningRequired();
     }
 
     @Override
@@ -522,7 +522,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         final UnoptimizableRepartitionNode<K, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
-        unoptimizableRepartitionNode.forbidRepartition();
+        unoptimizableRepartitionNode.disableRepartition();
 
         builder.addGraphNode(graphNode, unoptimizableRepartitionNode);
 
@@ -618,7 +618,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final Set<String> subTopologySourceNodes;
         final GraphNode tableParentNode;
 
-        if (isRepartitionRequired()) {
+        if (repartitioningRequired()) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
             final String sourceName = createRepartitionedSource(
                 builder,
@@ -884,7 +884,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final StreamJoinedInternal<K, V, VRight> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined, builder);
         final NamedInternal name = new NamedInternal(streamJoinedInternal.name());
-        if (joinThis.isRepartitionRequired()) {
+        if (joinThis.repartitioningRequired()) {
             final String joinThisName = joinThis.name;
             final String leftJoinRepartitionTopicName = name.suffixWithOrElseGet("-left", joinThisName);
 
@@ -895,7 +895,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 name.name() != null);
         }
 
-        if (joinOther.isRepartitionRequired()) {
+        if (joinOther.repartitioningRequired()) {
             final String joinOtherName = joinOther.name;
             final String rightJoinRepartitionTopicName = name.suffixWithOrElseGet("-right", joinOtherName);
 
@@ -942,7 +942,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         if (repartitionNode == null || !name.equals(repartitionName)) {
             repartitionNode = optimizableRepartitionNodeBuilder.build();
-            repartitionNode.forbidRepartition();
+            repartitionNode.disableRepartition();
             builder.addGraphNode(graphNode, repartitionNode);
         }
 
@@ -1047,7 +1047,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final JoinedInternal<K, V, TableValue> joinedInternal = new JoinedInternal<>(joined);
         final String name = joinedInternal.name();
 
-        if (isRepartitionRequired()) {
+        if (repartitioningRequired()) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
                     joinedInternal.keySerde(),
@@ -1088,7 +1088,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final JoinedInternal<K, V, VTable> joinedInternal = new JoinedInternal<>(joined);
         final String name = joinedInternal.name();
 
-        if (isRepartitionRequired()) {
+        if (repartitioningRequired()) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
                     joinedInternal.keySerde(),
@@ -1149,7 +1149,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             this.name,
             joinedInternal.gracePeriod()
         );
-        streamTableJoinNode.forbidRepartition();
+        streamTableJoinNode.disableRepartition();
 
         builder.addGraphNode(graphNode, streamTableJoinNode);
         if (leftJoin) {
@@ -1301,7 +1301,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             processNode.setValueChangingOperation(true);
         }
 
-        processNode.mustRepartition();
         builder.addGraphNode(graphNode, processNode);
 
         // cannot inherit key and value serde

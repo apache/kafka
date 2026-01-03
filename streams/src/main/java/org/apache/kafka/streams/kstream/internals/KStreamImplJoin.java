@@ -225,7 +225,7 @@ class KStreamImplJoin {
                    .withNodeName(joinMergeName);
 
         final GraphNode joinGraphNode = joinBuilder.build();
-        joinGraphNode.forbidRepartition();
+        joinGraphNode.disableRepartition();
 
         if (leftOuter || rightOuter) {
             joinGraphNode.addLabel(GraphNode.Label.NULL_KEY_RELAXED_JOIN);

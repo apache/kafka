@@ -63,8 +63,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         );
     }
 
-    public boolean isRepartitionRequired() {
-        return graphNode.isRepartitionRequired();
+    public boolean repartitioningRequired() {
+        return graphNode.repartitioningRequired();
     }
 
     @Override

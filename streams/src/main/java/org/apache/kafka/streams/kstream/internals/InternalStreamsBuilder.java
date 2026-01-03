@@ -102,7 +102,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         final String name = new NamedInternal(consumed.name()).orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name, topics, consumed);
-        streamSourceNode.forbidRepartition();
+        streamSourceNode.disableRepartition();
 
         addGraphNode(root, streamSourceNode);
 
@@ -118,7 +118,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                        final ConsumedInternal<K, V> consumed) {
         final String name = new NamedInternal(consumed.name()).orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name, topicPattern, consumed);
-        streamPatternSourceNode.forbidRepartition();
+        streamPatternSourceNode.disableRepartition();
 
         addGraphNode(root, streamPatternSourceNode);
 
