@@ -1952,6 +1952,8 @@ public class SharePartition {
                 // the delivery limit and already have some records to return in response then skip processing
                 // the current record, which shall be delivered alone in next fetch.
                 if (maxDeliveryCount > 2 && recordDeliveryCount == maxDeliveryCount - 1 && acquiredCount > 0) {
+                    log.warn("The offset {} is on last delivery attempt in share partition: {}-{}, should be delivered alone in next fetch",
+                        offsetState.getKey(), groupId, topicIdPartition);
                     break;
                 }
 
@@ -1995,6 +1997,8 @@ public class SharePartition {
 
                 // Delivered alone.
                 if (offsetState.getValue().deliveryCount() == maxDeliveryCount && maxDeliveryCount > 2) {
+                    log.warn("The offset {} is on last delivery attempt in share partition: {}-{}, should be delivered alone in this fetch",
+                        offsetState.getKey(), groupId, topicIdPartition);
                     break;
                 }
                 if (isRecordLimitMode && acquiredCount == maxFetchRecords) {
@@ -2002,6 +2006,8 @@ public class SharePartition {
                     break;
                 }
                 if (hasThrottledRecord && acquiredCount == maxFetchRecordsWhileThrottledRecords) {
+                    log.debug("Breaking early due to throttling for share partition: {}-{}, acquired {} records.",
+                        groupId, topicIdPartition, acquiredCount);
                     break;
                 }
             }
