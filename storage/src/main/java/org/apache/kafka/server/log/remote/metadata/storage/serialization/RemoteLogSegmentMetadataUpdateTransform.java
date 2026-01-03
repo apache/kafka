@@ -34,6 +34,8 @@ public class RemoteLogSegmentMetadataUpdateTransform implements RemoteLogMetadat
                 .setRemoteLogSegmentId(createRemoteLogSegmentIdEntry(segmentMetadataUpdate))
                 .setBrokerId(segmentMetadataUpdate.brokerId())
                 .setEventTimestampMs(segmentMetadataUpdate.eventTimestampMs())
+                .setBrokerLeaderEpoch(segmentMetadataUpdate.brokerLeaderEpoch())
+                .setEndOffset(segmentMetadataUpdate.endOffset())
                 .setRemoteLogSegmentState(segmentMetadataUpdate.state().id());
         segmentMetadataUpdate.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 

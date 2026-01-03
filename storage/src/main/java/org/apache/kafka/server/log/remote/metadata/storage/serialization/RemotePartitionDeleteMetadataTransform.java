@@ -31,6 +31,8 @@ public final class RemotePartitionDeleteMetadataTransform implements RemoteLogMe
                 .setTopicIdPartition(createTopicIdPartitionEntry(partitionDeleteMetadata.topicIdPartition()))
                 .setEventTimestampMs(partitionDeleteMetadata.eventTimestampMs())
                 .setBrokerId(partitionDeleteMetadata.brokerId())
+                .setBrokerLeaderEpoch(partitionDeleteMetadata.brokerLeaderEpoch())
+                .setEndOffset(partitionDeleteMetadata.endOffset())
                 .setRemotePartitionDeleteState(partitionDeleteMetadata.state().id());
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
     }

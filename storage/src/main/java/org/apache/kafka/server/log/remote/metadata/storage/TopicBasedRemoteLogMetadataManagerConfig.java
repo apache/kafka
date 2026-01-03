@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,7 +40,8 @@ import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
  */
 public final class TopicBasedRemoteLogMetadataManagerConfig {
 
-    public static final String REMOTE_LOG_METADATA_TOPIC_NAME = "__remote_log_metadata";
+    public static final String REMOTE_LOG_METADATA_TOPIC_NAME = "__remote_log_metadata_compacted";
+    public static final String REMOTE_LOG_METADATA_AUDIT_TOPIC_NAME = "__remote_log_metadata";
 
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP = "remote.log.metadata.topic.replication.factor";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.num.partitions";
@@ -212,7 +214,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_producer");
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        // Use StringSerializer for keys since we're using topicId:partition:endOffset:brokerLeaderEpoch format
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return Collections.unmodifiableMap(props);
     }

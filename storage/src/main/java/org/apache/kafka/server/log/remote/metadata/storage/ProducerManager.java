@@ -48,7 +48,7 @@ public class ProducerManager implements Closeable {
     public ProducerManager(TopicBasedRemoteLogMetadataManagerConfig rlmmConfig,
                            RemoteLogMetadataTopicPartitioner rlmmTopicPartitioner) {
         this.rlmmConfig = rlmmConfig;
-        this.producer = new KafkaProducer<>(rlmmConfig.producerProperties());
+        this.producer = new KafkaProducer<String, byte[]>(rlmmConfig.producerProperties());
         topicPartitioner = rlmmTopicPartitioner;
     }
 

@@ -42,7 +42,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -156,7 +155,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                                                            + RemoteLogSegmentState.COPY_SEGMENT_STARTED);
             }
 
-            if(segmentMetadataUpdate.state() == RemoteLogSegmentState.DELETE_SEGMENT_FINISHED) {
+            if (segmentMetadataUpdate.state() == RemoteLogSegmentState.DELETE_SEGMENT_FINISHED) {
                 return tombstoneSegmentMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
             }
 
@@ -167,36 +166,67 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    private CompletableFuture<Void> tombstoneSegmentMetadata(TopicIdPartition topicIdPartition, RemoteLogSegmentMetadataUpdate segmentMetadataUpdate) {
+    /**
+     * Tombstones segment metadata by publishing DELETE_SEGMENT_FINISHED and sending tombstones for historical records.
+     *
+     * The DELETE_SEGMENT_FINISHED event is critical and must be delivered successfully. However, tombstone messages
+     * are sent on a best-effort basis (fire-and-forget) as they are optimization hints for compaction, not critical
+     * state updates. The segment is considered deleted once DELETE_SEGMENT_FINISHED is published, regardless of
+     * whether tombstones succeed.
+     *
+     * @param topicIdPartition the topic partition
+     * @param segmentMetadataUpdate the DELETE_SEGMENT_FINISHED update
+     * @return CompletableFuture that completes when DELETE_SEGMENT_FINISHED is successfully published
+     */
+    private CompletableFuture<Void> tombstoneSegmentMetadata(TopicIdPartition topicIdPartition, RemoteLogSegmentMetadataUpdate segmentMetadataUpdate)
+    throws RemoteStorageException{
         Objects.requireNonNull(segmentMetadataUpdate, "segmentMetadataUpdate can not be null");
 
         lock.readLock().lock();
         try {
             ensureInitializedAndNotClosed();
 
-            // Publish the message to the topic.
-            storeRemoteLogMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
+            // 1. Publish DELETE_SEGMENT_FINISHED - this is the critical operation
+            CompletableFuture<Void> deleteFinishedFuture =
+                    storeRemoteLogMetadata(segmentMetadataUpdate.remoteLogSegmentId().topicIdPartition(), segmentMetadataUpdate);
 
-            List<CompletableFuture<RecordMetadata>> tombstoneFutures = new ArrayList<>();
-            // Get the cache to find all segments with the same endOffset
-            Iterator<String> toBeTombstonedKeys = remotePartitionMetadataStore.listRemoteLogSegmentsByEndoffset(topicIdPartition, segmentMetadataUpdate.endOffset(), segmentMetadataUpdate.brokerLeaderEpoch());
-            while(toBeTombstonedKeys.hasNext()) {
-                String metadataKey = toBeTombstonedKeys.next();
-                // Publish tombstone (null value) to the topic
-                CompletableFuture<RecordMetadata> future =
-                        producerManager.publishTombstone(topicIdPartition, metadataKey);
-                tombstoneFutures.add(future);
+            // 2. Send tombstones on a best-effort basis (fire-and-forget)
+            // These are optimization hints for compaction and don't affect correctness
+            try {
+                Iterator<String> toBeTombstonedKeys = remotePartitionMetadataStore.listRemoteLogSegmentsByEndoffset(
+                        topicIdPartition, segmentMetadataUpdate.endOffset(), segmentMetadataUpdate.brokerLeaderEpoch());
+
+                while (toBeTombstonedKeys.hasNext()) {
+                    String metadataKey = toBeTombstonedKeys.next();
+                    // Fire-and-forget: send tombstone but don't wait for completion
+                    producerManager.publishTombstone(topicIdPartition, metadataKey)
+                            .whenComplete((metadata, exception) -> {
+                                if (exception != null) {
+                                    log.warn("Failed to publish tombstone for key: {}. This is non-critical and compaction " +
+                                            "will eventually clean up the record by the RemoteLogMetadataCleanupManager. Error: {}", metadataKey, exception.getMessage());
+                                } else {
+                                    log.debug("Successfully published tombstone for key: {}", metadataKey);
+                                }
+                            });
+                }
+            } catch (Exception e) {
+                // Log but don't fail the operation - tombstones are best-effort
+                log.warn("Failed to query or publish tombstones for segment with endOffset: {}. " +
+                        "This is non-critical. Error: {}", segmentMetadataUpdate.endOffset(), e.getMessage());
             }
-            // Wait for all tombstones to complete
-            return CompletableFuture.allOf(
-                    tombstoneFutures.toArray(new CompletableFuture[0]));
 
-        } catch (RemoteStorageException e) {
-            throw new RuntimeException(e);
+            // 3. Return the DELETE_SEGMENT_FINISHED future - operation succeeds when this completes
+            return deleteFinishedFuture;
+
+        } catch (KafkaException e) {
+            if (e instanceof RetriableException) {
+                throw e;
+            } else {
+                throw new RemoteStorageException(e);
+            }
         } finally {
             lock.readLock().unlock();
         }
-
     }
 
     @Override
