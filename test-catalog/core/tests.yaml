@@ -3071,6 +3071,8 @@ kafka.server.share.SharePartitionTest:
 - testFetchAckTypeMapForBatch
 - testFetchLockReleasedByDifferentId
 - testFilterRecordBatchesFromAcquiredRecords
+- testInvalidAcknowledgeTypeInBatchAcknowledgement
+- testInvalidAcknowledgeTypeInSubsetAcknowledgement
 - testLastAttemptRecordIsolationWithMixedDeliveryCount
 - testLsoMovementAheadOfEndOffset
 - testLsoMovementAheadOfEndOffsetPostAcknowledgement
