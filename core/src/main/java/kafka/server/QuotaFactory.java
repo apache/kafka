@@ -69,15 +69,13 @@ public class QuotaFactory {
             clientQuotaCallbackPlugin.ifPresent(plugin -> Utils.closeQuietly(plugin, "client quota callback plugin"));
         }
 
-        public void updateQuotaMetricsConfigs() {
-            fetch.updateQuotaMetricConfigs();
-            produce.updateQuotaMetricConfigs();
-            request.updateQuotaMetricConfigs();
-            controllerMutation.updateQuotaMetricConfigs();
-        }
-
         public QuotaConfigChangeListener quotaConfigChangeListener() {
-            return this::updateQuotaMetricsConfigs;
+            return () -> {
+                fetch.updateQuotaMetricConfigs();
+                produce.updateQuotaMetricConfigs();
+                request.updateQuotaMetricConfigs();
+                controllerMutation.updateQuotaMetricConfigs();
+            };
         }
     }
 
