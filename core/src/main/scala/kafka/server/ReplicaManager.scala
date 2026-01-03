@@ -1430,11 +1430,13 @@ class ReplicaManager(val config: KafkaConfig,
             verificationGuards.getOrElse(topicIdPartition.topicPartition(), VerificationGuard.SENTINEL), transactionVersion)
           val numAppendedMessages = info.numMessages
 
-          // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
-          brokerTopicStats.topicStats(topicIdPartition.topic).bytesInRate.mark(records.sizeInBytes)
-          brokerTopicStats.allTopicsStats.bytesInRate.mark(records.sizeInBytes)
-          brokerTopicStats.topicStats(topicIdPartition.topic).messagesInRate.mark(numAppendedMessages)
-          brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
+          if (!info.isDuplicate) {
+            // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
+            brokerTopicStats.topicStats(topicIdPartition.topic).bytesInRate.mark(records.sizeInBytes)
+            brokerTopicStats.allTopicsStats.bytesInRate.mark(records.sizeInBytes)
+            brokerTopicStats.topicStats(topicIdPartition.topic).messagesInRate.mark(numAppendedMessages)
+            brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
+          }
 
           if (traceEnabled)
             trace(s"${records.sizeInBytes} written to log $topicIdPartition beginning at offset " +

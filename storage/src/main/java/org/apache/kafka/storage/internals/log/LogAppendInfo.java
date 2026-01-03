@@ -39,6 +39,7 @@ public class LogAppendInfo {
     private long logAppendTime;
     private long logStartOffset;
     private RecordValidationStats recordValidationStats;
+    private boolean isDuplicate;
 
     private final Optional<Integer> lastLeaderEpoch;
     private final CompressionType sourceCompression;
@@ -74,7 +75,7 @@ public class LogAppendInfo {
                          long lastOffsetOfFirstBatch) {
         this(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, logAppendTime, logStartOffset,
             recordValidationStats, sourceCompression, validBytes, lastOffsetOfFirstBatch, List.of(),
-                LeaderHwChange.NONE);
+                LeaderHwChange.NONE, false);
     }
 
     /**
@@ -94,6 +95,7 @@ public class LogAppendInfo {
      * @param recordErrors           List of record errors that caused the respective batch to be dropped
      * @param leaderHwChange         Incremental if the high watermark needs to be increased after appending record
      *                               Same if high watermark is not changed. None is the default value and it means append failed
+     * @param isDuplicate            Indicates whether the appended records are duplicates
      */
     public LogAppendInfo(long firstOffset,
                          long lastOffset,
@@ -106,7 +108,8 @@ public class LogAppendInfo {
                          int validBytes,
                          long lastOffsetOfFirstBatch,
                          List<RecordError> recordErrors,
-                         LeaderHwChange leaderHwChange) {
+                         LeaderHwChange leaderHwChange,
+                         boolean isDuplicate) {
         this.firstOffset = firstOffset;
         this.lastOffset = lastOffset;
         this.lastLeaderEpoch = lastLeaderEpoch;
@@ -119,6 +122,7 @@ public class LogAppendInfo {
         this.lastOffsetOfFirstBatch = lastOffsetOfFirstBatch;
         this.recordErrors = recordErrors;
         this.leaderHwChange = leaderHwChange;
+        this.isDuplicate = isDuplicate;
     }
 
     public long firstOffset() {
@@ -173,6 +177,14 @@ public class LogAppendInfo {
         this.recordValidationStats = recordValidationStats;
     }
 
+    public void setIsDuplicate(boolean isDuplicate) {
+        this.isDuplicate = isDuplicate;
+    }
+
+    public boolean isDuplicate() {
+        return isDuplicate;
+    }
+
     public CompressionType sourceCompression() {
         return sourceCompression;
     }
@@ -219,7 +231,7 @@ public class LogAppendInfo {
      */
     public LogAppendInfo copy(LeaderHwChange newLeaderHwChange) {
         return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpoch, maxTimestamp, logAppendTime, logStartOffset, recordValidationStats,
-                sourceCompression, validBytes, lastOffsetOfFirstBatch, recordErrors, newLeaderHwChange);
+                sourceCompression, validBytes, lastOffsetOfFirstBatch, recordErrors, newLeaderHwChange, isDuplicate);
     }
 
     public static LogAppendInfo unknownLogAppendInfoWithLogStartOffset(long logStartOffset) {
@@ -234,7 +246,7 @@ public class LogAppendInfo {
      */
     public static LogAppendInfo unknownLogAppendInfoWithAdditionalInfo(long logStartOffset, List<RecordError> recordErrors) {
         return new LogAppendInfo(-1, -1, Optional.empty(), RecordBatch.NO_TIMESTAMP, RecordBatch.NO_TIMESTAMP, logStartOffset,
-                RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L, recordErrors, LeaderHwChange.NONE);
+                RecordValidationStats.EMPTY, CompressionType.NONE, -1, -1L, recordErrors, LeaderHwChange.NONE, false);
     }
 
     @Override

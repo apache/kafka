@@ -1230,6 +1230,7 @@ public class UnifiedLog implements AutoCloseable {
                                 appendInfo.setLastOffset(duplicate.lastOffset());
                                 appendInfo.setLogAppendTime(duplicate.timestamp());
                                 appendInfo.setLogStartOffset(logStartOffset);
+                                appendInfo.setIsDuplicate(true);
                                 logger.trace("Duplicate batch detected, returning AppendInfo from duplicate batch with last offset: {}, first offset: {}, next offset: {}, skipped messages: {}",
                                         appendInfo.lastOffset(), appendInfo.firstOffset(), localLog.logEndOffset(), validRecords);
                             } else {
@@ -1568,7 +1569,7 @@ public class UnifiedLog implements AutoCloseable {
 
         return new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
                 RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
-                validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList(), LeaderHwChange.NONE);
+                validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList(), LeaderHwChange.NONE, false);
     }
 
     /**

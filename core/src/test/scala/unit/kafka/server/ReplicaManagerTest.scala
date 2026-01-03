@@ -6048,6 +6048,68 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testBrokerTopicStatsOnAppend(): Unit = {
+    val localId = 0
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId)
+
+    try {
+      // Create partition and make it leader
+      val brokerList = Seq[Integer](localId).asJava
+      val delta = createLeaderDelta(topicId, topicPartition, 0, brokerList, brokerList)
+      val leaderMetadataImage = imageFromTopics(delta.apply())
+      replicaManager.applyDelta(delta, leaderMetadataImage)
+
+      // Check the state of that partition
+      val HostedPartition.Online(partition) = replicaManager.getPartition(topicPartition)
+      assertTrue(partition.isLeader)
+      assertEquals(Set(localId), partition.inSyncReplicaIds)
+      assertEquals(0, partition.getLeaderEpoch)
+
+      // Get initial metric values
+      val topicStats = replicaManager.brokerTopicStats.topicStats("foo")
+      val allTopicsStats = replicaManager.brokerTopicStats.allTopicsStats
+      var initialTopicBytesIn = topicStats.bytesInRate.count()
+      var initialAllTopicsBytesIn = allTopicsStats.bytesInRate.count()
+      var initialTopicMessagesIn = topicStats.messagesInRate.count()
+      var initialAllTopicsMessagesIn = allTopicsStats.messagesInRate.count()
+
+      // Append records
+      val producerId = 234L
+      val epoch = 5.toShort
+      val records = MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, epoch, 0,
+        new SimpleRecord(s"message 0".getBytes))
+      appendRecords(replicaManager, topicPartition, records).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+
+      // Verify broker topic stats were updated correctly
+      assertTrue(topicStats.bytesInRate.count() > initialTopicBytesIn)
+      assertTrue(allTopicsStats.bytesInRate.count() > initialAllTopicsBytesIn)
+      assertTrue(topicStats.messagesInRate.count() > initialTopicMessagesIn)
+      assertTrue(allTopicsStats.messagesInRate.count() > initialAllTopicsMessagesIn)
+
+      initialTopicBytesIn = topicStats.bytesInRate.count()
+      initialAllTopicsBytesIn = allTopicsStats.bytesInRate.count()
+      initialTopicMessagesIn = topicStats.messagesInRate.count()
+      initialAllTopicsMessagesIn = allTopicsStats.messagesInRate.count()
+
+      // Append duplicated records
+      appendRecords(replicaManager, topicPartition, records).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
+
+      // Verify broker topic stats skips duplicated records
+      assertEquals(initialTopicBytesIn, topicStats.bytesInRate.count())
+      assertEquals(initialAllTopicsBytesIn, allTopicsStats.bytesInRate.count())
+      assertEquals(initialTopicMessagesIn, topicStats.messagesInRate.count())
+      assertEquals(initialAllTopicsMessagesIn, allTopicsStats.messagesInRate.count())
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def readFromLogWithOffsetOutOfRange(tp: TopicPartition): Seq[(TopicIdPartition, LogReadResult)] = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true)
     try {
