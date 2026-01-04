@@ -94,7 +94,7 @@ import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, Future, TimeUnit}
 import java.util.function.{BiConsumer, Consumer}
 import java.util.stream.IntStream
@@ -5514,6 +5514,16 @@ class ReplicaManagerTest {
 
     try {
       val spiedPartition = spy(Partition(tpId, time, replicaManager))
+
+      val blockPromotion = new AtomicBoolean(false)
+      doAnswer { invocation =>
+        if (blockPromotion.get) {
+          false
+        } else {
+          invocation.callRealMethod()
+        }
+      }.when(spiedPartition).maybeReplaceCurrentWithFutureReplica()
+
       replicaManager.addOnlinePartition(tp, spiedPartition)
 
       val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
@@ -5527,7 +5537,7 @@ class ReplicaManagerTest {
       replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
 
       // Prevent promotion of future replica
-      doReturn(false).when(spiedPartition).maybeReplaceCurrentWithFutureReplica()
+      blockPromotion.set(true)
 
       // Make sure the future log is created with the correct topic ID.
       val futureLog = replicaManager.futureLocalLogOrException(tp)
@@ -5537,7 +5547,7 @@ class ReplicaManagerTest {
       val finalReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(it => it == firstLogDir || it == newReplicaFolder).head
       replicaManager.alterReplicaLogDirs(Map(tp -> finalReplicaFolder.getAbsolutePath))
 
-      reset(spiedPartition)
+      blockPromotion.set(false)
 
       TestUtils.waitUntilTrue(() => {
         replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
