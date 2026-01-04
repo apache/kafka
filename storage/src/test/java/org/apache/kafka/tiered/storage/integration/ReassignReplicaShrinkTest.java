@@ -41,7 +41,7 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
 
     /**
      * Number of partitions in the '__remote_log_metadata' topic
-     * @return number of partitions in the '__remote_log_metadata' topic
+     * @return number of partitions in the '__remote_log_metadata_compacted' topic
      */
     @Override
     public int numRemoteLogMetadataPartitions() {

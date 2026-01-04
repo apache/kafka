@@ -82,6 +82,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private Thread initializationThread;
     private volatile ProducerManager producerManager;
     private volatile ConsumerManager consumerManager;
+    private volatile RemoteLogMetadataCleanupManager cleanupManager;
 
     // This allows to gracefully close this instance using {@link #close()} method while there are some pending or new
     // requests calling different methods which use the resources like producer/consumer managers.
@@ -471,7 +472,9 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private void initializeResources() {
         log.info("Initializing topic-based RLMM resources");
         final NewTopic remoteLogMetadataTopicRequest = createRemoteLogMetadataTopicRequest();
+        final NewTopic remoteLogMetadataAuditTopicRequest = createRemoteLogMetadataAuditTopicRequest();
         boolean topicCreated = false;
+        boolean auditTopicCreated = false;
         long startTimeMs = time.milliseconds();
         Admin adminClient = null;
         try {
@@ -491,17 +494,23 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     topicCreated = createTopic(adminClient, remoteLogMetadataTopicRequest);
                 }
 
-                if (!topicCreated) {
+                if (!auditTopicCreated) {
+                    auditTopicCreated = createTopic(adminClient, remoteLogMetadataAuditTopicRequest);
+                }
+
+                if (!topicCreated || !auditTopicCreated) {
                     // Sleep for INITIALIZATION_RETRY_INTERVAL_MS before trying to create the topic again.
                     log.info("Sleep for {} ms before it is retried again.", rlmmConfig.initializationRetryIntervalMs());
                     Utils.sleep(rlmmConfig.initializationRetryIntervalMs());
                     continue;
                 } else {
-                    // If topic is already created, validate the existing topic partitions.
+                    // If topics are already created, validate the existing topic partitions.
                     try {
                         String topicName = remoteLogMetadataTopicRequest.name();
+                        String auditTopicName = remoteLogMetadataAuditTopicRequest.name();
                         // If the existing topic partition size is not same as configured, mark initialization as failed and exit.
-                        if (!isPartitionsCountSameAsConfigured(adminClient, topicName)) {
+                        if (!isPartitionsCountSameAsConfigured(adminClient, topicName) ||
+                            !isPartitionsCountSameAsConfigured(adminClient, auditTopicName)) {
                             initializationFailed = true;
                         }
                     } catch (Exception e) {
@@ -521,6 +530,28 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     } else {
                         log.info("RLMM Consumer task thread is not configured to be started.");
                     }
+
+                    // Create and start cleanup manager for periodic tombstoning of expired metadata
+                    // The logStartOffsetProvider returns the lowest start offset from the cache
+                    RemoteLogMetadataCleanupManager.LogStartOffsetProvider logStartOffsetProvider =
+                            topicIdPartition -> {
+                                try {
+                                    return remotePartitionMetadataStore.lowestStartOffset(topicIdPartition);
+                                } catch (Exception e) {
+                                    log.warn("Failed to get log start offset for partition {}", topicIdPartition, e);
+                                    return -1;
+                                }
+                            };
+
+                    cleanupManager = new RemoteLogMetadataCleanupManager(
+                            rlmmConfig,
+                            remotePartitionMetadataStore,
+                            producerManager,
+                            logStartOffsetProvider,
+                            time
+                    );
+                    cleanupManager.start();
+                    log.info("Started RemoteLogMetadataCleanupManager");
 
                     if (!pendingAssignPartitions.isEmpty()) {
                         assignPartitions(pendingAssignPartitions);
@@ -596,6 +627,16 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                             rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
     }
 
+    private NewTopic createRemoteLogMetadataAuditTopicRequest() {
+        Map<String, String> topicConfigs = new HashMap<>();
+        topicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, "-1"); // Infinite retention
+        topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        topicConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
+        return new NewTopic(rlmmConfig.remoteLogMetadataAuditTopicName(),
+                            rlmmConfig.metadataTopicPartitionsCount(),
+                            rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
+    }
+
     /**
      * @param newTopic topic to be created.
      * @return Returns true if the topic already exists, or it is created successfully.
@@ -665,6 +706,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 }
             }
 
+            Utils.closeQuietly(cleanupManager, "RemoteLogMetadataCleanupManager");
             Utils.closeQuietly(producerManager, "ProducerTask");
             Utils.closeQuietly(consumerManager, "RLMMConsumerManager");
             Utils.closeQuietly(remotePartitionMetadataStore, "RemotePartitionMetadataStore");

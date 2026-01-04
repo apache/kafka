@@ -69,13 +69,13 @@
     {
       "name": "BrokerLeaderEpoch",
       "type": "int32",
-      "versions": "0+",
+      "versions": "1+",
       "about": "The leader epoch of the broker (partition leader epoch) at the time this update is being published."
     },
     {
       "name": "EndOffset",
       "type": "int64",
-      "versions": "0+",
+      "versions": "1+",
       "about": "End offset of the segment being updated."
     },
     {

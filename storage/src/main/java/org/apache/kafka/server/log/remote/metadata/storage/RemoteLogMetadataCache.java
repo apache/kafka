@@ -109,6 +109,11 @@ public class RemoteLogMetadataCache {
     // https://issues.apache.org/jira/browse/KAFKA-12641
     protected final ConcurrentMap<Integer, RemoteLogLeaderEpochState> leaderEpochEntries = new ConcurrentHashMap<>();
 
+    // Tracks the lowest start offset across all segments in this cache.
+    // Used to determine the log start offset for cleanup of expired metadata.
+    // Set to Long.MAX_VALUE initially to indicate no segments exist.
+    private volatile long lowestStartOffset = Long.MAX_VALUE;
+
     private final CountDownLatch initializedLatch = new CountDownLatch(1);
 
     public void markInitialized() {
@@ -117,6 +122,15 @@ public class RemoteLogMetadataCache {
 
     public boolean isInitialized() {
         return initializedLatch.getCount() == 0;
+    }
+
+    /**
+     * Returns the lowest start offset across all segments in this cache.
+     * Returns -1 if no segments exist (when lowestStartOffset is Long.MAX_VALUE).
+     * This is used to determine the log start offset for cleanup of expired metadata.
+     */
+    public long lowestStartOffset() {
+        return lowestStartOffset == Long.MAX_VALUE ? -1 : lowestStartOffset;
     }
 
     /**
@@ -245,6 +259,24 @@ public class RemoteLogMetadataCache {
         // Remove the segment's id to metadata mapping because this segment is considered as deleted and it cleared all
         // the state of this segment in the cache.
         idToSegmentMetadata.remove(remoteLogSegmentMetadata.remoteLogSegmentId());
+
+        // After deletion, recalculate the lowest start offset since log start offset increases when segments are deleted
+        recalculateLowestStartOffset();
+    }
+
+    /**
+     * Recalculates the lowest start offset by scanning all segments in the cache.
+     * This is called after a segment is deleted to update the log start offset.
+     * The log start offset represents the lowest offset that still exists in the partition.
+     */
+    private void recalculateLowestStartOffset() {
+        long newLowest = Long.MAX_VALUE;
+        for (RemoteLogSegmentMetadata metadata : idToSegmentMetadata.values()) {
+            if (metadata.startOffset() < newLowest) {
+                newLowest = metadata.startOffset();
+            }
+        }
+        lowestStartOffset = newLowest;
     }
 
     private void doHandleSegmentStateTransitionForLeaderEpochs(RemoteLogSegmentMetadata remoteLogSegmentMetadata,

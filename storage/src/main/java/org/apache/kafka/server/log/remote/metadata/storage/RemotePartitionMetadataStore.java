@@ -160,6 +160,19 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         return getRemoteLogMetadataCache(topicIdPartition).highestOffsetForEpoch(leaderEpoch);
     }
 
+    /**
+     * Returns the lowest start offset across all segments for the given TopicIdPartition.
+     * Returns -1 if no segments exist for this partition.
+     * This is used to determine the log start offset for cleanup of expired metadata.
+     *
+     * @param topicIdPartition the topic partition
+     * @return the lowest start offset, or -1 if no segments exist
+     * @throws RemoteStorageException if there's an error accessing the cache
+     */
+    public long lowestStartOffset(TopicIdPartition topicIdPartition) throws RemoteStorageException {
+        return getRemoteLogMetadataCache(topicIdPartition).lowestStartOffset();
+    }
+
     @Override
     public void close() throws IOException {
         log.info("Clearing the entries from the store.");

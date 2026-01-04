@@ -158,6 +158,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return REMOTE_LOG_METADATA_TOPIC_NAME;
     }
 
+    public String remoteLogMetadataAuditTopicName() {
+        return REMOTE_LOG_METADATA_AUDIT_TOPIC_NAME;
+    }
+
     public int metadataTopicPartitionsCount() {
         return metadataTopicPartitionsCount;
     }

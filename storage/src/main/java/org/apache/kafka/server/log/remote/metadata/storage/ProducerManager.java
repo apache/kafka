@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -92,14 +91,12 @@ public class ProducerManager implements Closeable {
 
     /**
      * Returns {@link CompletableFuture} which will complete only after publishing of the given {@code remoteLogMetadata}
-     * is considered complete.
+     * to both the compacted topic and audit topic is considered complete.
      *
      * @param remoteLogMetadata RemoteLogMetadata to be published
-     * @return
+     * @return CompletableFuture that completes when both publishes succeed
      */
     public CompletableFuture<RecordMetadata> publishMessage(RemoteLogMetadata remoteLogMetadata) {
-        CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
-
         TopicIdPartition topicIdPartition = remoteLogMetadata.topicIdPartition();
         int metadataPartitionNum = topicPartitioner.metadataPartition(topicIdPartition);
         log.debug("Publishing metadata message of partition:[{}] into metadata topic partition:[{}] with payload: [{}]",
@@ -111,20 +108,43 @@ public class ProducerManager implements Closeable {
         }
 
         try {
-            Callback callback = (metadata, exception) -> {
-                if (exception != null) {
-                    future.completeExceptionally(exception);
-                } else {
-                    future.complete(metadata);
-                }
-            };
-            producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, remoteLogMetadata.metadataKey(),
-                                               serde.serialize(remoteLogMetadata)), callback);
-        } catch (Exception ex) {
-            future.completeExceptionally(ex);
-        }
+            byte[] serializedData = serde.serialize(remoteLogMetadata);
+            String metadataKey = remoteLogMetadata.metadataKey();
 
-        return future;
+            // Send to compacted topic
+            CompletableFuture<RecordMetadata> compactedTopicFuture = new CompletableFuture<>();
+            producer.send(
+                    new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, metadataKey, serializedData),
+                    (metadata, exception) -> {
+                        if (exception != null) {
+                            compactedTopicFuture.completeExceptionally(exception);
+                        } else {
+                            compactedTopicFuture.complete(metadata);
+                        }
+                    }
+            );
+
+            // Send to audit topic
+            CompletableFuture<RecordMetadata> auditTopicFuture = new CompletableFuture<>();
+            producer.send(
+                    new ProducerRecord<>(rlmmConfig.remoteLogMetadataAuditTopicName(), metadataPartitionNum, metadataKey, serializedData),
+                    (metadata, exception) -> {
+                        if (exception != null) {
+                            auditTopicFuture.completeExceptionally(exception);
+                        } else {
+                            auditTopicFuture.complete(metadata);
+                        }
+                    }
+            );
+
+            // Return a future that completes when both publishes succeed
+            return CompletableFuture.allOf(compactedTopicFuture, auditTopicFuture)
+                    .thenApply(v -> compactedTopicFuture.join());
+        } catch (Exception ex) {
+            CompletableFuture<RecordMetadata> future = new CompletableFuture<>();
+            future.completeExceptionally(ex);
+            return future;
+        }
     }
 
     public void close() {
