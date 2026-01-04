@@ -20,7 +20,7 @@ import java.net.InetSocketAddress
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.CompletableFuture
 import kafka.server.KafkaConfig
 import kafka.tools.TestRaftServer.ByteArraySerde
@@ -36,6 +36,7 @@ import org.apache.kafka.raft.{Endpoints, KRaftConfigs, MetadataLogConfig, Quorum
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.server.metrics.DefaultExternalKRaftMetrics
 import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -105,7 +106,7 @@ class RaftManagerTest {
       topicId,
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
-      new DefaultExternalKRaftMetrics(None, None),
+      new DefaultExternalKRaftMetrics(Optional.empty, Optional.empty),
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),

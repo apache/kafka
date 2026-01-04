@@ -69,7 +69,6 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findLogD
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findPartitionReassignmentStates;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getBrokerMetadata;
-import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForPartitions;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForTopics;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaToLogDir;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyInterBrokerThrottle;
@@ -79,6 +78,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseExe
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseGenerateAssignmentArgs;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.partitionReassignmentStatesToString;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.replicaMoveStatesToString;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.toReplicaIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -290,20 +290,30 @@ public class ReassignPartitionsUnitTest {
             assignments.put(new TopicPartition("foo", 0), List.of(0, 1, 2));
             assignments.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
 
-            assertEquals(assignments, getReplicaAssignmentForTopics(adminClient, List.of("foo")));
+            assertEquals(
+                assignments,
+                toReplicaIds(getReplicaAssignmentForTopics(adminClient, List.of("foo")))
+            );
 
             assignments.clear();
 
             assignments.put(new TopicPartition("foo", 0), List.of(0, 1, 2));
             assignments.put(new TopicPartition("bar", 0), List.of(2, 3, 0));
 
-            assertEquals(assignments,
-                getReplicaAssignmentForPartitions(adminClient, Set.of(new TopicPartition("foo", 0), new TopicPartition("bar", 0))));
+            Map<TopicPartition, List<Integer>> actualAssignments = toReplicaIds(
+                ReassignPartitionsCommand.getReplicasForPartitions(
+                    adminClient,
+                    Set.of(new TopicPartition("foo", 0), new TopicPartition("bar", 0))
+            ));
+            assertEquals(
+                assignments,
+                actualAssignments
+            );
 
             UnknownTopicOrPartitionException exception =
                 assertInstanceOf(UnknownTopicOrPartitionException.class,
                     assertThrows(ExecutionException.class,
-                        () -> getReplicaAssignmentForPartitions(adminClient,
+                        () -> ReassignPartitionsCommand.getReplicasForPartitions(adminClient,
                             Set.of(new TopicPartition("foo", 0), new TopicPartition("foo", 10)))).getCause());
             assertEquals("Unable to find partition: foo-10", exception.getMessage());
         }
@@ -451,25 +461,31 @@ public class ReassignPartitionsUnitTest {
         ) {
 
             List<Node> brokers = adminClient.brokers();
+            Node broker1 = brokers.get(1);
+            Node broker2 = brokers.get(2);
+            Node broker3 = brokers.get(3);
+            Node broker4 = brokers.get(4);
+            Node broker5 = brokers.get(5);
+
             adminClient.addTopic(false, "foo", List.of(
-                new TopicPartitionInfo(1, brokers.get(1),
-                    List.of(brokers.get(1), brokers.get(2), brokers.get(3)),
-                    List.of(brokers.get(1), brokers.get(2), brokers.get(3)))
+                new TopicPartitionInfo(1, broker1,
+                    List.of(broker1, broker2, broker3),
+                    List.of(broker1, broker2, broker3))
             ), Map.of());
 
             adminClient.addTopic(false, "bar", List.of(
-                new TopicPartitionInfo(0, brokers.get(4),
-                    List.of(brokers.get(4), brokers.get(5)),
-                    List.of(brokers.get(4), brokers.get(5)))
+                new TopicPartitionInfo(0, broker4,
+                    List.of(broker4, broker5),
+                    List.of(broker4, broker5))
             ), Map.of());
 
             Map<TopicPartition, List<Integer>> proposedParts = new HashMap<>();
             proposedParts.put(new TopicPartition("foo", 1), List.of(0, 1, 2));
             proposedParts.put(new TopicPartition("bar", 0), List.of(3, 4, 5));
 
-            Map<TopicPartition, List<Integer>> currentParts = new HashMap<>();
-            currentParts.put(new TopicPartition("foo", 1), List.of(1, 2, 3));
-            currentParts.put(new TopicPartition("bar", 0), List.of(4, 5));
+            Map<TopicPartition, List<Node>> currentParts = new HashMap<>();
+            currentParts.put(new TopicPartition("foo", 1), List.of(broker1, broker2, broker3));
+            currentParts.put(new TopicPartition("bar", 0), List.of(broker4, broker5));
 
             assertEquals(String.join(System.lineSeparator(),
                 "Current partition replica assignment",
@@ -801,10 +817,16 @@ public class ReassignPartitionsUnitTest {
         ) {
             addTopics(adminClient);
 
-            Map<TopicPartition, List<Integer>> topicPartitionToReplicas = Map.of(
-                new TopicPartition("foo", 0), List.of(0, 1, 2),
-                new TopicPartition("foo", 1), List.of(1, 2, 3),
-                new TopicPartition("bar", 0), List.of(2, 3, 0)
+            List<Node> brokers = adminClient.brokers();
+            Node broker0 = brokers.get(0);
+            Node broker1 = brokers.get(1);
+            Node broker2 = brokers.get(2);
+            Node broker3 = brokers.get(3);
+
+            Map<TopicPartition, List<Node>> topicPartitionToReplicas = Map.of(
+                new TopicPartition("foo", 0), List.of(broker0, broker1, broker2),
+                new TopicPartition("foo", 1), List.of(broker1, broker2, broker3),
+                new TopicPartition("bar", 0), List.of(broker2, broker3, broker0)
             );
 
             Map<TopicPartitionReplica, String> result = getReplicaToLogDir(adminClient, topicPartitionToReplicas);
