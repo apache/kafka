@@ -55,8 +55,6 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.KafkaClusterTestKit;
-import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -66,7 +64,6 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Collection;
@@ -234,8 +231,7 @@ public class BootstrapControllersIntegrationTest {
     @SuppressWarnings("unchecked")
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
         Collection<Integer> nodeIds = usingBootstrapControllers ?
-                clusterInstance.controllerIds() :
-                ((Map<Integer, ?>) (Object) clusterInstance.brokers()).keySet();
+                clusterInstance.controllerIds() : clusterInstance.brokers().keySet();
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             for (int nodeId : nodeIds) {
                 ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
@@ -427,38 +423,13 @@ public class BootstrapControllersIntegrationTest {
         }
     }
 
-    @Test
-    public void testIncrementalAlterConfigsByControllersWithDynamicQuorum() throws Exception {
-        final var nodes = new TestKitNodes.Builder().
-            setNumBrokerNodes(0).
-            setNumControllerNodes(1).
-            build();
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).
-            setStandalone(true).
-            build()
-        ) {
-            cluster.format();
-            cluster.startup();
-            try (Admin admin = Admin.create(Map.of(BOOTSTRAP_CONTROLLERS_CONFIG, cluster.bootstrapControllers()))) {
-                int nodeId = cluster.controllers().values().iterator().next().config().nodeId();
-                ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
-                ConfigResource defaultResource = new ConfigResource(BROKER, "");
-                Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
-                        nodeResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"), AlterConfigOp.OpType.SET)),
-                        defaultResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"), AlterConfigOp.OpType.SET))
-                );
-                admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
-                TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    Config config = admin.describeConfigs(List.of(nodeResource)).
-                            all().get(1, TimeUnit.MINUTES).get(nodeResource);
-                    ConfigEntry entry = config.entries().stream().
-                            filter(e -> e.name().equals("my.custom.config")).
-                            findFirst().orElseThrow();
-                    assertEquals(DYNAMIC_BROKER_CONFIG, entry.source(),
-                            "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
-                                    "Instead, the entry was: " + entry);
-                });
-            }
-        }
+    @ClusterTest(controllers = 1, standalone = true)
+    public void testIncrementalAlterConfigsBySingleControllerWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testIncrementalAlterConfigsByAllControllersWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, true);
     }
 }
