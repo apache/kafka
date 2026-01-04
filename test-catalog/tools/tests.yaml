@@ -904,7 +904,9 @@ org.apache.kafka.tools.reassign.ReassignPartitionsCommandTest:
 - testCancellationWithBootstrapController
 - testCancellationWithBootstrapServer
 - testDisallowReplicationFactorChange
+- testExecuteAssignmentWithOneBootstrapServerShutdownWontTimeout
 - testGenerateAssignmentWithBootstrapServer
+- testGenerateAssignmentWithOneBootstrapServerShutdownWontTimeout
 - testHighWaterMarkAfterPartitionReassignment
 - testLogDirReassignment
 - testProduceAndConsumeWithReassignmentInProgress
