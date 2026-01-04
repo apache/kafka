@@ -133,7 +133,8 @@ versions += [
   zstd: "1.5.6-10",
   junitPlatform: "1.13.1",
   hdrHistogram: "2.2.2",
-  hash4j: "0.22.0"
+  hash4j: "0.22.0",
+  managedLedger: "4.1.2"
 ]
 
 libs += [
@@ -235,4 +236,5 @@ libs += [
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
   hdrHistogram: "org.hdrhistogram:HdrHistogram:$versions.hdrHistogram",
   hash4j: "com.dynatrace.hash4j:hash4j:$versions.hash4j",
+  managedLedger: "org.apache.pulsar:managed-ledger:$versions.managedLedger",
 ]

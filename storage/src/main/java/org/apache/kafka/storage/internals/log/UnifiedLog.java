@@ -80,6 +80,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledFuture;
@@ -126,14 +127,14 @@ public class UnifiedLog implements AutoCloseable {
     // localLog The LocalLog instance containing non-empty log segments recovered from disk
     private final LocalLog localLog;
     private final BrokerTopicStats brokerTopicStats;
-    private final ProducerStateManager producerStateManager;
+    protected final ProducerStateManager producerStateManager;
     private final boolean remoteStorageSystemEnable;
     private final ScheduledFuture<?> producerExpireCheck;
     private final int producerIdExpirationCheckIntervalMs;
     private final String logIdent;
     private final Logger logger;
     private final Logger futureTimestampLogger;
-    private final LogValidator.MetricsRecorder validatorMetricsRecorder;
+    protected final LogValidator.MetricsRecorder validatorMetricsRecorder;
 
     /* The earliest offset which is part of an incomplete transaction. This is used to compute the
      * last stable offset (LSO) in ReplicaManager. Note that it is possible that the "true" first unstable offset
@@ -510,7 +511,7 @@ public class UnifiedLog implements AutoCloseable {
         return producerStateManager;
     }
 
-    private Time time() {
+    protected Time time() {
         return localLog.time();
     }
 
@@ -775,7 +776,7 @@ public class UnifiedLog implements AutoCloseable {
         }
     }
 
-    private void updateHighWatermarkWithLogEndOffset() throws IOException {
+    protected void updateHighWatermarkWithLogEndOffset() throws IOException {
         // Update the high watermark in case it has gotten ahead of the log end offset following a truncation
         // or if a new segment has been rolled and the offset metadata needs to be updated.
         if (highWatermark() >= localLog.logEndOffset()) {
@@ -997,8 +998,17 @@ public class UnifiedLog implements AutoCloseable {
      * @param records The records to append
      * @param leaderEpoch the epoch of the replica appending
      */
+    // unused
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch) throws IOException {
         return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
+    }
+
+    public CompletableFuture<LogAppendInfo> appendAsLeaderAsync(MemoryRecords records, int leaderEpoch) {
+        try {
+            return CompletableFuture.completedFuture(appendAsLeader(records, leaderEpoch));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -1008,8 +1018,17 @@ public class UnifiedLog implements AutoCloseable {
      * @param leaderEpoch the epoch of the replica appending
      * @param origin Declares the origin of the append which affects required validations
      */
+    // For kraft
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch, AppendOrigin origin) throws IOException {
         return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
+    }
+
+    public CompletableFuture<LogAppendInfo> appendAsLeaderAsync(MemoryRecords records, int leaderEpoch, AppendOrigin origin) {
+        try {
+            return CompletableFuture.completedFuture(appendAsLeader(records, leaderEpoch, origin));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -1026,6 +1045,7 @@ public class UnifiedLog implements AutoCloseable {
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @return Information about the appended messages including the first and last offset.
      */
+    // For message
     public LogAppendInfo appendAsLeader(MemoryRecords records,
                                         int leaderEpoch,
                                         AppendOrigin origin,
@@ -1037,6 +1057,20 @@ public class UnifiedLog implements AutoCloseable {
             verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion);
     }
 
+
+    public CompletableFuture<LogAppendInfo> appendAsLeaderAsync(MemoryRecords records,
+                                                                int leaderEpoch,
+                                                                AppendOrigin origin,
+                                                                RequestLocal requestLocal,
+                                                                VerificationGuard verificationGuard,
+                                                                short transactionVersion) {
+        try {
+            return CompletableFuture.completedFuture(appendAsLeader(records, leaderEpoch, origin, requestLocal, verificationGuard, transactionVersion));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     /**
      * Even though we always write to disk with record version v2 since Apache Kafka 4.0, older record versions may have
      * been persisted to disk before that. In order to test such scenarios, we need the ability to append with older
@@ -1044,9 +1078,19 @@ public class UnifiedLog implements AutoCloseable {
      *
      * @see UnifiedLog#appendAsLeader
      */
+    // unused
     public LogAppendInfo appendAsLeaderWithRecordVersion(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
         return append(records, AppendOrigin.CLIENT, true, leaderEpoch, Optional.of(RequestLocal.noCaching()),
                 VerificationGuard.SENTINEL, false, recordVersion.value, TransactionVersion.TV_UNKNOWN);
+    }
+
+
+    public CompletableFuture<LogAppendInfo> appendAsLeaderWithRecordVersionAsync(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
+        try {
+            return CompletableFuture.completedFuture(appendAsLeaderWithRecordVersion(records, leaderEpoch, recordVersion));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -1057,6 +1101,7 @@ public class UnifiedLog implements AutoCloseable {
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @return Information about the appended messages including the first and last offset.
      */
+    // For kraft and  message replication
     public LogAppendInfo appendAsFollower(MemoryRecords records, int leaderEpoch) {
         return append(records,
                       AppendOrigin.REPLICATION,
@@ -1067,6 +1112,14 @@ public class UnifiedLog implements AutoCloseable {
                       true,
                       RecordBatch.CURRENT_MAGIC_VALUE,
                       TransactionVersion.TV_UNKNOWN);
+    }
+
+    public CompletableFuture<LogAppendInfo> appendAsFollowerAsync(MemoryRecords records, int leaderEpoch) {
+        try {
+            return CompletableFuture.completedFuture(appendAsFollower(records, leaderEpoch));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -1271,6 +1324,22 @@ public class UnifiedLog implements AutoCloseable {
         }
     }
 
+    public CompletableFuture<LogAppendInfo> appendAsync(MemoryRecords records,
+                                                        AppendOrigin origin,
+                                                        boolean validateAndAssignOffsets,
+                                                        int leaderEpoch,
+                                                        Optional<RequestLocal> requestLocal,
+                                                        VerificationGuard verificationGuard,
+                                                        boolean ignoreRecordSize,
+                                                        byte toMagic,
+                                                        short transactionVersion) {
+        try {
+            return CompletableFuture.completedFuture(append(records, origin, validateAndAssignOffsets, leaderEpoch, requestLocal, verificationGuard, ignoreRecordSize, toMagic, transactionVersion));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     public void assignEpochStartOffset(int leaderEpoch, long startOffset) {
         leaderEpochCache.assign(leaderEpoch, startOffset);
     }
@@ -1290,7 +1359,7 @@ public class UnifiedLog implements AutoCloseable {
         }
     }
 
-    private void maybeIncrementFirstUnstableOffset() throws IOException {
+    protected void maybeIncrementFirstUnstableOffset() throws IOException {
         synchronized (lock) {
             localLog.checkIfMemoryMappedBufferClosed();
 
@@ -1359,13 +1428,13 @@ public class UnifiedLog implements AutoCloseable {
             });
     }
 
-    private record AnalyzeAndValidateProducerStateResult(
+    protected record AnalyzeAndValidateProducerStateResult(
             Map<Long, ProducerAppendInfo> updatedProducers,
             List<CompletedTxn> completedTxns,
             Optional<BatchMetadata> maybeDuplicate) {
     }
 
-    private AnalyzeAndValidateProducerStateResult analyzeAndValidateProducerState(LogOffsetMetadata appendOffsetMetadata,
+    protected AnalyzeAndValidateProducerStateResult analyzeAndValidateProducerState(LogOffsetMetadata appendOffsetMetadata,
                                                                                   MemoryRecords records,
                                                                                   AppendOrigin origin,
                                                                                   VerificationGuard requestVerificationGuard,
@@ -1466,7 +1535,7 @@ public class UnifiedLog implements AutoCloseable {
      * <li> Whether any compression codec is used (if many are used, then the last one is given)
      * </ol>
      */
-    private LogAppendInfo analyzeAndValidateRecords(MemoryRecords records,
+    protected LogAppendInfo analyzeAndValidateRecords(MemoryRecords records,
                                                     AppendOrigin origin,
                                                     boolean ignoreRecordSize,
                                                     boolean requireOffsetsMonotonic,
@@ -1593,7 +1662,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param info The general information of the message set
      * @return A trimmed message set. This may be the same as what was passed in, or it may not.
      */
-    private MemoryRecords trimInvalidBytes(MemoryRecords records, LogAppendInfo info) {
+    protected MemoryRecords trimInvalidBytes(MemoryRecords records, LogAppendInfo info) {
         int validBytes = info.validBytes();
         if (validBytes < 0) {
             throw new CorruptRecordException("Cannot append record batch with illegal length " + validBytes + " to " +
@@ -1637,6 +1706,17 @@ public class UnifiedLog implements AutoCloseable {
             case TXN_COMMITTED -> fetchLastStableOffsetMetadata();
         };
         return localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchIsolation.TXN_COMMITTED);
+    }
+
+    public CompletableFuture<FetchDataInfo> readAsync(long startOffset,
+                                                       int maxLength,
+                                                       FetchIsolation isolation,
+                                                       boolean minOneMessage) {
+        try {
+            return CompletableFuture.completedFuture(read(startOffset, maxLength, isolation, minOneMessage));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     public List<AbortedTxn> collectAbortedTransactions(long startOffset, long upperBoundOffset) {
@@ -1745,6 +1825,14 @@ public class UnifiedLog implements AutoCloseable {
                 });
     }
 
+    public CompletableFuture<OffsetResultHolder> asyncFetchOffsetByTimestamp(long targetTimestamp, Optional<AsyncOffsetReader> remoteOffsetReader) {
+        try {
+            return CompletableFuture.completedFuture(fetchOffsetByTimestamp(targetTimestamp, remoteOffsetReader));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     private OffsetResultHolder fetchEarliestPendingUploadOffset(Optional<AsyncOffsetReader> remoteOffsetReader) {
         if (remoteLogEnabled()) {
             long curHighestRemoteOffset = highestOffsetInRemoteStorage();
@@ -1801,6 +1889,15 @@ public class UnifiedLog implements AutoCloseable {
             return localLog.convertToOffsetMetadataOrThrow(offset);
         } catch (OffsetOutOfRangeException ignore) {
             return new LogOffsetMetadata(offset);
+        }
+    }
+
+
+    public CompletableFuture<LogOffsetMetadata> maybeConvertToOffsetMetadataAsync(long offset) {
+        try {
+            return CompletableFuture.completedFuture(maybeConvertToOffsetMetadata(offset));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
         }
     }
 
@@ -1893,6 +1990,14 @@ public class UnifiedLog implements AutoCloseable {
         }
     }
 
+    public CompletableFuture<List<LogSegment>> deletableSegmentsAsync(DeletionCondition predicate) {
+        try {
+            return CompletableFuture.completedFuture(deletableSegments(predicate));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     /**
      * Wraps the value of iterator.next() in an optional.
      *
@@ -1963,6 +2068,14 @@ public class UnifiedLog implements AutoCloseable {
                 // unless the log start offset advances through deleteRecords
                 return deleteLogStartOffsetBreachedSegments();
             }
+        }
+    }
+
+    public CompletableFuture<Integer> deleteOldSegmentsAsync() {
+        try {
+            return CompletableFuture.completedFuture(deleteOldSegments());
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
         }
     }
 
@@ -2206,6 +2319,16 @@ public class UnifiedLog implements AutoCloseable {
         flush(logEndOffset(), forceFlushActiveSegment);
     }
 
+
+    public CompletableFuture<Void> flushAsync(boolean forceFlushActiveSegment) {
+        try {
+            flush(forceFlushActiveSegment);
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     /**
      * Flush local log segments for all offsets up to offset-1
      *
@@ -2213,6 +2336,16 @@ public class UnifiedLog implements AutoCloseable {
      */
     public void flushUptoOffsetExclusive(long offset) {
         flush(offset, false);
+    }
+
+
+    public CompletableFuture<Void> flushUptoOffsetExclusiveAsync(long offset) {
+        try {
+            flushUptoOffsetExclusive(offset);
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2260,11 +2393,30 @@ public class UnifiedLog implements AutoCloseable {
             });
     }
 
+    public CompletableFuture<Void> deleteAsync() {
+        try {
+            delete();
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     // visible for testing
     public void takeProducerSnapshot() throws IOException {
         synchronized (lock) {
             localLog.checkIfMemoryMappedBufferClosed();
             producerStateManager.takeSnapshot();
+        }
+    }
+
+
+    public CompletableFuture<Void> takeProducerSnapshotAsync() {
+        try {
+            takeProducerSnapshot();
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
         }
     }
 
@@ -2297,6 +2449,15 @@ public class UnifiedLog implements AutoCloseable {
                     Utils.flushFileIfExists(snapshot);
                     return null;
                 });
+    }
+
+    public CompletableFuture<Void> flushProducerStateSnapshotAsync(Path snapshot) {
+        try {
+            flushProducerStateSnapshot(snapshot);
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2349,6 +2510,15 @@ public class UnifiedLog implements AutoCloseable {
                 });
     }
 
+    public CompletableFuture<Void> truncateToAsync(long targetOffset) {
+        try {
+            truncateTo(targetOffset);
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     /**
      *  Delete all data in the log and start at the new offset
      *
@@ -2370,6 +2540,16 @@ public class UnifiedLog implements AutoCloseable {
                         return updateHighWatermark(localLog.logEndOffsetMetadata());
                     }
                 });
+    }
+
+
+    public CompletableFuture<Void> truncateFullyAndStartAtAsync(long newOffset, Optional<Long> logStartOffsetOpt) {
+        try {
+            truncateFullyAndStartAt(newOffset, logStartOffsetOpt);
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**

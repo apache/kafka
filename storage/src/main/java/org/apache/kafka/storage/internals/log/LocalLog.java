@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -523,9 +524,31 @@ public class LocalLog {
         );
     }
 
+    public CompletableFuture<FetchDataInfo> readAsync(long startOffset,
+                                                      int maxLength,
+                                                      boolean minOneMessage,
+                                                      LogOffsetMetadata maxOffsetMetadata,
+                                                      boolean includeAbortedTxns) {
+        try {
+            return CompletableFuture.completedFuture(read(startOffset, maxLength, minOneMessage,
+                    maxOffsetMetadata, includeAbortedTxns));
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
+    }
+
     public void append(long lastOffset, MemoryRecords records) throws IOException {
         segments.activeSegment().append(lastOffset, records);
         updateLogEndOffset(lastOffset + 1);
+    }
+
+    public CompletableFuture<Long> appendAsync(LogAppendInfo appendInfo, MemoryRecords records) {
+        try {
+            append(appendInfo.lastOffset(), records);
+            return CompletableFuture.completedFuture(null);
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     FetchDataInfo addAbortedTransactions(long startOffset, LogSegment segment, FetchDataInfo fetchInfo) throws IOException {
