@@ -14,20 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.metrics;
 
-package kafka.raft
+import org.apache.kafka.controller.metrics.ControllerMetadataMetrics;
+import org.apache.kafka.raft.ExternalKRaftMetrics;
 
-import org.apache.kafka.controller.metrics.ControllerMetadataMetrics
-import org.apache.kafka.raft.ExternalKRaftMetrics
-import org.apache.kafka.server.metrics.BrokerServerMetrics
+import java.util.Optional;
 
-class DefaultExternalKRaftMetrics(
-  val brokerServerMetrics: Option[BrokerServerMetrics],
-  val controllerMetadataMetrics: Option[ControllerMetadataMetrics]
-) extends ExternalKRaftMetrics {
+public record DefaultExternalKRaftMetrics(
+        Optional<BrokerServerMetrics> brokerServerMetrics,
+        Optional<ControllerMetadataMetrics> controllerMetadataMetrics) implements ExternalKRaftMetrics {
 
-  override def setIgnoredStaticVoters(ignoredStaticVoters: Boolean): Unit = {
-    brokerServerMetrics.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
-    controllerMetadataMetrics.foreach(metrics => metrics.setIgnoredStaticVoters(ignoredStaticVoters))
-  }
+    @Override
+    public void setIgnoredStaticVoters(boolean ignoredStaticVoters) {
+        brokerServerMetrics.ifPresent(metrics -> metrics.setIgnoredStaticVoters(ignoredStaticVoters));
+        controllerMetadataMetrics.ifPresent(metrics -> metrics.setIgnoredStaticVoters(ignoredStaticVoters));
+    }
 }
