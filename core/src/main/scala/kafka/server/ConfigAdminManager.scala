@@ -495,11 +495,6 @@ object ConfigAdminManager {
     configResource: ConfigResource
   ): Unit = {
     val properties = new Properties()
-    resource.configs().forEach(config =>
-      if (config.configOperation() != OpType.DELETE.id) {
-        properties.setProperty(config.name(), config.value())
-      }
-    )
     val alterConfigOps = resource.configs().asScala.map {
       config =>
         val opType = AlterConfigOp.OpType.forId(config.configOperation())
