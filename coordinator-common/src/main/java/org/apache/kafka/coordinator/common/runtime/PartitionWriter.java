@@ -79,12 +79,15 @@ public interface PartitionWriter {
      * @param tp                The partition to write records to.
      * @param verificationGuard The verification guard.
      * @param records           The MemoryRecords.
+     * @param transactionVersion  The transaction version (1 = TV1, 2 = TV2 etc.).
+     *                            Use TV_UNKNOWN (-1) for non-transaction writes.
      * @return The log end offset right after the written records.
      */
     long append(
         TopicPartition tp,
         VerificationGuard verificationGuard,
-        MemoryRecords records
+        MemoryRecords records,
+        short transactionVersion
     ) throws KafkaException;
 
     /**

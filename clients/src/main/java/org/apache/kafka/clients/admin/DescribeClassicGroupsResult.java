@@ -18,20 +18,15 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-
 /**
  * The result of the {@link Admin#describeClassicGroups(Collection, DescribeClassicGroupsOptions)}} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeClassicGroupsResult {
 
     private final Map<String, KafkaFuture<ClassicGroupDescription>> futures;

@@ -414,7 +414,8 @@ public class Sender implements Runnable {
             log.trace("Expired {} batches in accumulator", expiredBatches.size());
         for (ProducerBatch expiredBatch : expiredBatches) {
             String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
-                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
+                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation. " 
+                + "The request has not been sent, or no server response has been received yet.";
             failBatch(expiredBatch, new TimeoutException(errorMessage), false);
             if (transactionManager != null && expiredBatch.inRetry()) {
                 // This ensures that no new batches are drained until the current in flight batches are fully resolved.

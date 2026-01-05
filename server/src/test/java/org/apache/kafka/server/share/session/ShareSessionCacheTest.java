@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareSessionCacheTest {
 
@@ -177,6 +178,10 @@ public class ShareSessionCacheTest {
         // Remove session and verify listener are not called as connection disconnect listener didn't
         // remove the session.
         cache.remove(key1);
+        // Session should be marked stale only for memberId1.
+        assertTrue(cache.connectionSessionKeyAndState("conn-1").stale());
+        assertFalse(cache.connectionSessionKeyAndState("conn-2").stale());
+
         Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
         Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId);
         // Verify member count is updated
@@ -184,6 +189,8 @@ public class ShareSessionCacheTest {
 
         // Re-create session for memberId1.
         cache.maybeCreateSession(groupId, memberId1, mockedSharePartitionMap(1), "conn-1");
+        // Session should not be stale now.
+        assertFalse(cache.connectionSessionKeyAndState("conn-1").stale());
         assertEquals(2, cache.numMembers(groupId));
 
         // Simulate connection disconnect for memberId1.
@@ -233,6 +240,39 @@ public class ShareSessionCacheTest {
         // Verify member count is updated.
         assertNull(cache.numMembers(groupId1));
         assertEquals(1, cache.numMembers(groupId2));
+    }
+
+    @Test
+    public void testShareGroupListenerEventsOnStaleSession() {
+        ShareGroupListener mockListener = Mockito.mock(ShareGroupListener.class);
+        ShareSessionCache cache = new ShareSessionCache(3);
+        cache.registerShareGroupListener(mockListener);
+
+        String groupId = "grp";
+        String memberId1 = Uuid.randomUuid().toString();
+        ShareSessionKey key1 = cache.maybeCreateSession(groupId, memberId1, mockedSharePartitionMap(1), "conn-1");
+
+        // Verify member count is tracked
+        assertEquals(1, cache.size());
+        assertNotNull(cache.get(key1));
+        assertEquals(1, cache.numMembers(groupId));
+
+        // Remove session and verify listener are not called as connection disconnect listener didn't
+        // remove the session.
+        cache.remove(key1);
+        // Session should be marked stale only for memberId1.
+        assertTrue(cache.connectionSessionKeyAndState("conn-1").stale());
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
+        Mockito.verify(mockListener, Mockito.times(0)).onGroupEmpty(groupId);
+        // Verify member count is updated
+        assertEquals(0, cache.numMembers(groupId));
+
+        // Simulate connection disconnect for memberId1.
+        cache.connectionDisconnectListener().onDisconnect("conn-1");
+        // Verify only group empty event is triggered. Member leave event should not be triggered
+        // as session was already removed and marked stale.
+        Mockito.verify(mockListener, Mockito.times(0)).onMemberLeave(groupId, memberId1);
+        Mockito.verify(mockListener, Mockito.times(1)).onGroupEmpty(groupId);
     }
 
     @Test

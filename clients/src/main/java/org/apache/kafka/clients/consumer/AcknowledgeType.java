@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Locale;
 
 /**
  * The acknowledge type is used with {@link KafkaShareConsumer#acknowledge(ConsumerRecord, AcknowledgeType)} to indicate
  * whether the record was consumed successfully.
  */
-@InterfaceStability.Evolving
 public enum AcknowledgeType {
     /** The record was consumed successfully. */
     ACCEPT((byte) 1),
