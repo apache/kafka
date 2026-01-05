@@ -24,6 +24,7 @@ import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsResult;
@@ -3448,20 +3449,53 @@ public class ShareConsumerTest {
             alterShareGroupOffsets(adminClient, groupId, tp, 0L);
             // After altering, the share partition start offset should be 0.
             verifySharePartitionStartOffset(adminClient, groupId, tp, 0L);
-            // Create another share consumer.
+            // Verify that the lag is now 105 since the start offset is altered to 0 and there are total 105 records in the partition.
+            verifySharePartitionLag(adminClient, groupId, tp, 105L);
+        } catch (InterruptedException | ExecutionException e) {
+            fail("Test failed with exception: " + e.getMessage());
+        }
+    }
+
+    @ClusterTest
+    public void testSharePartitionLagAfterDeleteShareGroupOffsets() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            // Producing 5 records to the topic partition.
+            for (int i = 0; i < 5; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            // Create a new share consumer. Since the share.auto.offset.reset is not altered, it should be latest by default.
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure it joins the group and consumes the produced records.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
+            // Accept the records first to move the offset forward and register the state with persister.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer.commitSync();
+            // After accepting, the lag should be 0 because the record is consumed successfully.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Closing the share consumer so that the offsets can be deleted.
+            shareConsumer.close();
+            // Delete the start offset of the share partition to 0.
+            deleteShareGroupOffsets(adminClient, groupId, tp.topic());
+            // Create a new share consumer.
             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
             shareConsumer2.subscribe(List.of(tp.topic()));
-            // Since the start offset was altered, the new share consumer should start consuming from offset 0 onwards.
-            // Polling share consumer to make sure all 150 records (0 - 104) are consumed.
-            records = waitedPoll(shareConsumer2, 2500L, 105);
-            assertEquals(105, records.count());
-            // Since the consumed records haven't been acknowledged yet, the share partition lag should be 105.
-            verifySharePartitionLag(adminClient, groupId, tp, 105L);
-            // Acknowledge and commit the consumed records to update the share partition state.
+            // Since the offsets are deleted, the share consumer should consume from the beginning (share.auto.offset.reset is earliest).
+            // Thus, the consumer should consume all 5 records again.
+            records = waitedPoll(shareConsumer2, 2500L, 5);
+            assertEquals(5, records.count());
+            // Accept the records first to move the offset forward and register the state with persister.
             records.forEach(r -> shareConsumer2.acknowledge(r, AcknowledgeType.ACCEPT));
             shareConsumer2.commitSync();
-            // After acknowledging the lag should be 0, because the records hav been accepted.
+            // After accepting, the lag should be 0 because the records are consumed successfully.
             verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Closing the share consumer so that the offsets can be deleted.
             shareConsumer2.close();
         } catch (InterruptedException | ExecutionException e) {
             fail("Test failed with exception: " + e.getMessage());
@@ -4174,6 +4208,13 @@ public class ShareConsumerTest {
             groupId,
             Map.of(topicPartition, newOffset),
             new AlterShareGroupOffsetsOptions().timeoutMs(30000)).partitionResult(topicPartition).get();
+    }
+
+    private void deleteShareGroupOffsets(Admin adminClient, String groupId, String topic) throws InterruptedException, ExecutionException {
+        adminClient.deleteShareGroupOffsets(
+            groupId,
+            Set.of(topic),
+            new DeleteShareGroupOffsetsOptions().timeoutMs(30000)).topicResult(topic).get();
     }
 
     private void alterShareRecordLockDurationMs(String groupId, int newValue) {
