@@ -205,6 +205,24 @@ public class TransactionManager {
             this.priority = priority;
         }
     }
+    
+    private enum TransactionOperation {
+        SEND("send"),
+        BEGIN_TRANSACTION("beginTransaction"),
+        PREPARE_TRANSACTION("prepareTransaction"),
+        SEND_OFFSETS_TO_TRANSACTION("sendOffsetsToTransaction");
+        
+        final String displayName;
+
+        TransactionOperation(String displayName) {
+            this.displayName = displayName;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
+        }
+    }
 
     public TransactionManager(final LogContext logContext,
                               final String transactionalId,
@@ -331,7 +349,7 @@ public class TransactionManager {
 
     public synchronized void beginTransaction() {
         ensureTransactional();
-        throwIfPendingState("beginTransaction");
+        throwIfPendingState(TransactionOperation.BEGIN_TRANSACTION);
         maybeFailWithError();
         transitionTo(State.IN_TRANSACTION);
     }
@@ -343,7 +361,7 @@ public class TransactionManager {
      */
     public synchronized void prepareTransaction() {
         ensureTransactional();
-        throwIfPendingState("prepareTransaction");
+        throwIfPendingState(TransactionOperation.PREPARE_TRANSACTION);
         maybeFailWithError();
         transitionTo(State.PREPARED_TRANSACTION);
         this.preparedTxnState = new ProducerIdAndEpoch(
@@ -406,7 +424,7 @@ public class TransactionManager {
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                                             final ConsumerGroupMetadata groupMetadata) {
         ensureTransactional();
-        throwIfPendingState("sendOffsetsToTransaction");
+        throwIfPendingState(TransactionOperation.SEND_OFFSETS_TO_TRANSACTION);
         maybeFailWithError();
 
         if (currentState != State.IN_TRANSACTION) {
@@ -438,7 +456,7 @@ public class TransactionManager {
 
     public synchronized void maybeAddPartition(TopicPartition topicPartition) {
         maybeFailWithError();
-        throwIfPendingState("send");
+        throwIfPendingState(TransactionOperation.SEND);
 
         if (isTransactional()) {
             if (!hasProducerId()) {
@@ -1248,7 +1266,7 @@ public class TransactionManager {
         return new TxnOffsetCommitHandler(result, builder);
     }
 
-    private void throwIfPendingState(String operation) {
+    private void throwIfPendingState(TransactionOperation operation) {
         if (pendingTransition != null) {
             if (pendingTransition.result.isAcked()) {
                 pendingTransition = null;
