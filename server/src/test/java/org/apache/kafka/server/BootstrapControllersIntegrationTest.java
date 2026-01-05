@@ -228,7 +228,6 @@ public class BootstrapControllersIntegrationTest {
         testIncrementalAlterConfigs(clusterInstance, false);
     }
 
-    @SuppressWarnings("unchecked")
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
         Collection<Integer> nodeIds = usingBootstrapControllers ?
                 clusterInstance.controllerIds() : clusterInstance.brokers().keySet();
@@ -264,19 +263,19 @@ public class BootstrapControllersIntegrationTest {
                 verifyConfigValue(admin, defaultResource, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
                         DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
 
-                Object server = (usingBootstrapControllers ? clusterInstance.controllers() : clusterInstance.brokers()).get(nodeId);
+                Object node = (usingBootstrapControllers ? clusterInstance.controllers() : clusterInstance.brokers()).get(nodeId);
                 // Verify that SocketServer has actually updated the max connection limit in ConnectionQuotas
                 // The per-broker config should take precedence over the default config
-                verifySocketServerMaxConnectionsUpdated(server, Integer.parseInt(nodeMaxConnectionsValue));
+                verifySocketServerMaxConnectionsUpdated(node, Integer.parseInt(nodeMaxConnectionsValue));
                 // Verify MAX_CONNECTION_CREATION_RATE_CONFIG is also updated
                 // The default config value should be used (per-broker config doesn't set this)
-                verifySocketServerMaxConnectionCreationRateUpdated(server, Integer.parseInt(defaultConnectionRateValue));
+                verifySocketServerMaxConnectionCreationRateUpdated(node, Integer.parseInt(defaultConnectionRateValue));
             }
         }
     }
 
-    private void verifySocketServerMaxConnectionsUpdated(Object broker, int expectedMaxConnections) throws Exception {
-        Object socketServer = broker.getClass().getMethod("socketServer").invoke(broker);
+    private void verifySocketServerMaxConnectionsUpdated(Object node, int expectedMaxConnections) throws Exception {
+        Object socketServer = node.getClass().getMethod("socketServer").invoke(node);
         Object connectionQuotas = socketServer.getClass().getMethod("connectionQuotas").invoke(socketServer);
         java.lang.reflect.Field field = connectionQuotas.getClass().getDeclaredField("brokerMaxConnections");
         field.setAccessible(true);
@@ -286,8 +285,8 @@ public class BootstrapControllersIntegrationTest {
                 " but was " + actualMaxConnections);
     }
     
-    private void verifySocketServerMaxConnectionCreationRateUpdated(Object broker, int expectedMaxConnectionCreationRate) throws Exception {
-        Metrics metrics = (Metrics) broker.getClass().getMethod("metrics").invoke(broker);
+    private void verifySocketServerMaxConnectionCreationRateUpdated(Object node, int expectedMaxConnectionCreationRate) throws Exception {
+        Metrics metrics = (Metrics) node.getClass().getMethod("metrics").invoke(node);
         KafkaMetric metric = metrics.metrics().entrySet().stream()
                 .filter(entry -> "broker-connection-accept-rate".equals(entry.getKey().name()))
                 .map(java.util.Map.Entry::getValue)
