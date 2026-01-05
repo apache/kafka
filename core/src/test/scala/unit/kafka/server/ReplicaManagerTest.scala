@@ -5517,7 +5517,7 @@ class ReplicaManagerTest {
 
       val blockPromotion = new AtomicBoolean(false)
       doAnswer { invocation =>
-        if (blockPromotion.get) {
+        if (blockPromotion.compareAndSet(true, false)) {
           false
         } else {
           invocation.callRealMethod()
@@ -5534,10 +5534,10 @@ class ReplicaManagerTest {
       val partition = replicaManager.getPartitionOrException(tp)
       val firstLogDir = partition.log.get.dir.getParentFile
       val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == firstLogDir).head
-      replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
-
       // Prevent promotion of future replica
       blockPromotion.set(true)
+
+      replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
 
       // Make sure the future log is created with the correct topic ID.
       val futureLog = replicaManager.futureLocalLogOrException(tp)
@@ -5546,8 +5546,6 @@ class ReplicaManagerTest {
       // Move the replica to the third log directory
       val finalReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(it => it == firstLogDir || it == newReplicaFolder).head
       replicaManager.alterReplicaLogDirs(Map(tp -> finalReplicaFolder.getAbsolutePath))
-
-      blockPromotion.set(false)
 
       TestUtils.waitUntilTrue(() => {
         replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
