@@ -132,7 +132,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * 2. Last message of the non-blocking send should return the correct offset metadata
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testSendOffset(groupProtocol: String): Unit = {
     val producer = createProducer()
     val partition = 0
@@ -194,7 +194,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testSendCompressedMessageWithCreateTime(groupProtocol: String): Unit = {
     val producer = createProducer(
       compressionType = "gzip",
@@ -204,7 +204,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testSendNonCompressedMessageWithCreateTime(groupProtocol: String): Unit = {
     val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
@@ -424,7 +424,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     * succeed as long as the partition is included in the metadata.
     */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testSendBeforeAndAfterPartitionExpansion(groupProtocol: String): Unit = {
     val producer = createProducer(maxBlockMs = 5 * 1000L)
 
