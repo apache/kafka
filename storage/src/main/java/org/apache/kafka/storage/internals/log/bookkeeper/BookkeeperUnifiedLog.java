@@ -19,6 +19,7 @@ import org.apache.kafka.server.storage.log.UnexpectedAppendOffsetException;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
+import org.apache.kafka.storage.internals.log.AsyncProducerStateManager;
 import org.apache.kafka.storage.internals.log.BatchMetadata;
 import org.apache.kafka.storage.internals.log.CompletedTxn;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
@@ -41,6 +42,7 @@ import java.util.concurrent.CompletableFuture;
 
 public class BookkeeperUnifiedLog extends UnifiedLog {
     private final BookkeeperLocalLog bookkeeperLocalLog;
+    private final AsyncProducerStateManager producerStateManager;
 
     /**
      * A log which presents a unified view of local and tiered log segments.
@@ -79,11 +81,17 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
      */
     public BookkeeperUnifiedLog(long logStartOffset, BookkeeperLocalLog localLog, BrokerTopicStats brokerTopicStats,
                                 int producerIdExpirationCheckIntervalMs, LeaderEpochFileCache leaderEpochCache,
-                                ProducerStateManager producerStateManager, Optional<Uuid> topicId,
+                                AsyncProducerStateManager producerStateManager, Optional<Uuid> topicId,
                                 boolean remoteStorageSystemEnable, LogOffsetsListener logOffsetsListener) throws IOException {
         super(logStartOffset, localLog, brokerTopicStats, producerIdExpirationCheckIntervalMs, leaderEpochCache,
                 producerStateManager, topicId, remoteStorageSystemEnable, logOffsetsListener);
         this.bookkeeperLocalLog = localLog;
+        this.producerStateManager = producerStateManager;
+    }
+
+    @Override
+    public void removeExpiredProducers(long currentTimeMs) {
+
     }
 
     @Override

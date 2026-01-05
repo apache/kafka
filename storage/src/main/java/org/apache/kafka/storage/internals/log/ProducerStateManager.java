@@ -75,36 +75,36 @@ public class ProducerStateManager {
     private static final int CRC_OFFSET = VERSION_OFFSET + 2;
     private static final int PRODUCER_ENTRIES_OFFSET = CRC_OFFSET + 4;
 
-    private final Logger log;
+    protected final Logger log;
 
-    private final TopicPartition topicPartition;
-    private final int maxTransactionTimeoutMs;
-    private final ProducerStateManagerConfig producerStateManagerConfig;
-    private final Time time;
+    protected final TopicPartition topicPartition;
+    protected final int maxTransactionTimeoutMs;
+    protected final ProducerStateManagerConfig producerStateManagerConfig;
+    protected final Time time;
 
-    private final Map<Long, ProducerStateEntry> producers = new HashMap<>();
+    protected final Map<Long, ProducerStateEntry> producers = new HashMap<>();
 
-    private final Map<Long, VerificationStateEntry> verificationStates = new HashMap<>();
+    protected final Map<Long, VerificationStateEntry> verificationStates = new HashMap<>();
 
     // ongoing transactions sorted by the first offset of the transaction
-    private final TreeMap<Long, TxnMetadata> ongoingTxns = new TreeMap<>();
+    protected final TreeMap<Long, TxnMetadata> ongoingTxns = new TreeMap<>();
 
     // completed transactions whose markers are at offsets above the high watermark
-    private final TreeMap<Long, TxnMetadata> unreplicatedTxns = new TreeMap<>();
+    protected final TreeMap<Long, TxnMetadata> unreplicatedTxns = new TreeMap<>();
 
     private volatile File logDir;
 
     // The same as producers.size, but for lock-free access.
-    private volatile int producerIdCount = 0;
+    protected volatile int producerIdCount = 0;
 
     // Keep track of the last timestamp from the oldest transaction. This is used
     // to detect (approximately) when a transaction has been left hanging on a partition.
     // We make the field volatile so that it can be safely accessed without a lock.
-    private volatile long oldestTxnLastTimestamp = -1L;
+    protected volatile long oldestTxnLastTimestamp = -1L;
 
     private ConcurrentSkipListMap<Long, SnapshotFile> snapshots;
-    private long lastMapOffset = 0L;
-    private long lastSnapOffset = 0L;
+    protected long lastMapOffset = 0L;
+    protected long lastSnapOffset = 0L;
 
     public ProducerStateManager(TopicPartition topicPartition, File logDir, int maxTransactionTimeoutMs, ProducerStateManagerConfig producerStateManagerConfig, Time time) throws IOException {
         this.topicPartition = topicPartition;
@@ -158,7 +158,7 @@ public class ProducerStateManager {
      */
     public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch, boolean supportsEpochBump) {
         VerificationStateEntry entry = verificationStates.computeIfAbsent(producerId, pid ->
-            new VerificationStateEntry(time.milliseconds(), sequence, epoch, supportsEpochBump)
+                new VerificationStateEntry(time.milliseconds(), sequence, epoch, supportsEpochBump)
         );
         entry.maybeUpdateLowestSequenceAndEpoch(sequence, epoch);
         return entry;
@@ -181,7 +181,7 @@ public class ProducerStateManager {
     /**
      * Load producer state snapshots by scanning the logDir.
      */
-    private ConcurrentSkipListMap<Long, SnapshotFile> loadSnapshots() throws IOException {
+    protected ConcurrentSkipListMap<Long, SnapshotFile> loadSnapshots() throws IOException {
         ConcurrentSkipListMap<Long, SnapshotFile> offsetToSnapshots = new ConcurrentSkipListMap<>();
         List<SnapshotFile> snapshotFiles = listSnapshotFiles(logDir);
         for (SnapshotFile snapshotFile : snapshotFiles) {
@@ -339,7 +339,7 @@ public class ProducerStateManager {
         producerIdCount = producers.size();
 
         verificationStates.entrySet().removeIf(entry ->
-            (currentTimeMs - entry.getValue().timestamp()) >= producerStateManagerConfig.producerIdExpirationMs()
+                (currentTimeMs - entry.getValue().timestamp()) >= producerStateManagerConfig.producerIdExpirationMs()
         );
     }
 
