@@ -21,6 +21,7 @@ import kafka.server.KafkaBroker;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
@@ -3412,6 +3413,62 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
+    public void testSharePartitionLagAfterAlterShareGroupOffsets() {
+        String groupId = "group1";
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            // Producing 100 records to the topic partition.
+            for (int i = 0; i < 100; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+
+            // Create a new share consumer. Since the share.auto.offset.reset is not altered, it should be latest by default.
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure it joins the group and subscribes to the topic.
+            waitedPoll(shareConsumer, 2500L, 0, true, groupId, List.of(new TopicPartition(tp.topic(), 0)));
+            // Producing 5 additional records to the topic partition.
+            for (int i = 0; i < 5; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            // Polling share consumer to make sure the records are consumed.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
+            // Accept the record first to move the offset forward and register the state with persister.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer.commitSync();
+            // After accepting, the lag should be 0 because the record is consumed successfully.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Closing the share consumer so that the offsets can be altered.
+            shareConsumer.close();
+            // Alter the start offset of the share partition to 0.
+            alterShareGroupOffsets(adminClient, groupId, tp, 0L);
+            // After altering, the share partition start offset should be 0.
+            verifySharePartitionStartOffset(adminClient, groupId, tp, 0L);
+            // Create another share consumer.
+            ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+            shareConsumer2.subscribe(List.of(tp.topic()));
+            // Since the start offset was altered, the new share consumer should start consuming from offset 0 onwards.
+            // Polling share consumer to make sure all 150 records (0 - 104) are consumed.
+            records = waitedPoll(shareConsumer2, 2500L, 105);
+            assertEquals(105, records.count());
+            // Since the consumed records haven't been acknowledged yet, the share partition lag should be 105.
+            verifySharePartitionLag(adminClient, groupId, tp, 105L);
+            // Acknowledge and commit the consumed records to update the share partition state.
+            records.forEach(r -> shareConsumer2.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer2.commitSync();
+            // After acknowledging the lag should be 0, because the records hav been accepted.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            shareConsumer2.close();
+        } catch (InterruptedException | ExecutionException e) {
+            fail("Test failed with exception: " + e.getMessage());
+        }
+    }
+
+    @ClusterTest
     public void testFetchWithThrottledDelivery() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -4095,6 +4152,14 @@ public class ShareConsumerTest {
         return partitionResult;
     }
 
+    private void verifySharePartitionStartOffset(Admin adminClient, String groupId, TopicPartition tp, long expectedStartOffset) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
+            return sharePartitionOffsetInfo != null &&
+                sharePartitionOffsetInfo.startOffset() == expectedStartOffset;
+        }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to retrieve share partition lag");
+    }
+
     private void verifySharePartitionLag(Admin adminClient, String groupId, TopicPartition tp, long expectedLag) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
@@ -4102,6 +4167,13 @@ public class ShareConsumerTest {
                 sharePartitionOffsetInfo.lag().isPresent() &&
                 sharePartitionOffsetInfo.lag().get() == expectedLag;
         }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to retrieve share partition lag");
+    }
+
+    private void alterShareGroupOffsets(Admin adminClient, String groupId, TopicPartition topicPartition, Long newOffset) throws InterruptedException, ExecutionException {
+        adminClient.alterShareGroupOffsets(
+            groupId,
+            Map.of(topicPartition, newOffset),
+            new AlterShareGroupOffsetsOptions().timeoutMs(30000)).partitionResult(topicPartition).get();
     }
 
     private void alterShareRecordLockDurationMs(String groupId, int newValue) {
