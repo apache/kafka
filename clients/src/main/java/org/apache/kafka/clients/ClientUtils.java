@@ -267,11 +267,18 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
-            // Validate bootstrap servers immediately during construction
-            parseAndValidateAddresses(config);
+            List<String> bootstrapServers = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+            ClientDnsLookup dnsLookup = ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
+
+            // Only validate if bootstrap servers are provided (non-empty list)
+            // This allows configurations that don't use bootstrap (e.g., broker-to-broker) to skip validation
+            if (bootstrapServers != null && !bootstrapServers.isEmpty()) {
+                parseAndValidateAddresses(bootstrapServers, dnsLookup);
+            }
+
             bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-                config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-                ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
+                bootstrapServers,
+                dnsLookup,
                 CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
             );
             return new NetworkClient(metadataUpdater,
