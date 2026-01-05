@@ -28,11 +28,11 @@ org.apache.kafka.coordinator.transaction.TransactionLogTest:
 - ONGOING
 - PREPARE_ABORT
 - PREPARE_COMMIT
-- shouldReturnEmptyWhenForTombstoneRecord
+- shouldReturnNullForTombstoneRecord
 - shouldThrowExceptionWriteInvalidTxn
 - testDeserializeFutureTransactionLogValue
 - testDeserializeHighestSupportedTransactionLogValue
-- testReadTxnRecordKeyCanReadUnknownMessage
+- testReadTxnRecordKeyThrowsOnUnknownVersion
 - testSerializeTransactionLogValueToFlexibleVersion
 - testSerializeTransactionLogValueToHighestNonFlexibleVersion
 org.apache.kafka.coordinator.transaction.TransactionStateManagerConfigTest:
