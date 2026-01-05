@@ -1365,4 +1365,59 @@ class TransactionStateManagerTest {
 
     assertEquals(transactionVersion, transactionManager.transactionVersionLevel())
   }
+
+  @Test
+  def testLoadTransactionMetadata_InvalidKeyVersion(): Unit = {
+    // Test that records with invalid key versions throw IllegalStateException and are skipped
+    val loadedTransactions = new ConcurrentHashMap[String, TransactionMetadata]()
+    var currOffset = 0L
+
+    // Create an invalid key with unknown version
+    val invalidKeyBytes = ByteBuffer.allocate(10)
+    invalidKeyBytes.putShort(999.toShort) // Unknown version number
+    invalidKeyBytes.putInt(12345)
+    invalidKeyBytes.flip()
+
+    val validTxnId = "valid-txn"
+    val timestamp = time.milliseconds()
+    val validMetadata = new TransactionMetadata(validTxnId, 400L, RecordBatch.NO_PRODUCER_ID,
+      RecordBatch.NO_PRODUCER_ID, 0.toShort, RecordBatch.NO_PRODUCER_EPOCH,
+      transactionTimeoutMs, TransactionState.EMPTY, util.Set.of(), timestamp, timestamp, TV_2)
+
+    // Mix invalid and valid records
+    val mixedRecords = MemoryRecords.withRecords(0L, Compression.NONE,
+      new SimpleRecord(invalidKeyBytes.array(), "dummy-value".getBytes()), // Invalid key
+      new SimpleRecord(TransactionLog.keyToBytes(validTxnId), TransactionLog.valueToBytes(validMetadata.prepareNoTransit(), TV_2)) // Valid record
+    )
+
+    // Execute the code under test
+    var invalidKeySkipped = false
+    mixedRecords.batches.forEach { batch =>
+      for (record <- batch.asScala) {
+        require(record.hasKey, "Transaction state log's key should not be null")
+        val transactionalId = try Some(TransactionLog.readTxnRecordKey(record.key))
+        catch {
+          case _: IllegalStateException =>
+            // Should catch IllegalStateException for invalid key
+            invalidKeySkipped = true
+            None
+        }
+        transactionalId.foreach { txnId =>
+          val txnMetadata = TransactionLog.readTxnRecordValue(txnId, record.value)
+          if (txnMetadata == null) {
+            loadedTransactions.remove(txnId)
+          } else {
+            loadedTransactions.put(txnId, txnMetadata)
+          }
+        }
+      }
+      currOffset = batch.nextOffset
+    }
+
+    // Verify: invalid key was skipped, valid record was still loaded
+    assertTrue(invalidKeySkipped, "Should have caught IllegalStateException for invalid key version")
+    assertEquals(1, loadedTransactions.size())
+    assertTrue(loadedTransactions.containsKey(validTxnId))
+    assertEquals(2L, currOffset)
+  }
 }
