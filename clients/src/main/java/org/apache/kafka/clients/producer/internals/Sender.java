@@ -65,7 +65,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -126,8 +125,6 @@ public class Sender implements Runnable {
     // A per-partition queue of batches ordered by creation time for tracking the in-flight batches
     private final Map<TopicPartition, List<ProducerBatch>> inFlightBatches;
 
-    private final List<ProducerBatch> expiredInflightBatchesAwaitingDeallocation;
-
     public Sender(LogContext logContext,
                   KafkaClient client,
                   ProducerMetadata metadata,
@@ -156,7 +153,6 @@ public class Sender implements Runnable {
         this.retryBackoffMs = retryBackoffMs;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
-        this.expiredInflightBatchesAwaitingDeallocation = new LinkedList<>();
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -178,9 +174,9 @@ public class Sender implements Runnable {
         this.accumulator.deallocate(batch);
     }
 
-    private void maybeRemoveAndDeallocateBatchLater(ProducerBatch batch) {
+    private void maybeRemoveAndDeallocateBatchWithoutReuse(ProducerBatch batch) {
         maybeRemoveFromInflightBatches(batch);
-        this.accumulator.deallocateLater(batch);
+        this.accumulator.deallocateWithoutReuse(batch);
     }
 
     /**
@@ -196,7 +192,7 @@ public class Sender implements Runnable {
                 Iterator<ProducerBatch> iter = partitionInFlightBatches.iterator();
                 while (iter.hasNext()) {
                     ProducerBatch batch = iter.next();
-                    if (batch.hasReachedTimeout(accumulator.getDeliveryTimeoutMs(), now)) {
+                    if (batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now)) {
                         iter.remove();
                         // expireBatches is called in Sender.sendProducerData, before client.poll.
                         // The !batch.isDone() invariant should always hold. An IllegalStateException
@@ -363,39 +359,6 @@ public class Sender implements Runnable {
         return false;
     }
 
-    private void failExpiredBatches(List<ProducerBatch> expiredBatches, long now, boolean deallocateNow) {
-        // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
-        // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
-        // we need to reset the producer id here.
-        if (!expiredBatches.isEmpty())
-            log.trace("Expired {} batches in accumulator", expiredBatches.size());
-        for (ProducerBatch expiredBatch : expiredBatches) {
-            String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
-                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
-            failBatch(expiredBatch, new TimeoutException(errorMessage), false, deallocateNow);
-            if (transactionManager != null && expiredBatch.inRetry()) {
-                // This ensures that no new batches are drained until the current in flight batches are fully resolved.
-                transactionManager.markSequenceUnresolved(expiredBatch);
-            }
-        }
-    }
-
-    private void deallocateRequestTimeoutBatches(long now) {
-        Iterator<ProducerBatch> iter = expiredInflightBatchesAwaitingDeallocation.iterator();
-        while (iter.hasNext()) {
-            ProducerBatch batch = iter.next();
-            if (batch.hasReachedTimeout(requestTimeoutMs, now)) {
-                // fix for KAFKA-19012
-                // only deallocate after the request timeout (so the batch isn't in flight)
-                // and to be extra safe don't re-use the buffer in case there are other timing issues
-                this.accumulator.deallocateWithoutReuse(batch);
-                iter.remove();
-            } else {
-                return;
-            }
-        }
-    }
-
     private long sendProducerData(long now) {
         MetadataSnapshot metadataSnapshot = metadata.fetchMetadataSnapshot();
         // get the list of partitions with data ready to send
@@ -447,14 +410,22 @@ public class Sender implements Runnable {
         accumulator.resetNextBatchExpiryTime();
         List<ProducerBatch> expiredInflightBatches = getExpiredInflightBatches(now);
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
-        failExpiredBatches(expiredBatches, now, true);
-        // Fix for KAFKA-19012
-        // The pooled ByteBuffer associated with this batch might still be in use by the network client so we
-        // cannot allow it to be reused.
-        failExpiredBatches(expiredInflightBatches, now, false);
-        expiredInflightBatchesAwaitingDeallocation.addAll(expiredInflightBatches);
-        deallocateRequestTimeoutBatches(now);
+        expiredBatches.addAll(expiredInflightBatches);
 
+        // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
+        // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
+        // we need to reset the producer id here.
+        if (!expiredBatches.isEmpty())
+            log.trace("Expired {} batches in accumulator", expiredBatches.size());
+        for (ProducerBatch expiredBatch : expiredBatches) {
+            String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
+                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation";
+            failBatch(expiredBatch, new TimeoutException(errorMessage), false);
+            if (transactionManager != null && expiredBatch.inRetry()) {
+                // This ensures that no new batches are drained until the current in flight batches are fully resolved.
+                transactionManager.markSequenceUnresolved(expiredBatch);
+            }
+        }
         sensors.updateProduceRequestMetrics(batches);
 
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
@@ -729,7 +700,7 @@ public class Sender implements Runnable {
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
-                failBatch(batch, response, batch.attempts() < this.retries, true);
+                failBatch(batch, response, batch.attempts() < this.retries);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
@@ -787,8 +758,7 @@ public class Sender implements Runnable {
 
     private void failBatch(ProducerBatch batch,
                            ProduceResponse.PartitionResponse response,
-                           boolean adjustSequenceNumbers,
-                           boolean deallocateNow) {
+                           boolean adjustSequenceNumbers) {
         final RuntimeException topLevelException;
         if (response.error == Errors.TOPIC_AUTHORIZATION_FAILED)
             topLevelException = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
@@ -798,7 +768,7 @@ public class Sender implements Runnable {
             topLevelException = response.error.exception(response.errorMessage);
 
         if (response.recordErrors == null || response.recordErrors.isEmpty()) {
-            failBatch(batch, topLevelException, adjustSequenceNumbers, deallocateNow);
+            failBatch(batch, topLevelException, adjustSequenceNumbers);
         } else {
             Map<Integer, RuntimeException> recordErrorMap = new HashMap<>(response.recordErrors.size());
             for (ProduceResponse.RecordError recordError : response.recordErrors) {
@@ -837,25 +807,23 @@ public class Sender implements Runnable {
                 }
             };
 
-            failBatch(batch, topLevelException, recordExceptions, adjustSequenceNumbers, deallocateNow);
+            failBatch(batch, topLevelException, recordExceptions, adjustSequenceNumbers);
         }
     }
 
     private void failBatch(
         ProducerBatch batch,
         RuntimeException topLevelException,
-        boolean adjustSequenceNumbers,
-        boolean deallocateNow
+        boolean adjustSequenceNumbers
     ) {
-        failBatch(batch, topLevelException, batchIndex -> topLevelException, adjustSequenceNumbers, deallocateNow);
+        failBatch(batch, topLevelException, batchIndex -> topLevelException, adjustSequenceNumbers);
     }
 
     private void failBatch(
         ProducerBatch batch,
         RuntimeException topLevelException,
         Function<Integer, RuntimeException> recordExceptions,
-        boolean adjustSequenceNumbers,
-        boolean deallocateNow
+        boolean adjustSequenceNumbers
     ) {
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
@@ -869,11 +837,10 @@ public class Sender implements Runnable {
                     log.debug("Encountered error when transaction manager was handling a failed batch", e);
                 }
             }
-            if (deallocateNow) {
-                maybeRemoveAndDeallocateBatch(batch);
-            } else {
-                maybeRemoveAndDeallocateBatchLater(batch);
-            }
+            // Fix for KAFKA-19012
+            // The pooled ByteBuffer associated with this batch might still be in use by the network client so we
+            // cannot allow it to be reused.
+            maybeRemoveAndDeallocateBatchWithoutReuse(batch);
         }
     }
 
@@ -883,7 +850,7 @@ public class Sender implements Runnable {
      * future batches are certain to fail with an OutOfOrderSequence exception.
      */
     private boolean canRetry(ProducerBatch batch, ProduceResponse.PartitionResponse response, long now) {
-        return !batch.hasReachedTimeout(accumulator.getDeliveryTimeoutMs(), now) &&
+        return !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now) &&
             batch.attempts() < this.retries &&
             !batch.isDone() &&
             (transactionManager == null ?
