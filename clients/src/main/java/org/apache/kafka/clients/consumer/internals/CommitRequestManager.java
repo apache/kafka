@@ -1210,10 +1210,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     /**
      * <p>This is used to stage the unsent {@link OffsetCommitRequestState} and {@link OffsetFetchRequestState}.
-     * <li>unsentOffsetCommits holds the offset commit requests that have not been sent out</>
-     * <li>unsentOffsetFetches holds the offset fetch requests that have not been sent out</li>
-     * <li>inflightOffsetFetches holds the offset fetch requests that have been sent out but not completed</>.
-     * <p>
+     * <ul>
+     *   <li>unsentOffsetCommits holds the offset commit requests that have not been sent out</li>
+     *   <li>unsentOffsetFetches holds the offset fetch requests that have not been sent out</li>
+     *   <li>inflightOffsetFetches holds the offset fetch requests that have been sent out but not completed</li>
+     * </ul>
      * {@code addOffsetFetchRequest} dedupes the requests to avoid sending the same requests.
      */
 
