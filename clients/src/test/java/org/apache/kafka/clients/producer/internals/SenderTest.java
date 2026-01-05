@@ -3685,17 +3685,6 @@ public class SenderTest {
             super.deallocate(buffer, size);
         }
 
-        @Override
-        public void deallocateWithoutReuse(ByteBuffer buffer, int size) {
-            if (!allocatedBuffers.containsKey(buffer)) {
-                throw new IllegalStateException("Deallocating a buffer that is not allocated");
-            }
-            allocatedBuffers.remove(buffer);
-            ByteBuffer newBuffer = ByteBuffer.allocate(size);
-            allocatedBuffers.put(newBuffer, Boolean.TRUE);
-            deallocate(newBuffer, size);
-        }
-
         public boolean allMatch() {
             return allocatedBuffers.isEmpty();
         }
