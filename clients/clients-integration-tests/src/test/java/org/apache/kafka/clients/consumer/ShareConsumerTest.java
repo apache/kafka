@@ -3445,12 +3445,12 @@ public class ShareConsumerTest {
             verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Closing the share consumer so that the offsets can be altered.
             shareConsumer.close();
-            // Alter the start offset of the share partition to 0.
-            alterShareGroupOffsets(adminClient, groupId, tp, 0L);
-            // After altering, the share partition start offset should be 0.
-            verifySharePartitionStartOffset(adminClient, groupId, tp, 0L);
-            // Verify that the lag is now 105 since the start offset is altered to 0 and there are total 105 records in the partition.
-            verifySharePartitionLag(adminClient, groupId, tp, 105L);
+            // Alter the start offset of the share partition to 40.
+            alterShareGroupOffsets(adminClient, groupId, tp, 40L);
+            // After altering, the share partition start offset should be 40.
+            verifySharePartitionStartOffset(adminClient, groupId, tp, 40L);
+            // Verify that the lag is now 65 since the start offset is altered to 40 and there are total 105 records in the partition.
+            verifySharePartitionLag(adminClient, groupId, tp, 65L);
         } catch (InterruptedException | ExecutionException e) {
             fail("Test failed with exception: " + e.getMessage());
         }
@@ -3481,7 +3481,7 @@ public class ShareConsumerTest {
             verifySharePartitionLag(adminClient, groupId, tp, 0L);
             // Closing the share consumer so that the offsets can be deleted.
             shareConsumer.close();
-            // Delete the start offset of the share partition to 0.
+            // Delete the share group offsets.
             deleteShareGroupOffsets(adminClient, groupId, tp.topic());
             // Create a new share consumer.
             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
