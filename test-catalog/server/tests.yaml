@@ -59,7 +59,9 @@ org.apache.kafka.server.BootstrapControllersIntegrationTest:
 - testDescribeMetadataQuorum
 - testDescribeMetadataQuorumByControllers
 - testIncrementalAlterConfigs
+- testIncrementalAlterConfigsByAllControllersWithDynamicQuorum
 - testIncrementalAlterConfigsByControllers
+- testIncrementalAlterConfigsBySingleControllerWithDynamicQuorum
 - testPutBrokersInBootstrapControllersConfig
 - testPutControllersInBootstrapBrokersConfig
 - testUpdateFeatures

@@ -241,6 +241,7 @@ org.apache.kafka.controller.QuorumControllerTest:
 - testFatalMetadataReplayErrorOnActive
 - testFenceMultipleBrokers
 - testInsertBootstrapRecordsToEmptyLog
+- testIsNodeIdRegisteredWithDynamicQuorum
 - testMinIsrUpdateWithElr
 - testNoOpRecordWriteAfterTimeout
 - testRegisterBrokerKRaftVersions
