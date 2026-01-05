@@ -1320,14 +1320,15 @@ public class ProducerStateManagerTest {
     @Test
     public void testReadWriteSnapshot() throws IOException {
         Map<Long, ProducerStateEntry> expectedEntryMap = new HashMap<>();
-        expectedEntryMap.put(1L, new ProducerStateEntry(1L, (short) 2, 3,
-                RecordBatch.NO_TIMESTAMP,
-                OptionalLong.of(100L),
-                Optional.of(new BatchMetadata(1, 2L, 3, RecordBatch.NO_TIMESTAMP))));
+        ProducerStateEntry stateEntry = new ProducerStateEntry(1L, (short) 2, 3,
+            RecordBatch.NO_TIMESTAMP, OptionalLong.of(100L));
+
+        stateEntry.addBatch((short) 2, 1, 2L, 3, RecordBatch.NO_TIMESTAMP);
+
+        expectedEntryMap.put(1L, stateEntry);
         expectedEntryMap.put(11L, new ProducerStateEntry(11L, (short) 12, 13,
                 123456L,
-                OptionalLong.empty(),
-                Optional.empty()));
+                OptionalLong.empty()));
 
         File file = new File(logDir, "testReadWriteSnapshot");
         ProducerStateManager.writeSnapshot(file, expectedEntryMap, true);
