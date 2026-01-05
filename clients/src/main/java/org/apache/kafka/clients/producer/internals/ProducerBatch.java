@@ -45,6 +45,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -72,6 +73,7 @@ public final class ProducerBatch {
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
+    private final AtomicBoolean bufferDeallocated = new AtomicBoolean(false);
 
     int recordCount;
     int maxRecordSize;
@@ -579,6 +581,17 @@ public final class ProducerBatch {
 
     public boolean sequenceHasBeenReset() {
         return reopened;
+    }
+
+    public boolean isBufferDeallocated() {
+        return bufferDeallocated.get();
+    }
+
+    /**
+     * Try to set the bufferDeallocated flag and return true if it was updated to a different value
+     */
+    public boolean setBufferDeallocated(boolean bufferDeallocated) {
+        return this.bufferDeallocated.compareAndSet(!bufferDeallocated, bufferDeallocated);
     }
 
     // VisibleForTesting

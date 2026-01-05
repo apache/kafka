@@ -1031,10 +1031,28 @@ public class RecordAccumulator {
      */
     public void deallocate(ProducerBatch batch) {
         incomplete.remove(batch);
+        deallocateIfNecessary(batch);
+    }
+
+    private void deallocateIfNecessary(ProducerBatch batch) {
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
-        if (!batch.isSplitBatch())
+        if (!batch.isSplitBatch() && !batch.isBufferDeallocated() && batch.setBufferDeallocated(true))
             free.deallocate(batch.buffer(), batch.initialCapacity());
+    }
+
+    /**
+     * Remove from the incomplete list but do not free memory yet
+     */
+    public void deallocateLater(ProducerBatch batch) {
+        incomplete.remove(batch);
+    }
+
+    /**
+     * Only perform deallocation (and not removal from incomplete set)
+     */
+    public void deallocateAlreadyRemovedIncomplete(ProducerBatch batch) {
+        deallocateIfNecessary(batch);
     }
 
     /**

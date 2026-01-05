@@ -2498,12 +2498,16 @@ public class SenderTest {
         sender.runOnce();  // send request
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(1, sender.inFlightBatches(tp0).size());
+        assertFalse(sender.inFlightBatches(tp0).get(0).isBufferDeallocated(), "Buffer not deallocated yet");
+        ProducerBatch inflightBatch = sender.inFlightBatches(tp0).get(0);
+
 
         time.sleep(REQUEST_TIMEOUT);
         assertFalse(pool.allMatch());
 
         sender.runOnce();  // expire the batch
         assertTrue(request1.isDone());
+        assertTrue(inflightBatch.isBufferDeallocated(), "Buffer shold be deallocated after request timeout");
         assertTrue(pool.allMatch(), "The batch should have been de-allocated");
         assertTrue(pool.allMatch());
 
