@@ -209,7 +209,7 @@ public class FetchRequestManagerTest {
         emptyRecords = buildRecords(0L, 0, 0);
         partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
-        bootstrapConfiguration = mock(NetworkClient.BootstrapConfiguration.class);
+        bootstrapConfiguration = NetworkClient.BootstrapConfiguration.disabled();
     }
 
     private void assignFromUser(Set<TopicPartition> partitions) {

@@ -1187,7 +1187,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static class BootstrapConfiguration {
-        public final List<String> bootstrapServers;
+        public List<String> bootstrapServers;
         public final ClientDnsLookup clientDnsLookup;
         public final long bootstrapResolveTimeoutMs;
         private boolean isBootstrapDisabled;
@@ -1202,7 +1202,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         public static BootstrapConfiguration disabled() {
-            BootstrapConfiguration bootstrapConfiguration = new BootstrapConfiguration(null, null, 0);
+            BootstrapConfiguration bootstrapConfiguration = new BootstrapConfiguration(List.of(), null, 0);
             bootstrapConfiguration.disableBootstrap();
             return bootstrapConfiguration;
         }

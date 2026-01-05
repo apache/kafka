@@ -55,6 +55,9 @@ public final class ClientUtils {
 
     public static List<InetSocketAddress> validateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
+        if (urls == null) {
+            return addresses;
+        }
         urls.forEach(url -> {
             final String host = getHost(url);
             final Integer port = getPort(url);
@@ -264,6 +267,8 @@ public final class ClientUtils {
                     metricsGroupPrefix,
                     channelBuilder,
                     logContext);
+            // Validate bootstrap servers immediately during construction
+            parseAndValidateAddresses(config);
             bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
                 config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                 ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
