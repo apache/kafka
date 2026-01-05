@@ -191,8 +191,6 @@ public class TaskManagerTest {
     private StandbyTaskCreator standbyTaskCreator;
     @Mock
     private Admin adminClient;
-    @Mock
-    private ProcessorStateManager stateManager;
     final StateUpdater stateUpdater = mock(StateUpdater.class);
     final DefaultTaskManager schedulingTaskManager = mock(DefaultTaskManager.class);
 
@@ -878,7 +876,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId03, activeTask)));
-        assertEquals(taskManager.allOwnedTasks(), mkMap(mkEntry(taskId03, activeTask)));
+        assertEquals(taskManager.allRunningTasks(), mkMap(mkEntry(taskId03, activeTask)));
     }
 
     @Test
@@ -1590,6 +1588,52 @@ public class TaskManagerTest {
         verifyNoInteractions(consumer);
     }
 
+    @Test
+    public void shouldAddFailedRestoredTasksBackToStateUpdaterOnException() {
+        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+        final StreamTask task3 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId02Partitions).build();
+
+        // Use LinkedHashSet to ensure predictable iteration order
+        final Set<StreamTask> restoredTasks = new java.util.LinkedHashSet<>();
+        restoredTasks.add(task1);
+        restoredTasks.add(task2);
+        restoredTasks.add(task3);
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTransitionToRunningOfRestoredTask(restoredTasks, tasks);
+
+        // task1 completes successfully, task2 throws StreamsException from maybeInitTaskTimeoutOrThrow
+        // task3 is never processed because task2 throws
+        final TimeoutException timeoutException = new TimeoutException();
+        doThrow(timeoutException).when(task2).completeRestoration(noOpResetter);
+        doThrow(new StreamsException("Task timeout exceeded", task2.id())).when(task2).maybeInitTaskTimeoutOrThrow(anyLong(), eq(timeoutException));
+
+        assertThrows(StreamsException.class, () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
+
+        // task1 should be successfully transitioned
+        verify(tasks).addTask(task1);
+        verify(consumer).resume(task1.inputPartitions());
+        verify(task1).clearTaskTimeout();
+
+        // task2 should be added back to state updater once in the finally block
+        // (the add in the catch block doesn't execute because maybeInitTaskTimeoutOrThrow throws)
+        verify(stateUpdater).add(task2);
+        verify(tasks, never()).addTask(task2);
+        verify(task2, never()).clearTaskTimeout();
+
+        // task3 should also be added back to state updater in the finally block
+        verify(stateUpdater).add(task3);
+        verify(tasks, never()).addTask(task3);
+        verify(task3, never()).clearTaskTimeout();
+    }
+
     private TaskManager setUpTransitionToRunningOfRestoredTask(final Set<StreamTask> statefulTasks,
                                                                final TasksRegistry tasks) {
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
@@ -2186,7 +2230,6 @@ public class TaskManagerTest {
         verify(task00).prepareCommit(false);
         verify(task00).postCommit(true);
         verify(task00).addPartitionsForOffsetReset(taskId00Partitions);
-        verify(task00).changelogPartitions();
         verify(task00).closeDirty();
         verify(task00).revive();
         verify(tasks).removeTask(task00);
@@ -2258,7 +2301,6 @@ public class TaskManagerTest {
         verify(nonCorruptedTask).prepareCommit(true);
         verify(nonCorruptedTask, never()).addPartitionsForOffsetReset(any());
         verify(corruptedTask).addPartitionsForOffsetReset(taskId00Partitions);
-        verify(corruptedTask).changelogPartitions();
         verify(corruptedTask).postCommit(true);
 
         // check that we should not commit empty map either
@@ -2373,7 +2415,6 @@ public class TaskManagerTest {
         verify(uncorruptedActive, never()).prepareCommit(anyBoolean());
         verify(uncorruptedActive, never()).postCommit(anyBoolean());
 
-        verify(corruptedActive).changelogPartitions();
         verify(corruptedActive).postCommit(true);
         verify(corruptedActive).addPartitionsForOffsetReset(taskId00Partitions);
         verify(consumer, never()).commitSync(emptyMap());

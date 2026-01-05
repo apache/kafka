@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -48,15 +49,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
@@ -339,8 +342,13 @@ public class MetricsIntegrationTest {
             () -> "Kafka Streams application did not reach state NOT_RUNNING in " + timeout + " ms");
     }
 
-    @Test
-    public void shouldAddMetricsOnAllLevels() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAddMetricsOnAllLevels(final boolean streamsProtocolEnabled) throws Exception {
+        if (streamsProtocolEnabled) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
+
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
         builder.table(STREAM_OUTPUT_1,
@@ -373,8 +381,13 @@ public class MetricsIntegrationTest {
         checkMetricsDeregistration();
     }
 
-    @Test
-    public void shouldAddMetricsForWindowStoreAndSuppressionBuffer() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAddMetricsForWindowStoreAndSuppressionBuffer(final boolean streamsProtocolEnabled) throws Exception {
+        if (streamsProtocolEnabled) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
+
         final Duration windowSize = Duration.ofMillis(50);
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
@@ -401,8 +414,13 @@ public class MetricsIntegrationTest {
         checkMetricsDeregistration();
     }
 
-    @Test
-    public void shouldAddMetricsForSessionStore() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAddMetricsForSessionStore(final boolean streamsProtocolEnabled) throws Exception {
+        if (streamsProtocolEnabled) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
+
         final Duration inactivityGap = Duration.ofMillis(50);
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()

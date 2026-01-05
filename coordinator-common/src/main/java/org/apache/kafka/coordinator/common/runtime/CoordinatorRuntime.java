@@ -42,7 +42,6 @@ import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
-import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -66,6 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.lang.Math.min;
@@ -120,6 +120,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Compression compression;
         private OptionalInt appendLingerMs;
         private ExecutorService executorService;
+        private Supplier<Integer> cachedBufferMaxBytesSupplier;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -196,6 +197,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withCachedBufferMaxBytesSupplier(Supplier<Integer> cachedBufferMaxBytesSupplier) {
+            this.cachedBufferMaxBytesSupplier = cachedBufferMaxBytesSupplier;
+            return this;
+        }
+
         @SuppressWarnings("checkstyle:CyclomaticComplexity")
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
@@ -228,6 +234,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("AppendLinger must be empty or >= 0");
             if (executorService == null)
                 throw new IllegalArgumentException("ExecutorService must be set.");
+            if (cachedBufferMaxBytesSupplier == null)
+                throw new IllegalArgumentException("Cached buffer max bytes supplier must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -244,7 +252,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 serializer,
                 compression,
                 appendLingerMs,
-                executorService
+                executorService,
+                cachedBufferMaxBytesSupplier
             );
         }
     }
@@ -480,11 +489,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final long appendTimeMs;
 
         /**
-         * The max batch size.
-         */
-        final int maxBatchSize;
-
-        /**
          * The verification guard associated to the batch if it is
          * transactional.
          */
@@ -521,7 +525,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             Logger log,
             long baseOffset,
             long appendTimeMs,
-            int maxBatchSize,
             VerificationGuard verificationGuard,
             ByteBuffer buffer,
             MemoryRecordsBuilder builder,
@@ -530,7 +533,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.baseOffset = baseOffset;
             this.nextOffset = baseOffset;
             this.appendTimeMs = appendTimeMs;
-            this.maxBatchSize = maxBatchSize;
             this.verificationGuard = verificationGuard;
             this.buffer = buffer;
             this.builder = builder;
@@ -604,6 +606,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         BufferSupplier bufferSupplier;
 
         /**
+         * The cached buffer size.
+         */
+        AtomicLong cachedBufferSize;
+
+        /**
          * The current (or pending) batch.
          */
         CoordinatorBatch currentBatch;
@@ -641,6 +648,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 defaultWriteTimeout
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
+            this.cachedBufferSize = new AtomicLong(0);
         }
 
         /**
@@ -772,13 +780,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             // Cancel the linger timeout.
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
-            // Release the buffer only if it is not larger than the maxBatchSize.
-            int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
+            // Release the buffer only if it is not larger than the cachedBufferMaxBytes.
+            int cachedBufferMaxBytes = cachedBufferMaxBytesSupplier.get();
 
-            if (currentBatch.builder.buffer().capacity() <= maxBatchSize) {
+            if (currentBatch.builder.buffer().capacity() <= cachedBufferMaxBytes) {
                 bufferSupplier.release(currentBatch.builder.buffer());
-            } else if (currentBatch.buffer.capacity() <= maxBatchSize) {
+                cachedBufferSize.set(currentBatch.builder.buffer().capacity());
+            } else if (currentBatch.buffer.capacity() <= cachedBufferMaxBytes) {
                 bufferSupplier.release(currentBatch.buffer);
+                cachedBufferSize.set(currentBatch.buffer.capacity());
+                // If the builder expands the buffer beyond the cachedBufferMaxBytes, that should also increase the discard counter.
+                runtimeMetrics.recordBufferCacheDiscarded();
+            } else {
+                runtimeMetrics.recordBufferCacheDiscarded();
+                cachedBufferSize.set(0L);
             }
 
             currentBatch = null;
@@ -901,8 +916,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             long currentTimeMs
         ) {
             if (currentBatch == null) {
-                LogConfig logConfig = partitionWriter.config(tp);
-                int maxBatchSize = logConfig.maxMessageSize();
+                int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
                 long prevLastWrittenOffset = coordinator.lastWrittenOffset();
                 ByteBuffer buffer = bufferSupplier.get(min(INITIAL_BUFFER_SIZE, maxBatchSize));
 
@@ -953,7 +967,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     log,
                     prevLastWrittenOffset,
                     currentTimeMs,
-                    maxBatchSize,
                     verificationGuard,
                     buffer,
                     builder,
@@ -2065,6 +2078,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final ExecutorService executorService;
 
     /**
+     * The maximum buffer size that the coordinator can cache.
+     */
+    private final Supplier<Integer> cachedBufferMaxBytesSupplier;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -2092,6 +2110,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param compression                       The compression codec.
      * @param appendLingerMs                    The append linger time in ms.
      * @param executorService                   The executor service.
+     * @param cachedBufferMaxBytesSupplier      The cached buffer max bytes supplier.
      */
     @SuppressWarnings("checkstyle:ParameterNumber")
     private CoordinatorRuntime(
@@ -2109,7 +2128,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Serializer<U> serializer,
         Compression compression,
         OptionalInt appendLingerMs,
-        ExecutorService executorService
+        ExecutorService executorService,
+        Supplier<Integer> cachedBufferMaxBytesSupplier
     ) {
         this.logPrefix = logPrefix;
         this.log = logContext.logger(CoordinatorRuntime.class);
@@ -2127,6 +2147,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.compression = compression;
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
+        this.cachedBufferMaxBytesSupplier = cachedBufferMaxBytesSupplier;
+        this.runtimeMetrics.registerBufferCacheSizeGauge(
+            () -> coordinators.values().stream().mapToLong(c -> c.cachedBufferSize.get()).sum()
+        );
     }
 
     /**
