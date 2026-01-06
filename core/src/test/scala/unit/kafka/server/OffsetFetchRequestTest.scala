@@ -688,7 +688,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         .setGroupId("grp")
         .setTopics(List(
           new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setTopicId(topicId)
+            .setName("foo")
             .setPartitions(List(
               new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                 .setPartitionIndex(0)
@@ -708,7 +708,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           .setMemberEpoch(memberEpoch)
           .setTopics(null),
         requireStable = false,
-        version = ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)
+        version = 9
       )
     )
 
@@ -726,7 +726,9 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             .setMemberEpoch(-1)
             .setTopics(null),
           requireStable = false,
-          version = ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)
+          // Force using version 9 (and topic names) because unknown topic ids
+          // are filtered out.
+          version = 9
         ).topics.isEmpty
       },
       msg = "Offsets should be deleted after topic deletion."
