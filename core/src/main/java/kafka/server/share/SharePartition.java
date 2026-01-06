@@ -2086,7 +2086,7 @@ public class SharePartition {
         Map<Long, Byte> ackTypeMap = new HashMap<>();
         for (int index = 0; index < batch.acknowledgeTypes().size(); index++) {
             byte ackType = batch.acknowledgeTypes().get(index);
-            // Validate
+            // Validate ackType except values 0, since 0 stands for gap.
             if (ackType != 0) {
                 AcknowledgeType.forId(ackType);
             }
@@ -2304,7 +2304,7 @@ public class SharePartition {
                     // Only valid for ACQUIRED offsets; the check above ensures this.
                     long key = offsetState.getKey();
                     InFlightState state = offsetState.getValue();
-                    log.debug("Renewing acq lock for {}-{} with offset {} in batch {} for member {}.",
+                    log.debug("Renewing acquisition lock for {}-{} with offset {} in batch {} for member {}.",
                         groupId, topicIdPartition, key, inFlightBatch, memberId);
                     state.cancelAndClearAcquisitionLockTimeoutTask();
                     AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId, key, key);
@@ -2315,7 +2315,9 @@ public class SharePartition {
                     // mapping between bytes and record state type. All ack types have been added except for RENEW which
                     // has been handled above.
                     RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
-                    Objects.requireNonNull(recordState);
+                    if (recordState == null) {
+                        return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
+                    }
 
                     InFlightState updateResult = offsetState.getValue().startStateTransition(
                         recordState,
@@ -2372,7 +2374,7 @@ public class SharePartition {
             if (ackType == AcknowledgeType.RENEW.id) {
                 // Renew the acquisition lock timer for the complete batch. We have already
                 // checked that the batchState is ACQUIRED above.
-                log.debug("Renewing acq lock for {}-{} with batch {}-{} for member {}.",
+                log.debug("Renewing acquisition lock for {}-{} with batch {}-{} for member {}.",
                     groupId, topicIdPartition, inFlightBatch.firstOffset(), inFlightBatch.lastOffset(), memberId);
                 inFlightBatch.cancelAndClearAcquisitionLockTimeoutTask();
                 AcquisitionLockTimerTask renewalTask = scheduleAcquisitionLockTimeout(memberId,
@@ -2387,7 +2389,9 @@ public class SharePartition {
             // either released or moved to a state where member id existence is not important. The member id
             // is only important when the batch is acquired.
             RecordState recordState = ACK_TYPE_TO_RECORD_STATE.get(ackType);
-            Objects.requireNonNull(recordState);
+            if (recordState == null) {
+                return Optional.of(new IllegalArgumentException("Unknown acknowledge type id: " + ackType));
+            }
 
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                 recordState,
