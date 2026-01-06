@@ -5515,7 +5515,8 @@ class ReplicaManagerTest {
     try {
       val spiedPartition = spy(Partition(tpId, time, replicaManager))
 
-      val blockPromotion = new AtomicBoolean(false)
+      // Prevent promotion of future replica
+      val blockPromotion = new AtomicBoolean(true)
       doAnswer { invocation =>
         if (blockPromotion.compareAndSet(true, false)) {
           false
@@ -5534,9 +5535,6 @@ class ReplicaManagerTest {
       val partition = replicaManager.getPartitionOrException(tp)
       val firstLogDir = partition.log.get.dir.getParentFile
       val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == firstLogDir).head
-      // Prevent promotion of future replica
-      blockPromotion.set(true)
-
       replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
 
       // Make sure the future log is created with the correct topic ID.
