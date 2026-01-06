@@ -1,4 +1,20 @@
-package org.apache.kafka.storage.internals.log.bookkeeper.index;
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.storage.internals.log.bookkeeper;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.bookkeeper.mledger.AsyncCallbacks;
@@ -8,7 +24,6 @@ import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.mledger.PositionFactory;
 import org.apache.bookkeeper.mledger.proto.MLDataFormats;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.kafka.storage.internals.log.bookkeeper.MessageMetadataUtils;
 import org.apache.pulsar.common.util.Codec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +33,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
-class MessageFinder implements AsyncCallbacks.FindEntryCallback {
+public class MessageFinder implements AsyncCallbacks.FindEntryCallback {
     protected final ManagedCursor cursor;
     protected final String subName;
     protected final int ledgerCloseTimestampMaxClockSkewMillis;
@@ -33,14 +48,14 @@ class MessageFinder implements AsyncCallbacks.FindEntryCallback {
             AtomicIntegerFieldUpdater
                     .newUpdater(MessageFinder.class, "messageFindInProgress");
 
-    MessageFinder(String topicName, ManagedCursor cursor, int ledgerCloseTimestampMaxClockSkewMillis) {
+    public MessageFinder(String topicName, ManagedCursor cursor, int ledgerCloseTimestampMaxClockSkewMillis) {
         this.topicName = topicName;
         this.cursor = cursor;
         this.subName = Codec.decode(cursor.getName());
         this.ledgerCloseTimestampMaxClockSkewMillis = ledgerCloseTimestampMaxClockSkewMillis;
     }
 
-    void findMessages(final long timestamp, AsyncCallbacks.FindEntryCallback callback) {
+    public void findMessages(final long timestamp, AsyncCallbacks.FindEntryCallback callback) {
         if (!MESSAGE_FIND_IN_PROGRESS.compareAndSet(this, FALSE, TRUE)) {
             if (log.isDebugEnabled()) {
                 log.debug("[{}][{}] Ignore message position find scheduled task, last find is still running",

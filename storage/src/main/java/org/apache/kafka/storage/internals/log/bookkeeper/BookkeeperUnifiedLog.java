@@ -1,8 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.storage.internals.log.bookkeeper;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -28,7 +43,6 @@ import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetsListener;
 import org.apache.kafka.storage.internals.log.LogValidator;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
-import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -44,41 +58,6 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     private final BookkeeperLocalLog bookkeeperLocalLog;
     private final AsyncProducerStateManager producerStateManager;
 
-    /**
-     * A log which presents a unified view of local and tiered log segments.
-     *
-     * <p>The log consists of tiered and local segments with the tiered portion of the log being optional. There could be an
-     * overlap between the tiered and local segments. The active segment is always guaranteed to be local. If tiered segments
-     * are present, they always appear at the beginning of the log, followed by an optional region of overlap, followed by the local
-     * segments including the active segment.
-     *
-     * <p>NOTE: this class handles state and behavior specific to tiered segments as well as any behavior combining both tiered
-     * and local segments. The state and behavior specific to local segments are handled by the encapsulated LocalLog instance.
-     *
-     * @param logStartOffset                      The earliest offset allowed to be exposed to kafka client.
-     *                                            The logStartOffset can be updated by :
-     *                                            - user's DeleteRecordsRequest
-     *                                            - broker's log retention
-     *                                            - broker's log truncation
-     *                                            - broker's log recovery
-     *                                            The logStartOffset is used to decide the following:
-     *                                            - Log deletion. LogSegment whose nextOffset <= log's logStartOffset can be deleted.
-     *                                            It may trigger log rolling if the active segment is deleted.
-     *                                            - Earliest offset of the log in response to ListOffsetRequest. To avoid OffsetOutOfRange exception after user seeks to earliest offset,
-     *                                            we make sure that logStartOffset <= log's highWatermark
-     *                                            Other activities such as log cleaning are not affected by logStartOffset.
-     * @param localLog                            The LocalLog instance containing non-empty log segments recovered from disk
-     * @param brokerTopicStats                    Container for Broker Topic Yammer Metrics
-     * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
-     * @param leaderEpochCache                    The LeaderEpochFileCache instance (if any) containing state associated
-     *                                            with the provided logStartOffset and nextOffsetMetadata
-     * @param producerStateManager                The ProducerStateManager instance containing state associated with the provided segments
-     * @param topicId                             optional Uuid to specify the topic ID for the topic if it exists. Should only be specified when
-     *                                            first creating the log through Partition.makeLeader or Partition.makeFollower. When reloading a log,
-     *                                            this field will be populated by reading the topic ID value from partition.metadata if it exists.
-     * @param remoteStorageSystemEnable           flag to indicate whether the system level remote log storage is enabled or not.
-     * @param logOffsetsListener                  listener invoked when the high watermark is updated
-     */
     public BookkeeperUnifiedLog(long logStartOffset, BookkeeperLocalLog localLog, BrokerTopicStats brokerTopicStats,
                                 int producerIdExpirationCheckIntervalMs, LeaderEpochFileCache leaderEpochCache,
                                 AsyncProducerStateManager producerStateManager, Optional<Uuid> topicId,
@@ -245,7 +224,7 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
                         // Should run on ML executor
                         result.updatedProducers().values().forEach(producerStateManager::update);
                         for (CompletedTxn completedTxn : result.completedTxns()) {
-                            long lastStableOffset = producerStateManager.lastStableOffset(completedTxn);
+                            // long lastStableOffset = producerStateManager.lastStableOffset(completedTxn); todo
                             // TODO update txn index
                             producerStateManager.completeTxn(completedTxn);
                         }
