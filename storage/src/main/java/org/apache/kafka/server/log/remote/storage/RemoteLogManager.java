@@ -1286,8 +1286,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         private RemoteLogMetadataStats calculateMetadataAndSize(Iterator<RemoteLogSegmentMetadata> segmentMetadataIter) {
-            // Good to have an API from RLMM to get all the remote leader epochs of all the segments of a partition
-            // instead of going through all the segments and building it here.
+            // Good to have an API from RLMM to get the RemoteLogMetadataStats instead of going through all the segments
+            // and building it here.
             Set<Integer> epochsSet = new HashSet<>();
             int metadataCount = 0;
             long sizeInBytes = 0;
@@ -1492,10 +1492,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
             // compute valid remote-log size in bytes for the current partition if the size of the partition exceeds
             // the configured limit.
+            long startTimeMs = time.milliseconds();
             long remoteLogSizeBytes = 0L;
             if (!isAllSegmentsValid) {
                 boolean isAllValid = true;
-                long startTimeMs = time.milliseconds();
                 Set<RemoteLogSegmentId> visitedSegmentIds = new HashSet<>();
                 for (Integer epoch : epochEntries.navigableKeySet()) {
                     // remoteLogSize(topicIdPartition, epochEntry.epoch) may not be completely accurate as the remote
@@ -1524,11 +1524,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     }
                 }
                 this.isAllSegmentsValid = isAllValid && fullCopyFinishedSegmentsSizeInBytes == remoteLogSizeBytes;
-                brokerTopicStats.recordRemoteLogSizeComputationTime(topicIdPartition.topic(), topicIdPartition.partition(), time.milliseconds() - startTimeMs);
             } else {
                 // Once all the segments are valid, then the future segments to be uploaded by this leader are also valid.
                 remoteLogSizeBytes = fullCopyFinishedSegmentsSizeInBytes;
             }
+            brokerTopicStats.recordRemoteLogSizeComputationTime(topicIdPartition.topic(), topicIdPartition.partition(),
+                    time.milliseconds() - startTimeMs);
             // This is the total size of segments in local log that have their base-offset > local-log-start-offset
             // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
             long totalSize = onlyLocalLogSegmentsSize + remoteLogSizeBytes;

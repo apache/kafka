@@ -2196,21 +2196,21 @@ public class RemoteLogManagerTest {
 
         // 2. When (onlyLocalLogSegmentsSize + fullCopyFinishedSegmentsSizeInBytes) <= configure-retention-size
         result = expirationTask
-                .buildRetentionSizeData(-1L, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 500L);
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 500L);
         assertFalse(result.isPresent());
         assertFalse(expirationTask.isAllSegmentsValid());
 
-        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
-                .thenReturn(Collections.emptyIterator());
-
         // 3. totalSize <= retentionSize
         // totalSize = 500 (local) + 0 (remote, as listRemoteLogSegments returns empty) = 500. retentionSize = 1000.
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
+                .thenReturn(Collections.emptyIterator());
         result = expirationTask
                 .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullCopyFinishedSegmentsSizeInBytes);
         assertFalse(result.isPresent());
         assertFalse(expirationTask.isAllSegmentsValid());
 
         // 4. totalSize > retentionSize
+        // Each remote log segment size is 1000 bytes.
         // totalSize = 500 (local) + 1000 (remote) = 1500. retentionSize = 1000.
         AtomicInteger invocationCount = new AtomicInteger(0);
         RemoteLogSegmentMetadata segmentMetadata = createRemoteLogSegmentMetadata(0, 50, Collections.singletonMap(0, 0L));
