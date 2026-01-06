@@ -153,7 +153,7 @@ Note that the entity-type must be specified as `broker-loggers`, even though we 
                         
 
   
-It is not currently possible to apply a dynamic configuration on only a single controller. 
+Prior to version 4.3, dynamic configuration updates were not supported unless a static quorum was used. 
 
 
 

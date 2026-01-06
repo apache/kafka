@@ -174,7 +174,7 @@ class StreamsUpgradeTest(Test):
         self.stop_and_await()
 
     @cluster(num_nodes=6)
-    @matrix(from_version=[str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(LATEST_4_1), str(LATEST_4_2)],
+    @matrix(from_version=[str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(LATEST_4_0), str(LATEST_4_1)],
             upgrade=[True, False],
             metadata_quorum=[quorum.combined_kraft])
     def test_upgrade_downgrade_state_updater(self, from_version, upgrade, metadata_quorum):

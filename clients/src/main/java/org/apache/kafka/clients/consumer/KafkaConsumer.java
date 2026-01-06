@@ -452,7 +452,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *       this.consumer = consumer;
  *     }
  *
- *     {@literal}@Override
+ *     {@literal @Override}
  *     public void run() {
  *         try {
  *             consumer.subscribe(Arrays.asList("topic"));

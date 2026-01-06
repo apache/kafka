@@ -27,9 +27,9 @@ import java.util.List;
  * Helper utility for managing the bytes layout of the value stored in segments of the {@link RocksDBVersionedStore}.
  * All record versions for the same key (in the same segment) are collected into a single row.
  * The value format for each row is:
- * <pre>
- *     <next_timestamp> + <min_timestamp> + <list of <timestamp, value_size>, reverse-sorted by timestamp> + <list of values, forward-sorted by timestamp>
- * </pre>
+ * <pre>{@code
+ * <next_timestamp> + <min_timestamp> + <list of <timestamp, value_size>, reverse-sorted by timestamp> + <list of values, forward-sorted by timestamp>
+ * }</pre>
  * where:
  * <ul>
  * <li>{@code next_timestamp} is the validTo timestamp of the latest record version stored in this
