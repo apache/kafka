@@ -56,6 +56,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -472,12 +473,47 @@ public class SslTransportLayerTest {
     public void testDsaKeyPair(Args args) throws Exception {
         // DSA algorithms are not supported for TLSv1.3.
         assumeTrue(args.tlsProtocol.equals("TLSv1.2"));
+        // Skip test if DSA is not supported by the JVM
+        assumeTrue(isDsaSupported(), "DSA algorithm is not supported by this JVM");
         args.serverCertStores = certBuilder(true, "server", args.useInlinePem).keyAlgorithm("DSA").build();
         args.clientCertStores = certBuilder(false, "client", args.useInlinePem).keyAlgorithm("DSA").build();
         args.sslServerConfigs = args.getTrustingConfig(args.serverCertStores, args.clientCertStores);
         args.sslClientConfigs = args.getTrustingConfig(args.clientCertStores, args.serverCertStores);
         args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         verifySslConfigs(args);
+    }
+
+    /**
+     * Check if DSA algorithm is supported by the JVM and if there are compatible cipher suites
+     * available for TLSv1.2. This is important because even if DSA KeyPairGenerator is available,
+     * the SSL handshake may fail if no DSA-compatible cipher suites are available.
+     * @return true if DSA KeyPairGenerator is available and DSA-compatible cipher suites exist, false otherwise
+     */
+    private static boolean isDsaSupported() {
+        // First check if DSA KeyPairGenerator is available
+        try {
+            java.security.KeyPairGenerator.getInstance("DSA");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            return false;
+        }
+
+        // Check if there are DSA-compatible cipher suites available for TLSv1.2
+        // DSA algorithms are not supported for TLSv1.3, so we only check TLSv1.2
+        try {
+            SSLContext context = SSLContext.getInstance("TLSv1.2");
+            context.init(null, null, null);
+            SSLParameters params = context.getDefaultSSLParameters();
+            String[] cipherSuites = params.getCipherSuites();
+
+            // Check if any cipher suite supports DSA
+            // In TLS standards and JVM implementations, DSA signature cipher suites use "_DSS_" naming
+            // Common patterns: TLS_DHE_DSS_*, TLS_DH_DSS_*, SSL_DHE_DSS_*, SSL_DH_DSS_*
+            return Arrays.stream(cipherSuites)
+                    .anyMatch(suite -> suite.contains("_DSS_"));
+        } catch (Exception e) {
+            // If we can't check cipher suites, assume DSA is not fully supported
+            return false;
+        }
     }
 
     /**

@@ -561,4 +561,43 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
       )
     }
   }
+
+  @ClusterTest
+  def testGroupErrors(): Unit = {
+    // Start from version 1 because version 0 goes to ZK.
+    for (version <- 1 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+      assertEquals(
+        if (version >= 2) {
+          new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("unknown")
+            .setErrorCode(Errors.NOT_COORDINATOR.code)
+        } else {
+          // Version 1 does not support group level errors. Hence, the error is
+          // returned at the partition level.
+          new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("unknown")
+            .setTopics(List(
+              new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(List(
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NOT_COORDINATOR.code)
+                    .setCommittedOffset(-1)
+                    .setCommittedLeaderEpoch(-1)
+                    .setMetadata("")
+                ).asJava)
+            ).asJava)
+        },
+        fetchOffsets(
+          groupId = "unknown",
+          memberId = null,
+          memberEpoch = -1,
+          partitions = List(new TopicPartition("foo", 0)),
+          requireStable = false,
+          version = version.toShort
+        )
+      )
+    }
+  }
 }

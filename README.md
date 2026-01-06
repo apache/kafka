@@ -37,6 +37,9 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
+
+### Run tests with Java 25
+    ./gradlew testWithJava25
     
 ### Force re-running tests without code change ###
     ./gradlew test --rerun

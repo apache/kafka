@@ -163,8 +163,6 @@ allprojects {
           libs.nettyTransportNativeEpoll,
           // be explicit about the reload4j version instead of relying on the transitive versions
           libs.reload4j,
-          // Workaround before `commons-validator` has new release. See KAFKA-19359.
-          libs.commonsBeanutils,
           libs.commonsLang
         )
       }
@@ -542,6 +540,41 @@ subprojects {
 
     useJUnitPlatform {
       excludeTags "integration"
+      includeEngines 'junit-jupiter'
+    }
+
+    retry {
+      maxRetries = userMaxTestRetries
+      maxFailures = userMaxTestRetryFailures
+    }
+  }
+
+  // Do not run this task with Java 8. It will use an older version of Mockito,
+  // which depends on an older Byte Buddy version that does not support Java 25.
+  task testWithJava25(type: Test, dependsOn: compileJava) {
+    description = 'Run tests using Java 25 toolchain'
+
+    javaLauncher = javaToolchains.launcherFor {
+      languageVersion = JavaLanguageVersion.of(25)
+    }
+
+    maxParallelForks = maxTestForks
+    ignoreFailures = userIgnoreFailures
+    maxHeapSize = defaultMaxHeapSize
+    jvmArgs = defaultJvmArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+      displayGranularity = 0
+    }
+
+    logTestStdout.rehydrate(delegate, owner, this)()
+
+    exclude testsToExclude
+
+    useJUnitPlatform {
       includeEngines 'junit-jupiter'
     }
 

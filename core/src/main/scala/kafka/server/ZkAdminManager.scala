@@ -48,8 +48,7 @@ import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, S
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs, ZooKeeperInternals}
-import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
-import org.apache.kafka.server.config.ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG
+import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -84,6 +83,8 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private val alterConfigPolicy =
     Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[AlterConfigPolicy]))
+  // KIP-1252 compatibility flag
+  private val alterConfigPolicyKraftCompatibilityEnabled = config.getBoolean(ALTER_CONFIG_POLICY_KRAFT_COMPATIBILITY_ENABLE_CONFIG)
 
   def hasDelayedTopicOperations: Boolean = topicPurgatory.numDelayed != 0
 
@@ -503,8 +504,6 @@ class ZkAdminManager(val config: KafkaConfig,
   def incrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, alterConfigOps) =>
       try {
-        val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
-
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
             if (resource.name.isEmpty) {
@@ -512,6 +511,10 @@ class ZkAdminManager(val config: KafkaConfig,
             }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.TOPIC, resource.name)
             prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys.asScala)
+            val configEntriesMap = if(alterConfigPolicyKraftCompatibilityEnabled)
+              alterConfigOps.map(entry => (entry.configEntry.name, configProps.getProperty(entry.configEntry.name))).filter(x => x._2 != null).toMap
+            else
+              alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
@@ -523,6 +526,10 @@ class ZkAdminManager(val config: KafkaConfig,
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+            val configEntriesMap = if(alterConfigPolicyKraftCompatibilityEnabled)
+              alterConfigOps.map(entry => (entry.configEntry.name, configProps.getProperty(entry.configEntry.name))).toMap
+            else
+              alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case resourceType =>

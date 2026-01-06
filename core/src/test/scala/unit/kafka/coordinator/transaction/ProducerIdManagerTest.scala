@@ -19,8 +19,9 @@ package kafka.coordinator.transaction
 import kafka.coordinator.transaction.ProducerIdManager.RetryBackoffMs
 import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
+import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
+import org.apache.kafka.common.errors.{AuthenticationException, CoordinatorLoadInProgressException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
@@ -52,31 +53,58 @@ class ProducerIdManagerTest {
     val idLen: Int,
     val errorQueue: ConcurrentLinkedQueue[Errors] = new ConcurrentLinkedQueue[Errors](),
     val isErroneousBlock: Boolean = false,
-    val time: Time = Time.SYSTEM
+    val time: Time = Time.SYSTEM,
+    var hasAuthenticationException: Boolean = false,
+    var hasVersionMismatch: Boolean = false,
+    var hasNoResponse: Boolean = false
   ) extends RPCProducerIdManager(brokerId, time, () => 1, brokerToController) {
 
     private val brokerToControllerRequestExecutor = Executors.newSingleThreadExecutor()
     val capturedFailure: AtomicBoolean = new AtomicBoolean(false)
 
+    private def createClientResponse(authenticationException: AuthenticationException = null, versionException: UnsupportedVersionException = null, response: AllocateProducerIdsResponse = null): ClientResponse =
+      new ClientResponse(null, null, null, time.milliseconds, time.milliseconds, false, versionException, authenticationException, response)
+
     override private[transaction] def sendRequest(): Unit = {
 
       brokerToControllerRequestExecutor.submit(() => {
+        if (hasAuthenticationException) {
+          handleAllocateProducerIdsResponse(createClientResponse(authenticationException = new AuthenticationException("Auth Failure")))
+          hasAuthenticationException = false // reset so retry works
+          return
+        }
+        if (hasVersionMismatch) {
+          handleAllocateProducerIdsResponse(createClientResponse(versionException = new UnsupportedVersionException("Version Mismatch")))
+          hasVersionMismatch = false // reset so retry works
+          return
+        }
+        if (hasNoResponse) {
+          handleAllocateProducerIdsResponse(createClientResponse(null, null, null))
+          hasNoResponse = false // reset so retry works
+          return
+        }
         val error = errorQueue.poll()
         if (error == null || error == Errors.NONE) {
-          handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
-            new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
+          handleAllocateProducerIdsResponse(createClientResponse(
+            response = new AllocateProducerIdsResponse(
+              new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)
+            )
+          ))
           if (!isErroneousBlock) {
             idStart += idLen
           }
         } else {
-          handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
-            new AllocateProducerIdsResponseData().setErrorCode(error.code)))
+          handleAllocateProducerIdsResponse(createClientResponse(
+            response = new AllocateProducerIdsResponse(
+              new AllocateProducerIdsResponseData().setErrorCode(error.code)
+            )
+          ))
         }
       }, 0)
     }
 
-    override private[transaction] def handleAllocateProducerIdsResponse(response: AllocateProducerIdsResponse): Unit = {
-      super.handleAllocateProducerIdsResponse(response)
+    override private[transaction] def handleAllocateProducerIdsResponse(clientResponse: ClientResponse): Unit = {
+      super.handleAllocateProducerIdsResponse(clientResponse)
       capturedFailure.set(nextProducerIdBlock.get == null)
     }
   }
@@ -206,6 +234,45 @@ class ProducerIdManagerTest {
     val time = new MockTime()
     val manager = new MockProducerIdManager(0, 0, 1,
       errorQueue = queue(Errors.UNKNOWN_SERVER_ERROR), time = time)
+
+    verifyFailure(manager)
+
+    // We should only get a new block once retry backoff ms has passed.
+    assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
+    time.sleep(RetryBackoffMs)
+    verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
+  }
+
+  @Test
+  def testRetryBackoffOnAuthException(): Unit = {
+    val time = new MockTime()
+    val manager = new MockProducerIdManager(0, 0, 1, time = time, hasAuthenticationException = true)
+
+    verifyFailure(manager)
+
+    // We should only get a new block once retry backoff ms has passed.
+    assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
+    time.sleep(RetryBackoffMs)
+    verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
+  }
+
+  @Test
+  def testRetryBackoffOnVersionMismatch(): Unit = {
+    val time = new MockTime()
+    val manager = new MockProducerIdManager(0, 0, 1, time = time, hasVersionMismatch = true)
+
+    verifyFailure(manager)
+
+    // We should only get a new block once retry backoff ms has passed.
+    assertCoordinatorLoadInProgressExceptionFailure(manager.generateProducerId())
+    time.sleep(RetryBackoffMs)
+    verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
+  }
+
+  @Test
+  def testRetryBackoffOnNoResponse(): Unit = {
+    val time = new MockTime()
+    val manager = new MockProducerIdManager(0, 0, 1, time = time, hasNoResponse = true)
 
     verifyFailure(manager)
 

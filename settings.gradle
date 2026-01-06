@@ -16,6 +16,8 @@
 plugins {
     id 'com.gradle.enterprise' version '3.14.1'
     id 'com.gradle.common-custom-user-data-gradle-plugin' version '1.11.1'
+    // Using 0.10.0 for JDK 8 compatibility (1.0.0 requires JDK 17)
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null

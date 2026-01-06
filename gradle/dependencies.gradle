@@ -61,7 +61,7 @@ String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
 else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.14.2"
+  mockitoVersion = "5.20.0"
 else
   mockitoVersion = "4.11.0"
 
@@ -91,9 +91,8 @@ versions += [
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   commonsIo: "2.14.0", // ZooKeeper dependency. Do not use, this is going away.
-  commonsBeanutils: "1.11.0",
   commonsLang: "3.18.0",
-  commonsValidator: "1.7",
+  commonsValidator: "1.10.1",
   dropwizardMetrics: "4.1.12.1",
   gradle: "8.10.2",
   grgit: "4.1.1",
@@ -140,10 +139,12 @@ versions += [
   kafka_37: "3.7.2",
   kafka_38: "3.8.1",
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
-  lz4: "1.8.0",
+  // https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/record/CompressionType.java#L73-L74
+  // https://github.com/yawkat/lz4-java/blob/main/src/java/net/jpountz/lz4/LZ4Constants.java#L23-L24
+  lz4: "1.10.1",
   mavenArtifact: "3.9.6",
   metrics: "2.2.0",
-  netty: "4.1.119.Final",
+  netty: "4.1.125.Final",
   opentelemetryProto: "1.0.0-alpha",
   protobuf: "3.25.5", // a dependency of opentelemetryProto
   pcollections: "4.0.1",
@@ -184,7 +185,6 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsIo: "commons-io:commons-io:$versions.commonsIo",
-  commonsBeanutils: "commons-beanutils:commons-beanutils:$versions.commonsBeanutils",
   commonsLang: "org.apache.commons:commons-lang3:$versions.commonsLang",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
@@ -240,7 +240,7 @@ libs += [
   kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
   kafkaStreams_37: "org.apache.kafka:kafka-streams:$versions.kafka_37",
   kafkaStreams_38: "org.apache.kafka:kafka-streams:$versions.kafka_38",
-  lz4: "org.lz4:lz4-java:$versions.lz4",
+  lz4: "at.yawk.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
   mockitoCore: "org.mockito:$mockitoArtifactName:$mockitoVersion",

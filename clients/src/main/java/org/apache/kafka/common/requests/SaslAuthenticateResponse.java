@@ -80,4 +80,12 @@ public class SaslAuthenticateResponse extends AbstractResponse {
     public static SaslAuthenticateResponse parse(ByteBuffer buffer, short version) {
         return new SaslAuthenticateResponse(new SaslAuthenticateResponseData(new ByteBufferAccessor(buffer), version));
     }
+
+    // Do not print authBytes, overwrite a temp copy of the data with empty bytes
+    @Override
+    public String toString() {
+        SaslAuthenticateResponseData tempData = data.duplicate();
+        tempData.setAuthBytes(new byte[0]);
+        return tempData.toString();
+    }
 }

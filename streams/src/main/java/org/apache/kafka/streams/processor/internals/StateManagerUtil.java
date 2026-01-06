@@ -147,7 +147,7 @@ final class StateManagerUtil {
                     }
                 }
             } else {
-                log.error("Failed to acquire lock while closing the state store for {} task {}", taskType, id);
+                log.warn("Unable to acquire lock while closing the state store for {} task {}", taskType, id);
             }
         } catch (final IOException e) {
             final ProcessorStateException exception = new ProcessorStateException(

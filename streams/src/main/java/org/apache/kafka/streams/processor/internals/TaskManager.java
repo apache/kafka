@@ -57,6 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,7 @@ import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.parseTaskDirectoryName;
 
+@SuppressWarnings("checkstyle:ClassFanOutComplexity")
 public class TaskManager {
 
     private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
@@ -973,9 +975,12 @@ public class TaskManager {
         }
     }
 
+    /**
+     * @throws StreamsException if fetching committed offsets timed out often enough to exceed task timeout
+     */
     private void transitRestoredTaskToRunning(final Task task,
                                               final long now,
-                                              final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+                                              final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) throws StreamsException {
         try {
             task.completeRestoration(offsetResetter);
             tasks.addTask(task);
@@ -1051,8 +1056,22 @@ public class TaskManager {
     private void handleRestoredTasksFromStateUpdater(final long now,
                                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         final Duration timeout = Duration.ZERO;
-        for (final Task task : stateUpdater.drainRestoredActiveTasks(timeout)) {
-            transitRestoredTaskToRunning(task, now, offsetResetter);
+        // Create a mutable copy to support iterator.remove()
+        final Set<StreamTask> restoredTasks = new LinkedHashSet<>(stateUpdater.drainRestoredActiveTasks(timeout));
+        final Iterator<StreamTask> iterator = restoredTasks.iterator();
+
+        try {
+            while (iterator.hasNext()) {
+                final Task task = iterator.next();
+                transitRestoredTaskToRunning(task, now, offsetResetter);
+                iterator.remove(); // Remove successfully transitioned tasks
+            }
+        } finally {
+            // Add back any tasks that we drained but didn't successfully transition
+            // from the state updater, so that they are closed during shutdown.
+            for (final Task task : restoredTasks) {
+                stateUpdater.add(task);
+            }
         }
     }
 

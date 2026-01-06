@@ -17,13 +17,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
-import org.apache.kafka.common.message.AlterUserScramCredentialsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -48,7 +44,7 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return data.toString();
+            return maskData(data);
         }
     }
 
@@ -87,15 +83,18 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
         return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData().setResults(results));
     }
 
+    private static String maskData(AlterUserScramCredentialsRequestData data) {
+        AlterUserScramCredentialsRequestData tempData = data.duplicate();
+        tempData.upsertions().forEach(upsertion -> {
+            upsertion.setSalt(new byte[0]);
+            upsertion.setSaltedPassword(new byte[0]);
+        });
+        return tempData.toString();
+    }
+
     // Do not print salt or saltedPassword
     @Override
     public String toString() {
-        JsonNode json = AlterUserScramCredentialsRequestDataJsonConverter.write(data, version()).deepCopy();
-
-        for (JsonNode upsertion : json.get("upsertions")) {
-            ((ObjectNode) upsertion).put("salt", "");
-            ((ObjectNode) upsertion).put("saltedPassword", "");
-        }
-        return AlterUserScramCredentialsRequestDataJsonConverter.read(json, version()).toString();
+        return maskData(data);
     }
 }

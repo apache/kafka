@@ -53,6 +53,7 @@ import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -753,18 +754,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
         boolean requireStable
     ) {
         if (!isActive.get()) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.COORDINATOR_NOT_AVAILABLE,
+                context.requestVersion()
+            ));
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
         if (request.groupId() == null) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.INVALID_GROUP_ID.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.INVALID_GROUP_ID,
+                context.requestVersion()
+            ));
         }
 
         // The require stable flag when set tells the broker to hold on returning unstable
@@ -804,18 +807,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
         boolean requireStable
     ) {
         if (!isActive.get()) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.COORDINATOR_NOT_AVAILABLE,
+                context.requestVersion()
+            ));
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
         if (request.groupId() == null) {
-            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
-                .setGroupId(request.groupId())
-                .setErrorCode(Errors.INVALID_GROUP_ID.code())
-            );
+            return CompletableFuture.completedFuture(OffsetFetchResponse.groupError(
+                request,
+                Errors.INVALID_GROUP_ID,
+                context.requestVersion()
+            ));
         }
 
         // The require stable flag when set tells the broker to hold on returning unstable
