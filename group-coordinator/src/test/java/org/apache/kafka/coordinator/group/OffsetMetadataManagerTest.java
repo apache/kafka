@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -285,10 +284,10 @@ public class OffsetMetadataManagerTest {
             return result;
         }
 
-        public List<CoordinatorRecord> deletePartitions(
-            List<TopicPartition> topicPartitions
+        public List<CoordinatorRecord> deleteTopics(
+            Set<String> deletedTopicNames
         ) {
-            List<CoordinatorRecord> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+            List<CoordinatorRecord> records = offsetMetadataManager.onTopicsDeleted(deletedTopicNames);
             records.forEach(this::replay);
             return records;
         }
@@ -3550,7 +3549,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testOnPartitionsDeleted() {
+    public void testOnTopicsDeleted() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Commit offsets.
@@ -3566,20 +3565,14 @@ public class OffsetMetadataManagerTest {
         context.commitOffset(100L, "grp-2", "foo", 2, 200, 1, context.time.milliseconds());
         context.commitOffset(100L, "grp-2", "foo", 3, 300, 1, context.time.milliseconds());
 
-        // Delete partitions.
-        List<CoordinatorRecord> records = context.deletePartitions(Arrays.asList(
-            new TopicPartition("foo", 1),
-            new TopicPartition("foo", 2),
-            new TopicPartition("foo", 3),
-            new TopicPartition("bar", 1)
-        ));
+        // Delete topics.
+        List<CoordinatorRecord> records = context.deleteTopics(Set.of("foo"));
 
-        // Verify.
+        // Verify. All partitions for topic "foo" should be deleted.
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 3),
-            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-1", "bar", 1),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 1),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 2),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 3)
@@ -3590,7 +3583,9 @@ public class OffsetMetadataManagerTest {
         assertFalse(context.hasOffset("grp-0", "foo", 1));
         assertFalse(context.hasOffset("grp-0", "foo", 2));
         assertFalse(context.hasOffset("grp-0", "foo", 3));
-        assertFalse(context.hasOffset("grp-1", "bar", 1));
+        assertTrue(context.hasOffset("grp-1", "bar", 1));
+        assertTrue(context.hasOffset("grp-1", "bar", 2));
+        assertTrue(context.hasOffset("grp-1", "bar", 3));
         assertFalse(context.hasOffset("grp-2", "foo", 1));
         assertFalse(context.hasOffset("grp-2", "foo", 2));
         assertFalse(context.hasOffset("grp-2", "foo", 3));

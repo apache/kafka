@@ -3202,7 +3202,7 @@ public class GroupCoordinatorServiceTest {
         );
 
         when(runtime.scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq("on-topics-deleted"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(offsetFutures);
@@ -3218,7 +3218,7 @@ public class GroupCoordinatorServiceTest {
 
         // Wait for the operations to be scheduled and verify method is blocked.
         verify(runtime, timeout(5000).times(1)).scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq("on-topics-deleted"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
@@ -3256,7 +3256,7 @@ public class GroupCoordinatorServiceTest {
 
         // Verify no operations scheduled.
         verify(runtime, times(0)).scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq("on-topics-deleted"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
@@ -3288,7 +3288,7 @@ public class GroupCoordinatorServiceTest {
 
         // Mock operations with 3 futures, some failing.
         when(runtime.scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq("on-topics-deleted"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(Arrays.asList(
@@ -3312,7 +3312,7 @@ public class GroupCoordinatorServiceTest {
 
         // Verify operations were still scheduled exactly once.
         verify(runtime, times(1)).scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq("on-topics-deleted"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );

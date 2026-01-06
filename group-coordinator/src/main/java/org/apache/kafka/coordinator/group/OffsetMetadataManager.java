@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -56,11 +55,10 @@ import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -1079,39 +1077,32 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * Remove offsets of the partitions that have been deleted.
+     * Remove offsets of the topics that have been deleted.
      *
-     * @param topicPartitions   The partitions that have been deleted.
+     * @param deletedTopicNames   The names of the topics that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
-    public List<CoordinatorRecord> onPartitionsDeleted(
-        List<TopicPartition> topicPartitions
+    public List<CoordinatorRecord> onTopicsDeleted(
+        Set<String> deletedTopicNames
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
 
-        Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
-        topicPartitions.forEach(tp -> partitionsByTopic
-            .computeIfAbsent(tp.topic(), __ -> new ArrayList<>())
-            .add(tp.partition())
-        );
-
         Consumer<Offsets> delete = offsetsToClean -> {
             offsetsToClean.offsetsByGroup.forEach((groupId, topicOffsets) -> {
-                topicOffsets.forEach((topic, partitionOffsets) -> {
-                    if (partitionsByTopic.containsKey(topic)) {
-                        partitionsByTopic.get(topic).forEach(partition -> {
-                            if (partitionOffsets.containsKey(partition)) {
-                                appendOffsetCommitTombstone(groupId, topic, partition, records);
-                            }
+                deletedTopicNames.forEach(topic -> {
+                    var partitionOffsets = topicOffsets.get(topic);
+                    if (partitionOffsets != null) {
+                        partitionOffsets.keySet().forEach(partition -> {
+                            appendOffsetCommitTombstone(groupId, topic, partition, records);
                         });
                     }
                 });
             });
         };
 
-        // Delete the partitions from the main storage.
+        // Delete the offsets from the main storage.
         delete.accept(offsets);
-        // Delete the partitions from the pending transactional offsets.
+        // Delete the offsets from the pending transactional offsets.
         pendingTransactionalOffsets.forEach((__, offsets) -> delete.accept(offsets));
 
         return records;

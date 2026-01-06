@@ -2272,38 +2272,36 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Handles the deletion of topic partitions by scheduling write operations
+     * Handles the deletion of topics by scheduling write operations
      * to delete committed offsets and clean up share group state.
      *
      * @param topicsDelta The topics delta containing deleted topic IDs.
      */
     private void handlePartitionsDeletion(TopicsDelta topicsDelta) {
-        var topicPartitions = new ArrayList<TopicPartition>();
         var topicIds = topicsDelta.deletedTopicIds();
+        var deletedTopicNames = new HashSet<String>();
 
         topicIds.forEach(topicId -> {
             var topicImage = topicsDelta.image().getTopic(topicId);
             if (topicImage != null) {
-                topicImage.partitions().keySet().forEach(partitionId ->
-                    topicPartitions.add(new TopicPartition(topicImage.name(), partitionId))
-                );
+                deletedTopicNames.add(topicImage.name());
             }
         });
 
         var futures = new ArrayList<CompletableFuture<Void>>();
 
-        if (!topicPartitions.isEmpty()) {
+        if (!deletedTopicNames.isEmpty()) {
             // Schedule offset deletion.
             futures.addAll(
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
-                        "on-partition-deleted",
+                        "on-topics-deleted",
                         Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                        coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
+                        coordinator -> coordinator.onTopicsDeleted(deletedTopicNames)
                     ),
                     exception -> {
-                        log.error("Could not delete offsets for deleted partitions {} due to: {}.",
-                            topicPartitions, exception.getMessage(), exception);
+                        log.error("Could not delete offsets for deleted topics {} due to: {}.",
+                            deletedTopicNames, exception.getMessage(), exception);
                         return null;
                     }
                 )

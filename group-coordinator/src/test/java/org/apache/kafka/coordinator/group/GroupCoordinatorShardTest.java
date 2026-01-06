@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -1530,7 +1529,7 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testOnPartitionsDeleted() {
+    public void testOnTopicsDeleted() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -1552,12 +1551,12 @@ public class GroupCoordinatorShardTest {
             0
         ));
 
-        when(offsetMetadataManager.onPartitionsDeleted(
-            List.of(new TopicPartition("foo", 0))
+        when(offsetMetadataManager.onTopicsDeleted(
+            Set.of("foo")
         )).thenReturn(records);
 
-        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.onPartitionsDeleted(
-            List.of(new TopicPartition("foo", 0))
+        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.onTopicsDeleted(
+            Set.of("foo")
         );
 
         assertEquals(records, result.records());
