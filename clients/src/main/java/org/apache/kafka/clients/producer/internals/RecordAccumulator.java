@@ -1029,7 +1029,7 @@ public class RecordAccumulator {
     /**
      * Deallocate the record batch
      */
-    public void deallocate(ProducerBatch batch) {
+    public void completeBatchAndDeallocate(ProducerBatch batch) {
         incomplete.remove(batch);
         deallocateIfNecessary(batch);
     }
@@ -1037,21 +1037,27 @@ public class RecordAccumulator {
     private void deallocateIfNecessary(ProducerBatch batch) {
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
-        if (!batch.isSplitBatch() && !batch.isBufferDeallocated() && batch.setBufferDeallocated(true))
-            free.deallocate(batch.buffer(), batch.initialCapacity());
+        if (!batch.isSplitBatch()) {
+            if (batch.isBufferDeallocated()) {
+                log.warn("Skipping deallocating a batch that has already been deallocated. This is expected to happen rarely: for expired in-flight batches. Batch is {}, created time is {}", batch, batch.createdMs);
+            } else {
+                batch.setBufferDeallocated(true);
+                free.deallocate(batch.buffer(), batch.initialCapacity());
+            }
+        }
     }
 
     /**
      * Remove from the incomplete list but do not free memory yet
      */
-    public void deallocateLater(ProducerBatch batch) {
+    public void completeBatch(ProducerBatch batch) {
         incomplete.remove(batch);
     }
 
     /**
      * Only perform deallocation (and not removal from incomplete set)
      */
-    public void deallocateAlreadyRemovedIncomplete(ProducerBatch batch) {
+    public void deallocate(ProducerBatch batch) {
         deallocateIfNecessary(batch);
     }
 
@@ -1150,7 +1156,7 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            deallocate(batch);
+            completeBatchAndDeallocate(batch);
         }
     }
 
@@ -1170,7 +1176,7 @@ public class RecordAccumulator {
             }
             if (aborted) {
                 batch.abort(reason);
-                deallocate(batch);
+                completeBatchAndDeallocate(batch);
             }
         }
     }

@@ -2503,15 +2503,13 @@ public class SenderTest {
         assertFalse(sender.inFlightBatches(tp0).get(0).isBufferDeallocated(), "Buffer not deallocated yet");
         ProducerBatch inflightBatch = sender.inFlightBatches(tp0).get(0);
 
-
         time.sleep(REQUEST_TIMEOUT);
         assertFalse(pool.allMatch());
 
-        sender.runOnce();  // expire the batch
+        sender.runOnce();  // times out the request
         assertTrue(request1.isDone());
-        assertTrue(inflightBatch.isBufferDeallocated(), "Buffer shold be deallocated after request timeout");
+        assertTrue(inflightBatch.isBufferDeallocated(), "Buffer should be deallocated after request timeout");
         assertTrue(pool.allMatch(), "The batch should have been de-allocated");
-        assertTrue(pool.allMatch());
 
         sender.runOnce();
         assertTrue(pool.allMatch(), "The batch should have been de-allocated");
@@ -3597,7 +3595,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testNoBufferReuseWhenBatchHasTimeoutErrors() throws Exception {
+    public void testNoBufferReuseWhenBatchExpires() throws Exception {
         long totalSize = 1024 * 1024;
         try (Metrics m = new Metrics()) {
             BufferPool pool = new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics");
@@ -3607,13 +3605,7 @@ public class SenderTest {
             pool.deallocate(buffer);
 
             setupWithTransactionState(null, false, pool);
-            StringBuilder sb = new StringBuilder();
-            // Make a value the right size so that RecordAccumulator calls BufferPool.allocate with the batchSize so it's pooled
-            for (int i = 0; i < 16290; i++) {
-                sb.append("a");
-            }
-            String largeValue = sb.toString();
-            appendToAccumulator(tp0, 0L, "key", largeValue);
+            appendToAccumulator(tp0, 0L, "key", "value");
             sender.runOnce();  // connect
             sender.runOnce();  // send produce request
 

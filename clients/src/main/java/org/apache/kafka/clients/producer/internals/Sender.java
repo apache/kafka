@@ -171,12 +171,12 @@ public class Sender implements Runnable {
 
     private void maybeRemoveAndDeallocateBatch(ProducerBatch batch) {
         maybeRemoveFromInflightBatches(batch);
-        this.accumulator.deallocate(batch);
+        this.accumulator.completeBatchAndDeallocate(batch);
     }
 
     private void maybeRemoveAndDeallocateBatchLater(ProducerBatch batch) {
         maybeRemoveFromInflightBatches(batch);
-        this.accumulator.deallocateLater(batch);
+        this.accumulator.completeBatch(batch);
     }
 
     /**
@@ -761,7 +761,7 @@ public class Sender implements Runnable {
             maybeRemoveAndDeallocateBatch(batch);
         } else {
             // Always safe to call dellocate because the batch keeps track of whether or not it was deallocated yet
-            this.accumulator.deallocateAlreadyRemovedIncomplete(batch);
+            this.accumulator.deallocate(batch);
         }
     }
 
@@ -849,17 +849,17 @@ public class Sender implements Runnable {
                     log.debug("Encountered error when transaction manager was handling a failed batch", e);
                 }
             }
-            // Fix for KAFKA-19012
-            // The pooled ByteBuffer associated with this batch might still be in use by the network client so we
-            // cannot allow it to be reused yet. We skip deallocating it now, instead doing that in completeBatch
-            // or in another run of failBatch where we hit the else clause and call deallocateAlreadyRemovedIncomplete
             if (deallocateBatch) {
                 maybeRemoveAndDeallocateBatch(batch);
             } else {
+                // Fix for KAFKA-19012
+                // The pooled ByteBuffer associated with this batch might still be in use by the network client so we
+                // cannot allow it to be reused yet. We skip deallocating it now, instead doing that in completeBatch
+                // or in another run of failBatch where we hit the else clause and call deallocateAlreadyRemovedIncomplete
                 maybeRemoveAndDeallocateBatchLater(batch);
             }
         } else {
-            this.accumulator.deallocateAlreadyRemovedIncomplete(batch);
+            this.accumulator.deallocate(batch);
         }
     }
 
