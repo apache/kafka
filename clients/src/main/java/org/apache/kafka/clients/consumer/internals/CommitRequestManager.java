@@ -1137,7 +1137,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             for (var topic : response.topics()) {
                 // If the topic id is used, the topic name is empty in the response.
-                String topicName = topic.name().isEmpty() ? topicNamesCache.get(topic.topicId()) : topic.name();
+                String topicName = Uuid.ZERO_UUID.equals(topic.topicId()) ? topic.name() : topicNamesCache.get(topic.topicId());
                 for (var partition : topic.partitions()) {
                     var tp = new TopicPartition(
                         topicName,
