@@ -55,7 +55,7 @@ The following features are not yet available and should be avoided when using th
 
 * **Static Membership**: Setting a client `instance.id` will be rejected.
 
-* **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of sub-topologies), a new streams group must be created.
+* **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
 * **High Availability Assignor**: Only the sticky assignor is supported.
 
@@ -197,7 +197,7 @@ Whenever a member joins the streams group, the first heartbeat request contains 
 
 During the handling of the streams group heartbeat, the group coordinator may detect that source/sink or internal topics required by the topology do not exist or differ in their configuration from what is required for the topology to execute successfully. This triggers a "topology configuration" process, in which the group coordinator performs the following steps:
 
-* Check that all source topics exist and resolve source topic regular expressions (checking that each resolves to at least one topic).
+* Check that all configured source topics exist.
 * Check that "copartition groups" are satisfied - that is, all source topics that are supposed to be copartitioned are indeed copartitioned.
 * Derive the required number of partitions for all internal topics from the source topic configuration.
 * Check that all internal topics exist with the right configuration.
