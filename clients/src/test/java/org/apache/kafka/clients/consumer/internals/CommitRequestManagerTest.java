@@ -788,8 +788,6 @@ public class CommitRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         Uuid topicId = Uuid.randomUuid();
         when(metadata.topicIds()).thenReturn(Map.of("t1", topicId));
-        // Mock the scenario where the topicID from the response is not in the metadata.
-        when(metadata.topicNames()).thenReturn(Map.of());
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(new TopicPartition("t1", 0));
 
@@ -803,7 +801,17 @@ public class CommitRequestManagerTest {
         futures.forEach(f -> {
             assertTrue(f.isDone());
             assertFalse(f.isCompletedExceptionally());
+            try {
+                // The topic received in response should be included in the result even
+                // if it's not in the consumer metadata anymore.
+                assertTrue(f.get().containsKey(new TopicPartition("t1", 0)));
+            } catch (InterruptedException | ExecutionException e) {
+                fail();
+            }
         });
+        // Names should be retrieved from the internal cache when parsing the response (not from the consumer metadata)
+        verify(metadata, never()).topicNames();
+
         // expecting the buffers to be emptied after being completed successfully
         commitRequestManager.poll(0);
         assertEmptyPendingRequests(commitRequestManager);
