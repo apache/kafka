@@ -92,9 +92,11 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -947,7 +949,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPartitionFor() {
+    public void testPartitionFor() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -963,7 +965,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testGroupMetadataTopicConfigs() {
+    public void testGroupMetadataTopicConfigs() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -979,7 +981,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnElection() {
+    public void testOnElection() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -999,7 +1001,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnResignation() {
+    public void testOnResignation() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -1019,7 +1021,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnResignationWithEmptyLeaderEpoch() {
+    public void testOnResignationWithEmptyLeaderEpoch() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -1035,7 +1037,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testJoinGroup() {
+    public void testJoinGroup() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -1191,7 +1193,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testSyncGroup() {
+    public void testSyncGroup() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3109,7 +3111,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testCompleteTransactionWhenNotCoordinatorServiceStarted() {
+    public void testCompleteTransactionWhenNotCoordinatorServiceStarted() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3130,7 +3132,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testCompleteTransactionWithUnexpectedPartition() {
+    public void testCompleteTransactionWithUnexpectedPartition() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3151,20 +3153,130 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnPartitionsDeleted() {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+    public void testOnMetadataUpdateSchedulesOperationsWhenTopicsDeleted() throws Exception {
+        var runtime = mockRuntime();
+        var service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
             .setRuntime(runtime)
             .build();
         service.startup(() -> 3);
 
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "foo", 1)
+        var topicId = Uuid.randomUuid();
+        var initialImage = new MetadataImageBuilder()
+            .addTopic(topicId, "foo", 1)
             .build();
 
-        service.onMetadataUpdate(new MetadataDelta(image), image);
+        // Create a delta that deletes the topic.
+        var delta = new MetadataDelta(initialImage);
+        delta.replay(new RemoveTopicRecord().setTopicId(topicId));
+        var newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
 
+        // Use incomplete futures to verify method blocks.
+        var offsetFutures = List.of(
+            new CompletableFuture<>(),
+            new CompletableFuture<>(),
+            new CompletableFuture<>()
+        );
+        var shareFutures = List.of(
+            new CompletableFuture<>(),
+            new CompletableFuture<>(),
+            new CompletableFuture<>()
+        );
+
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(offsetFutures);
+
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(shareFutures);
+
+        // Run onMetadataUpdate in a separate thread.
+        var resultFuture = CompletableFuture.runAsync(() -> {
+            try {
+                service.onMetadataUpdate(delta, newImage);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Verify method is blocked.
+        assertFalse(resultFuture.isDone());
+
+        // Complete all futures.
+        offsetFutures.forEach(f -> f.complete(null));
+        shareFutures.forEach(f -> f.complete(null));
+
+        // Verify method completes.
+        resultFuture.get(5, TimeUnit.SECONDS);
+
+        // Verify operations were scheduled exactly once.
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    public void testOnMetadataUpdateDoesNotScheduleOperationsWhenNoTopicsDeleted() throws ExecutionException, InterruptedException {
+        var runtime = mockRuntime();
+        var service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build();
+        service.startup(() -> 3);
+
+        // Create an image with a topic and a delta with no deletions.
+        var image = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 1)
+            .build();
+        var delta = new MetadataDelta(image);
+
+        assertDoesNotThrow(() -> service.onMetadataUpdate(delta, image));
+
+        // Verify no operations scheduled.
+        verify(runtime, times(0)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
+        verify(runtime, times(0)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    public void testOnMetadataUpdateSwallowsErrorsWhenTopicsDeleted() throws ExecutionException, InterruptedException {
+        var runtime = mockRuntime();
+        var service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build();
+        service.startup(() -> 3);
+
+        var topicId = Uuid.randomUuid();
+        var initialImage = new MetadataImageBuilder()
+            .addTopic(topicId, "foo", 1)
+            .build();
+
+        // Create a delta that deletes the topic.
+        var delta = new MetadataDelta(initialImage);
+        delta.replay(new RemoveTopicRecord().setTopicId(topicId));
+        var newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
+
+        // Mock operations with 3 futures, some failing.
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-partition-deleted"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
@@ -3182,175 +3294,19 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(null),
             CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null)
+            FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
         ));
 
-        // The exception is logged and swallowed.
-        assertDoesNotThrow(() ->
-            service.onPartitionsDeleted(
-                List.of(new TopicPartition("foo", 0)),
-                BufferSupplier.NO_CACHING
-            )
-        );
-    }
+        // Verify no exception thrown.
+        assertDoesNotThrow(() -> service.onMetadataUpdate(delta, newImage));
 
-    @Test
-    public void testOnPartitionsDeletedWhenServiceIsNotStarted() {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
-            .setConfig(createConfig())
-            .setRuntime(runtime)
-            .build();
-
-        assertThrows(CoordinatorNotAvailableException.class, () -> service.onPartitionsDeleted(
-            List.of(new TopicPartition("foo", 0)),
-            BufferSupplier.NO_CACHING
-        ));
-    }
-
-    @Test
-    public void testOnPartitionsDeletedCleanupShareGroupState() {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
-            .setConfig(createConfig())
-            .setRuntime(runtime)
-            .build();
-        service.startup(() -> 3);
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "foo", 1)
-            .build();
-
-        service.onMetadataUpdate(new MetadataDelta(image), image);
-
-        // No error in partition deleted callback
-        when(runtime.scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        )).thenReturn(List.of(
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null)
-        ));
-
-        when(runtime.scheduleWriteAllOperation(
-            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        )).thenReturn(List.of(
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
-        ));
-
-        // The exception is logged and swallowed.
-        assertDoesNotThrow(() ->
-            service.onPartitionsDeleted(
-                List.of(new TopicPartition("foo", 0)),
-                BufferSupplier.NO_CACHING
-            )
-        );
-
+        // Verify operations were still scheduled exactly once.
         verify(runtime, times(1)).scheduleWriteAllOperation(
-            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        );
-    }
-
-    @Test
-    public void testOnPartitionsDeletedCleanupShareGroupStateEmptyMetadata() {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
-            .setConfig(createConfig())
-            .setRuntime(runtime)
-            .build();
-        service.startup(() -> 3);
-
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "bar", 1)
-            .build();
-        service.onMetadataUpdate(new MetadataDelta(image), image);
-
-        // No error in partition deleted callback
-        when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-partition-deleted"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
-        )).thenReturn(List.of(
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null)
-        ));
-
-        when(runtime.scheduleWriteAllOperation(
-            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        )).thenReturn(List.of(
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null)
-        ));
-
-        // The exception is logged and swallowed.
-        assertDoesNotThrow(() ->
-            service.onPartitionsDeleted(
-                List.of(new TopicPartition("foo", 0)),
-                BufferSupplier.NO_CACHING
-            )
         );
-
-        verify(runtime, times(0)).scheduleWriteAllOperation(
-            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        );
-    }
-
-    @Test
-    public void testOnPartitionsDeletedCleanupShareGroupStateTopicsNotInMetadata() {
-        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
-        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
-            .setConfig(createConfig())
-            .setRuntime(runtime)
-            .build();
-        service.startup(() -> 3);
-
-        MetadataImage image = MetadataImage.EMPTY;
-        service.onMetadataUpdate(new MetadataDelta(image), image);
-
-        // No error in partition deleted callback
-        when(runtime.scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        )).thenReturn(List.of(
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null)
-        ));
-
-        when(runtime.scheduleWriteAllOperation(
-            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        )).thenReturn(List.of(
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null),
-            CompletableFuture.completedFuture(null)
-        ));
-
-        // The exception is logged and swallowed.
-        assertDoesNotThrow(() ->
-            service.onPartitionsDeleted(
-                List.of(new TopicPartition("foo", 0)),
-                BufferSupplier.NO_CACHING
-            )
-        );
-
-        verify(runtime, times(0)).scheduleWriteAllOperation(
+        verify(runtime, times(1)).scheduleWriteAllOperation(
             ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
@@ -3840,7 +3796,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupOffsetsWithDefaultPersisterThrowsError() {
+    public void testDescribeShareGroupOffsetsWithDefaultPersisterThrowsError() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -3867,7 +3823,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullResult() {
+    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullResult() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -3894,7 +3850,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullTopicData() {
+    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullTopicData() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4330,7 +4286,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupAllOffsetsThrowsError() {
+    public void testDescribeShareGroupAllOffsetsThrowsError() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4366,7 +4322,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupAllOffsetsNullResult() {
+    public void testDescribeShareGroupAllOffsetsNullResult() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5563,7 +5519,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeSuccess() {
+    public void testPersisterInitializeSuccess() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5617,7 +5573,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeFailure() {
+    public void testPersisterInitializeFailure() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5672,7 +5628,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializePartialFailure() {
+    public void testPersisterInitializePartialFailure() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5737,7 +5693,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeGroupInitializeFailure() {
+    public void testPersisterInitializeGroupInitializeFailure() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5955,7 +5911,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeForAlterShareGroupOffsetsResponseSuccess() {
+    public void testPersisterInitializeForAlterShareGroupOffsetsResponseSuccess() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -6022,18 +5978,18 @@ public class GroupCoordinatorServiceTest {
         private MetadataImage metadataImage = null;
         private PartitionMetadataClient partitionMetadataClient = null;
 
-        GroupCoordinatorService build() {
+        GroupCoordinatorService build() throws ExecutionException, InterruptedException {
             return build(false);
         }
 
-        GroupCoordinatorService build(boolean serviceStartup) {
+        GroupCoordinatorService build(boolean serviceStartup) throws ExecutionException, InterruptedException {
             if (metadataImage == null) {
                 metadataImage = new MetadataImageBuilder()
                     .addTopic(TOPIC_ID, TOPIC_NAME, 1)
                     .build();
             }
 
-            GroupCoordinatorService service = new GroupCoordinatorService(
+            var service = new GroupCoordinatorService(
                 logContext,
                 config,
                 runtime,

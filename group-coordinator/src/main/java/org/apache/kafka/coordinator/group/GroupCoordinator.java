@@ -411,17 +411,6 @@ public interface GroupCoordinator {
     int partitionFor(String groupId);
 
     /**
-     * Remove the provided deleted partitions offsets.
-     *
-     * @param topicPartitions   The deleted partitions.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
-     */
-    void onPartitionsDeleted(
-        List<TopicPartition> topicPartitions,
-        BufferSupplier bufferSupplier
-    ) throws ExecutionException, InterruptedException;
-
-    /**
      * Group coordinator is now the leader for the given partition at the
      * given leader epoch. It should load cached state from the partition
      * and begin handling requests for groups mapped to it.
@@ -458,7 +447,7 @@ public interface GroupCoordinator {
     void onMetadataUpdate(
         MetadataDelta delta,
         MetadataImage newImage
-    );
+    ) throws ExecutionException, InterruptedException;
 
     /**
      * Return the configuration properties of the internal group
