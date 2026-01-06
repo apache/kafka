@@ -251,6 +251,7 @@ public abstract class Loggers {
         }
 
         // visible for testing
+        @SuppressWarnings("deprecation")
         Map<String, org.apache.logging.log4j.core.Logger> currentLoggers() {
             LoggerContext context = (LoggerContext) LogManager.getContext(false);
             var results = new HashMap<String, org.apache.logging.log4j.core.Logger>();
