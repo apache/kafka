@@ -3468,7 +3468,7 @@ public class ShareConsumerTest {
                 producer.send(record);
             }
             producer.flush();
-            // Create a new share consumer. Since the share.auto.offset.reset is not altered, it should be latest by default.
+            // Create a new share consumer.
             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
             shareConsumer.subscribe(List.of(tp.topic()));
             // Polling share consumer to make sure it joins the group and consumes the produced records.
@@ -3483,6 +3483,8 @@ public class ShareConsumerTest {
             shareConsumer.close();
             // Delete the share group offsets.
             deleteShareGroupOffsets(adminClient, groupId, tp.topic());
+            // Verify that the share partition offsets are deleted.
+            verifySharePartitionOffsetsDeleted(adminClient, groupId, tp);
             // Create a new share consumer.
             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
             shareConsumer2.subscribe(List.of(tp.topic()));
@@ -4201,6 +4203,14 @@ public class ShareConsumerTest {
                 sharePartitionOffsetInfo.lag().isPresent() &&
                 sharePartitionOffsetInfo.lag().get() == expectedLag;
         }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to retrieve share partition lag");
+    }
+
+    private void verifySharePartitionOffsetsDeleted(Admin adminClient, String groupId, TopicPartition tp) throws InterruptedException {
+        TestUtils.waitForCondition(
+            () -> sharePartitionOffsetInfo(adminClient, groupId, tp) == null, 
+            DEFAULT_MAX_WAIT_MS, 
+            DEFAULT_POLL_INTERVAL_MS, 
+            () -> "Failed to retrieve share partition lag");
     }
 
     private void alterShareGroupOffsets(Admin adminClient, String groupId, TopicPartition topicPartition, Long newOffset) throws InterruptedException, ExecutionException {
