@@ -66,14 +66,7 @@ public class JmxTool {
     public static void main(String[] args) {
         try {
             JmxToolOptions options = new JmxToolOptions(args);
-            if (CommandLineUtils.isPrintHelpNeeded(options)) {
-                CommandLineUtils.printUsageAndExit(options.parser, "Dump JMX values to standard output.");
-                return;
-            }
-            if (CommandLineUtils.isPrintVersionNeeded(options)) {
-                CommandLineUtils.printVersionAndExit();
-                return;
-            }
+            CommandLineUtils.maybePrintHelpOrVersion(options, "Dump JMX values to standard output.");
 
             Optional<String[]> attributesInclude = options.attributesInclude();
             Optional<DateFormat> dateFormat = options.dateFormat();

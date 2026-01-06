@@ -241,7 +241,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         copyQuotaMetrics = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
             "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS);
 
-        indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteStorageManagerPlugin.get(), logDir);
+        indexCache = new RemoteIndexCache(
+            rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(),
+            rlmConfig.remoteLogIndexFileCacheTtlMs(),
+            false,
+            remoteStorageManagerPlugin.get(),
+            logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmCopyThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerCopierThreadPoolSize(),
             "RLMCopyThreadPool", "kafka-rlm-copy-thread-pool-%d");
@@ -426,7 +431,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return Plugin.wrapInstance(rlmm, metrics, RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
     }
 
-    RemoteLogMetadataManager remoteLogMetadataManager() {
+    public RemoteLogMetadataManager remoteLogMetadataManager() {
         return remoteLogMetadataManagerPlugin.get();
     }
 
@@ -836,7 +841,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 if (!isCancelled()) {
                     logger.warn("Current thread for partition {} is interrupted", topicIdPartition, ex);
                 }
-            } catch (RetriableException ex) {
+            } catch (RetriableException | RetriableRemoteStorageException ex) {
                 logger.debug("Encountered a retryable error while executing current task for partition {}", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
@@ -869,7 +874,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         @Override
-        protected void execute(UnifiedLog log) throws InterruptedException {
+        protected void execute(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
             // In the first run after completing altering logDir within broker, we should make sure the state is reset. (KAFKA-16711)
             if (!log.parentDir().equals(logDirectory.orElse(null))) {
                 copiedOffsetOption = Optional.empty();
@@ -928,7 +933,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             return candidateLogSegments;
         }
 
-        public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException {
+        public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
             if (isCancelled())
                 return;
 
@@ -985,9 +990,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             segmentIdsBeingCopied.add(segmentId);
                             try {
                                 copyLogSegment(log, candidateLogSegment.logSegment, segmentId, candidateLogSegment.nextSegmentOffset);
-                            } catch (Exception e) {
-                                recordLagStats(log);
-                                throw e;
                             } finally {
                                 segmentIdsBeingCopied.remove(segmentId);
                             }
@@ -1001,7 +1003,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
                 brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                 this.cancel();
-            } catch (InterruptedException | RetriableException ex) {
+            } catch (InterruptedException | RetriableException | RetriableRemoteStorageException ex) {
                 throw ex;
             } catch (Exception ex) {
                 if (!isCancelled()) {
@@ -1009,6 +1011,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
                     logger.error("Error occurred while copying log segments of partition: {}", topicIdPartition, ex);
                 }
+            } finally {
+                recordLagStats(log);
             }
         }
 
@@ -1044,6 +1048,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             
             try {
                 customMetadata = remoteStorageManagerPlugin.get().copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+            } catch (RetriableRemoteStorageException e) {
+                logger.info("Copy failed with retriable error for segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
+                throw e;
             } catch (RemoteStorageException e) {
                 logger.info("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 try {
@@ -1093,14 +1100,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}",
                     logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
-
-            recordLagStats(log);
-        }
-
-        private void recordLagStats(UnifiedLog log) {
-            long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
-            long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
-            recordLagStats(bytesLag, segmentsLag);
         }
 
         // VisibleForTesting
@@ -1118,6 +1117,17 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             int partition = topicIdPartition.partition();
             brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, 0);
             brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, 0);
+        }
+
+        // VisibleForTesting
+        void recordLagStats(UnifiedLog log) {
+            try {
+                long bytesLag = Math.max(0, log.onlyLocalLogSegmentsSize() - log.activeSegment().size());
+                long segmentsLag = Math.max(0, log.onlyLocalLogSegmentsCount() - 1);
+                recordLagStats(bytesLag, segmentsLag);
+            } catch (Exception e) {
+                logger.debug("Failed to record lag stats for partition {}", topicIdPartition, e);
+            }
         }
 
         private Path toPathIfExists(File file) {
@@ -1513,6 +1523,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // Delete the segment in remote storage.
             try {
                 remoteStorageManagerPlugin.get().deleteLogSegmentData(segmentMetadata);
+            } catch (RetriableRemoteStorageException e) {
+                throw e;
             } catch (RemoteStorageException e) {
                 brokerTopicStats.topicStats(topic).failedRemoteDeleteRequestRate().mark();
                 brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().mark();

@@ -78,14 +78,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <pre>
  * class SomeIntegrationTest {
- *   &#64;ClusterTest(brokers = 1, controllers = 1, clusterType = ClusterType.Both)
- *   def someTest(): Unit = {
+ *   &#64;ClusterTest(brokers = 1, controllers = 1, types = {Type.KRAFT, Type.CO_KRAFT})
+ *   void someTest(ClusterInstance cluster) {
  *     assertTrue(condition)
  *   }
  * }
  * </pre>
  *
- * will generate two invocations of "someTest" (since ClusterType.Both was given). For each invocation, the test class
+ * will generate two invocations of "someTest" (since two cluster types were specified). For each invocation, the test class
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
  * A special system property "kafka.cluster.test.repeat" can be used to cause repeated invocation of the tests.
@@ -294,6 +294,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .setMetadataVersion(clusterTest.metadataVersion())
             .setTags(List.of(clusterTest.tags()))
             .setFeatures(features)
+            .setStandalone(clusterTest.standalone())
             .build();
 
         return Arrays.stream(types)

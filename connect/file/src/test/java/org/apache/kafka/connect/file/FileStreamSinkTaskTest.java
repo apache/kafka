@@ -57,7 +57,7 @@ public class FileStreamSinkTaskTest {
 
     @Test
     public void testPutFlush() {
-        HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         final String newLine = System.lineSeparator();
 
         // We do not call task.start() since it would override the output stream

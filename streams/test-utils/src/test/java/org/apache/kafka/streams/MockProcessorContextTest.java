@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -290,7 +291,6 @@ public class MockProcessorContextTest {
         when(mockInternalProcessorContext.metrics()).thenReturn(new StreamsMetricsImpl(
             new Metrics(new MetricConfig()),
             Thread.currentThread().getName(),
-            "processId",
             Time.SYSTEM
         ));
         when(mockInternalProcessorContext.taskId()).thenReturn(new TaskId(1, 1));
@@ -440,6 +440,45 @@ public class MockProcessorContextTest {
 
         final Punctuator punctuator = capturedPunctuator.getPunctuator();
         assertFalse(context.committed());
+        punctuator.punctuate(1234L);
+        assertTrue(context.committed());
+    }
+
+    @Test
+    public void shouldCaptureAnchoredPunctuator() {
+        final Transformer<String, Long, KeyValue<String, Long>> transformer = new Transformer<>() {
+            @Override
+            public void init(final ProcessorContext context) {
+                context.schedule(
+                        Instant.ofEpochMilli(1000),
+                        Duration.ofSeconds(1L),
+                        PunctuationType.WALL_CLOCK_TIME,
+                        timestamp -> context.commit()
+                );
+            }
+
+            @Override
+            public KeyValue<String, Long> transform(final String key, final Long value) {
+                return null;
+            }
+
+            @Override
+            public void close() { }
+        };
+
+        final MockProcessorContext context = new MockProcessorContext();
+
+        transformer.init(context);
+
+        final MockProcessorContext.CapturedPunctuator capturedPunctuator = context.scheduledPunctuators().get(0);
+        assertEquals(Instant.ofEpochMilli(1000), capturedPunctuator.getStartTime());
+        assertEquals(1000L, capturedPunctuator.getIntervalMs());
+        assertEquals(PunctuationType.WALL_CLOCK_TIME, capturedPunctuator.getType());
+        assertFalse(capturedPunctuator.cancelled());
+
+        final Punctuator punctuator = capturedPunctuator.getPunctuator();
+        assertFalse(context.committed());
+
         punctuator.punctuate(1234L);
         assertTrue(context.committed());
     }

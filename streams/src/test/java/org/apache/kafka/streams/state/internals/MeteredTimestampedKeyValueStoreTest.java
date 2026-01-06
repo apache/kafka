@@ -127,7 +127,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         setUpWithoutContext();
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.metrics())
-            .thenReturn(new StreamsMetricsImpl(metrics, "test", "processId", mockTime));
+            .thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(inner.name()).thenReturn(STORE_NAME);
@@ -503,15 +503,13 @@ public class MeteredTimestampedKeyValueStoreTest {
         when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
         init();
 
-        KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, nullValue());
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
         KeyValueIterator<String, ValueAndTimestamp<String>> second = null;
         final long secondTimestamp;
         try {
             try (final KeyValueIterator<String, ValueAndTimestamp<String>> unused = metered.all()) {
-                oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-                assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
@@ -531,8 +529,7 @@ public class MeteredTimestampedKeyValueStoreTest {
                 second.close();
             }
         }
-
-        oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
-        assertThat(oldestIteratorTimestampMetric, nullValue());
+        // now that all iterators are closed, the metric should be zero
+        assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 }

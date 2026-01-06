@@ -129,17 +129,12 @@ object StorageTool extends Logging {
       setControllerListenerName(config.controllerListenerNames.get(0)).
       setMetadataLogDirectory(config.metadataLogDir)
 
-    def metadataVersionsToString(first: MetadataVersion, last: MetadataVersion): String = {
-      val versions = MetadataVersion.VERSIONS.slice(first.ordinal, last.ordinal + 1)
-      versions.map(_.toString).mkString(", ")
-    }
     Option(namespace.getString("release_version")).foreach(releaseVersion => {
       try {
-        formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
+        formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion, config.unstableFeatureVersionsEnabled))
       } catch {
-        case _: Throwable =>
-          throw new TerseFailure(s"Unknown metadata.version $releaseVersion. Supported metadata.version are " +
-            s"${metadataVersionsToString(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction())}")
+        case e: Throwable =>
+          throw new TerseFailure(e.getMessage)
       }
     })
 
@@ -149,8 +144,9 @@ object StorageTool extends Logging {
       })
     val initialControllers = namespace.getString("initial_controllers")
     val isStandalone = namespace.getBoolean("standalone")
-    if (!config.quorumConfig.voters().isEmpty &&
-      (Option(initialControllers).isDefined || isStandalone)) {
+    val staticVotersEmpty = config.quorumConfig.voters().isEmpty
+    formatter.setHasDynamicQuorum(staticVotersEmpty)
+    if (!staticVotersEmpty && (Option(initialControllers).isDefined || isStandalone)) {
       throw new TerseFailure("You cannot specify " +
         QuorumConfig.QUORUM_VOTERS_CONFIG + " and format the node " +
         "with --initial-controllers or --standalone. " +
@@ -163,16 +159,13 @@ object StorageTool extends Logging {
     if (isStandalone) {
       formatter.setInitialControllers(createStandaloneDynamicVoters(config))
     }
-    if (namespace.getBoolean("no_initial_controllers")) {
-      formatter.setNoInitialControllersFlag(true)
-    } else {
-      if (config.processRoles.contains(ProcessRole.ControllerRole)) {
-        if (config.quorumConfig.voters().isEmpty && formatter.initialVoters().isEmpty) {
+    if (!namespace.getBoolean("no_initial_controllers") &&
+      config.processRoles.contains(ProcessRole.ControllerRole) &&
+      staticVotersEmpty &&
+      formatter.initialVoters().isEmpty) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
             "--standalone, --initial-controllers, or --no-initial-controllers.");
-        }
-      }
     }
     Option(namespace.getList("add_scram")).
       foreach(scramArgs => formatter.setScramArguments(scramArgs.asInstanceOf[util.List[String]]))
@@ -184,9 +177,9 @@ object StorageTool extends Logging {
    * Maps the given release version to the corresponding metadata version
    * and prints the corresponding features.
    *
-   * @param namespace       Arguments containing the release version.
-   * @param printStream     The print stream to output the version mapping.
-   * @param validFeatures   List of features to be considered in the output
+   * @param namespace                     Arguments containing the release version.
+   * @param printStream                   The print stream to output the version mapping.
+   * @param validFeatures                 List of features to be considered in the output.
    */
   def runVersionMappingCommand(
     namespace: Namespace,
@@ -195,7 +188,7 @@ object StorageTool extends Logging {
   ): Unit = {
     val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
     try {
-      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
+      val metadataVersion = MetadataVersion.fromVersionString(releaseVersion, true)
 
       val metadataVersionLevel = metadataVersion.featureLevel()
       printStream.print(f"metadata.version=$metadataVersionLevel%d ($releaseVersion%s)%n")
@@ -206,8 +199,7 @@ object StorageTool extends Logging {
       }
     } catch {
       case e: IllegalArgumentException =>
-        throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.latestTesting().version()}")
+        throw new TerseFailure(e.getMessage)
     }
   }
 
@@ -220,7 +212,14 @@ object StorageTool extends Logging {
 
     // Iterate over each feature specified with --feature
     for (featureArg <- featureArgs) {
-      val Array(featureName, versionStr) = featureArg.split("=")
+      // Improved error handling for feature argument format
+      val parts = featureArg.split("=", 2)
+      if (parts.length != 2) {
+        throw new TerseFailure(s"Invalid feature format: $featureArg. Expected format: 'feature=version' (e.g. 'group.version=1')")
+      }
+
+      val featureName = parts(0).trim
+      val versionStr = parts(1).trim
 
       val featureLevel = try {
         versionStr.toShort
@@ -342,18 +341,21 @@ object StorageTool extends Logging {
 
     val reconfigurableQuorumOptions = formatParser.addMutuallyExclusiveGroup()
     reconfigurableQuorumOptions.addArgument("--standalone", "-s")
-      .help("Used to initialize a controller as a single-node dynamic quorum.")
+      .help("Used to initialize a controller as a single-node dynamic quorum. When setting this flag, " +
+        "the controller.quorum.voters config must not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--no-initial-controllers", "-N")
-      .help("Used to initialize a server without a dynamic quorum topology.")
+      .help("Used to initialize a server without specifying a dynamic quorum. When setting this flag, " +
+        "the controller.quorum.voters config should not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(storeTrue())
 
     reconfigurableQuorumOptions.addArgument("--initial-controllers", "-I")
-      .help("Used to initialize a server with a specific dynamic quorum topology. The argument " +
+      .help("Used to initialize a server with the specified dynamic quorum. The argument " +
         "is a comma-separated list of id@hostname:port:directory. The same values must be used to " +
         "format all nodes. For example:\n0@example.com:8082:JEXY6aqzQY-32P5TStzaFg,1@example.com:8083:" +
-        "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n")
+        "MvDxzVmcRsaTz33bUuRU6A,2@example.com:8084:07R5amHmR32VDA6jHkGbTA\n. When setting this flag, " +
+        "the controller.quorum.voters config must not be set, and controller.quorum.bootstrap.servers is set instead.")
       .action(store())
   }
 
