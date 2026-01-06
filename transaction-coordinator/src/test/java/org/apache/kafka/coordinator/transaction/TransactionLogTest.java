@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.transaction;
 
-import kafka.coordinator.transaction.TransactionLog;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -52,8 +50,9 @@ import static org.apache.kafka.server.common.TransactionVersion.LATEST_PRODUCTIO
 import static org.apache.kafka.server.common.TransactionVersion.TV_0;
 import static org.apache.kafka.server.common.TransactionVersion.TV_2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 class TransactionLogTest {
@@ -67,15 +66,12 @@ class TransactionLogTest {
     );
 
     private sealed interface TxnKeyResult {
-        record UnknownVersion(short version) implements TxnKeyResult { }
         record TransactionalId(String id) implements TxnKeyResult { }
     }
 
     private static TxnKeyResult readTxnRecordKey(ByteBuffer buf) {
-        var e = TransactionLog.readTxnRecordKey(buf);
-        return e.isLeft()
-            ? new TxnKeyResult.UnknownVersion((Short) e.left().get())
-            : new TxnKeyResult.TransactionalId(e.right().get());
+        var result = TransactionLog.readTxnRecordKey(buf);
+        return new TxnKeyResult.TransactionalId(result);
     }
 
     private static TransactionMetadata TransactionMetadata(TransactionState state) {
@@ -128,7 +124,7 @@ class TransactionLogTest {
             TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2)
         )).records().iterator().next();
         var txnIdResult = assertInstanceOf(TxnKeyResult.TransactionalId.class, readTxnRecordKey(record.key()));
-        var deserialized = TransactionLog.readTxnRecordValue(txnIdResult.id(), record.value()).get();
+        var deserialized = TransactionLog.readTxnRecordValue(txnIdResult.id(), record.value());
 
         assertEquals(txnMetadata.producerId(), deserialized.producerId());
         assertEquals(txnMetadata.producerEpoch(), deserialized.producerEpoch());
@@ -172,7 +168,7 @@ class TransactionLogTest {
             .setTransactionPartitions(List.of(txnPartitions));
 
         var serialized = MessageUtil.toVersionPrefixedByteBuffer((short) 1, txnLogValue);
-        var deserialized = TransactionLog.readTxnRecordValue("transactionId", serialized).get();
+        var deserialized = TransactionLog.readTxnRecordValue("transactionId", serialized);
 
         assertEquals(100, deserialized.producerId());
         assertEquals(50, deserialized.producerEpoch());
@@ -253,11 +249,9 @@ class TransactionLogTest {
 
         // Read the buffer with readTxnRecordValue.
         buffer.rewind();
-        var txnMetadata = TransactionLog.readTxnRecordValue("transaction-id", buffer);
-        
-        assertFalse(txnMetadata.isEmpty(), "Expected transaction metadata but got none");
+        var metadata = TransactionLog.readTxnRecordValue("transaction-id", buffer);
 
-        var metadata = txnMetadata.get();
+        assertNotNull(metadata, "Expected transaction metadata but got none");
         assertEquals(1000L, metadata.producerId());
         assertEquals(100, metadata.producerEpoch());
         assertEquals(1000, metadata.txnTimeoutMs());
@@ -268,16 +262,15 @@ class TransactionLogTest {
     }
 
     @Test
-    void testReadTxnRecordKeyCanReadUnknownMessage() {
+    void testReadTxnRecordKeyThrowsOnUnknownVersion() {
         var unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MAX_VALUE, new TransactionLogKey());
-        var result = readTxnRecordKey(wrap(unknownRecord));
-        
-        var uv = assertInstanceOf(TxnKeyResult.UnknownVersion.class, result);
-        assertEquals(Short.MAX_VALUE, uv.version());
+        var exception = assertThrows(IllegalStateException.class,
+            () -> TransactionLog.readTxnRecordKey(wrap(unknownRecord)));
+        assertTrue(exception.getMessage().contains("Unknown version " + Short.MAX_VALUE));
     }
    
     @Test
-    void shouldReturnEmptyWhenForTombstoneRecord() {
-        assertTrue(TransactionLog.readTxnRecordValue("transaction-id", null).isEmpty());
+    void shouldReturnNullForTombstoneRecord() {
+        assertNull(TransactionLog.readTxnRecordValue("transaction-id", null));
     }
 }

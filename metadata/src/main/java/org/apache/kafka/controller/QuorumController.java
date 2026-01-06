@@ -479,10 +479,8 @@ public final class QuorumController implements Controller {
                         throw new InvalidRequestException("Invalid broker name " +
                             configResource.name());
                     }
-                    if (!(clusterControl.brokerRegistrations().containsKey(nodeId) ||
-                            featureControl.isControllerId(nodeId))) {
-                        throw new BrokerIdNotRegisteredException("No node with id " +
-                            nodeId + " found.");
+                    if (!isNodeIdRegistered(nodeId)) {
+                        throw new BrokerIdNotRegisteredException("No node with id " + nodeId + " found.");
                     }
                     break;
                 case TOPIC:
@@ -494,6 +492,19 @@ public final class QuorumController implements Controller {
                 default:
                     break;
             }
+        }
+
+        /**
+         * Checks if a node id is registered as a broker, controller in static/dynamic quorum.
+         */
+        private boolean isNodeIdRegistered(int nodeId) {
+            if (clusterControl.brokerRegistrations().containsKey(nodeId)) {
+                return true;
+            }
+            if (featureControl.isControllerId(nodeId)) {
+                return true;
+            }
+            return clusterControl.controllerRegistrations().containsKey(nodeId);
         }
     }
 
