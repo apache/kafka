@@ -88,7 +88,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -778,8 +777,13 @@ public class CommitRequestManagerTest {
         assertEmptyPendingRequests(commitRequestManager);
     }
 
+    // Ensure that OffsetFetch requests using topic ID do not fail when receiving topic IDs in response
+    // that are not in the client metadata anymore. This is the case when a consumer unsubscribes from a topic
+    // right after sending an OffsetFetch request. The response will contain a topic ID that does not exist in
+    // the consumer metadata anymore. The expectation is that the response parsing succeeds,
+    // ignoring the offsets for the topic that the consumer no longer needs.
     @Test
-    public void testOffsetFetchRequestShouldFailWithTopicIdWhenMetadataUnknownResponseTopicId() {
+    public void testFetchOffsetsWithTopicIdsDoesNotFailOnUnsubscribedTopics() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         Uuid topicId = Uuid.randomUuid();
@@ -798,9 +802,7 @@ public class CommitRequestManagerTest {
             topicId);
         futures.forEach(f -> {
             assertTrue(f.isDone());
-            assertTrue(f.isCompletedExceptionally());
-            ExecutionException exception = assertThrows(ExecutionException.class, f::get);
-            assertInstanceOf(KafkaException.class, exception.getCause());
+            assertFalse(f.isCompletedExceptionally());
         });
         // expecting the buffers to be emptied after being completed successfully
         commitRequestManager.poll(0);

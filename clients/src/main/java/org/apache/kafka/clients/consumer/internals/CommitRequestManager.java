@@ -1143,9 +1143,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             failedRequestRegistered = true;
                         }
 
-                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.UNKNOWN_TOPIC_ID || topicName == null) {
+                        if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION || error == Errors.UNKNOWN_TOPIC_ID) {
                             future.completeExceptionally(new KafkaException("Topic does not exist"));
                             return;
+                        } else if (topicName == null) {
+                            // The requested topic exists in the broker, but it's not in the client metadata anymore (consumer unsubscribed).
+                            // Ignore the offsets received for this topic that the consumer no longer needs.
+                            log.debug("Topic does not exist in client metadata anymore. Ignoring offsets received for it.");
                         } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                             unauthorizedTopics.add(tp.topic());
                         } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
