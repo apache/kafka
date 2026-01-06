@@ -388,6 +388,8 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testShareConsumerAfterCoordinatorMovement
 - testShareGroupMaxSizeConfigExceeded
 - testShareGroupShareSessionCacheIsFull
+- testSharePartitionLagAfterAlterShareGroupOffsets
+- testSharePartitionLagAfterDeleteShareGroupOffsets
 - testSharePartitionLagForMultipleShareConsumers
 - testSharePartitionLagForSingleShareConsumer
 - testSharePartitionLagOnGroupCoordinatorMovement

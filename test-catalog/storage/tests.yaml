@@ -135,6 +135,7 @@ org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfigTest:
 - testValidateEmptyStringConfig
 org.apache.kafka.server.log.remote.storage.RemoteLogManagerTest:
 - testBuildFilteredLeaderEpochMap
+- testBuildRetentionSizeData
 - testCandidateLogSegmentsSkipsActiveSegment
 - testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset
 - testConfigure

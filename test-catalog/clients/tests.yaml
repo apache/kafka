@@ -1295,6 +1295,8 @@ org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManagerTest:
 - testFailureOnFatalException
 - testFencedMemberStopHeartbeatUntilItReleasesAssignmentToRejoin
 - testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments
+- testGroupIdNotFoundExceptionWhileUnsubscribed
+- testGroupIdNotFoundWhileStableIsFatal
 - testHeartBeatRequestStateToStringBase
 - testHeartbeatNotSentIfAnotherOneInFlight
 - testHeartbeatOnStartup
@@ -2295,6 +2297,8 @@ org.apache.kafka.clients.consumer.internals.ShareFetchMetricsManagerTest:
 org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManagerTest:
 - testFailureOnFatalException
 - testFirstHeartbeatIncludesRequiredInfoToJoinGroupAndGetAssignments
+- testGroupIdNotFoundExceptionWhileUnsubscribed
+- testGroupIdNotFoundWhileStableIsFatal
 - testHeartbeatMetrics
 - testHeartbeatNotSentIfAnotherOneInFlight
 - testHeartbeatOnStartup
