@@ -64,7 +64,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 /**
@@ -447,7 +446,7 @@ public interface GroupCoordinator {
     void onMetadataUpdate(
         MetadataDelta delta,
         MetadataImage newImage
-    ) throws ExecutionException, InterruptedException;
+    );
 
     /**
      * Return the configuration properties of the internal group

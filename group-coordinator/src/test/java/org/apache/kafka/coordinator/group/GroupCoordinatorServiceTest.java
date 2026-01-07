@@ -949,7 +949,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPartitionFor() throws ExecutionException, InterruptedException {
+    public void testPartitionFor() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -965,7 +965,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testGroupMetadataTopicConfigs() throws ExecutionException, InterruptedException {
+    public void testGroupMetadataTopicConfigs() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -981,7 +981,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnElection() throws ExecutionException, InterruptedException {
+    public void testOnElection() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -1001,7 +1001,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnResignation() throws ExecutionException, InterruptedException {
+    public void testOnResignation() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -1021,7 +1021,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnResignationWithEmptyLeaderEpoch() throws ExecutionException, InterruptedException {
+    public void testOnResignationWithEmptyLeaderEpoch() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -1037,7 +1037,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testJoinGroup() throws ExecutionException, InterruptedException {
+    public void testJoinGroup() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -1193,7 +1193,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testSyncGroup() throws ExecutionException, InterruptedException {
+    public void testSyncGroup() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3153,7 +3153,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnMetadataUpdateWhenNotStarted() throws ExecutionException, InterruptedException {
+    public void testOnMetadataUpdateWhenNotStarted() {
         var runtime = mockRuntime();
         var service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3245,7 +3245,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnMetadataUpdateDoesNotScheduleOperationsWhenNoTopicsDeleted() throws ExecutionException, InterruptedException {
+    public void testOnMetadataUpdateDoesNotScheduleOperationsWhenNoTopicsDeleted() {
         var runtime = mockRuntime();
         var service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3275,7 +3275,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnMetadataUpdateSwallowsErrorsWhenTopicsDeleted() throws ExecutionException, InterruptedException {
+    public void testOnMetadataUpdateSwallowsErrorsWhenTopicsDeleted() {
         var runtime = mockRuntime();
         var service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -5995,11 +5995,11 @@ public class GroupCoordinatorServiceTest {
         private MetadataImage metadataImage = null;
         private PartitionMetadataClient partitionMetadataClient = null;
 
-        GroupCoordinatorService build() throws ExecutionException, InterruptedException {
+        GroupCoordinatorService build() {
             return build(false);
         }
 
-        GroupCoordinatorService build(boolean serviceStartup) throws ExecutionException, InterruptedException {
+        GroupCoordinatorService build(boolean serviceStartup) {
             if (metadataImage == null) {
                 metadataImage = new MetadataImageBuilder()
                     .addTopic(TOPIC_ID, TOPIC_NAME, 1)

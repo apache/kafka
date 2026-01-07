@@ -137,7 +137,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -2255,7 +2254,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public void onMetadataUpdate(
         MetadataDelta delta,
         MetadataImage newImage
-    ) throws ExecutionException, InterruptedException {
+    ) {
         throwIfNotActive();
         Objects.requireNonNull(delta, "delta must be provided");
         Objects.requireNonNull(newImage, "newImage must be provided");
@@ -2278,7 +2277,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      *
      * @param topicsDelta The topics delta containing deleted topic IDs.
      */
-    private void handlePartitionsDeletion(TopicsDelta topicsDelta) throws ExecutionException, InterruptedException {
+    private void handlePartitionsDeletion(TopicsDelta topicsDelta) {
         var topicPartitions = new ArrayList<TopicPartition>();
         var topicIds = topicsDelta.deletedTopicIds();
 
@@ -2329,7 +2328,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         // Wait for all operations to complete.
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).get();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).join();
     }
 
     /**
