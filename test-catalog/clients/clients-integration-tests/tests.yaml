@@ -328,6 +328,7 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testAlterReadCommittedToReadUncommittedIsolationLevelWithReleaseAck
 - testAlterReadUncommittedToReadCommittedIsolationLevel
 - testBehaviorOnDeliveryCountBoundary
+- testCommitSyncFailsForDeletedTopic
 - testComplexShareConsumer
 - testConfiguredExplicitAcknowledgeCommitSuccess
 - testConfiguredImplicitAcknowledgeExplicitAcknowledgeFails
