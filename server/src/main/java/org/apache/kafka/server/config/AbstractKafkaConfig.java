@@ -208,11 +208,30 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
         return connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT);
     }
+
+    /**
+     * Registers a component for dynamic reconfiguration notifications.
+     * <p>
+     * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
+     * When migrating code, replace KafkaConfig references with AbstractKafkaConfig. The default implementation is a no-op;
+     * KafkaConfig overrides this to manage the reconfigurable registry.
+     *
+     * @param reconfigurable the component to register for configuration updates
+     */
     public void addReconfigurable(Reconfigurable reconfigurable) {
         // Default no-op. Overridden by KafkaConfig to support dynamic configuration.
-    };
+    }
 
+    /**
+     * Unregisters a component from dynamic reconfiguration notifications.
+     * <p>
+     * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
+     * When migrating code, replace KafkaConfig references with AbstractKafkaConfig. The default implementation is a no-op;
+     * KafkaConfig overrides this to remove components from the registry.
+     *
+     * @param reconfigurable the component to unregister
+     */
     public void removeReconfigurable(Reconfigurable reconfigurable) {
         // Default no-op. Overridden by KafkaConfig to support dynamic configuration.
-    };
+    }
 }

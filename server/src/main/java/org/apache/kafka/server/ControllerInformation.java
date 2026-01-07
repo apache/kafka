@@ -23,6 +23,17 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Optional;
 
+/**
+ * Connection information for communicating with the active Kafka controller in KRaft mode.
+ * <p>
+ * Contains the controller node endpoint and security configuration needed to establish
+ * a network connection. The node may be absent during cluster initialization or leader elections.
+ *
+ * @param node The controller node (id, host, port), or empty if controller is unknown
+ * @param listenerName The listener to use for controller connections
+ * @param securityProtocol The security protocol (PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL)
+ * @param saslMechanism The SASL mechanism for authentication (e.g., "PLAIN", "SCRAM-SHA-256")
+ */
 public record ControllerInformation(Optional<Node> node, ListenerName listenerName, SecurityProtocol securityProtocol,
                                     String saslMechanism) {
 }

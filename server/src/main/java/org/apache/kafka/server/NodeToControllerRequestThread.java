@@ -39,6 +39,13 @@ import java.util.Optional;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Background thread that manages to send requests to the active controller.
+ * <p>
+ * Maintains a queue of pending requests and handles automatic retries on failures,
+ * controller failover, and timeout detection. Requests are re-queued when the controller
+ * changes or connections are lost.
+ */
 public class NodeToControllerRequestThread extends InterBrokerSendThread {
     private static final Logger log = LoggerFactory.getLogger(NodeToControllerRequestThread.class);
 
@@ -51,7 +58,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
     private final ControllerNodeProvider controllerNodeProvider;
     private final ManualMetadataUpdater metadataUpdater;
 
-    // Used to testing
+    // Used for testing
     volatile boolean started = false;
     public void setStarted(boolean started) {
         this.started = started;

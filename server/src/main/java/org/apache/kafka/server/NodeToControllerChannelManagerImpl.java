@@ -47,6 +47,13 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Manages a communication channel from a node to the active KRaft controller.
+ * <p>
+ * Creates a network client with the appropriate security configuration and uses a background
+ * request thread to queue and send requests asynchronously. Supports dynamic reconfiguration
+ * of security settings when the controller listener configuration changes.
+ */
 public class NodeToControllerChannelManagerImpl implements NodeToControllerChannelManager {
     private static final Logger log = LoggerFactory.getLogger(NodeToControllerChannelManagerImpl.class);
     private final ControllerNodeProvider controllerNodeProvider;
