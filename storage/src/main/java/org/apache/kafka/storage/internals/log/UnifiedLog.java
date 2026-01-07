@@ -1825,7 +1825,7 @@ public class UnifiedLog implements AutoCloseable {
                 });
     }
 
-    public CompletableFuture<OffsetResultHolder> asyncFetchOffsetByTimestamp(long targetTimestamp, Optional<AsyncOffsetReader> remoteOffsetReader) {
+    public CompletableFuture<OffsetResultHolder> fetchOffsetByTimestampAsync(long targetTimestamp, Optional<AsyncOffsetReader> remoteOffsetReader) {
         try {
             return CompletableFuture.completedFuture(fetchOffsetByTimestamp(targetTimestamp, remoteOffsetReader));
         } catch (Throwable t) {

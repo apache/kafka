@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log.bookkeeper;
 
 import io.netty.buffer.ByteBuf;
 import org.apache.bookkeeper.mledger.AsyncCallbacks;
+import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
@@ -142,6 +143,32 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
         return null;
     }
 
+    public CompletableFuture<MemoryRecords> readLatestRecordsAsync() {
+        Position lac = managedLedger.getLastConfirmedEntry();
+        if (lac == null) {
+            return CompletableFuture.completedFuture(MemoryRecords.EMPTY);
+        }
+        CompletableFuture<MemoryRecords> future = new CompletableFuture<>();
+        managedLedger.asyncReadEntry(lac, new AsyncCallbacks.ReadEntryCallback() {
+            @Override
+            public void readEntryComplete(Entry entry, Object ctx) {
+                try {
+                    future.complete(KafkaEntryFormatter.decode(List.of(entry)));
+                } catch (Throwable t) {
+                    log.error("Failed to decode entry", t);
+                    future.completeExceptionally(Errors.KAFKA_STORAGE_ERROR.exception(t.getMessage()));
+                }
+            }
+
+            @Override
+            public void readEntryFailed(ManagedLedgerException exception, Object ctx) {
+                log.error("Failed to read entry", exception);
+                future.completeExceptionally(Errors.KAFKA_STORAGE_ERROR.exception(exception.getMessage()));
+            }
+        }, null);
+        return future;
+    }
+
     @Override
     public CompletableFuture<Long> appendAsync(LogAppendInfo appendInfo, MemoryRecords records) {
         pendingAddEntries.incrementAndGet();
@@ -166,6 +193,15 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
                 buf.release();
             }
         }
+    }
+
+
+    public CompletableFuture<Long> asyncGetLogStartOffset() {
+        return index.asyncGetLogStartOffset();
+    }
+
+    public CompletableFuture<Long> asyncFindTimestampOffset(long timestamp) {
+        return index.asyncFindTimestampOffset(timestamp);
     }
 
     @Override

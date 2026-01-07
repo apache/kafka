@@ -20,11 +20,13 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.common.TransactionVersion;
@@ -247,9 +249,42 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     }
 
     @Override
-    public CompletableFuture<OffsetResultHolder> asyncFetchOffsetByTimestamp(long targetTimestamp,
+    public CompletableFuture<OffsetResultHolder> fetchOffsetByTimestampAsync(long targetTimestamp,
                                                                              Optional<AsyncOffsetReader> remoteOffsetReader) {
-        return super.asyncFetchOffsetByTimestamp(targetTimestamp, remoteOffsetReader);
+        if (remoteOffsetReader.isPresent()) {
+            return CompletableFuture.failedFuture(Errors.UNSUPPORTED_VERSION.exception());
+        }
+        if (targetTimestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP
+                || targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP
+                || targetTimestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
+            return bookkeeperLocalLog.asyncGetLogStartOffset()
+                    .thenApply(logStartOffset -> new OffsetResultHolder(
+                            new FileRecords.TimestampAndOffset(targetTimestamp, logStartOffset, Optional.empty())));
+        } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP
+                || targetTimestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+            return CompletableFuture.completedFuture(new OffsetResultHolder(
+                    new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, bookkeeperLocalLog.logEndOffset(), Optional.empty())));
+        } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
+            if (bookkeeperLocalLog.logEndOffset() == 0) {
+                return CompletableFuture.completedFuture(new OffsetResultHolder(
+                        new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, bookkeeperLocalLog.logEndOffset(), Optional.empty())));
+            }
+            return bookkeeperLocalLog.readLatestRecordsAsync()
+                    .thenApply(records -> {
+                        Optional<RecordBatch> lastBatchOpt = records.lastBatch();
+                        if (lastBatchOpt.isEmpty()) {
+                            return new OffsetResultHolder(
+                                    new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.empty()));
+                        } else {
+                            RecordBatch lastBatch = lastBatchOpt.get();
+                            return new OffsetResultHolder(
+                                    new FileRecords.TimestampAndOffset(lastBatch.maxTimestamp(), lastBatch.lastOffset(), Optional.empty()));
+                        }
+                    });
+        } else {
+            return bookkeeperLocalLog.asyncFindTimestampOffset(targetTimestamp)
+                    .thenApply(offset -> new OffsetResultHolder(new FileRecords.TimestampAndOffset(targetTimestamp, offset, Optional.empty())));
+        }
     }
 
     @Override
