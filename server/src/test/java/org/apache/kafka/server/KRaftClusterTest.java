@@ -100,10 +100,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -126,8 +126,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.server.IntegrationTestUtils.connectAndReceive;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1233,7 +1235,7 @@ public class KRaftClusterTest {
             controller.shutdown();
             // Rewrite The `listeners` config to avoid controller socket server init using different port
             var config = controller.sharedServer().controllerConfig().props();
-            ((java.util.HashMap<String, String>) config).put(SocketServerConfigs.LISTENERS_CONFIG,
+            ((Map<String, String>) config).put(SocketServerConfigs.LISTENERS_CONFIG,
                 "CONTROLLER://localhost:" + port);
             controller.sharedServer().controllerConfig().updateCurrentConfig(config);
 
@@ -1561,17 +1563,15 @@ public class KRaftClusterTest {
                     .orElseThrow();
                 var targetDirFile = new File(targetParentDir, log.dir().getName());
                 targetDirFile.mkdir();
-                Files.walk(Paths.get(log.dir().toString())).forEach(p -> {
-                    var out = Paths.get(targetDirFile.toString(),
-                        p.toString().substring(log.dir().toString().length()));
-                    if (!p.toString().equals(log.dir().toString())) {
-                        try {
-                            Files.copy(p, out);
-                        } catch (IOException e) {
-                            throw new UncheckedIOException(e);
+                try (Stream<Path> stream = Files.walk(Paths.get(log.dir().toString()))) {
+                    stream.forEach(p -> {
+                        var out = Paths.get(targetDirFile.toString(),
+                            p.toString().substring(log.dir().toString().length()));
+                        if (!p.toString().equals(log.dir().toString())) {
+                            assertDoesNotThrow(() -> Files.copy(p, out));
                         }
-                    }
-                });
+                    });
+                }
                 assertTrue(targetDirFile.exists());
 
                 // Rename original log to a future
