@@ -4478,7 +4478,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.NOT_READY && firstGroup.groupId() == streamsGroupId
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.NOT_READY && firstGroup.groupId() == streamsGroupId
       }, "Streams group did not transition to NOT_READY before timeout")
 
       // Verify the describe call works correctly
