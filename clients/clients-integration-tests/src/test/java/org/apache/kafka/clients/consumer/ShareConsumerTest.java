@@ -2300,7 +2300,6 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
-            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "10"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
@@ -2322,12 +2321,11 @@ public class ShareConsumerTest {
         int targetRecordCount = 2000;
         service.execute(() -> {
             try (Producer<byte[], byte[]> producer = createProducer()) {
-                while (prodState.count().get() < targetRecordCount) {
+                do {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
                     producer.send(record);
                     producer.flush();
-                    prodState.count().incrementAndGet();
-                }
+                } while (prodState.count().incrementAndGet() < targetRecordCount);
                 prodState.done().set(true);
             }
         });
