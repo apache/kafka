@@ -3170,7 +3170,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnMetadataUpdateSchedulesOperationsWhenTopicsDeleted() throws Exception {
+    public void testOnMetadataUpdateSchedulesOperationsWhenTopicsDeleted() throws ExecutionException, InterruptedException, TimeoutException {
         var runtime = mockRuntime();
         var service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -5536,7 +5536,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeSuccess() throws ExecutionException, InterruptedException {
+    public void testPersisterInitializeSuccess() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5590,7 +5590,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeFailure() throws ExecutionException, InterruptedException {
+    public void testPersisterInitializeFailure() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5645,7 +5645,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializePartialFailure() throws ExecutionException, InterruptedException {
+    public void testPersisterInitializePartialFailure() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5710,7 +5710,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeGroupInitializeFailure() throws ExecutionException, InterruptedException {
+    public void testPersisterInitializeGroupInitializeFailure() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -5928,7 +5928,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testPersisterInitializeForAlterShareGroupOffsetsResponseSuccess() throws ExecutionException, InterruptedException {
+    public void testPersisterInitializeForAlterShareGroupOffsetsResponseSuccess() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
