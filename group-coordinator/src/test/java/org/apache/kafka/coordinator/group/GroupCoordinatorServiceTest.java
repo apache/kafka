@@ -3153,6 +3153,23 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testOnMetadataUpdateWhenNotStarted() throws ExecutionException, InterruptedException {
+        var runtime = mockRuntime();
+        var service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .build();
+
+        var image = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 1)
+            .build();
+        var delta = new MetadataDelta(image);
+
+        assertThrows(CoordinatorNotAvailableException.class,
+            () -> service.onMetadataUpdate(delta, image));
+    }
+
+    @Test
     public void testOnMetadataUpdateSchedulesOperationsWhenTopicsDeleted() throws Exception {
         var runtime = mockRuntime();
         var service = new GroupCoordinatorServiceBuilder()
