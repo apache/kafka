@@ -188,7 +188,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
     }
 
     private boolean sanityCheckResponse(AllocateProducerIdsResponseData data) {
-        if (data.producerIdStart() < currentProducerIdBlock.get().lastProducerId()) {
+        if (data.producerIdStart() <= currentProducerIdBlock.get().lastProducerId()) {
             log.error("{} Producer ID block is not monotonic with current block: current={} response={}", logPrefix, currentProducerIdBlock.get(), data);
         } else if (data.producerIdStart() < 0 || data.producerIdLen() < 0 || data.producerIdStart() > Long.MAX_VALUE - data.producerIdLen()) {
             log.error("{} Producer ID block includes invalid ID range: {}", logPrefix, data);
