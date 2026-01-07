@@ -3111,7 +3111,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testCompleteTransactionWhenNotCoordinatorServiceStarted() throws ExecutionException, InterruptedException {
+    public void testCompleteTransactionWhenNotCoordinatorServiceStarted() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3132,7 +3132,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testCompleteTransactionWithUnexpectedPartition() throws ExecutionException, InterruptedException {
+    public void testCompleteTransactionWithUnexpectedPartition() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3813,7 +3813,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupOffsetsWithDefaultPersisterThrowsError() throws ExecutionException, InterruptedException {
+    public void testDescribeShareGroupOffsetsWithDefaultPersisterThrowsError() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -3840,7 +3840,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullResult() throws ExecutionException, InterruptedException {
+    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullResult() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -3867,7 +3867,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullTopicData() throws ExecutionException, InterruptedException {
+    public void testDescribeShareGroupOffsetsWithDefaultPersisterNullTopicData() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4303,7 +4303,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupAllOffsetsThrowsError() throws ExecutionException, InterruptedException {
+    public void testDescribeShareGroupAllOffsetsThrowsError() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4339,7 +4339,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupAllOffsetsNullResult() throws ExecutionException, InterruptedException {
+    public void testDescribeShareGroupAllOffsetsNullResult() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
