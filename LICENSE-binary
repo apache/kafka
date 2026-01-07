@@ -236,10 +236,10 @@ License Version 2.0:
 - jetty-session-12.0.15
 - jetty-util-12.0.15
 - jose4j-0.9.4
-- log4j-api-2.24.3
-- log4j-core-2.24.3
-- log4j-slf4j-impl-2.24.3
-- log4j-1.2-api-2.24.3
+- log4j-api-2.25.3
+- log4j-core-2.25.3
+- log4j-slf4j-impl-2.25.3
+- log4j-1.2-api-2.25.3
 - lz4-java-1.10.1
 - maven-artifact-3.9.6
 - metrics-core-2.2.0
