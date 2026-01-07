@@ -1027,19 +1027,22 @@ public class RecordAccumulator {
     }
 
     /**
-     * Deallocate the record batch
+     * Complete and deallocate the record batch
      */
     public void completeBatchAndDeallocate(ProducerBatch batch) {
-        incomplete.remove(batch);
-        deallocateIfNecessary(batch);
+        completeBatch(batch);
+        deallocate(batch);
     }
 
-    private void deallocateIfNecessary(ProducerBatch batch) {
+    /**
+     * Only perform deallocation (and not removal from the incomplete set)
+     */
+    public void deallocate(ProducerBatch batch) {
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
         if (!batch.isSplitBatch()) {
             if (batch.isBufferDeallocated()) {
-                log.warn("Skipping deallocating a batch that has already been deallocated. This is expected to happen rarely: for expired in-flight batches. Batch is {}, created time is {}", batch, batch.createdMs);
+                log.warn("Skipping deallocating a batch that has already been deallocated. Batch is {}, created time is {}", batch, batch.createdMs);
             } else {
                 batch.setBufferDeallocated(true);
                 free.deallocate(batch.buffer(), batch.initialCapacity());
@@ -1052,13 +1055,6 @@ public class RecordAccumulator {
      */
     public void completeBatch(ProducerBatch batch) {
         incomplete.remove(batch);
-    }
-
-    /**
-     * Only perform deallocation (and not removal from incomplete set)
-     */
-    public void deallocate(ProducerBatch batch) {
-        deallocateIfNecessary(batch);
     }
 
     /**

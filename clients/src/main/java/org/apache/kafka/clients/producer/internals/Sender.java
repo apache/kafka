@@ -760,7 +760,7 @@ public class Sender implements Runnable {
         if (batch.complete(response.baseOffset, response.logAppendTime)) {
             maybeRemoveAndDeallocateBatch(batch);
         } else {
-            // Always safe to call dellocate because the batch keeps track of whether or not it was deallocated yet
+            // Always safe to call daellocate because the batch keeps track of whether or not it was deallocated yet
             this.accumulator.deallocate(batch);
         }
     }
