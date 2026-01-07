@@ -22,10 +22,9 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.SocketServer
-import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager, RaftManager}
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool}
+import kafka.raft.KafkaRaftManager
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, KafkaRequestHandlerPoolFactory}
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
@@ -37,16 +36,17 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, QuorumConfig, RaftClient}
+import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, KRaftConfigs, LeaderAndEpoch, QuorumConfig, RaftClient, RaftManager}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
+import org.apache.kafka.server.metrics.DefaultExternalKRaftMetrics
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 /**
@@ -68,6 +68,7 @@ class TestRaftServer(
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
   private val threadNamePrefix = "test-raft"
+  private val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
 
   var socketServer: SocketServer = _
   var credentialProvider: CredentialProvider = _
@@ -104,7 +105,7 @@ class TestRaftServer(
       topicId,
       time,
       metrics,
-      new DefaultExternalKRaftMetrics(None, None),
+      new DefaultExternalKRaftMetrics(Optional.empty, Optional.empty),
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
@@ -115,8 +116,8 @@ class TestRaftServer(
     workloadGenerator = new RaftWorkloadGenerator(
       raftManager,
       time,
-      recordsPerSec = 20000,
-      recordSize = 256
+      recordsPerSec = throughput,
+      recordSize = recordSize
     )
 
     val requestHandler = new TestRaftRequestHandler(
@@ -126,13 +127,13 @@ class TestRaftServer(
       apiVersionManager
     )
 
-    dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(
+    dataPlaneRequestHandlerPool = requestHandlerPoolFactory.createPool(
       config.brokerId,
       socketServer.dataPlaneRequestChannel,
       requestHandler,
       time,
       config.numIoThreads,
-      "RequestHandlerAvgIdlePercent"
+      "broker"
     )
 
     workloadGenerator.start()
@@ -181,7 +182,7 @@ class TestRaftServer(
 
     private var claimedEpoch: Option[Int] = None
 
-    raftManager.register(this)
+    raftManager.client.register(this)
 
     override def handleLeaderChange(newLeaderAndEpoch: LeaderAndEpoch): Unit = {
       if (newLeaderAndEpoch.isLeader(config.nodeId)) {
@@ -428,7 +429,7 @@ object TestRaftServer extends Logging {
   }
 
   private class TestRaftServerOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    val configOpt: OptionSpec[String] = parser.accepts("config", "Required configured file")
+    val configOpt: OptionSpec[String] = parser.accepts("config", "REQUIRED: The configured file")
       .withRequiredArg
       .describedAs("filename")
       .ofType(classOf[String])
@@ -446,12 +447,14 @@ object TestRaftServer extends Logging {
       .ofType(classOf[Int])
       .defaultsTo(256)
 
-    val directoryId: OptionSpec[String] = parser.accepts("replica-directory-id", "The directory id of the replica")
+    val directoryId: OptionSpec[String] = parser.accepts("replica-directory-id", "REQUIRED: The directory id of the replica")
       .withRequiredArg
       .describedAs("directory id")
       .ofType(classOf[String])
 
     options = parser.parse(args : _*)
+
+    def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, configOpt, directoryId)
   }
 
   def main(args: Array[String]): Unit = {
@@ -459,16 +462,11 @@ object TestRaftServer extends Logging {
     try {
       CommandLineUtils.maybePrintHelpOrVersion(opts,
         "Standalone raft server for performance testing")
+      opts.checkArgs()
 
       val configFile = opts.options.valueOf(opts.configOpt)
-      if (configFile == null) {
-        throw new InvalidConfigurationException("Missing configuration file. Should specify with '--config'")
-      }
-
       val directoryIdAsString = opts.options.valueOf(opts.directoryId)
-      if (directoryIdAsString == null) {
-        throw new InvalidConfigurationException("Missing replica directory id. Should specify with --replica-directory-id")
-      }
+
       val serverProps = Utils.loadProps(configFile)
 
       // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are

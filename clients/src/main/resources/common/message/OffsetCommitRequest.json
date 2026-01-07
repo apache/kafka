@@ -40,7 +40,6 @@
   // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
   "validVersions": "2-10",
   "flexibleVersions": "8+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },

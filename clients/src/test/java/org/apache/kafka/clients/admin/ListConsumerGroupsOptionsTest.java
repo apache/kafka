@@ -25,6 +25,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ListConsumerGroupsOptionsTest {
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testState() {
         Set<ConsumerGroupState> consumerGroupStates = Set.of(ConsumerGroupState.values());

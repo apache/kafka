@@ -17,37 +17,42 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.server.util.ShutdownableThread;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public class ConsumerAssignmentPoller extends ShutdownableThread {
     private final Consumer<byte[], byte[]> consumer;
-
-    private final Set<TopicPartition> partitionAssignment = new HashSet<>();
+    private final Set<TopicPartition> partitionsToAssign;
+    private volatile Optional<Throwable> thrownException = Optional.empty();
+    private volatile int receivedMessages = 0;
+    private final Set<TopicPartition> partitionAssignment = Collections.synchronizedSet(new HashSet<>());
     private volatile boolean subscriptionChanged = false;
-    private final List<String> topicsSubscription;
+    private List<String> topicsSubscription;
     private final ConsumerRebalanceListener rebalanceListener;
 
-    public ConsumerAssignmentPoller(
-        Consumer<byte[], byte[]> consumer,
-        List<String> topicsToSubscribe
-    ) {
+    public ConsumerAssignmentPoller(Consumer<byte[], byte[]> consumer, List<String> topicsToSubscribe) {
         this(consumer, topicsToSubscribe, Set.of(), null);
     }
 
-    public ConsumerAssignmentPoller(
-        Consumer<byte[], byte[]> consumer,
-        List<String> topicsToSubscribe,
-        Set<TopicPartition> partitionsToAssign,
-        ConsumerRebalanceListener userRebalanceListener
-    ) {
+    public ConsumerAssignmentPoller(Consumer<byte[], byte[]> consumer, Set<TopicPartition> partitionsToAssign) {
+        this(consumer, List.of(), partitionsToAssign, null);
+    }
+
+    public ConsumerAssignmentPoller(Consumer<byte[], byte[]> consumer,
+                                    List<String> topicsToSubscribe,
+                                    Set<TopicPartition> partitionsToAssign,
+                                    ConsumerRebalanceListener userRebalanceListener) {
         super("daemon-consumer-assignment", false);
         this.consumer = consumer;
+        this.partitionsToAssign = partitionsToAssign;
         this.topicsSubscription = topicsToSubscribe;
 
         this.rebalanceListener = new ConsumerRebalanceListener() {
@@ -77,6 +82,21 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         return Set.copyOf(partitionAssignment);
     }
 
+    public void subscribe(List<String> newTopicsToSubscribe) {
+        if (subscriptionChanged) {
+            throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.");
+        }
+        if (!partitionsToAssign.isEmpty()) {
+            throw new IllegalStateException("Cannot call subscribe when configured to use manual partition assignment");
+        }
+        this.topicsSubscription = newTopicsToSubscribe;
+        subscriptionChanged = true;
+    }
+
+    public boolean isSubscribeRequestProcessed() {
+        return !subscriptionChanged;
+    }
+
     @Override
     public boolean initiateShutdown() {
         boolean res = super.initiateShutdown();
@@ -90,6 +110,22 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
             consumer.subscribe(topicsSubscription, rebalanceListener);
             subscriptionChanged = false;
         }
-        consumer.poll(Duration.ofMillis(50)).count();
+        try {
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
+            receivedMessages += records.count();
+        } catch (WakeupException e) {
+            // ignore for shutdown
+        } catch (Throwable e) {
+            thrownException = Optional.of(e);
+            throw e;
+        }
+    }
+
+    public Optional<Throwable> getThrownException() {
+        return thrownException;
+    }
+
+    public int receivedMessages() {
+        return receivedMessages;
     }
 }

@@ -246,7 +246,7 @@ public class OffsetFetcherTest {
         assertTrue(subscriptions.hasValidPosition(tp0));
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(subscriptions.position(tp0).offset, 5L);
+        assertEquals(5L, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -395,7 +395,7 @@ public class OffsetFetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(metadata.updateRequested());
-        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals((long) epoch, 2));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals(2, (long) epoch));
     }
 
     @Test
@@ -902,7 +902,7 @@ public class OffsetFetcherTest {
                 ListOffsetsRequest offsetRequest = (ListOffsetsRequest) body;
                 int epoch = offsetRequest.topics().get(0).partitions().get(0).currentLeaderEpoch();
                 assertTrue(epoch != ListOffsetsResponse.UNKNOWN_EPOCH, "Expected Fetcher to set leader epoch in request");
-                assertEquals(epoch, 99, "Expected leader epoch to match epoch from metadata update");
+                assertEquals(99, epoch, "Expected leader epoch to match epoch from metadata update");
                 return true;
             } else {
                 fail("Should have seen ListOffsetRequest");

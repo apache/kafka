@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.AsyncPollEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
@@ -50,6 +51,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
+import static org.apache.kafka.clients.consumer.internals.RequestState.RETRY_BACKOFF_JITTER;
 
 /**
  * <p>Manages the request creation and response handling for the streams group heartbeat. The class creates a
@@ -287,7 +289,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final HeartbeatMetricsManager metricsManager;
 
-    private StreamsRebalanceData streamsRebalanceData;
+    private final StreamsRebalanceData streamsRebalanceData;
 
     /**
      * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
@@ -330,7 +332,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             0,
             retryBackoffMs,
             retryBackoffMaxMs,
-            maxPollIntervalMs
+            RETRY_BACKOFF_JITTER
         );
         this.pollTimer = time.timer(maxPollIntervalMs);
     }
@@ -425,7 +427,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
      * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
      * responsive to changes.
      *
-     * <p>Similarly, we may have to unblock the application thread to send a `PollApplicationEvent` to make sure
+     * <p>Similarly, we may have to unblock the application thread to send a {@link AsyncPollEvent} to make sure
      * our poll timer will not expire while we are polling.
      *
      * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
@@ -504,7 +506,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs) {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new StreamsGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData(), true),
+            new StreamsGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
             coordinatorRequestManager.coordinator()
         );
         heartbeatRequestState.onSendAttempt(currentTimeMs);
@@ -527,6 +529,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
         heartbeatState.setEndpointInformationEpoch(data.endpointInformationEpoch());
+        streamsRebalanceData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));

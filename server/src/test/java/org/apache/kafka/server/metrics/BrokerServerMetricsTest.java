@@ -38,7 +38,7 @@ public final class BrokerServerMetricsTest {
         Metrics metrics = new Metrics();
         String expectedGroup = "broker-metadata-metrics";
 
-        // Metric description is not use for metric name equality
+        // Metric description is not used for metric name equality
         Set<MetricName> expectedMetrics = Set.of(
                 new MetricName("last-applied-record-offset", expectedGroup, "", Map.of()),
                 new MetricName("last-applied-record-timestamp", expectedGroup, "", Map.of()),

@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -93,7 +92,7 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
         StreamsGroupDescribeRequestData data = new StreamsGroupDescribeRequestData()
             .setGroupIds(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-        return new StreamsGroupDescribeRequest.Builder(data, true);
+        return new StreamsGroupDescribeRequest.Builder(data);
     }
 
     @Override
@@ -259,22 +258,9 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
                 break;
 
             case GROUP_ID_NOT_FOUND:
-                // In order to maintain compatibility with describeConsumerGroups, an unknown group ID is
-                // reported as a DEAD streams group, and the admin client operation did not fail
                 log.debug("`DescribeStreamsGroups` request for group id {} failed because the group does not exist. {}",
                     groupId.idValue, errorMsg != null ? errorMsg : "");
-                final StreamsGroupDescription streamsGroupDescription =
-                    new StreamsGroupDescription(
-                        groupId.idValue,
-                        -1,
-                        -1,
-                        -1,
-                        Collections.emptySet(),
-                        Collections.emptySet(),
-                        GroupState.DEAD,
-                        coordinator,
-                        validAclOperations(describedGroup.authorizedOperations()));
-                completed.put(groupId, streamsGroupDescription);
+                failed.put(groupId, error.exception(errorMsg));
                 break;
 
             default:

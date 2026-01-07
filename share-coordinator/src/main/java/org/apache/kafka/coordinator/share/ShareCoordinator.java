@@ -135,11 +135,11 @@ public interface ShareCoordinator {
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
      * @param delta     The metadata delta.
+     * @param newImage  The new metadata image.
      */
-    void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+    void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage
     );
 }

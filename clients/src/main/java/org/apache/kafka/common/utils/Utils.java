@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -64,6 +66,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.EnumSet;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -109,6 +112,9 @@ public final class Utils {
     public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    private static final VarHandle INT_HANDLE =
+            MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
 
     /**
      * Get a sorted list representation of a collection.
@@ -499,11 +505,11 @@ public final class Utils {
 
         // Initialize the hash to a random value
         int h = seed ^ length;
-        int length4 = length / 4;
+        int length4 = length >> 2;
 
         for (int i = 0; i < length4; i++) {
-            final int i4 = i * 4;
-            int k = (data[i4 + 0] & 0xff) + ((data[i4 + 1] & 0xff) << 8) + ((data[i4 + 2] & 0xff) << 16) + ((data[i4 + 3] & 0xff) << 24);
+            final int i4 = i << 2;
+            int k = (int) INT_HANDLE.get(data, i4);
             k *= m;
             k ^= k >>> r;
             k *= m;
@@ -512,13 +518,14 @@ public final class Utils {
         }
 
         // Handle the last few bytes of the input array
-        switch (length % 4) {
+        int index = length4 << 2;
+        switch (length - index) {
             case 3:
-                h ^= (data[(length & ~3) + 2] & 0xff) << 16;
+                h ^= (data[index + 2] & 0xff) << 16;
             case 2:
-                h ^= (data[(length & ~3) + 1] & 0xff) << 8;
+                h ^= (data[index + 1] & 0xff) << 8;
             case 1:
-                h ^= data[length & ~3] & 0xff;
+                h ^= data[index] & 0xff;
                 h *= m;
         }
 
@@ -674,8 +681,8 @@ public final class Utils {
     }
 
     /**
-     * Converts a Properties object to a Map<String, String>, calling {@link #toString} to ensure all keys and values
-     * are Strings.
+     * Converts a Properties object to a {@code Map<String, String>}, calling {@link #toString} to ensure all keys and
+     * values are Strings.
      */
     public static Map<String, String> propsToStringMap(Properties props) {
         Map<String, String> result = new HashMap<>();
@@ -856,7 +863,7 @@ public final class Utils {
     public static void delete(final File rootFile) throws IOException {
         if (rootFile == null)
             return;
-        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 if (exc instanceof NoSuchFileException) {
@@ -1387,11 +1394,16 @@ public final class Utils {
 
     /**
      * A Collector that offers two kinds of convenience:
-     * 1. You can specify the concrete type of the returned Map
-     * 2. You can turn a stream of Entries directly into a Map without having to mess with a key function
-     *    and a value function. In particular, this is handy if all you need to do is apply a filter to a Map's entries.
-     *
-     *
+     * <ol>
+     * <li>
+     * You can specify the concrete type of the returned Map
+     * </li>
+     * <li>
+     * You can turn a stream of Entries directly into a Map without having to mess with a key function
+     * and a value function. In particular, this is handy if all you need to do is apply a filter to a Map's entries.
+     * </li>
+     * </ol>
+     * <p>
      * One thing to be wary of: These types are too "distant" for IDE type checkers to warn you if you
      * try to do something like build a TreeMap of non-Comparable elements. You'd get a runtime exception for that.
      *
@@ -1399,10 +1411,10 @@ public final class Utils {
      * @param <K> The Map key type
      * @param <V> The Map value type
      * @param <M> The type of the Map itself.
-     * @return new Collector<Map.Entry<K, V>, M, M>
+     * @return new {@code Collector<Map.Entry<K, V>, M, M>}
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
-        return new Collector<Map.Entry<K, V>, M, M>() {
+        return new Collector<>() {
             @Override
             public Supplier<M> supplier() {
                 return mapSupplier;
@@ -1469,7 +1481,24 @@ public final class Utils {
      * @return a map including all elements in properties
      */
     public static Map<String, Object> propsToMap(Properties properties) {
-        return castToStringObjectMap(properties);
+        // This try catch block is to handle the case when the Properties object has non-String keys
+        // when calling the propertyNames() method. This is a workaround for the lack of a method that
+        // returns all properties including defaults and does not attempt to convert all keys to Strings.
+        Enumeration<?> enumeration;
+        try {
+            enumeration = properties.propertyNames();
+        } catch (ClassCastException e) {
+            throw new ConfigException("One or more keys is not a string.");
+        }
+        Map<String, Object> map = new HashMap<>();
+        while (enumeration.hasMoreElements()) {
+            String key = (String) enumeration.nextElement();
+            // properties.get(key) returns null for defaults, but properties.getProperty(key) returns null for
+            // non-string values. A combination of the two methods is used to cover all cases
+            Object value = (properties.get(key) != null) ? properties.get(key) : properties.getProperty(key);
+            map.put(key, value);
+        }
+        return map;
     }
 
     /**
@@ -1479,6 +1508,9 @@ public final class Utils {
      * @throws ConfigException if any key is not a String
      */
     public static Map<String, Object> castToStringObjectMap(Map<?, ?> inputMap) {
+        if (inputMap instanceof Properties) {
+            return propsToMap((Properties) inputMap);
+        }
         Map<String, Object> map = new HashMap<>(inputMap.size());
         for (Map.Entry<?, ?> entry : inputMap.entrySet()) {
             if (entry.getKey() instanceof String) {
@@ -1697,5 +1729,18 @@ public final class Utils {
     @FunctionalInterface
     public interface ThrowingRunnable {
         void run() throws Exception;
+    }
+
+    /**
+     * convert millisecond to nanosecond, or throw exception if overflow
+     * @param timeMs the time in millisecond
+     * @return the converted nanosecond
+     */
+    public static long msToNs(long timeMs) {
+        try {
+            return Math.multiplyExact(1000 * 1000, timeMs);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Cannot convert " + timeMs + " millisecond to nanosecond due to arithmetic overflow", e);
+        }
     }
 }

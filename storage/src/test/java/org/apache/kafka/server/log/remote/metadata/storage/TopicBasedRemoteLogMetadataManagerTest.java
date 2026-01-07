@@ -17,13 +17,22 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -40,16 +49,23 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@SuppressWarnings("resource")
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
@@ -66,7 +82,6 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         if (remoteLogMetadataManager == null)
             remoteLogMetadataManager = RemoteLogMetadataManagerTestUtils.builder()
                 .bootstrapServers(clusterInstance.bootstrapServers())
-                .startConsumerThread(true)
                 .remotePartitionMetadataStore(() -> spyRemotePartitionMetadataEventHandler)
                 .build();
         return remoteLogMetadataManager;
@@ -82,19 +97,39 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             String topic = "test-topic-exist";
             admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get();
-            clusterInstance.waitForTopic(topic, 1);
+            clusterInstance.waitTopicCreation(topic, 1);
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertTrue(doesTopicExist);
         }
     }
 
     @ClusterTest
-    public void testTopicDoesNotExist() {
+    public void testTopicDoesNotExist() throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             String topic = "dummy-test-topic";
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             assertFalse(doesTopicExist);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    @ClusterTest
+    public void testDoesTopicExistWithAdminClientExecutionError() throws ExecutionException, InterruptedException {
+        // Create a mock Admin client that throws an ExecutionException (not UnknownTopicOrPartitionException)
+        Admin mockAdmin = mock(Admin.class);
+        DescribeTopicsResult mockDescribeTopicsResult = mock(DescribeTopicsResult.class);
+        KafkaFuture<TopicDescription> mockFuture = mock(KafkaFuture.class);
+        
+        String topic = "test-topic";
+        
+        // Set up the mock to throw a RuntimeException wrapped in ExecutionException
+        when(mockAdmin.describeTopics(anySet())).thenReturn(mockDescribeTopicsResult);
+        when(mockDescribeTopicsResult.topicNameValues()).thenReturn(Map.of(topic, mockFuture));
+        when(mockFuture.get()).thenThrow(new ExecutionException("Admin client connection error", new RuntimeException("Connection failed")));
+        
+        // The method should re-throw the ExecutionException since it's not an UnknownTopicOrPartitionException
+        TopicBasedRemoteLogMetadataManager rlmm = topicBasedRlmm();
+        assertThrows(ExecutionException.class, () -> rlmm.doesTopicExist(mockAdmin, topic));
     }
 
     @ClusterTest
@@ -112,9 +147,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         try (Admin admin = clusterInstance.admin()) {
             // Set broker id 0 as the first entry which is taken as the leader.
             admin.createTopics(List.of(new NewTopic(leaderTopic, Map.of(0, List.of(0, 1, 2))))).all().get();
-            clusterInstance.waitForTopic(leaderTopic, 1);
+            clusterInstance.waitTopicCreation(leaderTopic, 1);
             admin.createTopics(List.of(new NewTopic(followerTopic, Map.of(0, List.of(1, 2, 0))))).all().get();
-            clusterInstance.waitForTopic(followerTopic, 1);
+            clusterInstance.waitTopicCreation(followerTopic, 1);
         }
 
         final TopicIdPartition newLeaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
@@ -311,6 +346,16 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     @ClusterTest
     public void testInitializationFailure() throws IOException, InterruptedException {
+        // Set up a custom exit procedure for testing
+        final AtomicBoolean exitCalled = new AtomicBoolean(false);
+        final AtomicInteger exitCode = new AtomicInteger(-1);
+        
+        // Set custom exit procedure that won't actually exit the process
+        Exit.setExitProcedure((statusCode, message) -> {
+            exitCalled.set(true);
+            exitCode.set(statusCode);
+        });
+
         try (TopicBasedRemoteLogMetadataManager rlmm = new TopicBasedRemoteLogMetadataManager()) {
             // configure rlmm without bootstrap servers, so it will fail to initialize admin client.
             Map<String, Object> configs = Map.of(
@@ -318,7 +363,67 @@ public class TopicBasedRemoteLogMetadataManagerTest {
                 TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
             );
             rlmm.configure(configs);
-            TestUtils.waitForCondition(rlmm::isInitializationFailed, "Initialization should fail");
+            rlmm.onBrokerReady();
+            
+            // Wait for initialization failure and exit procedure to be called
+            TestUtils.waitForCondition(() -> exitCalled.get(), 
+                "Exit procedure should be called due to initialization failure");
+            
+            // Verify exit code
+            assertEquals(1, exitCode.get(), "Exit code should be 1");
+        } finally {
+            // Restore default exit procedure
+            Exit.resetExitProcedure();
+        }
+    }
+
+    @ClusterTest
+    public void testRemoteLogMetadataTopicWithDefaultMinIsr() throws ExecutionException, InterruptedException {
+        // Initialize the manager which will create the __remote_log_metadata topic
+        TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = topicBasedRlmm();
+        verifyRemoteLogMetadataTopicWithMinIsr(topicBasedRemoteLogMetadataManager,
+                                               TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
+                                               "default value");
+    }
+
+    @ClusterTest
+    public void testRemoteLogMetadataTopicWithCustomMinIsr() throws ExecutionException, InterruptedException, IOException {
+        // Create a manager with custom min.isr value
+        short customMinIsr = 3;
+        Map<String, Object> overrideProps = Map.of(
+            TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr
+        );
+        try (TopicBasedRemoteLogMetadataManager customRlmm = RemoteLogMetadataManagerTestUtils.builder()
+                .bootstrapServers(clusterInstance.bootstrapServers())
+                .overrideRemoteLogMetadataManagerProps(overrideProps)
+                .build()) {
+            verifyRemoteLogMetadataTopicWithMinIsr(customRlmm, customMinIsr, "custom value");
+        }
+    }
+
+    private void verifyRemoteLogMetadataTopicWithMinIsr(TopicBasedRemoteLogMetadataManager rlmm,
+                                                        short expectedMinIsr,
+                                                        String valueDescription)
+                                                        throws ExecutionException, InterruptedException {
+        try (Admin admin = clusterInstance.admin()) {
+            String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
+            
+            // Wait for the topic to be created
+            clusterInstance.waitTopicCreation(metadataTopic, RemoteLogMetadataManagerTestUtils.METADATA_TOPIC_PARTITIONS_COUNT);
+            
+            // Verify the topic exists
+            assertTrue(rlmm.doesTopicExist(admin, metadataTopic));
+            
+            // Describe the topic configs to verify min.insync.replicas
+            ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, metadataTopic);
+            DescribeConfigsResult describeResult = admin.describeConfigs(List.of(topicResource));
+            Config config = describeResult.all().get().get(topicResource);
+
+            assertNotNull(config, "Topic config should not be null");
+            ConfigEntry minIsrEntry = config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
+            assertNotNull(minIsrEntry, "min.insync.replicas config should exist");
+            assertEquals(String.valueOf(expectedMinIsr), minIsrEntry.value(), 
+                "min.insync.replicas should be " + expectedMinIsr + " (" + valueDescription + ")");
         }
     }
 }

@@ -224,7 +224,7 @@ public class ProducerFailureHandlingTest {
                     .groupMetadataTopicConfigs()
                     .forEach((k, v) -> topicConfig.put(k.toString(), v.toString()));
             admin.createTopics(List.of(new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, (short) 1).configs(topicConfig)));
-            clusterInstance.waitForTopic(Topic.GROUP_METADATA_TOPIC_NAME, 0);
+            clusterInstance.waitTopicDeletion(Topic.GROUP_METADATA_TOPIC_NAME);
         }
 
         try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(1))) {
@@ -276,16 +276,11 @@ public class ProducerFailureHandlingTest {
 
         // create topic
         String topic10 = "topic10";
-        try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(topic10, brokerSize, (short) brokerSize).configs(topicConfig)));
-            clusterInstance.waitTopicDeletion("topic10");
-        }
+        clusterInstance.createTopic(topic10, brokerSize, (short) brokerSize, topicConfig);
 
         // send a record that is too large for replication, but within the broker max message limit
-        byte[] value =
-                new byte[maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD];
-        Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(-1));
-        try (producer) {
+        byte[] value = new byte[maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD];
+        try (Producer<byte[], byte[]> producer = clusterInstance.producer(producerConfig(-1))) {
             ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(topic10, null, value);
             RecordMetadata recordMetadata = producer.send(producerRecord).get();
 

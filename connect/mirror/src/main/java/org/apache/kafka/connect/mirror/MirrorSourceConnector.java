@@ -55,7 +55,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -99,8 +98,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private String connectorName;
     private TopicFilter topicFilter;
     private ConfigPropertyFilter configPropertyFilter;
-    private List<TopicPartition> knownSourceTopicPartitions = Collections.emptyList();
-    private List<TopicPartition> knownTargetTopicPartitions = Collections.emptyList();
+    private List<TopicPartition> knownSourceTopicPartitions = List.of();
+    private List<TopicPartition> knownTargetTopicPartitions = List.of();
     private ReplicationPolicy replicationPolicy;
     private int replicationFactor;
     private Admin sourceAdminClient;
@@ -202,7 +201,7 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         if (!config.enabled() || knownSourceTopicPartitions.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
         int numTasks = Math.min(maxTasks, knownSourceTopicPartitions.size());
         List<List<TopicPartition>> roundRobinByTask = new ArrayList<>(numTasks);
@@ -623,8 +622,10 @@ public class MirrorSourceConnector extends SourceConnector {
                                 + sourceAndTarget.target() + "' is not compatible with " +
                                 "IncrementalAlterConfigs " +
                                 "API", e));
-                    } else {
+                    } else if (e != null) {
                         log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                    } else {
+                        log.debug("Successfully altered configuration of topic {}.", k.name());
                     }
                 }));
             return null;

@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -55,7 +56,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -405,11 +405,20 @@ public class DeleteStreamsGroupTest {
             updateStreamsGroupProtocol((short) 0);
             final Map<String, Throwable> result = new HashMap<>();
             String output = ToolsTestUtils.grabConsoleOutput(() -> result.putAll(service.deleteGroups()));
+            System.out.println(output);
 
             assertTrue(output.contains("Deletion of requested streams groups ('" + appId + "') was successful."),
                 "The streams group could not be deleted as expected");
-            assertTrue(output.contains("Retrieving internal topics is not supported by the broker version. " +
-                "Use 'kafka-topics.sh' to list and delete the group's internal topics."));
+            assertTrue(output.contains("Retrieving internal topics is not supported by the broker version."));
+            assertTrue(output.contains("Use 'kafka-topics.sh' to delete the group's internal topics."));
+            // Validate the list of internal topics in error message
+            assertTrue(output.contains("Internal topics:"));
+            System.out.println(output);
+            assertTrue(
+                output.matches("(?s).*" + APP_ID_PREFIX + "[a-zA-Z0-9\\-]+-(aggregated_value-changelog|repartition|changelog).*"),
+                "The internal topic name does not match the expected format. Output: " + output
+            );
+
             assertEquals(1, result.size());
             assertTrue(result.containsKey(appId));
             assertNull(result.get(appId), "The streams group could not be deleted as expected");
@@ -497,16 +506,15 @@ public class DeleteStreamsGroupTest {
             "The group did not become stable as expected."
         );
         TestUtils.waitForCondition(() -> recordCount.get() == RECORD_TOTAL,
-            "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
+                () -> "Expected " + RECORD_TOTAL + " records processed but only got " + recordCount.get());
 
         return streams;
     }
 
     private void stopKSApp(String appId, KafkaStreams streams, StreamsGroupCommand.StreamsGroupService service) throws InterruptedException {
         if (streams != null) {
-            KafkaStreams.CloseOptions closeOptions = new KafkaStreams.CloseOptions();
-            closeOptions.timeout(Duration.ofSeconds(30));
-            closeOptions.leaveGroup(true);
+            CloseOptions closeOptions = CloseOptions.timeout(Duration.ofSeconds(30))
+                    .withGroupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             streams.close(closeOptions);
             streams.cleanUp();
 
@@ -551,7 +559,7 @@ public class DeleteStreamsGroupTest {
     private static StreamsBuilder builder(String inputTopic, String outputTopic) {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()))
-            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .flatMapValues(value -> List.of(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy((key, value) -> value)
             .count()
             .toStream().to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));

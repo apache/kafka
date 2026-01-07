@@ -39,11 +39,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -55,7 +55,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setLeaderEpoch(20)
         .setStartOffset(50)
         .setStateBatches(
-            Arrays.asList(
+            List.of(
                 new PersisterStateBatch(
                     100,
                     200,
@@ -78,7 +78,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setLeaderEpoch(25)
         .setStartOffset(55)
         .setStateBatches(
-            Arrays.asList(
+            List.of(
                 new PersisterStateBatch(
                     100,
                     150,
@@ -229,7 +229,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
             new RecordHeaders(), Optional.empty());
 
         try (MessageFormatter formatter = new ShareGroupStateMessageFormatter()) {
-            formatter.configure(emptyMap());
+            formatter.configure(Map.of());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             RuntimeException re = assertThrows(RuntimeException.class, () -> formatter.writeTo(record, new PrintStream(out)));
             assertEquals(expectedOutput.getMessage(), re.getMessage());

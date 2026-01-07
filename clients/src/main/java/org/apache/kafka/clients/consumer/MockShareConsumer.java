@@ -105,6 +105,10 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     @Override
+    public synchronized void acknowledge(String topic, int partition, long offset, AcknowledgeType type) {
+    }
+
+    @Override
     public synchronized Map<TopicIdPartition, Optional<KafkaException>> commitSync() {
         return new HashMap<>();
     }
@@ -139,6 +143,11 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
         return Collections.emptyMap();
+    }
+
+    @Override
+    public Optional<Integer> acquisitionLockTimeoutMs() {
+        return Optional.empty();
     }
 
     @Override

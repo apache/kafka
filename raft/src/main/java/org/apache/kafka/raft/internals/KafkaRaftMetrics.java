@@ -29,6 +29,7 @@ import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.QuorumState;
 import org.apache.kafka.raft.ReplicaKey;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.metrics.TimeRatio;
 
 import java.util.List;
 import java.util.OptionalLong;

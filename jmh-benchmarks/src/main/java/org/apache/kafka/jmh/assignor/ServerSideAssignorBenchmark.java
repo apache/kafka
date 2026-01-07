@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -32,7 +33,6 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
-import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -48,7 +48,6 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -121,9 +120,9 @@ public class ServerSideAssignorBenchmark {
 
     private GroupSpec groupSpec;
 
-    private List<String> allTopicNames = Collections.emptyList();
+    private List<String> allTopicNames = List.of();
 
-    private MetadataImage metadataImage = MetadataImage.EMPTY;
+    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     private TopicIds.TopicResolver topicResolver;
 
@@ -149,7 +148,7 @@ public class ServerSideAssignorBenchmark {
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
 
         metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionsPerTopic);
-        topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
+        topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }
@@ -196,14 +195,14 @@ public class ServerSideAssignorBenchmark {
         for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
-                new MemberAssignmentImpl(Collections.emptyMap())
+                new MemberAssignmentImpl(Map.of())
             );
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 groupSpec.memberSubscription(memberId).rackId(),
                 Optional.empty(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(Collections.unmodifiableMap(memberAssignment.partitions()))
+                new Assignment(Map.copyOf(memberAssignment.partitions()))
             ));
         }
 

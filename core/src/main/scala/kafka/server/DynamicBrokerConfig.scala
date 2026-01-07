@@ -37,15 +37,17 @@ import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{BufferSupplier, ConfigUtils, Utils}
 import org.apache.kafka.config
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.config.{DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{DynamicProducerStateManagerConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, MetricConfigs}
-import org.apache.kafka.server.telemetry.ClientTelemetry
+import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
+import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.apache.kafka.storage.internals.log.{LogCleaner, LogConfig}
 
@@ -98,7 +100,11 @@ object DynamicBrokerConfig {
     DynamicListenerConfig.ReconfigurableConfigs ++
     SocketServer.ReconfigurableConfigs ++
     DynamicProducerStateManagerConfig ++
-    DynamicRemoteLogConfig.ReconfigurableConfigs
+    DynamicRemoteLogConfig.ReconfigurableConfigs ++
+    DynamicReplicationConfig.ReconfigurableConfigs ++
+    Set(AbstractConfig.CONFIG_PROVIDERS_CONFIG) ++
+    GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS.asScala ++
+    ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS.asScala
 
   private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
@@ -207,8 +213,8 @@ object DynamicBrokerConfig {
         props.put(key, value)
       }
     }
-    raftManager.replicatedLog.latestSnapshotId().ifPresent { latestSnapshotId =>
-      raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent { rawSnapshotReader =>
+    raftManager.raftLog.latestSnapshotId().ifPresent { latestSnapshotId =>
+      raftManager.raftLog.readSnapshot(latestSnapshotId).ifPresent { rawSnapshotReader =>
         Using.resource(
           RecordsSnapshotReader.of(
             rawSnapshotReader,
@@ -238,7 +244,7 @@ object DynamicBrokerConfig {
             }
           }
           val configHandler = new BrokerConfigHandler(config, quotaManagers)
-          configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
+          configHandler.processConfigChanges("", dynamicDefaultConfigs)
           configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
         }
       }
@@ -258,12 +264,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private[server] val reconfigurables = new CopyOnWriteArrayList[Reconfigurable]()
   private val brokerReconfigurables = new CopyOnWriteArrayList[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
-  private var metricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin] = _
+  private var telemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin] = _
   private var currentConfig: KafkaConfig = _
 
-  private[server] def initialize(clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
+  private[server] def initialize(clientTelemetryExporterPluginOpt: Option[ClientTelemetryExporterPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
-    metricsReceiverPluginOpt = clientMetricsReceiverPluginOpt
+    telemetryExporterPluginOpt = clientTelemetryExporterPluginOpt
   }
 
   /**
@@ -306,6 +312,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
     addBrokerReconfigurable(new DynamicRemoteLogConfig(kafkaServer))
+    addBrokerReconfigurable(new DynamicReplicationConfig(kafkaServer))
   }
 
   /**
@@ -373,8 +380,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     dynamicDefaultConfigs.clone()
   }
 
-  private[server] def clientMetricsReceiverPlugin: Option[ClientMetricsReceiverPlugin] = CoreUtils.inReadLock(lock) {
-    metricsReceiverPluginOpt
+  private[server] def clientTelemetryExporterPlugin: Option[ClientTelemetryExporterPlugin] = CoreUtils.inReadLock(lock) {
+    telemetryExporterPluginOpt
   }
 
   private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties, doLog: Boolean = true): Unit = CoreUtils.inWriteLock(lock) {
@@ -384,7 +391,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       dynamicBrokerConfigs ++= props.asScala
       updateCurrentConfig(doLog)
     } catch {
-      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: ${persistentProps.keys()}", e)
+      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: ${persistentProps.keySet()}", e)
     }
   }
 
@@ -395,7 +402,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       dynamicDefaultConfigs ++= props.asScala
       updateCurrentConfig(doLog)
     } catch {
-      case e: Exception => error(s"Cluster default configs could not be applied: ${persistentProps.keys()}", e)
+      case e: Exception => error(s"Cluster default configs could not be applied: ${persistentProps.keySet()}", e)
     }
   }
 
@@ -840,18 +847,22 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
     reporters.forEach { reporter =>
       metrics.addReporter(reporter)
       currentReporters += reporter.getClass.getName -> reporter
-      val clientTelemetryReceiver = reporter match {
-        case telemetry: ClientTelemetry => telemetry.clientReceiver()
-        case _ => null
-      }
 
-      if (clientTelemetryReceiver != null) {
-        dynamicConfig.clientMetricsReceiverPlugin match {
-          case Some(receiverPlugin) =>
-            receiverPlugin.add(clientTelemetryReceiver)
-          case None =>
-            // Do nothing
-        }
+      // Support both deprecated ClientTelemetry and new ClientTelemetryExporterProvider interfaces
+      // If a class implements both, only use the new (i.e., ClientTelemetryExporterProvider interface)
+      dynamicConfig.clientTelemetryExporterPlugin match {
+        case Some(telemetryExporterPlugin) =>
+          reporter match {
+            case exporterProvider: ClientTelemetryExporterProvider =>
+              // Use new interface (i.e., takes precedence even if class also implements deprecated interface)
+              telemetryExporterPlugin.add(exporterProvider.clientTelemetryExporter())
+            case telemetry: ClientTelemetry =>
+              telemetryExporterPlugin.add(telemetry.clientReceiver())
+            case _ =>
+              // Reporter doesn't support client telemetry
+          }
+        case None =>
+          // Do nothing
       }
     }
     KafkaBroker.notifyClusterListeners(clusterId, reporters.asScala)
@@ -1123,5 +1134,25 @@ object DynamicRemoteLogConfig {
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
     RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP
+  )
+}
+
+class DynamicReplicationConfig(server: KafkaBroker) extends BrokerReconfigurable with Logging {
+  override def reconfigurableConfigs: Set[String] = {
+    DynamicReplicationConfig.ReconfigurableConfigs
+  }
+
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
+  }
+
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    // Currently it is a noop for reconfiguring the dynamic config follower.fetch.last.tiered.offset.enable
+  }
+}
+
+object DynamicReplicationConfig {
+  val ReconfigurableConfigs = Set(
+    ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG
   )
 }

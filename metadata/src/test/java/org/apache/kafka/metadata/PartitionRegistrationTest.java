@@ -18,11 +18,9 @@
 package org.apache.kafka.metadata;
 
 import org.apache.kafka.common.DirectoryId;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -92,52 +90,6 @@ public class PartitionRegistrationTest {
         PartitionRegistration registrationB =
             new PartitionRegistration((PartitionRecord) record.message());
         assertEquals(registrationA, registrationB);
-    }
-
-    @Test
-    public void testToLeaderAndIsrPartitionState() {
-        PartitionRegistration a = new PartitionRegistration.Builder().
-            setReplicas(new int[]{1, 2, 3}).
-                setDirectories(new Uuid[]{
-                    Uuid.fromString("NSmkU0ieQuy2IHN59Ce0Bw"),
-                    Uuid.fromString("Y8N9gnSKSLKKFCioX2laGA"),
-                    Uuid.fromString("Oi7nvb8KQPyaGEqr4JtCRw")
-                }).
-            setIsr(new int[]{1, 2}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(123).setPartitionEpoch(456).build();
-        PartitionRegistration b = new PartitionRegistration.Builder().
-            setReplicas(new int[]{2, 3, 4}).
-                setDirectories(new Uuid[]{
-                    Uuid.fromString("tAn3q03aQAWEYkNajXm3lA"),
-                    Uuid.fromString("zgj8rqatTmWMyWBsRZyiVg"),
-                    Uuid.fromString("bAAlGAz1TN2doZjtWlvhRQ")
-                }).
-            setIsr(new int[]{2, 3, 4}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(234).setPartitionEpoch(567).build();
-        assertEquals(new LeaderAndIsrRequest.PartitionState().
-                setTopicName("foo").
-                setPartitionIndex(1).
-                setControllerEpoch(-1).
-                setLeader(1).
-                setLeaderEpoch(123).
-                setIsr(List.of(1, 2)).
-                setPartitionEpoch(456).
-                setReplicas(List.of(1, 2, 3)).
-                setAddingReplicas(List.of()).
-                setRemovingReplicas(List.of()).
-                setIsNew(true).toString(),
-            a.toLeaderAndIsrPartitionState(new TopicPartition("foo", 1), true).toString());
-        assertEquals(new LeaderAndIsrRequest.PartitionState().
-                setTopicName("bar").
-                setPartitionIndex(0).
-                setControllerEpoch(-1).
-                setLeader(2).
-                setLeaderEpoch(234).
-                setIsr(List.of(2, 3, 4)).
-                setPartitionEpoch(567).
-                setReplicas(List.of(2, 3, 4)).
-                setAddingReplicas(List.of()).
-                setRemovingReplicas(List.of()).
-                setIsNew(false).toString(),
-            b.toLeaderAndIsrPartitionState(new TopicPartition("bar", 0), false).toString());
     }
 
     @Test

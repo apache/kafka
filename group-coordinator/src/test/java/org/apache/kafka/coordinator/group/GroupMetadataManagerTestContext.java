@@ -53,6 +53,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
@@ -112,10 +113,9 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
-import org.apache.kafka.coordinator.group.streams.TasksTuple;
+import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
@@ -200,7 +200,7 @@ public class GroupMetadataManagerTestContext {
 
     public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts) {
         assertTrue(timeouts.size() <= 1);
-        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result));
+        timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result()));
     }
 
     public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toProtocols(String... protocolNames) {
@@ -462,7 +462,7 @@ public class GroupMetadataManagerTestContext {
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        private MetadataImage metadataImage;
+        private CoordinatorMetadataImage metadataImage;
         private GroupConfigManager groupConfigManager;
         private final List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private final List<StreamsGroupBuilder> streamsGroupBuilders = new ArrayList<>();
@@ -478,7 +478,7 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withMetadataImage(MetadataImage metadataImage) {
+        public Builder withMetadataImage(CoordinatorMetadataImage metadataImage) {
             this.metadataImage = metadataImage;
             return this;
         }
@@ -519,7 +519,7 @@ public class GroupMetadataManagerTestContext {
         }
 
         public GroupMetadataManagerTestContext build() {
-            if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
+            if (metadataImage == null) metadataImage = CoordinatorMetadataImage.EMPTY;
             if (groupConfigManager == null) groupConfigManager = createConfigManager();
 
             config.putIfAbsent(
@@ -554,7 +554,7 @@ public class GroupMetadataManagerTestContext {
             );
 
             consumerGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
-            shareGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
+            shareGroupBuilders.forEach(builder -> builder.build().forEach(context::replay));
             streamsGroupBuilders.forEach(builder -> {
                 builder.build().forEach(context::replay);
                 StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
@@ -563,7 +563,7 @@ public class GroupMetadataManagerTestContext {
                         new LogContext(),
                         0,
                         group.topology().get(),
-                        metadataImage.topics())
+                        metadataImage)
                     );
                 }
             });
@@ -764,8 +764,8 @@ public class GroupMetadataManagerTestContext {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
         timeouts.forEach(timeout -> {
-            if (timeout.result.replayRecords()) {
-                timeout.result.records().forEach(this::replay);
+            if (timeout.result().replayRecords()) {
+                timeout.result().records().forEach(this::replay);
             }
         });
         return timeouts;
@@ -774,8 +774,8 @@ public class GroupMetadataManagerTestContext {
     public List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> processTasks() {
         List<MockCoordinatorExecutor.ExecutorResult<CoordinatorRecord>> results = executor.poll();
         results.forEach(taskResult -> {
-            if (taskResult.result.replayRecords()) {
-                taskResult.result.records().forEach(this::replay);
+            if (taskResult.result().replayRecords()) {
+                taskResult.result().records().forEach(this::replay);
             }
         });
         return results;
@@ -789,7 +789,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(groupSessionTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
     }
 
     public void assertNoSessionTimeout(
@@ -809,7 +809,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(groupRebalanceTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -830,7 +830,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupJoinKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -851,7 +851,7 @@ public class GroupMetadataManagerTestContext {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupSyncKey(groupId, memberId));
         assertNotNull(timeout);
-        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
         return timeout;
     }
 
@@ -1324,12 +1324,12 @@ public class GroupMetadataManagerTestContext {
         ));
 
 
-        Set<String> heartbeatKeys = timeouts.stream().map(timeout -> timeout.key).collect(Collectors.toSet());
+        Set<String> heartbeatKeys = timeouts.stream().map(timeout -> timeout.key()).collect(Collectors.toSet());
         assertEquals(expectedHeartbeatKeys, heartbeatKeys);
 
         // Only the last member leaving the group should result in the empty group metadata record.
         int timeoutsSize = timeouts.size();
-        assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result.records());
+        assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result().records());
         assertNoOrEmptyResult(timeouts.subList(0, timeoutsSize - 1));
         assertTrue(group.isInState(EMPTY));
         assertEquals(0, group.numMembers());
@@ -1790,8 +1790,8 @@ public class GroupMetadataManagerTestContext {
     public static StreamsGroupMember.Builder streamsGroupMemberBuilderWithDefaults(String memberId) {
         return new StreamsGroupMember.Builder(memberId)
             .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
-            .setAssignedTasks(TasksTuple.EMPTY)
-            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setAssignedTasks(TasksTupleWithEpochs.EMPTY)
+            .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setRackId(null)

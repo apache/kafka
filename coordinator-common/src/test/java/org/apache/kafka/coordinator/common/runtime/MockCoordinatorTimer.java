@@ -23,7 +23,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -36,54 +35,13 @@ public class MockCoordinatorTimer<T, U> implements CoordinatorTimer<T, U> {
     /**
      * Represents a scheduled timeout.
      */
-    public static class ScheduledTimeout<T, U> {
-        public final String key;
-        public final long deadlineMs;
-        public final TimeoutOperation<T, U> operation;
-
-        public ScheduledTimeout(
-            String key,
-            long deadlineMs,
-            TimeoutOperation<T, U> operation
-        ) {
-            this.key = key;
-            this.deadlineMs = deadlineMs;
-            this.operation = operation;
-        }
+    public record ScheduledTimeout<T, U>(String key, long deadlineMs, TimeoutOperation<T, U> operation) {
     }
 
     /**
      * Represents an expired timeout.
      */
-    public static class ExpiredTimeout<T, U> {
-        public final String key;
-        public final CoordinatorResult<T, U> result;
-
-        public ExpiredTimeout(
-            String key,
-            CoordinatorResult<T, U> result
-        ) {
-            this.key = key;
-            this.result = result;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            ExpiredTimeout<?, ?> that = (ExpiredTimeout<?, ?>) o;
-
-            if (!Objects.equals(key, that.key)) return false;
-            return Objects.equals(result, that.result);
-        }
-
-        @Override
-        public int hashCode() {
-            int result1 = key != null ? key.hashCode() : 0;
-            result1 = 31 * result1 + (result != null ? result.hashCode() : 0);
-            return result1;
-        }
+    public record ExpiredTimeout<T, U>(String key, CoordinatorResult<T, U> result) {
     }
 
     private final Time time;
@@ -150,6 +108,14 @@ public class MockCoordinatorTimer<T, U> implements CoordinatorTimer<T, U> {
         if (timeout != null) {
             timeoutQueue.remove(timeout);
         }
+    }
+
+    /**
+     * Checks if a timeout with the given key is scheduled.
+     */
+    @Override
+    public boolean isScheduled(String key) {
+        return timeoutMap.containsKey(key);
     }
 
     /**

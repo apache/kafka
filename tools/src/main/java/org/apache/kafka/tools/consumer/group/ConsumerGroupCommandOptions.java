@@ -19,11 +19,6 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -33,7 +28,6 @@ import joptsimple.OptionSpec;
 import static org.apache.kafka.tools.ToolsUtils.minus;
 
 public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommandOptions.class);
 
     private static final String BOOTSTRAP_SERVER_DOC = "The server(s) to connect to. REQUIRED for all options except for --validate-regex.";
     private static final String GROUP_DOC = "The consumer group we wish to act on.";
@@ -203,11 +197,11 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             .describedAs("regex")
             .ofType(String.class);
 
-        allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
-        allConsumerGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt, resetOffsetsOpt));
-        allResetOffsetScenarioOpts = new HashSet<>(Arrays.asList(resetToOffsetOpt, resetShiftByOpt,
-            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt));
-        allDeleteOffsetsOpts = new HashSet<>(Arrays.asList(groupOpt, topicOpt));
+        allGroupSelectionScopeOpts = Set.of(groupOpt, allGroupsOpt);
+        allConsumerGroupLevelOpts = Set.of(listOpt, describeOpt, deleteOpt, resetOffsetsOpt);
+        allResetOffsetScenarioOpts = Set.of(resetToOffsetOpt, resetShiftByOpt,
+            resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt);
+        allDeleteOffsetsOpts = Set.of(groupOpt, topicOpt);
 
         options = parser.parse(args);
     }
@@ -224,7 +218,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
             "Option " + describeOpt + " takes one of these options: " + allGroupSelectionScopeOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
-            List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
+            List<OptionSpec<?>> mutuallyExclusiveOpts = List.of(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + describeOpt + " takes at most one of these options: " + mutuallyExclusiveOpts.stream().map(Object::toString).collect(Collectors.joining(", ")));
@@ -232,9 +226,6 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + describeOpt + " does not take a value for " + stateOpt);
-        } else {
-            if (options.has(timeoutMsOpt))
-                LOGGER.debug("Option " + timeoutMsOpt + " is applicable only when " + describeOpt + " is used.");
         }
 
         if (options.has(deleteOpt)) {
@@ -258,9 +249,9 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
 
             if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
                 System.err.println("WARN: No action will be performed as the --execute option is missing. " +
-                    "In a future major release, the default behavior of this command will be to prompt the user before " +
-                    "executing the reset rather than doing a dry run. You should add the --dry-run option explicitly " +
-                    "if you are scripting this command and want to keep the current default behavior without prompting.");
+                        "In version 5.0, this command will require either --dry-run or --execute to be specified. " +
+                        "You should add the --dry-run option explicitly if you are scripting this command and want to " +
+                        "keep the current default behavior without prompting.");
             }
 
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))

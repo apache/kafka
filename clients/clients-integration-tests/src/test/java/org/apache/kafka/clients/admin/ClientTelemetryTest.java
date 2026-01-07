@@ -40,12 +40,13 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.telemetry.ClientTelemetry;
-import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +55,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG;
@@ -67,10 +67,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClientTelemetryTest {
 
     @ClusterTest(
-            types = Type.KRAFT, 
+            types = Type.KRAFT,
             brokers = 3,
             serverProperties = {
-                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$GetIdClientTelemetry"),
+                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
             })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
@@ -79,7 +79,7 @@ public class ClientTelemetryTest {
         try (Admin admin = Admin.create(configs)) {
             String testTopicName = "test_topic";
             admin.createTopics(Collections.singletonList(new NewTopic(testTopicName, 1, (short) 1)));
-            clusterInstance.waitForTopic(testTopicName, 1);
+            clusterInstance.waitTopicCreation(testTopicName, 1);
 
             Map<String, Object> producerConfigs = new HashMap<>();
             producerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
@@ -128,7 +128,7 @@ public class ClientTelemetryTest {
         List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
                 "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
         try (Admin client = clusterInstance.admin()) {
-            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(alterOpts));
+            ConfigCommand.ConfigCommandOptions addOpts = new ConfigCommand.ConfigCommandOptions(toArray(Set.of(alterOpts)));
 
             Throwable e = assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, addOpts));
             assertTrue(e.getMessage().contains(InvalidConfigurationException.class.getSimpleName()));
@@ -152,17 +152,12 @@ public class ClientTelemetryTest {
         }
     }
 
-    private static String[] toArray(List<String>... lists) {
-        return Stream.of(lists).flatMap(List::stream).toArray(String[]::new);
+    private static String[] toArray(Collection<List<String>> lists) {
+        return lists.stream().flatMap(List::stream).toArray(String[]::new);
     }
 
-    /**
-     * We should add a ClientTelemetry into plugins to test the clientInstanceId method Otherwise the
-     * {@link org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS} command will not be supported
-     * by the server
-     **/
-    public static class GetIdClientTelemetry implements ClientTelemetry, MetricsReporter {
-
+    @SuppressWarnings("unused")
+    public static class TelemetryExporter implements ClientTelemetryExporterProvider, MetricsReporter {
 
         @Override
         public void init(List<KafkaMetric> metrics) {
@@ -185,7 +180,7 @@ public class ClientTelemetryTest {
         }
 
         @Override
-        public ClientTelemetryReceiver clientReceiver() {
+        public ClientTelemetryExporter clientTelemetryExporter() {
             return (context, payload) -> {
             };
         }

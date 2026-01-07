@@ -28,6 +28,8 @@ import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -42,6 +44,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -83,11 +86,9 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
@@ -100,6 +101,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
@@ -307,14 +309,14 @@ public class GroupCoordinatorShardTest {
             List<CoordinatorRecord> records = invocation.getArgument(1);
             records.add(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
-        }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
+        }).when(groupMetadataManager).createGroupTombstoneRecordsAndCancelTimers(anyString(), anyList());
 
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, CoordinatorRecord> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
 
         for (String groupId : groupIds) {
             verify(groupMetadataManager, times(1)).validateDeleteGroup(ArgumentMatchers.eq(groupId));
-            verify(groupMetadataManager, times(1)).createGroupTombstoneRecords(ArgumentMatchers.eq(groupId), anyList());
+            verify(groupMetadataManager, times(1)).createGroupTombstoneRecordsAndCancelTimers(ArgumentMatchers.eq(groupId), anyList());
             verify(offsetMetadataManager, times(1)).deleteAllOffsets(ArgumentMatchers.eq(groupId), anyList());
         }
         assertEquals(expectedResult, coordinatorResult);
@@ -373,7 +375,7 @@ public class GroupCoordinatorShardTest {
             List<CoordinatorRecord> records = invocation.getArgument(1);
             records.add(GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId));
             return null;
-        }).when(groupMetadataManager).createGroupTombstoneRecords(anyString(), anyList());
+        }).when(groupMetadataManager).createGroupTombstoneRecordsAndCancelTimers(anyString(), anyList());
 
         CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, CoordinatorRecord> coordinatorResult =
             coordinator.deleteGroups(context, groupIds);
@@ -381,7 +383,7 @@ public class GroupCoordinatorShardTest {
         for (String groupId : groupIds) {
             verify(groupMetadataManager, times(1)).validateDeleteGroup(eq(groupId));
             if (!groupId.equals("group-id-2")) {
-                verify(groupMetadataManager, times(1)).createGroupTombstoneRecords(eq(groupId), anyList());
+                verify(groupMetadataManager, times(1)).createGroupTombstoneRecordsAndCancelTimers(eq(groupId), anyList());
                 verify(offsetMetadataManager, times(1)).deleteAllOffsets(eq(groupId), anyList());
             }
         }
@@ -1248,7 +1250,7 @@ public class GroupCoordinatorShardTest {
 
     @Test
     public void testOnLoaded() {
-        MetadataImage image = MetadataImage.EMPTY;
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -1266,9 +1268,8 @@ public class GroupCoordinatorShardTest {
 
         coordinator.onLoaded(image);
 
-        verify(groupMetadataManager, times(1)).onNewMetadataImage(
-            eq(image),
-            any()
+        verify(groupMetadataManager, times(1)).onMetadataUpdate(
+            any(), eq(image)
         );
 
         verify(groupMetadataManager, times(1)).onLoaded();
@@ -1344,7 +1345,7 @@ public class GroupCoordinatorShardTest {
             mock(CoordinatorMetrics.class),
             mock(CoordinatorMetricsShard.class)
         );
-        MetadataImage image = MetadataImage.EMPTY;
+        CoordinatorMetadataImage image = CoordinatorMetadataImage.EMPTY;
 
         // Confirm the cleanup is scheduled when the coordinator is initially loaded.
         coordinator.onLoaded(image);
@@ -1384,10 +1385,9 @@ public class GroupCoordinatorShardTest {
         ArgumentCaptor<List<CoordinatorRecord>> recordsCapture = ArgumentCaptor.forClass(List.class);
 
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
 
-        ConsumerGroup group1 = new ConsumerGroup(snapshotRegistry, "group-id", metricsShard);
-        ConsumerGroup group2 = new ConsumerGroup(snapshotRegistry, "other-group-id", metricsShard);
+        ConsumerGroup group1 = new ConsumerGroup(new LogContext(), snapshotRegistry, "group-id");
+        ConsumerGroup group2 = new ConsumerGroup(new LogContext(), snapshotRegistry, "other-group-id");
 
         when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id", "other-group-id"));
         when(groupMetadataManager.group("group-id")).thenReturn(group1);
@@ -1479,12 +1479,12 @@ public class GroupCoordinatorShardTest {
             coordinatorMetrics,
             metricsShard
         );
-        coordinator.onLoaded(MetadataImage.EMPTY);
+        coordinator.onLoaded(CoordinatorMetadataImage.EMPTY);
 
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
 
         // Advance the timer to trigger the update.
@@ -1495,7 +1495,7 @@ public class GroupCoordinatorShardTest {
         // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs() - time.milliseconds()
         );
     }
 
@@ -2385,5 +2385,50 @@ public class GroupCoordinatorShardTest {
 
         assertEquals(expectedResult, coordinator.completeDeleteShareGroupOffsets(groupId, topics, errorTopicResponseList));
         verify(groupMetadataManager, times(1)).completeDeleteShareGroupOffsets(any(), any(), any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testFetchOffsets(boolean fetchAllOffsets) {
+        var offsetMetadataManager = mock(OffsetMetadataManager.class);
+        var coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            mock(GroupMetadataManager.class),
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        var request = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("foo");
+
+        if (fetchAllOffsets) {
+            request.setTopics(null);
+        } else {
+            request.setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(List.of(0))
+            ));
+        }
+
+        var result = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("foo");
+
+        if (fetchAllOffsets) {
+            when(offsetMetadataManager.fetchAllOffsets(
+                request,
+                Long.MAX_VALUE
+            )).thenReturn(result);
+        } else {
+            when(offsetMetadataManager.fetchOffsets(
+                request,
+                Long.MAX_VALUE
+            )).thenReturn(result);
+        }
+
+        assertEquals(result, coordinator.fetchOffsets(request, Long.MAX_VALUE));
     }
 }

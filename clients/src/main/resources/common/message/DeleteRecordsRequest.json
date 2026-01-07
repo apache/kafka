@@ -33,7 +33,7 @@
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
         { "name": "Offset", "type": "int64", "versions": "0+",
-          "about": "The deletion offset." }
+          "about": "The deletion offset. -1 means that records should be truncated to the high watermark." }
       ]}
     ]},
     { "name": "TimeoutMs", "type": "int32", "versions": "0+",

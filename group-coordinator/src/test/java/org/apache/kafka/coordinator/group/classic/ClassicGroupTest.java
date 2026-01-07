@@ -39,12 +39,12 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
@@ -80,7 +80,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 
 public class ClassicGroupTest {
     private final String protocolType = "consumer";
@@ -559,8 +558,8 @@ public class ClassicGroupTest {
         int newSessionTimeoutMs = 20000;
         group.updateMember(member, newProtocols, newRebalanceTimeoutMs, newSessionTimeoutMs, null);
 
-        assertEquals(group.rebalanceTimeoutMs(), newRebalanceTimeoutMs);
-        assertEquals(member.sessionTimeoutMs(), newSessionTimeoutMs);
+        assertEquals(newRebalanceTimeoutMs, group.rebalanceTimeoutMs());
+        assertEquals(newSessionTimeoutMs, member.sessionTimeoutMs());
         assertEquals(newProtocols, member.supportedProtocols());
     }
 
@@ -1381,9 +1380,9 @@ public class ClassicGroupTest {
             .build();
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
+            logContext,
             new SnapshotRegistry(logContext),
-            groupId,
-            mock(GroupCoordinatorMetricsShard.class)
+            groupId
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentEpoch(10);
@@ -1461,7 +1460,7 @@ public class ClassicGroupTest {
             newMember2,
             logContext,
             time,
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(
@@ -1534,9 +1533,9 @@ public class ClassicGroupTest {
             .build();
 
         ConsumerGroup consumerGroup = new ConsumerGroup(
+            logContext,
             new SnapshotRegistry(logContext),
-            groupId,
-            mock(GroupCoordinatorMetricsShard.class)
+            groupId
         );
         consumerGroup.setGroupEpoch(10);
         consumerGroup.setTargetAssignmentEpoch(10);
@@ -1592,7 +1591,7 @@ public class ClassicGroupTest {
             null,
             logContext,
             time,
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         ClassicGroup expectedClassicGroup = new ClassicGroup(

@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegis
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
-import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 

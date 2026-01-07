@@ -17,6 +17,8 @@
 
 package org.apache.kafka.image.loader;
 
+import org.apache.kafka.common.message.KRaftVersionRecord;
+import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
@@ -30,9 +32,12 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -115,7 +120,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 throw new RuntimeException("You must set the high water mark accessor.");
             }
             if (metrics == null) {
-                metrics = new MetadataLoaderMetrics(Optional.empty(),
+                metrics = new MetadataLoaderMetrics(
+                    Optional.empty(),
                     __ -> { },
                     __ -> { },
                     new AtomicReference<>(MetadataProvenance.EMPTY));
@@ -212,10 +218,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             faultHandler,
             this::maybePublishMetadata);
         this.eventQueue = new KafkaEventQueue(
-            Time.SYSTEM,
+            time,
             logContext,
             threadNamePrefix + "metadata-loader-",
-            new ShutdownEvent());
+            new ShutdownEvent(),
+            metrics::updateIdleTime);
     }
 
     // VisibleForTesting
@@ -345,7 +352,24 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
-        metrics.setCurrentMetadataVersion(image.features().metadataVersionOrThrow());
+        MetadataVersion metadataVersion = image.features().metadataVersionOrThrow();
+        metrics.setCurrentMetadataVersion(metadataVersion);
+
+        // Set the metadata version feature level, since it is handled separately from other features
+        metrics.recordFinalizedFeatureLevel(
+            MetadataVersion.FEATURE_NAME,
+            metadataVersion.featureLevel()
+        );
+
+        // Set all production feature levels from the image
+        metrics.maybeRemoveFinalizedFeatureLevelMetrics(image.features().finalizedVersions());
+        for (var featureEntry : image.features().finalizedVersions().entrySet()) {
+            metrics.recordFinalizedFeatureLevel(
+                featureEntry.getKey(),
+                featureEntry.getValue()
+            );
+        }
+
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }
@@ -357,6 +381,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             try (reader) {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
+                    loadControlRecords(batch);
                     long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
@@ -418,6 +443,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         int snapshotIndex = 0;
         while (reader.hasNext()) {
             Batch<ApiMessageAndVersion> batch = reader.next();
+            loadControlRecords(batch);
             for (ApiMessageAndVersion record : batch.records()) {
                 try {
                     delta.replay(record.message());
@@ -433,6 +459,15 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
         return new SnapshotManifest(provenance,
                 time.nanoseconds() - startNs);
+    }
+
+    void loadControlRecords(Batch<ApiMessageAndVersion> batch) {
+        for (ControlRecord controlRecord : batch.controlRecords()) {
+            if (controlRecord.type() == ControlRecordType.KRAFT_VERSION) {
+                final var kRaftVersionRecord = (KRaftVersionRecord) controlRecord.message();
+                metrics.recordFinalizedFeatureLevel(KRaftVersion.FEATURE_NAME, kRaftVersionRecord.kRaftVersion());
+            }
+        }
     }
 
     @Override

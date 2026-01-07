@@ -68,11 +68,9 @@ public class ActiveTaskCreatorTest {
     private InternalTopologyBuilder builder;
     @Mock
     private StateDirectory stateDirectory;
-    @Mock
-    private ChangelogReader changeLogReader;
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", "processId", new MockTime());
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", new MockTime());
     private final Map<String, Object> properties = mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
@@ -272,15 +270,13 @@ public class ActiveTaskCreatorTest {
             config,
             streamsMetrics,
             stateDirectory,
-            changeLogReader,
             new ThreadCache(new LogContext(), 0L, streamsMetrics),
             new MockTime(),
             mockClientSupplier,
             "clientId-StreamThread-0",
             0,
             uuid,
-            new LogContext().logger(ActiveTaskCreator.class),
-            false,
+            new LogContext(),
             false);
 
         assertThat(

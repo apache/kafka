@@ -22,7 +22,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ListGroupsOptions, NewTopic}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.consumer.internals.{StreamsRebalanceData, StreamsRebalanceListener}
+import org.apache.kafka.clients.consumer.internals.{ShareAcquireMode, StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -709,6 +709,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   private def shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
     new ShareGroupHeartbeatRequestData()
       .setGroupId(shareGroup)
+      .setMemberId(Uuid.randomUuid().toString)
       .setMemberEpoch(0)
       .setSubscribedTopicNames(List(topic).asJava)).build(ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion)
 
@@ -724,7 +725,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val send: Seq[TopicIdPartition] = Seq(
       new TopicIdPartition(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), new TopicPartition(topic, part)))
     val ackMap = new util.HashMap[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]]
-    requests.ShareFetchRequest.Builder.forConsumer(shareGroup, metadata, 100, 0, Int.MaxValue, 500, 500,
+    requests.ShareFetchRequest.Builder.forConsumer(shareGroup, metadata, 100, 0, Int.MaxValue, 500, 500, ShareAcquireMode.BATCH_OPTIMIZED.id(), false,
       send.asJava, Seq.empty.asJava, ackMap).build()
   }
 
@@ -1356,7 +1357,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     sendRecords(producer, 1, tp)
     removeAllClientAcls()
 
-    val consumer = createConsumer()
+    // Remove the group.id configuration since this self-assigning partitions.
+    val consumer = createConsumer(configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG)) 
     consumer.assign(java.util.List.of(tp))
     assertThrows(classOf[TopicAuthorizationException], () => consumeRecords(consumer))
   }
@@ -3121,8 +3123,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
     addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
 
-    val response = sendAndReceiveFirstRegexHeartbeat(Uuid.randomUuid.toString, listenerName)
-    sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    var response = sendAndReceiveFirstRegexHeartbeat(Uuid.randomUuid.toString, listenerName)
+    TestUtils.tryUntilNoAssertionError() {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    }
   }
 
   @Test
@@ -3251,6 +3255,18 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val consumer = createShareConsumer()
     consumer.subscribe(util.Set.of(topic))
     consumer.poll(Duration.ofMillis(500L))
+    removeAllClientAcls()
+  }
+
+  private def createEmptyShareGroup(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), shareGroupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), topicResource)
+    shareConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, shareGroup)
+    val consumer = createShareConsumer()
+    consumer.subscribe(util.Set.of(topic))
+    consumer.poll(Duration.ofMillis(500L))
+    consumer.close()
     removeAllClientAcls()
   }
 
@@ -3614,6 +3630,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @Test
   def testDeleteShareGroupOffsetsWithoutTopicReadAcl(): Unit = {
+    createEmptyShareGroup()
     addAndVerifyAcls(shareGroupDeleteAcl(shareGroupResource), shareGroupResource)
 
     val request = deleteShareGroupOffsetsRequest
@@ -3663,6 +3680,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @Test
   def testAlterShareGroupOffsetsWithoutTopicReadAcl(): Unit = {
+    createEmptyShareGroup()
     addAndVerifyAcls(shareGroupReadAcl(shareGroupResource), shareGroupResource)
 
     val request = alterShareGroupOffsetsRequest
@@ -3829,6 +3847,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val response = sendRequestAndVerifyResponseError(request, resource, isAuthorized = true).asInstanceOf[StreamsGroupHeartbeatResponse]
     assertEquals(
       util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
+        new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
         .setStatusDetail("Internal topics are missing: [topic]; Unauthorized to CREATE on topics topic.")),
     response.data().status())
@@ -3860,6 +3881,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // Request successful, and no internal topic creation error.
     assertEquals(
       util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
+        new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
         .setStatusDetail("Internal topics are missing: [topic]")),
       response.data().status())
@@ -3898,14 +3922,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumer.subscribe(
       if (topicAsSourceTopic || topicAsRepartitionSourceTopic) util.Set.of(sourceTopic, topic) else util.Set.of(sourceTopic),
       new StreamsRebalanceListener {
-        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Optional[Exception] =
-          Optional.empty()
-
-        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Optional[Exception] =
-          Optional.empty()
-
-        override def onAllTasksLost(): Optional[Exception] =
-          Optional.empty()
+        override def onTasksRevoked(tasks: util.Set[StreamsRebalanceData.TaskId]): Unit = ()
+        override def onTasksAssigned(assignment: StreamsRebalanceData.Assignment): Unit = ()
+        override def onAllTasksLost(): Unit = ()
       }
     )
     consumer.poll(Duration.ofMillis(500L))

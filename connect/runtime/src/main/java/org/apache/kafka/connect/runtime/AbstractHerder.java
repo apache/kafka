@@ -555,7 +555,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "header converter",
                 HEADER_CONVERTER_CLASS_CONFIG,
                 HEADER_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.HEADER.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -568,7 +568,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "key converter",
                 KEY_CONVERTER_CLASS_CONFIG,
                 KEY_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.KEY.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -582,7 +582,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 "value converter",
                 VALUE_CONVERTER_CLASS_CONFIG,
                 VALUE_CONVERTER_VERSION_CONFIG,
-                Collections.singletonMap(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName()),
+                Map.of(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName()),
                 connectorLoader,
                 reportStage
         );
@@ -843,7 +843,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         try {
             connVersion = PluginUtils.connectorVersionRequirement(connectorProps.get(CONNECTOR_VERSION));
             connector = cachedConnectors.getConnector(connType, connVersion);
-            connectorLoader = plugins().pluginLoader(connType, connVersion);
+            connectorLoader = plugins().connectorLoader(connType, connVersion);
             log.info("Validating connector {}, version {}", connType, connector.version());
         } catch (VersionedPluginLoadingException e) {
             log.warn("Failed to load connector {} with version {}, skipping additional validations (connector, converters, transformations, client overrides) ",
@@ -897,7 +897,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         for (ConfigInfos configInfos : configInfosList) {
             if (configInfos != null) {
                 errorCount += configInfos.errorCount();
-                configInfoList.addAll(configInfos.values());
+                configInfoList.addAll(configInfos.configs());
                 groups.addAll(configInfos.groups());
             }
         }
@@ -1073,7 +1073,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             StringBuilder messages = new StringBuilder();
             messages.append("Connector configuration is invalid and contains the following ")
                 .append(errors).append(" error(s):");
-            for (ConfigInfo configInfo : configInfos.values()) {
+            for (ConfigInfo configInfo : configInfos.configs()) {
                 for (String msg : configInfo.configValue().errors()) {
                     messages.append('\n').append(msg);
                 }
@@ -1278,7 +1278,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         if (!loggers.isValidLevel(normalizedLevel)) {
             log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
-            return Collections.emptyList();
+            return List.of();
         }
 
         return loggers.setLevel(namespace, normalizedLevel);

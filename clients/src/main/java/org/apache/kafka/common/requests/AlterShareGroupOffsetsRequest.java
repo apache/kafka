@@ -53,26 +53,31 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Errors error = Errors.forException(e);
-        return new AlterShareGroupOffsetsResponse(getErrorResponse(throttleTimeMs, error));
+    public AlterShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return getErrorResponse(throttleTimeMs, Errors.forException(e));
     }
 
-    public static AlterShareGroupOffsetsResponseData getErrorResponse(int throttleTimeMs, Errors error) {
-        return new AlterShareGroupOffsetsResponseData()
-            .setThrottleTimeMs(throttleTimeMs)
-            .setErrorCode(error.code())
-            .setErrorMessage(error.message());
+    public AlterShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Errors error) {
+        return getErrorResponse(throttleTimeMs, error.code(), error.message());
     }
 
-    public static AlterShareGroupOffsetsResponseData getErrorResponse(Errors error) {
-        return getErrorResponse(error.code(), error.message());
-    }
-
-    public static AlterShareGroupOffsetsResponseData getErrorResponse(short errorCode, String errorMessage) {
-        return new AlterShareGroupOffsetsResponseData()
+    public AlterShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, short errorCode, String message) {
+        return new AlterShareGroupOffsetsResponse(
+            new AlterShareGroupOffsetsResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(errorCode)
-                .setErrorMessage(errorMessage);
+                .setErrorMessage(message)
+        );
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponseData(Errors error) {
+        return getErrorResponseData(error, null);
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorResponseData(Errors error, String errorMessage) {
+        return new AlterShareGroupOffsetsResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage == null ? error.message() : errorMessage);
     }
 
     public static AlterShareGroupOffsetsRequest parse(Readable readable, short version) {

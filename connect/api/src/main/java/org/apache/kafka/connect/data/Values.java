@@ -430,33 +430,20 @@ public class Values {
             }
             throw new DataException("Unable to convert a null value to a schema that requires a value");
         }
-        switch (toSchema.type()) {
-            case BYTES:
-                return convertMaybeLogicalBytes(toSchema, value);
-            case STRING:
-                return convertToString(fromSchema, value);
-            case BOOLEAN:
-                return convertToBoolean(fromSchema, value);
-            case INT8:
-                return convertToByte(fromSchema, value);
-            case INT16:
-                return convertToShort(fromSchema, value);
-            case INT32:
-                return convertMaybeLogicalInteger(toSchema, fromSchema, value);
-            case INT64:
-                return convertMaybeLogicalLong(toSchema, fromSchema, value);
-            case FLOAT32:
-                return convertToFloat(fromSchema, value);
-            case FLOAT64:
-                return convertToDouble(fromSchema, value);
-            case ARRAY:
-                return convertToArray(toSchema, value);
-            case MAP:
-                return convertToMapInternal(toSchema, value);
-            case STRUCT:
-                return convertToStructInternal(toSchema, value);
-        }
-        throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
+        return switch (toSchema.type()) {
+            case BYTES -> convertMaybeLogicalBytes(toSchema, value);
+            case STRING -> convertToString(fromSchema, value);
+            case BOOLEAN -> convertToBoolean(fromSchema, value);
+            case INT8 -> convertToByte(fromSchema, value);
+            case INT16 -> convertToShort(fromSchema, value);
+            case INT32 -> convertMaybeLogicalInteger(toSchema, fromSchema, value);
+            case INT64 -> convertMaybeLogicalLong(toSchema, fromSchema, value);
+            case FLOAT32 -> convertToFloat(fromSchema, value);
+            case FLOAT64 -> convertToDouble(fromSchema, value);
+            case ARRAY -> convertToArray(toSchema, value);
+            case MAP -> convertToMapInternal(toSchema, value);
+            case STRUCT -> convertToStructInternal(toSchema, value);
+        };
     }
 
     private static Serializable convertMaybeLogicalBytes(Schema toSchema, Object value) {
@@ -1144,21 +1131,15 @@ public class Values {
         Type previousType = previous.type();
         Type newType = newSchema.type();
         if (previousType != newType) {
-            switch (previous.type()) {
-                case INT8:
-                    return commonSchemaForInt8(newSchema, newType);
-                case INT16:
-                    return commonSchemaForInt16(previous, newSchema, newType);
-                case INT32:
-                    return commonSchemaForInt32(previous, newSchema, newType);
-                case INT64:
-                    return commonSchemaForInt64(previous, newSchema, newType);
-                case FLOAT32:
-                    return commonSchemaForFloat32(previous, newSchema, newType);
-                case FLOAT64:
-                    return commonSchemaForFloat64(previous, newType);
-            }
-            return null;
+            return switch (previous.type()) {
+                case INT8 -> commonSchemaForInt8(newSchema, newType);
+                case INT16 -> commonSchemaForInt16(previous, newSchema, newType);
+                case INT32 -> commonSchemaForInt32(previous, newSchema, newType);
+                case INT64 -> commonSchemaForInt64(previous, newSchema, newType);
+                case FLOAT32 -> commonSchemaForFloat32(previous, newSchema, newType);
+                case FLOAT64 -> commonSchemaForFloat64(previous, newType);
+                default -> null;
+            };
         }
         if (previous.isOptional() == newSchema.isOptional()) {
             // Use the optional one
@@ -1273,10 +1254,8 @@ public class Values {
             }
             if (knownType == null) {
                 knownType = schema.type();
-            } else if (knownType != schema.type()) {
-                return false;
             }
-            return true;
+            return knownType == schema.type();
         }
 
         public Schema schema() {

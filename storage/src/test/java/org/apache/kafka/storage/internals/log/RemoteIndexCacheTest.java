@@ -19,7 +19,6 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -122,12 +121,12 @@ public class RemoteIndexCacheTest {
         rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(),
                 brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
         cache = new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString());
-        cache.setFileDeleteDelayMs(0);
+        cache.setFileDeleteDelayMs(20);
         mockRsmFetchIndex(rsm);
     }
 
     @AfterEach
-    public void cleanup() {
+    public void cleanup() throws InterruptedException {
         reset(rsm);
         // the files created for the test will be deleted automatically on thread exit since we use temp dir
         Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
@@ -172,15 +171,15 @@ public class RemoteIndexCacheTest {
         OffsetIndex offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex();
         OffsetPosition offsetPosition1 = offsetIndex.entry(1);
         // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
-        int resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset);
-        assertEquals(offsetPosition1.position, resultPosition);
+        int resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset());
+        assertEquals(offsetPosition1.position(), resultPosition);
         verifyFetchIndexInvocation(1, List.of(IndexType.OFFSET, IndexType.TIMESTAMP));
 
         // this should not cause fetching index from RemoteStorageManager as it is already fetched earlier
         reset(rsm);
         OffsetPosition offsetPosition2 = offsetIndex.entry(2);
-        int resultPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset);
-        assertEquals(offsetPosition2.position, resultPosition2);
+        int resultPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset());
+        assertEquals(offsetPosition2.position(), resultPosition2);
         assertNotNull(cache.getIndexEntry(rlsMetadata));
         verifyNoInteractions(rsm);
     }
@@ -219,7 +218,7 @@ public class RemoteIndexCacheTest {
         // offsetIndex.lookup() returns OffsetPosition(baseOffset, 0) for offsets smaller than the last entry in the offset index.
         OffsetPosition nonExistentOffsetPosition = new OffsetPosition(baseOffset, 0);
         long lowerOffsetThanBaseOffset = offsetIndex.baseOffset() - 1;
-        assertEquals(nonExistentOffsetPosition.position, cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset));
+        assertEquals(nonExistentOffsetPosition.position(), cache.lookupOffset(rlsMetadata, lowerOffsetThanBaseOffset));
     }
 
     @Test
@@ -331,14 +330,26 @@ public class RemoteIndexCacheTest {
         verify(cacheEntry.offsetIndex()).renameTo(any(File.class));
         verify(cacheEntry.txnIndex()).renameTo(any(File.class));
 
+        // wait until the delete method is invoked
+        TestUtils.waitForCondition(() -> {
+            try {
+                verify(cacheEntry.timeIndex()).deleteIfExists();
+                verify(cacheEntry.offsetIndex()).deleteIfExists();
+                verify(cacheEntry.txnIndex()).deleteIfExists();
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }, "Failed to delete index file");
+
         // verify no index files on disk
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isEmpty(),
                 "Offset index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isEmpty(),
                 "Txn index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isEmpty(),
                 "Time index file should not be present on disk at " + tpDir.toPath());
-        assertFalse(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isPresent(),
+        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty(),
                 "Index file marked for deletion should not be present on disk at " + tpDir.toPath());
     }
 
@@ -761,7 +772,6 @@ public class RemoteIndexCacheTest {
     }
 
     @Test
-    @Flaky("KAFKA-19286")
     public void testConcurrentRemoveReadForCache1() throws IOException, InterruptedException, ExecutionException {
         // Create a spy Cache Entry
         RemoteIndexCache.Entry spyEntry = generateSpyCacheEntry();
@@ -1076,12 +1086,12 @@ public class RemoteIndexCacheTest {
                 name -> name.contains(segmentUuid.toString()) && name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
         // Ensure that the `indexEntry` object still able to access the renamed index files after being marked for deletion
         OffsetPosition offsetPosition = indexEntry.offsetIndex().entry(2);
-        assertEquals(offsetPosition.position, indexEntry.lookupOffset(offsetPosition.offset).position);
+        assertEquals(offsetPosition.position(), indexEntry.lookupOffset(offsetPosition.offset()).position());
         assertNull(cache.internalCache().asMap().get(segmentUuid));
         verifyFetchIndexInvocation(1);
 
         // Once the entry gets removed from cache, the subsequent call to the cache should re-fetch the entry from remote.
-        assertEquals(offsetPosition.position, cache.lookupOffset(rlsMetadata, offsetPosition.offset));
+        assertEquals(offsetPosition.position(), cache.lookupOffset(rlsMetadata, offsetPosition.offset()));
         verifyFetchIndexInvocation(2);
         RemoteIndexCache.Entry indexEntry2 = cache.getIndexEntry(rlsMetadata);
         assertNotNull(indexEntry2);
@@ -1099,18 +1109,18 @@ public class RemoteIndexCacheTest {
         assertEquals(3, countFiles(cacheDir, name -> true));
         assertEquals(3, countFiles(cacheDir,
                 name -> name.contains(segmentUuid.toString()) && name.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)));
-        assertEquals(offsetPosition.position, indexEntry.lookupOffset(offsetPosition.offset).position);
-        assertEquals(offsetPosition.position, indexEntry2.lookupOffset(offsetPosition.offset).position);
+        assertEquals(offsetPosition.position(), indexEntry.lookupOffset(offsetPosition.offset()).position());
+        assertEquals(offsetPosition.position(), indexEntry2.lookupOffset(offsetPosition.offset()).position());
 
         indexEntry.cleanup();
         assertEquals(0, countFiles(cacheDir, name -> true));
-        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset));
-        assertEquals(offsetPosition.position, indexEntry2.lookupOffset(offsetPosition.offset).position);
+        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
+        assertEquals(offsetPosition.position(), indexEntry2.lookupOffset(offsetPosition.offset()).position());
 
         indexEntry2.cleanup();
         assertEquals(0, countFiles(cacheDir, name -> true));
-        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset));
-        assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset));
+        assertThrows(IllegalStateException.class, () -> indexEntry.lookupOffset(offsetPosition.offset()));
+        assertThrows(IllegalStateException.class, () -> indexEntry2.lookupOffset(offsetPosition.offset()));
     }
 
     private int countFiles(File cacheDir, Predicate<String> condition) {
@@ -1298,5 +1308,133 @@ public class RemoteIndexCacheTest {
                 .stream()
                 .filter(t -> t.isAlive() && t.getName().startsWith(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD))
                 .collect(Collectors.toSet());
+    }
+
+    @Test
+    public void testCacheTtlCanBeDisabled() throws IOException {
+        // Test that TTL can be disabled by setting it to -1
+        long ttlMs = -1L;
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            RemoteIndexCache.Entry entry = ttlCache.getIndexEntry(rlsMetadata);
+            assertNotNull(entry);
+
+            fakeTicker.advance(TimeUnit.MINUTES.toNanos(15));
+            ttlCache.internalCache().cleanUp();
+
+            RemoteIndexCache.Entry cachedEntry = ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id());
+            assertNotNull(cachedEntry, "Entry should remain cached when TTL disabled");
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testCacheTtlEviction() throws IOException {
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            RemoteIndexCache.Entry entry = ttlCache.getIndexEntry(rlsMetadata);
+            assertNotNull(entry);
+
+            fakeTicker.advance(TimeUnit.MILLISECONDS.toNanos(ttlMs - 1000));
+            ttlCache.internalCache().cleanUp();
+            assertEquals(1, ttlCache.internalCache().estimatedSize());
+
+            fakeTicker.advance(TimeUnit.MILLISECONDS.toNanos(2000));
+            ttlCache.internalCache().cleanUp();
+            assertEquals(0, ttlCache.internalCache().estimatedSize());
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testCacheTtlRefreshOnAccess() throws IOException {
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            ttlCache.getIndexEntry(rlsMetadata);
+
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(8));
+            ttlCache.getIndexEntry(rlsMetadata);
+
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(8));
+            ttlCache.internalCache().cleanUp();
+
+            RemoteIndexCache.Entry cachedEntry = ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id());
+            assertNotNull(cachedEntry, "Entry should remain after access refreshes TTL");
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testCacheTtlWithMultipleEntries() throws IOException, RemoteStorageException {
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            RemoteLogSegmentId remoteLogSegmentId2 = RemoteLogSegmentId.generateNew(idPartition);
+            RemoteLogSegmentMetadata rlsMetadata2 = new RemoteLogSegmentMetadata(remoteLogSegmentId2, baseOffset + 100, lastOffset + 100,
+                    time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+
+            ttlCache.getIndexEntry(rlsMetadata);
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(5));
+
+            ttlCache.getIndexEntry(rlsMetadata2);
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(6));
+            ttlCache.internalCache().cleanUp();
+
+            assertNull(ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()));
+            assertNotNull(ttlCache.internalCache().getIfPresent(rlsMetadata2.remoteLogSegmentId().id()));
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testSizeAndTimeBasedEviction() throws IOException, RemoteStorageException, InterruptedException {
+        long estimateEntryBytesSize = estimateOneEntryBytesSize();
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(2 * estimateEntryBytesSize, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+
+        try {
+            TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+            List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
+
+            ttlCache.getIndexEntry(metadataList.get(0));
+            ttlCache.getIndexEntry(metadataList.get(1));
+            TestUtils.waitForCondition(() -> ttlCache.internalCache().estimatedSize() == 2,
+                    "Cache size should be 2 after adding 2 entries");
+
+            ttlCache.getIndexEntry(metadataList.get(2));
+            TestUtils.waitForCondition(() -> ttlCache.internalCache().estimatedSize() == 2,
+                    "Size-based eviction should keep cache at 2 entries");
+
+            fakeTicker.advance(TimeUnit.MILLISECONDS.toNanos(ttlMs + 1000));
+            ttlCache.internalCache().cleanUp();
+            assertEquals(0, ttlCache.internalCache().estimatedSize(),
+                    "Time-based eviction should remove all expired entries");
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    static class FakeTicker implements com.github.benmanes.caffeine.cache.Ticker {
+        private long nanos = 0;
+
+        public void advance(long nanoseconds) {
+            nanos += nanoseconds;
+        }
+
+        @Override
+        public long read() {
+            return nanos;
+        }
     }
 }

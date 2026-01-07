@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState;
 
 import java.util.Arrays;
@@ -59,9 +60,24 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     public static final String EVENT_PURGATORY_TIME_METRIC_NAME = "event-purgatory-time-ms";
 
     /**
+     * The effective batch linger time metric name.
+     */
+    public static final String BATCH_LINGER_TIME_METRIC_NAME = "batch-linger-time-ms";
+
+    /**
      * The flush time metric name.
      */
     public static final String BATCH_FLUSH_TIME_METRIC_NAME = "batch-flush-time-ms";
+
+    /**
+     * The buffer cache size metric name.
+     */
+    public static final String BATCH_BUFFER_CACHE_SIZE_METRIC_NAME = "batch-buffer-cache-size-bytes";
+
+    /**
+     * The buffer cache discard count metric name.
+     */
+    public static final String BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME = "batch-buffer-cache-discard-count";
 
     /**
      * Metric to count the number of partitions in Loading state.
@@ -85,6 +101,17 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
      * Metric to count the size of the processor queue.
      */
     private final MetricName eventQueueSize;
+
+    /**
+     * Metric to count the size of the cached buffers.
+     */
+    private final MetricName bufferCacheSize;
+
+    /**
+     * Metric to count the number of over-sized append buffers that were discarded.
+     */
+    private final MetricName bufferCacheDiscardCount;
+    private final AtomicLong bufferCacheDiscardCounter = new AtomicLong(0);
 
     /**
      * The Kafka metrics registry.
@@ -117,9 +144,14 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     private final Sensor eventPurgatoryTimeSensor;
 
     /**
-     * Sensor to measure the flush time.
+     * Sensor to measure the effective batch linger time.
      */
-    private final Sensor flushTimeSensor;
+    private final Sensor lingerTimeSensor;
+
+    /**
+     * Sensor to measure the flush time and rate.
+     */
+    private final Sensor flushSensor;
 
     public CoordinatorRuntimeMetricsImpl(Metrics metrics, String metricsGroup) {
         this.metrics = Objects.requireNonNull(metrics);
@@ -145,11 +177,22 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
 
         this.eventQueueSize = kafkaMetricName("event-queue-size", "The event accumulator queue size.");
 
+        this.bufferCacheSize = kafkaMetricName(
+            BATCH_BUFFER_CACHE_SIZE_METRIC_NAME,
+            "The current total size in bytes of the append buffers being held in the coordinator's cache."
+        );
+
+        this.bufferCacheDiscardCount = kafkaMetricName(
+            BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME,
+            "The count of over-sized append buffers that were discarded instead of being cached upon release."
+        );
+        
         metrics.addMetric(numPartitionsLoading, (Gauge<Long>) (config, now) -> numPartitionsLoadingCounter.get());
         metrics.addMetric(numPartitionsActive, (Gauge<Long>) (config, now) -> numPartitionsActiveCounter.get());
         metrics.addMetric(numPartitionsFailed, (Gauge<Long>) (config, now) -> numPartitionsFailedCounter.get());
+        metrics.addMetric(bufferCacheDiscardCount, (Gauge<Long>) (config, now) -> bufferCacheDiscardCounter.get());
 
-        this.partitionLoadSensor = metrics.sensor("GroupPartitionLoadTime");
+        this.partitionLoadSensor = metrics.sensor(this.metricsGroup + "-PartitionLoadTime");
         this.partitionLoadSensor.add(
             metrics.metricName(
                 "partition-load-time-max",
@@ -163,7 +206,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The average time it took to load the partitions in the last 30 sec."
             ), new Avg());
 
-        this.threadIdleSensor = metrics.sensor("ThreadIdleRatio");
+        this.threadIdleSensor = metrics.sensor(this.metricsGroup + "-ThreadIdleRatio");
         this.threadIdleSensor.add(
             metrics.metricName(
                 "thread-idle-ratio-avg",
@@ -178,7 +221,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " event queue time in milliseconds"
             )
         );
-        this.eventQueueTimeSensor = metrics.sensor("EventQueueTime");
+        this.eventQueueTimeSensor = metrics.sensor(this.metricsGroup + "-EventQueueTime");
         this.eventQueueTimeSensor.add(eventQueueTimeHistogram);
 
         KafkaMetricHistogram eventProcessingTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
@@ -187,7 +230,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " event processing time in milliseconds"
             )
         );
-        this.eventProcessingTimeSensor = metrics.sensor("EventProcessingTime");
+        this.eventProcessingTimeSensor = metrics.sensor(this.metricsGroup + "-EventProcessingTime");
         this.eventProcessingTimeSensor.add(eventProcessingTimeHistogram);
 
         KafkaMetricHistogram eventPurgatoryTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
@@ -196,8 +239,17 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " event purgatory time in milliseconds"
             )
         );
-        this.eventPurgatoryTimeSensor = metrics.sensor("EventPurgatoryTime");
+        this.eventPurgatoryTimeSensor = metrics.sensor(this.metricsGroup + "-EventPurgatoryTime");
         this.eventPurgatoryTimeSensor.add(eventPurgatoryTimeHistogram);
+
+        KafkaMetricHistogram lingerTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+            suffix -> kafkaMetricName(
+                BATCH_LINGER_TIME_METRIC_NAME + "-" + suffix,
+                "The " + suffix + " effective linger time in milliseconds"
+            )
+        );
+        this.lingerTimeSensor = metrics.sensor(this.metricsGroup + "-LingerTime");
+        this.lingerTimeSensor.add(lingerTimeHistogram);
 
         KafkaMetricHistogram flushTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
             suffix -> kafkaMetricName(
@@ -205,8 +257,14 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 "The " + suffix + " flush time in milliseconds"
             )
         );
-        this.flushTimeSensor = metrics.sensor("FlushTime");
-        this.flushTimeSensor.add(flushTimeHistogram);
+        this.flushSensor = metrics.sensor(this.metricsGroup + "-Flush");
+        this.flushSensor.add(flushTimeHistogram);
+        this.flushSensor.add(
+            metrics.metricName(
+                "batch-flush-rate",
+                this.metricsGroup,
+                "The flushes per second."),
+            new Rate(TimeUnit.SECONDS, new WindowedCount()));
     }
 
     /**
@@ -226,7 +284,9 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
             numPartitionsLoading,
             numPartitionsActive,
             numPartitionsFailed,
-            eventQueueSize
+            eventQueueSize,
+            bufferCacheSize,
+            bufferCacheDiscardCount
         ).forEach(metrics::removeMetric);
 
         metrics.removeSensor(partitionLoadSensor.name());
@@ -234,7 +294,8 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
         metrics.removeSensor(eventQueueTimeSensor.name());
         metrics.removeSensor(eventProcessingTimeSensor.name());
         metrics.removeSensor(eventPurgatoryTimeSensor.name());
-        metrics.removeSensor(flushTimeSensor.name());
+        metrics.removeSensor(lingerTimeSensor.name());
+        metrics.removeSensor(flushSensor.name());
     }
 
     /**
@@ -295,8 +356,13 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     }
 
     @Override
+    public void recordLingerTime(long durationMs) {
+        lingerTimeSensor.record(durationMs);
+    }
+
+    @Override
     public void recordFlushTime(long durationMs) {
-        flushTimeSensor.record(durationMs);
+        flushSensor.record(durationMs);
     }
 
     @Override
@@ -307,5 +373,15 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     @Override
     public void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier) {
         metrics.addMetric(eventQueueSize, (Gauge<Long>) (config, now) -> (long) sizeSupplier.get());
+    }
+
+    @Override
+    public void registerBufferCacheSizeGauge(Supplier<Long> bufferCacheSizeSupplier) {
+        metrics.addMetric(bufferCacheSize, (Gauge<Long>) (config, now) -> bufferCacheSizeSupplier.get());
+    }
+
+    @Override
+    public void recordBufferCacheDiscarded() {
+        bufferCacheDiscardCounter.incrementAndGet();
     }
 }

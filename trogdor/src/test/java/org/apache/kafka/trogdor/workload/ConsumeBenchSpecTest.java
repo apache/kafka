@@ -22,13 +22,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,7 +35,7 @@ public class ConsumeBenchSpecTest {
 
     @Test
     public void testMaterializeTopicsWithNoPartitions() {
-        Map<String, List<TopicPartition>> materializedTopics = consumeBenchSpec(Arrays.asList("topic[1-3]", "secondTopic")).materializeTopics();
+        Map<String, List<TopicPartition>> materializedTopics = consumeBenchSpec(List.of("topic[1-3]", "secondTopic")).materializeTopics();
         Map<String, List<TopicPartition>> expected = new HashMap<>();
         expected.put("topic1", new ArrayList<>());
         expected.put("topic2", new ArrayList<>());
@@ -50,28 +47,28 @@ public class ConsumeBenchSpecTest {
 
     @Test
     public void testMaterializeTopicsWithSomePartitions() {
-        Map<String, List<TopicPartition>> materializedTopics = consumeBenchSpec(Arrays.asList("topic[1-3]:[1-5]", "secondTopic", "thirdTopic:1")).materializeTopics();
+        Map<String, List<TopicPartition>> materializedTopics = consumeBenchSpec(List.of("topic[1-3]:[1-5]", "secondTopic", "thirdTopic:1")).materializeTopics();
         Map<String, List<TopicPartition>> expected = new HashMap<>();
-        expected.put("topic1", IntStream.range(1, 6).asLongStream().mapToObj(i -> new TopicPartition("topic1", (int) i)).collect(Collectors.toList()));
-        expected.put("topic2", IntStream.range(1, 6).asLongStream().mapToObj(i -> new TopicPartition("topic2", (int) i)).collect(Collectors.toList()));
-        expected.put("topic3", IntStream.range(1, 6).asLongStream().mapToObj(i -> new TopicPartition("topic3", (int) i)).collect(Collectors.toList()));
+        expected.put("topic1", IntStream.range(1, 6).asLongStream().mapToObj(i -> new TopicPartition("topic1", (int) i)).toList());
+        expected.put("topic2", IntStream.range(1, 6).asLongStream().mapToObj(i -> new TopicPartition("topic2", (int) i)).toList());
+        expected.put("topic3", IntStream.range(1, 6).asLongStream().mapToObj(i -> new TopicPartition("topic3", (int) i)).toList());
         expected.put("secondTopic", new ArrayList<>());
-        expected.put("thirdTopic", Collections.singletonList(new TopicPartition("thirdTopic", 1)));
+        expected.put("thirdTopic", List.of(new TopicPartition("thirdTopic", 1)));
 
         assertEquals(expected, materializedTopics);
     }
 
     @Test
     public void testInvalidTopicNameRaisesExceptionInMaterialize() {
-        for (String invalidName : Arrays.asList("In:valid", "invalid:", ":invalid", "in:valid:1", "invalid:2:2", "invalid::1", "invalid[1-3]:")) {
-            assertThrows(IllegalArgumentException.class, () -> consumeBenchSpec(Collections.singletonList(invalidName)).materializeTopics());
+        for (String invalidName : List.of("In:valid", "invalid:", ":invalid", "in:valid:1", "invalid:2:2", "invalid::1", "invalid[1-3]:")) {
+            assertThrows(IllegalArgumentException.class, () -> consumeBenchSpec(List.of(invalidName)).materializeTopics());
         }
     }
 
     private ConsumeBenchSpec consumeBenchSpec(List<String> activeTopics) {
         return new ConsumeBenchSpec(0, 0, "node", "localhost",
             123, 1234, "cg-1",
-            Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), 1,
+            Map.of(), Map.of(), Map.of(), 1,
             Optional.empty(), activeTopics);
     }
 }

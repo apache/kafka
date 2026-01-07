@@ -18,6 +18,7 @@
 package org.apache.kafka.common.test.junit;
 
 import kafka.server.ControllerServer;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -54,10 +55,15 @@ import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.metadata.properties.MetaProperties;
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Assertions;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -65,6 +71,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -83,6 +90,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(types = {Type.KRAFT}, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
@@ -178,19 +186,37 @@ public class ClusterTestExtensionsTest {
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}),
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, disksPerBroker = 2),
     })
-    public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
+    public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException, IOException {
         try (Admin admin = clusterInstance.admin()) {
             DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
             result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) ->
                 assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size()));
         }
+        for (Map.Entry<Integer, KafkaBroker> entry : clusterInstance.brokers().entrySet()) {
+            int brokerId = entry.getKey();
+            KafkaBroker broker = entry.getValue();
+            List<String> logDirs = broker.config().logDirs();
+            for (String logDir : logDirs) {
+                Properties props = Utils.loadProps(new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath());
+                MetaProperties metaProps = new MetaProperties.Builder(props).build();
+
+                assertTrue(metaProps.clusterId().isPresent(), "Cluster ID missing in " + logDir);
+                assertTrue(metaProps.nodeId().isPresent(), "Node ID missing in " + logDir);
+                assertTrue(metaProps.directoryId().isPresent(), "Directory ID missing in " + logDir);
+
+                assertEquals(MetaPropertiesVersion.V1, metaProps.version(), "MetaProperties version mismatch in " + logDir);
+                assertEquals(clusterInstance.clusterId(), metaProps.clusterId().get(), "Cluster ID mismatch in " + logDir);
+                assertEquals(brokerId, metaProps.nodeId().getAsInt(), "Node ID mismatch in " + logDir);
+                assertEquals(metaProps.directoryId().get(), broker.logManager().directoryId(logDir).get(), "Directory ID mismatch in " + logDir);
+            }
+        }
     }
 
     @ClusterTest(autoStart = AutoStart.NO)
     public void testNoAutoStart() {
-        Assertions.assertThrows(RuntimeException.class, clusterInstance::anyBrokerSocketServer);
+        Assertions.assertThrows(RuntimeException.class, () -> clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst());
         clusterInstance.start();
-        assertNotNull(clusterInstance.anyBrokerSocketServer());
+        assertTrue(clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst().isPresent());
     }
 
     @ClusterTest
@@ -240,7 +266,7 @@ public class ClusterTestExtensionsTest {
         short numReplicas = 3;
         clusterInstance.createTopic(topicName, numPartition, numReplicas);
         clusterInstance.shutdownBroker(0);
-        clusterInstance.waitForTopic(topicName, numPartition);
+        clusterInstance.waitTopicCreation(topicName, numPartition);
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
@@ -271,7 +297,7 @@ public class ClusterTestExtensionsTest {
         try (Admin admin = clusterInstance.admin()) {
             String testTopic = "testTopic";
             admin.createTopics(List.of(new NewTopic(testTopic, 1, (short) 1)));
-            clusterInstance.waitForTopic(testTopic, 1);
+            clusterInstance.waitTopicCreation(testTopic, 1);
             admin.deleteTopics(List.of(testTopic));
             clusterInstance.waitTopicDeletion(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
@@ -355,7 +381,7 @@ public class ClusterTestExtensionsTest {
                  ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
             admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
 
-            cluster.waitForTopic(topicName, 1);
+            cluster.waitTopicCreation(topicName, 1);
 
             cluster.brokers().values().forEach(broker -> {
                 broker.shutdown();

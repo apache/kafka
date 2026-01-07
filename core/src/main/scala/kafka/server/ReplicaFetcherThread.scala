@@ -63,6 +63,17 @@ class ReplicaFetcherThread(name: String,
     replicaMgr.localLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
+  override protected[server] def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = {
+    val isCompactTopic = replicaMgr.localLog(topicPartition).exists(_.config.compact)
+    val remoteStorageEnabled = replicaMgr.localLog(topicPartition).exists(_.remoteLogEnabled())
+
+    brokerConfig.followerFetchLastTieredOffsetEnable &&
+      remoteStorageEnabled &&
+      !isCompactTopic &&
+      replicaEndOffset == 0 &&
+      leaderEndOffset != 0
+  }
+
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
     if (justShutdown) {
@@ -164,13 +175,8 @@ class ReplicaFetcherThread(name: String,
    */
   override def truncate(tp: TopicPartition, offsetTruncationState: OffsetTruncationState): Unit = {
     val partition = replicaMgr.getPartitionOrException(tp)
-    val log = partition.localLogOrException
 
     partition.truncateTo(offsetTruncationState.offset, isFuture = false)
-
-    if (offsetTruncationState.offset < log.highWatermark)
-      warn(s"Truncating $tp to offset ${offsetTruncationState.offset} below high watermark " +
-        s"${log.highWatermark}")
 
     // mark the future replica for truncation only when we do last truncation
     if (offsetTruncationState.truncationCompleted)

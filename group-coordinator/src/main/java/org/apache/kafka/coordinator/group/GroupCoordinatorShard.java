@@ -57,10 +57,13 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -117,8 +120,6 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -620,7 +621,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             try {
                 groupMetadataManager.validateDeleteGroup(groupId);
                 numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
-                groupMetadataManager.createGroupTombstoneRecords(groupId, records);
+                groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers(groupId, records);
                 deletedGroups.add(groupId);
 
                 resultCollection.add(
@@ -779,10 +780,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Make the following checks to make sure the AlterShareGroupOffsetsRequest request is valid:
-     * 1. Checks whether the provided group is empty
-     * 2. Checks the requested topics are presented in the metadataImage
-     * 3. Checks the corresponding share partitions in AlterShareGroupOffsetsRequest are existing
+     * Alters the offsets for a share group.
      *
      * @param groupId - The group ID
      * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
@@ -793,19 +791,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         String groupId,
         AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequestData
     ) {
-        List<CoordinatorRecord> records = new ArrayList<>();
-        ShareGroup group = groupMetadataManager.shareGroup(groupId);
-        group.validateOffsetsAlterable();
-
-        Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters> response = groupMetadataManager.completeAlterShareGroupOffsets(
-            groupId,
-            alterShareGroupOffsetsRequestData,
-            records
-        );
-        return new CoordinatorResult<>(
-            records,
-            response
-        );
+        return groupMetadataManager.alterShareGroupOffsets(groupId, alterShareGroupOffsetsRequestData.topics());
     }
 
     /**
@@ -821,23 +807,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long epoch
     ) throws ApiException {
-        return offsetMetadataManager.fetchOffsets(request, epoch);
-    }
-
-    /**
-     * Fetch all offsets for a given group.
-     *
-     * @param request   The OffsetFetchRequestGroup request.
-     * @param epoch     The epoch (or offset) used to read from the
-     *                  timeline data structure.
-     *
-     * @return A List of OffsetFetchResponseTopics response.
-     */
-    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        long epoch
-    ) throws ApiException {
-        return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        if (OffsetFetchRequest.requestAllOffsets(request)) {
+            return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        } else {
+            return offsetMetadataManager.fetchOffsets(request, epoch);
+        }
     }
 
     /**
@@ -1088,9 +1062,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param newImage  The metadata image.
      */
     @Override
-    public void onLoaded(MetadataImage newImage) {
-        MetadataDelta emptyDelta = new MetadataDelta(newImage);
-        groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
+    public void onLoaded(CoordinatorMetadataImage newImage) {
+        CoordinatorMetadataDelta emptyDelta = newImage.emptyDelta();
+        groupMetadataManager.onMetadataUpdate(emptyDelta, newImage);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
@@ -1109,12 +1083,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
      */
     @Override
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
-        groupMetadataManager.onNewMetadataImage(newImage, delta);
+    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
+        groupMetadataManager.onMetadataUpdate(delta, newImage);
     }
 
     private static OffsetCommitKey convertLegacyOffsetCommitKey(

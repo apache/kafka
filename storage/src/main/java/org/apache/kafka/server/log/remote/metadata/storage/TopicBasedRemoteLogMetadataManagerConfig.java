@@ -46,6 +46,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP = "remote.log.metadata.topic.replication.factor";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.num.partitions";
     public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP = "remote.log.metadata.topic.retention.ms";
+    public static final String REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP = "remote.log.metadata.topic.min.isr";
     public static final String REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP = "remote.log.metadata.consume.wait.ms";
     public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_PROP = "remote.log.metadata.initialization.retry.max.timeout.ms";
     public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP = "remote.log.metadata.initialization.retry.interval.ms";
@@ -53,6 +54,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS = 50;
     public static final long DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MS = -1L;
     public static final short DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR = 3;
+    public static final short DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR = 2;
     public static final long DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS = 2 * 60 * 1000L;
     public static final long DEFAULT_REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS = 2 * 60 * 1000L;
     public static final long DEFAULT_REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS = 100L;
@@ -63,14 +65,17 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
             "Default: -1, that means unlimited. Users can configure this value based on their use cases. " +
             "To avoid any data loss, this value should be more than the maximum retention period of any topic enabled with " +
             "tiered storage in the cluster.";
+    public static final String REMOTE_LOG_METADATA_TOPIC_MIN_ISR_DOC = "The minimum number of replicas that must acknowledge a write to remote log metadata topic.";
     public static final String REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC = "The amount of time in milliseconds to wait for the local consumer to " +
             "receive the published event.";
     public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_DOC = "The retry interval in milliseconds for " +
             "retrying RemoteLogMetadataManager resources initialization again.";
 
     public static final String REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_DOC = "The maximum amount of time in milliseconds " +
-            "for retrying RemoteLogMetadataManager resources initialization. When total retry intervals reach this timeout, initialization " +
-            "is considered as failed and broker starts shutting down.";
+            "for retrying RemoteLogMetadataManager resources initialization. " +
+            "For TopicBasedRemoteLogMetadataManager's initialization, the timer starts after this local broker is ready to process requests " +
+            "(primarily for ensuring the local cluster is ready when metadata is stored locally as an internal topic). " +
+            "If initialization fails within this timeout, this broker process will terminate.";
 
     public static final String REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX = "remote.log.metadata.common.client.";
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
@@ -88,6 +93,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                       REMOTE_LOG_METADATA_TOPIC_PARTITIONS_DOC)
               .define(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, LONG, DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MS, LOW,
                       REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_DOC)
+              .define(REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, SHORT, DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR, atLeast(1), LOW,
+                      REMOTE_LOG_METADATA_TOPIC_MIN_ISR_DOC)
               .define(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP, LONG, DEFAULT_REMOTE_LOG_METADATA_CONSUME_WAIT_MS, atLeast(0), LOW,
                       REMOTE_LOG_METADATA_CONSUME_WAIT_MS_DOC)
               .define(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_PROP, LONG,
@@ -104,6 +111,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     private final long consumeWaitMs;
     private final long metadataTopicRetentionMs;
     private final short metadataTopicReplicationFactor;
+    private final short metadataTopicMinIsr;
     private final long initializationRetryMaxTimeoutMs;
     private final long initializationRetryIntervalMs;
 
@@ -124,6 +132,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         if (metadataTopicRetentionMs != -1 && metadataTopicRetentionMs <= 0) {
             throw new IllegalArgumentException("Invalid metadata topic retention in millis: " + metadataTopicRetentionMs);
         }
+        metadataTopicMinIsr = (short) parsedConfigs.get(REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP);
         consumeWaitMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_CONSUME_WAIT_MS_PROP);
         initializationRetryIntervalMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP);
         initializationRetryMaxTimeoutMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_PROP);
@@ -182,6 +191,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return initializationRetryIntervalMs;
     }
 
+    public short metadataTopicMinIsr() {
+        return metadataTopicMinIsr;
+    }
+
     public String logDir() {
         return logDir;
     }
@@ -227,6 +240,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", consumeWaitMs=" + consumeWaitMs +
                 ", metadataTopicRetentionMs=" + metadataTopicRetentionMs +
                 ", metadataTopicReplicationFactor=" + metadataTopicReplicationFactor +
+                ", metadataTopicMinIsr=" + metadataTopicMinIsr +
                 ", initializationRetryMaxTimeoutMs=" + initializationRetryMaxTimeoutMs +
                 ", initializationRetryIntervalMs=" + initializationRetryIntervalMs +
                 ", commonProps=" + configMapToRedactedString(commonProps, AdminClientConfig.configDef()) +

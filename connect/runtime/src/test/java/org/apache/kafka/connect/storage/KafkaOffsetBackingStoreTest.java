@@ -45,9 +45,9 @@ import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -145,7 +145,7 @@ public class KafkaOffsetBackingStoreTest {
 
         if (mockKeyConverter) {
             when(keyConverter.toConnectData(any(), any())).thenReturn(new SchemaAndValue(null,
-                    Arrays.asList("connector", Collections.singletonMap("partitionKey", "dummy"))));
+                    List.of("connector", Map.of("partitionKey", "dummy"))));
         }
         store = spy(new KafkaOffsetBackingStore(adminSupplier, clientIdBase, keyConverter));
 
@@ -233,7 +233,7 @@ public class KafkaOffsetBackingStoreTest {
         }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
         // Getting from empty store should return nulls
-        Map<ByteBuffer, ByteBuffer> offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        Map<ByteBuffer, ByteBuffer> offsets = store.get(List.of(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         // Since we didn't read them yet, these will be null
         assertNull(offsets.get(TP0_KEY));
         assertNull(offsets.get(TP1_KEY));
@@ -270,7 +270,7 @@ public class KafkaOffsetBackingStoreTest {
         }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
         // Getting data should read to end of our published data and return it
-        offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        offsets = store.get(List.of(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         assertEquals(TP0_VALUE, offsets.get(TP0_KEY));
         assertEquals(TP1_VALUE, offsets.get(TP1_KEY));
 
@@ -287,7 +287,7 @@ public class KafkaOffsetBackingStoreTest {
         }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
         // Getting data should read to end of our published data and return it
-        offsets = store.get(Arrays.asList(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        offsets = store.get(List.of(TP0_KEY, TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         assertEquals(TP0_VALUE_NEW, offsets.get(TP0_KEY));
         assertEquals(TP1_VALUE_NEW, offsets.get(TP1_KEY));
 
@@ -363,7 +363,7 @@ public class KafkaOffsetBackingStoreTest {
         }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
         // Getting data should read to end of our published data and return it
-        offsets = store.get(Collections.singletonList(TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
+        offsets = store.get(List.of(TP1_KEY)).get(10000, TimeUnit.MILLISECONDS);
         assertNull(offsets.get(TP1_KEY));
 
         // Just verifying that KafkaOffsetBackingStore::get returns null isn't enough, we also need to verify that the mapping for the source partition key is removed.
@@ -488,7 +488,7 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testConnectorPartitions() throws Exception {
         JsonConverter jsonConverter = new JsonConverter();
-        jsonConverter.configure(Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), true);
+        jsonConverter.configure(Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), true);
         store = spy(new KafkaOffsetBackingStore(() -> {
             fail("Should not attempt to instantiate admin in these tests");
             return null;
@@ -506,57 +506,57 @@ public class KafkaOffsetBackingStoreTest {
         doAnswer(invocation -> {
             capturedConsumedCallback.getValue().onCompletion(null,
                     new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0,
-                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
-                                    Collections.singletonMap("partitionKey", "partitionValue1"))), TP0_VALUE.array(),
+                            jsonConverter.fromConnectData("", null, List.of("connector1",
+                                    Map.of("partitionKey", "partitionValue1"))), TP0_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             capturedConsumedCallback.getValue().onCompletion(null,
                     new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0,
-                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
-                                    Collections.singletonMap("partitionKey", "partitionValue1"))), TP1_VALUE.array(),
+                            jsonConverter.fromConnectData("", null, List.of("connector1",
+                                    Map.of("partitionKey", "partitionValue1"))), TP1_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             capturedConsumedCallback.getValue().onCompletion(null,
                     new ConsumerRecord<>(TOPIC, 0, 2, 0L, TimestampType.CREATE_TIME, 0, 0,
-                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
-                                    Collections.singletonMap("partitionKey", "partitionValue2"))), TP2_VALUE.array(),
+                            jsonConverter.fromConnectData("", null, List.of("connector1",
+                                    Map.of("partitionKey", "partitionValue2"))), TP2_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             capturedConsumedCallback.getValue().onCompletion(null,
                     new ConsumerRecord<>(TOPIC, 0, 3, 0L, TimestampType.CREATE_TIME, 0, 0,
-                            jsonConverter.fromConnectData("", null, Arrays.asList("connector2",
-                                    Collections.singletonMap("partitionKey", "partitionValue"))), TP1_VALUE.array(),
+                            jsonConverter.fromConnectData("", null, List.of("connector2",
+                                    Map.of("partitionKey", "partitionValue"))), TP1_VALUE.array(),
                             new RecordHeaders(), Optional.empty()));
             storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
             return null;
         }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
         // Trigger a read to the end of the log
-        store.get(Collections.emptyList()).get(10000, TimeUnit.MILLISECONDS);
+        store.get(List.of()).get(10000, TimeUnit.MILLISECONDS);
 
         Set<Map<String, Object>> connectorPartitions1 = store.connectorPartitions("connector1");
         Set<Map<String, Object>> expectedConnectorPartition1 = new HashSet<>();
-        expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue1"));
-        expectedConnectorPartition1.add(Collections.singletonMap("partitionKey", "partitionValue2"));
+        expectedConnectorPartition1.add(Map.of("partitionKey", "partitionValue1"));
+        expectedConnectorPartition1.add(Map.of("partitionKey", "partitionValue2"));
         assertEquals(expectedConnectorPartition1, connectorPartitions1);
 
         Set<Map<String, Object>> connectorPartitions2 = store.connectorPartitions("connector2");
-        Set<Map<String, Object>> expectedConnectorPartition2 = Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue"));
+        Set<Map<String, Object>> expectedConnectorPartition2 = Set.of(Map.of("partitionKey", "partitionValue"));
         assertEquals(expectedConnectorPartition2, connectorPartitions2);
 
         doAnswer(invocation -> {
             capturedConsumedCallback.getValue().onCompletion(null,
                     new ConsumerRecord<>(TOPIC, 0, 4, 0L, TimestampType.CREATE_TIME, 0, 0,
-                            jsonConverter.fromConnectData("", null, Arrays.asList("connector1",
-                                    Collections.singletonMap("partitionKey", "partitionValue1"))), null,
+                            jsonConverter.fromConnectData("", null, List.of("connector1",
+                                    Map.of("partitionKey", "partitionValue1"))), null,
                             new RecordHeaders(), Optional.empty()));
             storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
             return null;
         }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
         // Trigger a read to the end of the log
-        store.get(Collections.emptyList()).get(10000, TimeUnit.MILLISECONDS);
+        store.get(List.of()).get(10000, TimeUnit.MILLISECONDS);
 
         // Null valued offset for a partition key should remove that partition for the connector
         connectorPartitions1 = store.connectorPartitions("connector1");
-        assertEquals(Collections.singleton(Collections.singletonMap("partitionKey", "partitionValue2")), connectorPartitions1);
+        assertEquals(Set.of(Map.of("partitionKey", "partitionValue2")), connectorPartitions1);
 
         store.stop();
         verify(storeLog).stop();

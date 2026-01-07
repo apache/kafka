@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.Action;
+import org.apache.kafka.server.authorizer.AuthorizationResult;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -54,7 +55,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -88,6 +88,9 @@ public class AuthorizerBenchmark {
     private List<Action> actions = new ArrayList<>();
     private RequestContext authorizeContext;
     private RequestContext authorizeByResourceTypeContext;
+    private AclBindingFilter filter;
+    private AclOperation op;
+    private ResourceType resourceType;
 
     Random rand = new Random(System.currentTimeMillis());
     double eps = 1e-9;
@@ -95,12 +98,15 @@ public class AuthorizerBenchmark {
     @Setup(Level.Trial)
     public void setup() throws Exception {
         authorizer = new StandardAuthorizer();
+        filter = AclBindingFilter.ANY;
+        op = AclOperation.READ;
+        resourceType = ResourceType.TOPIC;
         prepareAclCache();
         // By adding `-95` to the resource name prefix, we cause the `TreeMap.from/to` call to return
         // most map entries. In such cases, we rely on the filtering based on `String.startsWith`
         // to return the matching ACLs. Using a more efficient data structure (e.g. a prefix
         // tree) should improve performance significantly.
-        actions = Collections.singletonList(new Action(AclOperation.WRITE,
+        actions = List.of(new Action(AclOperation.WRITE,
             new ResourcePattern(ResourceType.TOPIC, resourceNamePrefix + 95, PatternType.LITERAL),
             1, true, true));
         authorizeContext = new RequestContext(new RequestHeader(ApiKeys.PRODUCE, Integer.valueOf(1).shortValue(),
@@ -197,17 +203,17 @@ public class AuthorizerBenchmark {
     }
 
     @Benchmark
-    public void testAclsIterator() {
-        authorizer.acls(AclBindingFilter.ANY);
+    public Iterable<AclBinding> testAclsIterator() {
+        return authorizer.acls(filter);
     }
 
     @Benchmark
-    public void testAuthorizer() {
-        authorizer.authorize(authorizeContext, actions);
+    public List<AuthorizationResult> testAuthorizer() {
+        return authorizer.authorize(authorizeContext, actions);
     }
 
     @Benchmark
-    public void testAuthorizeByResourceType() {
-        authorizer.authorizeByResourceType(authorizeByResourceTypeContext, AclOperation.READ, ResourceType.TOPIC);
+    public AuthorizationResult testAuthorizeByResourceType() {
+        return authorizer.authorizeByResourceType(authorizeByResourceTypeContext, op, resourceType);
     }
 }

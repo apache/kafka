@@ -509,9 +509,12 @@ public class LogSegmentTest {
 
             // recover again, assuming the transaction from pid2 began on a previous segment
             stateManager = newProducerStateManager();
-            stateManager.loadProducerEntry(new ProducerStateEntry(pid2, producerEpoch, 0,
-                RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L),
-                Optional.of(new BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP))));
+
+            ProducerStateEntry stateEntry = new ProducerStateEntry(pid2, producerEpoch, 0,
+                RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L));
+            stateEntry.addBatch(producerEpoch, 10, 10L, 5, RecordBatch.NO_TIMESTAMP);
+
+            stateManager.loadProducerEntry(stateEntry);
             segment.recover(stateManager, mock(LeaderEpochFileCache.class));
             assertEquals(108L, stateManager.mapEndOffset());
 
@@ -824,8 +827,8 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertEquals(1, segment.offsetIndex().entry(0).offset);
-        assertEquals(2, segment.offsetIndex().entry(1).offset);
+        assertEquals(1, segment.offsetIndex().entry(0).offset());
+        assertEquals(2, segment.offsetIndex().entry(1).offset());
 
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 1), segment.timeIndex().entry(0));
@@ -857,8 +860,8 @@ public class LogSegmentTest {
         segment.append(2L, record);
 
         assertEquals(2, segment.offsetIndex().entries());
-        assertEquals(1, segment.offsetIndex().entry(0).offset);
-        assertEquals(2, segment.offsetIndex().entry(1).offset);
+        assertEquals(1, segment.offsetIndex().entry(0).offset());
+        assertEquals(2, segment.offsetIndex().entry(1).offset());
 
         assertEquals(2, segment.timeIndex().entries());
         assertEquals(new TimestampOffset(1, 0), segment.timeIndex().entry(0));

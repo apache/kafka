@@ -287,21 +287,6 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Fetch all offsets for a given Group.
-     *
-     * @param context           The request context.
-     * @param request           The OffsetFetchRequestGroup request.
-     *
-     * @return  A future yielding the results.
-     *          The error codes of the results are set to indicate the errors occurred during the execution.
-     */
-    CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
-        AuthorizableRequestContext context,
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        boolean requireStable
-    );
-
-    /**
      * Describe the Share Group Offsets for a given group.
      *
      * @param context           The request context
@@ -401,6 +386,7 @@ public interface GroupCoordinator {
      * @param producerEpoch     The producer epoch.
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
+     * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
      * @param timeout           The operation timeout.
      *
      * @return A future yielding the result.
@@ -411,6 +397,7 @@ public interface GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
+        short transactionVersion,
         Duration timeout
     );
 
@@ -465,12 +452,12 @@ public interface GroupCoordinator {
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
      * @param delta     The metadata delta.
+     * @param newImage  The new metadata image.
      */
-    void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+    void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage
     );
 
     /**

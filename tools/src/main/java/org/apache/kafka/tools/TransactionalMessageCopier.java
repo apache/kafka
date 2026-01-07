@@ -47,17 +47,16 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static java.util.Collections.singleton;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
@@ -240,13 +239,13 @@ public class TransactionalMessageCopier {
             if (offsetAndMetadata != null)
                 consumer.seek(tp, offsetAndMetadata.offset());
             else
-                consumer.seekToBeginning(singleton(tp));
+                consumer.seekToBeginning(Set.of(tp));
         });
     }
 
     private static long messagesRemaining(KafkaConsumer<String, String> consumer, TopicPartition partition) {
         long currentPosition = consumer.position(partition);
-        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(singleton(partition));
+        Map<TopicPartition, Long> endOffsets = consumer.endOffsets(Set.of(partition));
         if (endOffsets.containsKey(partition)) {
             return endOffsets.get(partition) - currentPosition;
         }
@@ -302,6 +301,7 @@ public class TransactionalMessageCopier {
         }
     }
 
+    @SuppressWarnings("removal")
     public static void runEventLoop(Namespace parsedArgs) {
         final String transactionalId = parsedArgs.getString("transactionalId");
         final String outputTopic = parsedArgs.getString("outputTopic");
@@ -319,7 +319,7 @@ public class TransactionalMessageCopier {
         final AtomicLong numMessagesProcessedSinceLastRebalance = new AtomicLong(0);
         final AtomicLong totalMessageProcessed = new AtomicLong(0);
         if (groupMode) {
-            consumer.subscribe(Collections.singleton(topicName), new ConsumerRebalanceListener() {
+            consumer.subscribe(Set.of(topicName), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                 }
@@ -341,7 +341,7 @@ public class TransactionalMessageCopier {
             });
         } else {
             TopicPartition inputPartition = new TopicPartition(topicName, parsedArgs.getInt("inputPartition"));
-            consumer.assign(singleton(inputPartition));
+            consumer.assign(Set.of(inputPartition));
             remainingMessages.set(Math.min(messagesRemaining(consumer, inputPartition), remainingMessages.get()));
         }
 

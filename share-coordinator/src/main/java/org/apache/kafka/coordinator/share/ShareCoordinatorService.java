@@ -49,6 +49,8 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSupplier;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
@@ -68,6 +70,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
@@ -81,7 +84,7 @@ import java.util.function.Supplier;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ShareCoordinatorService implements ShareCoordinator {
     private final ShareCoordinatorConfig config;
     private final Logger log;
@@ -205,6 +208,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     .withCompression(Compression.of(config.shareCoordinatorStateTopicCompressionType()).build())
                     .withAppendLingerMs(config.shareCoordinatorAppendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
+                    .withCachedBufferMaxBytesSupplier(config::shareCoordinatorCachedBufferMaxBytes)
                     .build();
 
             return new ShareCoordinatorService(
@@ -300,7 +304,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     return;
                 }
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
-                runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
+                runtime.activeCoordinators().forEach(tp -> futures.add(performRecordPruning(tp)));
 
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
                     .whenComplete((res, exp) -> {
@@ -471,6 +475,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                                     .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                                         .setPartition(partitionData.partition())
                                         .setStartOffset(partitionData.startOffset())
+                                        .setDeliveryCompleteCount(partitionData.deliveryCompleteCount())
                                         .setLeaderEpoch(partitionData.leaderEpoch())
                                         .setStateEpoch(partitionData.stateEpoch())
                                         .setStateBatches(partitionData.stateBatches())))))))
@@ -1096,9 +1101,12 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+    public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
         throwIfNotActive();
-        this.runtime.onNewMetadataImage(newImage, delta);
+        this.runtime.onMetadataUpdate(
+            new KRaftCoordinatorMetadataDelta(Objects.requireNonNull(delta, "delta must be provided")),
+            new KRaftCoordinatorMetadataImage(Objects.requireNonNull(newImage, "newImage must be provided"))
+        );
         boolean enabled = isShareGroupsEnabled(newImage);
         // enabled    shouldRunJob         result (XOR)
         // 0            0               no op on flag, do not call jobs

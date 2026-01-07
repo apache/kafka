@@ -16,6 +16,7 @@
  */
 package kafka.server
 
+import kafka.utils.TestUtils
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.{OffsetFetchRequestData, OffsetFetchResponseData}
@@ -642,6 +643,141 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
                 .setPartitionIndexes(List[Integer](0, 1, 2).asJava)
             ).asJava),
           requireStable = true,
+          version = version.toShort
+        )
+      )
+    }
+  }
+
+  @ClusterTest
+  def testCommittedOffsetsDeletedWhenTopicDeleted(): Unit = {
+    // This test verifies that committed offsets are deleted when a topic is deleted.
+    // When a topic is deleted, GroupCoordinatorService.onMetadataUpdate is called which
+    // schedules the deletion of all committed offsets for the deleted topic partitions.
+
+    createOffsetsTopic()
+
+    // Create the topic.
+    val topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Join the consumer group. Note that we don't heartbeat here so we must use
+    // a session long enough for the duration of the test.
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol = true)
+
+    // Commit offsets.
+    for (partitionId <- 0 to 2) {
+      commitOffset(
+        groupId = "grp",
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        topic = "foo",
+        topicId = topicId,
+        partition = partitionId,
+        offset = 100L + partitionId,
+        expectedError = Errors.NONE,
+        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+      )
+    }
+
+    // Verify that the offsets are committed.
+    assertEquals(
+      new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId("grp")
+        .setTopics(List(
+          new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName("foo")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100L),
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(1)
+                .setCommittedOffset(101L),
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(2)
+                .setCommittedOffset(102L)
+            ).asJava)
+        ).asJava),
+      fetchOffsets(
+        group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+          .setGroupId("grp")
+          .setMemberId(memberId)
+          .setMemberEpoch(memberEpoch)
+          .setTopics(null),
+        requireStable = false,
+        version = 9
+      )
+    )
+
+    // Delete the topic.
+    deleteTopic("foo")
+
+    // Wait until the offsets are deleted. The offsets should be deleted
+    // when the topic deletion is processed by onMetadataUpdate.
+    TestUtils.waitUntilTrue(
+      () => {
+        fetchOffsets(
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("grp")
+            .setMemberId("")
+            .setMemberEpoch(-1)
+            .setTopics(null),
+          requireStable = false,
+          // Force using version 9 (and topic names) because unknown topic ids
+          // are filtered out.
+          version = 9
+        ).topics.isEmpty
+      },
+      msg = "Offsets should be deleted after topic deletion."
+    )
+  }
+
+  @ClusterTest
+  def testGroupErrors(): Unit = {
+    val topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    for (version <- ApiKeys.OFFSET_FETCH.oldestVersion() to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+      assertEquals(
+        if (version >= 2) {
+          new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("unknown")
+            .setErrorCode(Errors.NOT_COORDINATOR.code)
+        } else {
+          // Version 1 does not support group level errors. Hence, the error is
+          // returned at the partition level.
+          new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("unknown")
+            .setTopics(List(
+              new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(List(
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NOT_COORDINATOR.code)
+                    .setCommittedOffset(-1)
+                    .setCommittedLeaderEpoch(-1)
+                    .setMetadata("")
+                ).asJava)
+            ).asJava)
+        },
+        fetchOffsets(
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId("unknown")
+            .setMemberId("")
+            .setMemberEpoch(0)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0).asJava)
+            ).asJava),
+          requireStable = false,
           version = version.toShort
         )
       )

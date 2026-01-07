@@ -21,7 +21,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
@@ -37,7 +36,6 @@ import java.util.Set;
  * @see KafkaShareConsumer
  * @see MockShareConsumer
  */
-@InterfaceStability.Evolving
 public interface ShareConsumer<K, V> extends Closeable {
 
     /**
@@ -71,6 +69,11 @@ public interface ShareConsumer<K, V> extends Closeable {
     void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type);
 
     /**
+     * @see KafkaShareConsumer#acknowledge(String, int, long, AcknowledgeType)
+     */
+    void acknowledge(String topic, int partition, long offset, AcknowledgeType type);
+
+    /**
      * @see KafkaShareConsumer#commitSync()
      */
     Map<TopicIdPartition, Optional<KafkaException>> commitSync();
@@ -94,6 +97,11 @@ public interface ShareConsumer<K, V> extends Closeable {
      * @see KafkaShareConsumer#clientInstanceId(Duration)
      */
     Uuid clientInstanceId(Duration timeout);
+
+    /**
+     * @see KafkaShareConsumer#acquisitionLockTimeoutMs()
+     */
+    Optional<Integer> acquisitionLockTimeoutMs();
 
     /**
      * @see KafkaShareConsumer#metrics()
@@ -124,5 +132,4 @@ public interface ShareConsumer<K, V> extends Closeable {
      * @see KafkaShareConsumer#wakeup()
      */
     void wakeup();
-
 }

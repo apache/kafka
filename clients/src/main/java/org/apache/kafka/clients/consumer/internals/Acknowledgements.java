@@ -144,6 +144,15 @@ public class Acknowledgements {
     }
 
     /**
+     * Whether an acknowledgement error code was received in the response from the broker.
+     *
+     * @return Whether an acknowledgement error code was received in the response from the broker.
+     */
+    public boolean isCompletedExceptionally() {
+        return acknowledgeException != null;
+    }
+
+    /**
      * Merges two sets of acknowledgements. If there are overlapping acknowledgements, the
      * merged set wins.
      *
@@ -185,7 +194,7 @@ public class Acknowledgements {
                 currentBatch.acknowledgeTypes().add(ACKNOWLEDGE_TYPE_GAP);
             }
         }
-        List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
+        List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgeTypes(currentBatch);
 
         optimalBatches.forEach(batch -> {
             if (canOptimiseForSingleAcknowledgeType(batch)) {
@@ -204,7 +213,7 @@ public class Acknowledgements {
      */
     private AcknowledgementBatch maybeCreateNewBatch(AcknowledgementBatch currentBatch, Long nextOffset, List<AcknowledgementBatch> batches) {
         if (nextOffset != currentBatch.lastOffset() + 1) {
-            List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgementTypes(currentBatch);
+            List<AcknowledgementBatch> optimalBatches = maybeOptimiseAcknowledgeTypes(currentBatch);
 
             optimalBatches.forEach(batch -> {
                 if (canOptimiseForSingleAcknowledgeType(batch)) {
@@ -228,7 +237,7 @@ public class Acknowledgements {
      * whose count exceeds the default value. In this case, the batch is split into 2 such that the
      * batch with the continuous records has only 1 acknowledge type in its array.
      */
-    private List<AcknowledgementBatch> maybeOptimiseAcknowledgementTypes(AcknowledgementBatch currentAcknowledgeBatch) {
+    private List<AcknowledgementBatch> maybeOptimiseAcknowledgeTypes(AcknowledgementBatch currentAcknowledgeBatch) {
         List<AcknowledgementBatch> batches = new ArrayList<>();
         if (currentAcknowledgeBatch == null) return batches;
 

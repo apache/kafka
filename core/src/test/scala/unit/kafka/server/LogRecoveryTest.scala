@@ -64,6 +64,16 @@ class LogRecoveryTest extends QuorumTestHarness {
   def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.get(0), ReplicaManager.HighWatermarkFilename), null)
   var servers = Seq.empty[KafkaBroker]
 
+  // testHWCheckpointWithFailuresMultipleLogSegments simulates broker failures that can leave the only available replica out of the
+  // ISR. By enabling unclean leader election, we ensure that the test can proceed and elect
+  // the out-of-sync replica as the new leader, which is necessary to validate the log
+  // recovery and high-watermark checkpointing logic under these specific failure conditions.
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
+    val properties = new Properties()
+    properties.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+    Seq(properties)
+  }
+
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
   // to use a new producer that knows the new ports
   def updateProducer(): Unit = {
@@ -215,7 +225,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     server2.startup()
     updateProducer()
     // check if leader moves to the other server
-    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
+    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader), timeout = 30000L)
     assertEquals(1, leader, "Leader must move to broker 1")
 
     assertEquals(hw, hwFile1.read().getOrDefault(topicPartition, 0L))
