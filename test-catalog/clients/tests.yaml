@@ -1255,6 +1255,7 @@ org.apache.kafka.clients.consumer.internals.CommitRequestManagerTest:
 - testCommitSyncWithEmptyOffsets
 - testEnsureBackoffRetryOnOffsetCommitRequestTimeout
 - testEnsureCommitSensorRecordsMetric
+- testFetchOffsetsWithTopicIdsDoesNotFailOnUnsubscribedTopics
 - testLastEpochSentOnCommit
 - testOffsetCommitAsyncFailedWithRetriableThrowsRetriableCommitException
 - testOffsetCommitRequestErroredRequestsNotRetriedForAsyncCommit
@@ -1266,7 +1267,6 @@ org.apache.kafka.clients.consumer.internals.CommitRequestManagerTest:
 - testOffsetFetchRequestEnsureDuplicatedRequestSucceed
 - testOffsetFetchRequestErroredRequests
 - testOffsetFetchRequestPartitionDataError
-- testOffsetFetchRequestShouldFailWithTopicIdWhenMetadataUnknownResponseTopicId
 - testOffsetFetchRequestShouldSucceedWithTopicId
 - testOffsetFetchRequestStateToStringBase
 - testOffsetFetchRequestTimeoutRequests
