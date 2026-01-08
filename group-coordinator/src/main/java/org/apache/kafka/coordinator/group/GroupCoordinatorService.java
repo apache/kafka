@@ -2278,10 +2278,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param topicsDelta The topics delta containing deleted topic IDs.
      */
     private void handlePartitionsDeletion(TopicsDelta topicsDelta) {
-        var topicIds = topicsDelta.deletedTopicIds();
+        var deletedTopicIds = topicsDelta.deletedTopicIds();
         var deletedTopicNames = new HashSet<String>();
 
-        topicIds.forEach(topicId -> {
+        deletedTopicIds.forEach(topicId -> {
             var topicImage = topicsDelta.image().getTopic(topicId);
             if (topicImage != null) {
                 deletedTopicNames.add(topicImage.name());
@@ -2308,17 +2308,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        if (!topicIds.isEmpty()) {
+        if (!deletedTopicIds.isEmpty()) {
             // Schedule share group state cleanup.
             futures.addAll(
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
                         "maybe-cleanup-share-group-state",
                         Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                        coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                        coordinator -> coordinator.maybeCleanupShareGroupState(deletedTopicIds)
                     ),
                     exception -> {
-                        log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                        log.error("Unable to cleanup state for the deleted topics {}", deletedTopicIds, exception);
                         return null;
                     }
                 )
