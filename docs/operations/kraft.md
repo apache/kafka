@@ -239,4 +239,4 @@ The kafka-metadata-shell.sh tool can be used to interactively inspect the state 
 
 ## ZooKeeper to KRaft Migration
 
-In order to migrate from ZooKeeper to KRaft you need to use a bridge release. The last bridge release is Kafka 3.9. See the [ZooKeeper to KRaft Migration steps](/39/documentation/#kraft_zk_migration) in the 3.9 documentation.
+In order to migrate from ZooKeeper to KRaft you need to use a bridge release. The last bridge release is Kafka 3.9. See the [ZooKeeper to KRaft Migration steps](/39/operations/kraft/#zookeeper-to-kraft-migration) in the 3.9 documentation.
