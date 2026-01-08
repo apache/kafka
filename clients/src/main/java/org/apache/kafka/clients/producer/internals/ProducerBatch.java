@@ -73,7 +73,8 @@ public final class ProducerBatch {
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
     private boolean bufferDeallocated = false;
-    private boolean sent = false;
+    // Tracks if the batch has been sent to the NetworkClient
+    private boolean inflight = false;
 
     int recordCount;
     int maxRecordSize;
@@ -591,12 +592,12 @@ public final class ProducerBatch {
         bufferDeallocated = true;
     }
 
-    public boolean isSent() {
-        return sent;
+    public boolean isInflight() {
+        return inflight;
     }
 
-    public void markSent() {
-        sent = true;
+    public void setInflight(boolean inflight) {
+        this.inflight = inflight;
     }
 
     // VisibleForTesting

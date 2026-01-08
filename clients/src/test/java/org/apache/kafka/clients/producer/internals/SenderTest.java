@@ -2211,6 +2211,7 @@ public class SenderTest {
 
         sender.runOnce();
         assertFutureFailure(future2, ClusterAuthorizationException.class);
+        assertFalse(pool.allMatch(), "Batch should not be deallocated before the response is received");
 
         // Should be fine if the second response eventually returns
         client.respond(
@@ -2443,12 +2444,15 @@ public class SenderTest {
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
+            ProducerBatch inflightBatch = sender.inFlightBatches(tpId.topicPartition()).get(0);
+            assertTrue(inflightBatch.isInflight(), "Batch should be marked inflight after being sent");
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
             Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
             responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
             client.respond(new ProduceResponse(responseMap));
             sender.runOnce(); // split and reenqueue
+            assertFalse(inflightBatch.isInflight(), "Batch should be marked as not inflight after being split and re-enqueued");
             assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence should be 2");
             // The compression ratio should have been improved once.
             assertEquals(CompressionType.GZIP.rate - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP,
