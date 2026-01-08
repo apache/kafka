@@ -157,6 +157,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -3213,15 +3214,19 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(shareFutures);
 
         // Run onMetadataUpdate in a separate thread.
-        var resultFuture = CompletableFuture.runAsync(() -> {
-            try {
-                service.onMetadataUpdate(delta, newImage);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        });
+        var resultFuture = CompletableFuture.runAsync(() -> service.onMetadataUpdate(delta, newImage));
 
-        // Verify method is blocked.
+        // Wait for the operations to be scheduled and verify method is blocked.
+        verify(runtime, timeout(5000).times(1)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
+        verify(runtime, timeout(5000).times(1)).scheduleWriteAllOperation(
+            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        );
         assertFalse(resultFuture.isDone());
 
         // Complete all futures.
@@ -3230,18 +3235,6 @@ public class GroupCoordinatorServiceTest {
 
         // Verify method completes.
         resultFuture.get(5, TimeUnit.SECONDS);
-
-        // Verify operations were scheduled exactly once.
-        verify(runtime, times(1)).scheduleWriteAllOperation(
-            ArgumentMatchers.eq("on-partition-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        );
-        verify(runtime, times(1)).scheduleWriteAllOperation(
-            ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
-        );
     }
 
     @Test
