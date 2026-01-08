@@ -121,13 +121,13 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
 **For a rolling upgrade:**
 
   1. Upgrade the clients one at a time: shut down the client, update the code, and restart it.
-  2. Clients (including Streams and Connect) must be on version 2.1 or higher before upgrading to 4.0. Many deprecated APIs were removed in Kafka 4.0. For more information about the compatibility, please refer to the [compatibility matrix](/42/documentation/compatibility.html) or [KIP-1124](https://cwiki.apache.org/confluence/x/y4kgF).
+  2. Clients (including Streams and Connect) must be on version 2.1 or higher before upgrading to 4.0. Many deprecated APIs were removed in Kafka 4.0. For more information about the compatibility, please refer to the [compatibility matrix](/42/getting-started/compatibility) or [KIP-1124](https://cwiki.apache.org/confluence/x/y4kgF).
 
 
 
 ### Upgrading Servers to 4.0.1 from any version 3.3.x through 3.9.x
 
-Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.0.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.0.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/42/documentation.html#kraft_zk_migration) before they can be upgraded to 4.0.x. 
+Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.0.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.0.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/42/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.0.x. 
 
 **For a rolling upgrade:**
 
@@ -140,14 +140,14 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
 ### Notable changes in 4.0.1
 
   * The filename for rotated `state-change.log` files has been updated from `stage-change.log.[date]` to `state-change.log.[date]` in the log4j2.yaml configuration file. See [KAFKA-19576](https://issues.apache.org/jira/browse/KAFKA-19576) for details. 
-  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (remove with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/42/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors). 
+  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (remove with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/42/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
 
 
 
 ### Notable changes in 4.0.0
 
   * Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading Java clients (including Connect and Kafka Streams which use the clients internally) to 4.0. Similarly, users should ensure their Java clients (including Connect and Kafka Streams) version is 2.1 or higher before upgrading brokers to 4.0. Finally, care also needs to be taken when it comes to kafka clients that are not part of Apache Kafka, please see [KIP-896](https://cwiki.apache.org/confluence/x/K5sODg) for the details. 
-  * Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. About version upgrade, check [Upgrading to 4.0.1 from any version 3.3.x through 3.9.x](/42/documentation.html#upgrade_4_0_1) for more info. 
+  * Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. About version upgrade, check [Upgrading to 4.0.1 from any version 3.3.x through 3.9.x](/42/getting-started/upgrade/#upgrading-servers-to-401-from-any-version-33x-through-39x) for more info. 
   * Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See [here](https://cwiki.apache.org/confluence/x/HhD1D)). Functionally speaking, it implements all the same APIs. There are reasonable defaults, but the behavior of the new group coordinator can be tuned by setting the configurations with prefix `group.coordinator`. 
   * The Next Generation of the Consumer Rebalance Protocol ([KIP-848](https://cwiki.apache.org/confluence/x/HhD1D)) is now Generally Available (GA) in Apache Kafka 4.0. The protocol is automatically enabled on the server when the upgrade to 4.0 is finalized. Note that once the new protocol is used by consumer groups, the cluster can only be downgraded to version 3.4.1 or newer. For more information check [here](/42/documentation.html#consumer_rebalance_protocol). 
   * Transactions Server-Side Defense ([KIP-890](https://cwiki.apache.org/confluence/x/B40ODg)) brings a strengthened transactional protocol to Apache Kafka 4.0. The new and improved transactional protocol is enabled when the upgrade to 4.0 is finalized. When using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not written as part of the next transaction. Downgrading the protocol is safe. For more information check [here](/42/documentation.html#transaction_protocol). 
@@ -227,9 +227,9 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
       * The `all()` method was removed from the `org.apache.kafka.clients.admin.DescribeTopicsResult`. Please use `allTopicNames()` instead. 
     * **Kafka Streams**
       * All public APIs, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of `JoinWindows.of()` and `JoinWindows#grace()`. See [KAFKA-17531](https://issues.apache.org/jira/browse/KAFKA-17531) for details. 
-      * The most important changes are highlighted in the [Kafka Streams upgrade guide](/42/documentation/streams/upgrade-guide.html#streams_api_changes_400). 
+      * The most important changes are highlighted in the [Kafka Streams upgrade guide](/42/streams/upgrade-guide/#streams-api-changes-in-400). 
       * For a full list of changes, see [KAFKA-12822](https://issues.apache.org/jira/browse/KAFKA-12822). 
-      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/42/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors). 
+      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/42/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
   * Other changes: 
     * The minimum Java version required by clients and Kafka Streams applications has been increased from Java 8 to Java 11 while brokers, connect and tools now require Java 17. See [KIP-750](https://cwiki.apache.org/confluence/x/P4vOCg) and [KIP-1013](https://cwiki.apache.org/confluence/x/Bov5E) for more details. 
     * Java 23 support has been added in Apache Kafka 4.0. 
