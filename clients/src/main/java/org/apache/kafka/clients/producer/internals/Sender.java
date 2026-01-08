@@ -171,7 +171,7 @@ public class Sender implements Runnable {
 
     private void maybeRemoveAndDeallocateBatch(ProducerBatch batch) {
         maybeRemoveFromInflightBatches(batch);
-        this.accumulator.completeBatchAndDeallocate(batch);
+        this.accumulator.completeAndDeallocateBatch(batch);
     }
 
     private void maybeRemoveAndDeallocateBatchLater(ProducerBatch batch) {
@@ -760,7 +760,7 @@ public class Sender implements Runnable {
         if (batch.complete(response.baseOffset, response.logAppendTime)) {
             maybeRemoveAndDeallocateBatch(batch);
         } else {
-            // Always safe to call daellocate because the batch keeps track of whether or not it was deallocated yet
+            // Always safe to call deallocate because the batch keeps track of whether or not it was deallocated yet
             this.accumulator.deallocate(batch);
         }
     }
@@ -854,8 +854,9 @@ public class Sender implements Runnable {
             } else {
                 // Fix for KAFKA-19012
                 // The pooled ByteBuffer associated with this batch might still be in use by the network client so we
-                // cannot allow it to be reused yet. We skip deallocating it now, instead doing that in completeBatch
-                // or in another run of failBatch where we hit the else clause and call deallocateAlreadyRemovedIncomplete
+                // cannot allow it to be reused yet. We skip deallocating it now. When the request in the network client 
+                // completes with a response, either completeBatch() or failBatch() will be called with deallocateBatch=true.
+                // The buffer associated with the batch will be deallocated then.
                 maybeRemoveAndDeallocateBatchLater(batch);
             }
         } else {

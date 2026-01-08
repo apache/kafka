@@ -72,7 +72,7 @@ public final class ProducerBatch {
     private final AtomicInteger attempts = new AtomicInteger(0);
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
-    private boolean bufferDeallocated;
+    private boolean bufferDeallocated = false;
 
     int recordCount;
     int maxRecordSize;
@@ -586,8 +586,8 @@ public final class ProducerBatch {
         return bufferDeallocated;
     }
 
-    public void setBufferDeallocated(boolean bufferDeallocated) {
-        this.bufferDeallocated = bufferDeallocated;
+    public void markBufferDeallocated() {
+        bufferDeallocated = true;
     }
 
     // VisibleForTesting

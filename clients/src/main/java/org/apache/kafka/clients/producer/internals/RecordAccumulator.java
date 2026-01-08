@@ -1029,7 +1029,7 @@ public class RecordAccumulator {
     /**
      * Complete and deallocate the record batch
      */
-    public void completeBatchAndDeallocate(ProducerBatch batch) {
+    public void completeAndDeallocateBatch(ProducerBatch batch) {
         completeBatch(batch);
         deallocate(batch);
     }
@@ -1044,7 +1044,7 @@ public class RecordAccumulator {
             if (batch.isBufferDeallocated()) {
                 log.warn("Skipping deallocating a batch that has already been deallocated. Batch is {}, created time is {}", batch, batch.createdMs);
             } else {
-                batch.setBufferDeallocated(true);
+                batch.markBufferDeallocated();
                 free.deallocate(batch.buffer(), batch.initialCapacity());
             }
         }
@@ -1152,7 +1152,7 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            completeBatchAndDeallocate(batch);
+            completeAndDeallocateBatch(batch);
         }
     }
 
@@ -1172,7 +1172,7 @@ public class RecordAccumulator {
             }
             if (aborted) {
                 batch.abort(reason);
-                completeBatchAndDeallocate(batch);
+                completeAndDeallocateBatch(batch);
             }
         }
     }
