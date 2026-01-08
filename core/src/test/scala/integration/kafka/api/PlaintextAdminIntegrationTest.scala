@@ -47,6 +47,7 @@ import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, GroupState, GroupType, IsolationLevel, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
@@ -4457,6 +4458,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  @Flaky("KAFKA-20045")
   @Test
   def testDescribeStreamsGroupsNotReady(): Unit = {
     val streamsGroupId = "stream_group_id"
