@@ -1152,7 +1152,14 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            completeAndDeallocateBatch(batch);
+            if (batch.isSent()) {
+                completeAndDeallocateBatch(batch);
+            } else {
+                // KAFKA-19012: if the batch has been sent it might still be in use by the network client so we cannot allow it to be reused yet.
+                // We skip deallocating it now. When the request in network client completes with a response, either completeBatch() or 
+                // failBatch() will be called with deallocateBatch=true. The buffer associated with the batch will be deallocated then.
+                completeBatch(batch);
+            }
         }
     }
 

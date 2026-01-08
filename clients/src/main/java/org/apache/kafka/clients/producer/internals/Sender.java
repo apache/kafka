@@ -913,6 +913,7 @@ public class Sender implements Runnable {
                     .setIndex(tp.partition())
                     .setRecords(records));
             recordsByPartition.put(tp, batch);
+            batch.markSent();
         }
 
         String transactionalId = null;

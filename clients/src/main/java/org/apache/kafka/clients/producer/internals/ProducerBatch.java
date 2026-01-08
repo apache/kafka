@@ -73,6 +73,7 @@ public final class ProducerBatch {
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
     private boolean bufferDeallocated = false;
+    private boolean sent = false;
 
     int recordCount;
     int maxRecordSize;
@@ -588,6 +589,14 @@ public final class ProducerBatch {
 
     public void markBufferDeallocated() {
         bufferDeallocated = true;
+    }
+
+    public boolean isSent() {
+        return sent;
+    }
+
+    public void markSent() {
+        sent = true;
     }
 
     // VisibleForTesting

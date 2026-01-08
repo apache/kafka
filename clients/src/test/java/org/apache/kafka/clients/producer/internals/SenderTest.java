@@ -2184,7 +2184,10 @@ public class SenderTest {
     public void testCancelInFlightRequestAfterFatalError() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
-        setupWithTransactionState(transactionManager);
+        long totalSize = 1024 * 1024;
+        String metricGrpName = "producer-custom-metrics";
+        MatchingBufferPool pool = new MatchingBufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        setupWithTransactionState(transactionManager, false, pool);
 
         prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
@@ -2195,6 +2198,8 @@ public class SenderTest {
 
         Future<RecordMetadata> future2 = appendToAccumulator(tp1);
         sender.runOnce();
+
+        assertFalse(pool.allMatch());
 
         client.respond(
             body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
@@ -2212,6 +2217,7 @@ public class SenderTest {
             body -> body instanceof ProduceRequest && RequestTestUtils.hasIdempotentRecords((ProduceRequest) body),
             produceResponse(tp1, 0, Errors.NONE, 0));
         sender.runOnce();
+        assertTrue(pool.allMatch(), "The batch should have been de-allocated");
     }
 
     @Test
