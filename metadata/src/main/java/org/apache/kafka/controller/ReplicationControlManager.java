@@ -1147,12 +1147,18 @@ public class ReplicationControlManager {
                 if (record.isPresent()) {
                     records.add(record.get());
                     PartitionChangeRecord change = (PartitionChangeRecord) record.get().message();
-                    String isrChange = String.format("ISR was {} and is now {}.", partition.isr, change.isr());
-                    String replicSetChange = String.format("Replica set was {} and is now {}.",  partition.replicas, change.replicas());
+                    String priorIsr = Arrays.toString(partition.isr);
+                    String priorReplicaSet = Arrays.toString(partition.replicas);
+                    int priorPartitionEpoch = partition.partitionEpoch;
+                    int priorLeaderEpoch = partition.leaderEpoch;
                     partition = partition.merge(change);
+                    String partitionChangeInfo = String.format("isr: %s -> %s, replicaSet: %s -> %s, " +
+                            "partitionEpoch: %d -> %d, leaderEpoch: %d -> %d",
+                        priorIsr, Arrays.toString(partition.isr()), priorReplicaSet, Arrays.toString(partition.replicas()),
+                        priorPartitionEpoch, partition.partitionEpoch, priorLeaderEpoch, partition.leaderEpoch);
                     if (log.isDebugEnabled()) {
-                        log.debug("Node {} has altered ISR for {}-{}. {} {}"
-                            request.brokerId(), topic.name, partitionId, isrChange, replicaSetChange);
+                        log.debug("Node {} has altered ISR for {}-{}. {}"
+                            request.brokerId(), topic.name, partitionId, partitionChangeInfo);
                     }
                     if (change.leader() != request.brokerId() &&
                             change.leader() != NO_LEADER_CHANGE) {
@@ -1169,16 +1175,16 @@ public class ReplicationControlManager {
                         // metadata record. We usually only do one or the other.
                         Errors error = NEW_LEADER_ELECTED;
                         log.info("AlterPartition request from node {} for {}-{} completed " +
-                            "the ongoing partition reassignment and triggered a leadership change. {} {} Returning {}."
-                            request.brokerId(), topic.name, partitionId, isrChange, replicaSetChange, error);
+                            "the ongoing partition reassignment and triggered a leadership change. {}. Returning {}."
+                            request.brokerId(), topic.name, partitionId, partitionChangeInfo, error);
                         responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                             setPartitionIndex(partitionId).
                             setErrorCode(error.code()));
                         continue;
                     } else if (isReassignmentInProgress(partition)) {
                         log.info("AlterPartition request from node {} for {}-{} completed " +
-                            "the ongoing partition reassignment. {} {}" +
-                            request.brokerId(), topic.name, partitionId, isrChange, replicaSetChange);
+                            "the ongoing partition reassignment. {}" +
+                            request.brokerId(), topic.name, partitionId, partitionChangeInfo);
                     }
                 }
 
