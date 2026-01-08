@@ -534,6 +534,7 @@ public class Sender implements Runnable {
         if (accumulator.hasIncomplete()) {
             log.error("Aborting producer batches due to fatal error", exception);
             accumulator.abortBatches(exception);
+            inFlightBatches.clear();
         }
     }
 
