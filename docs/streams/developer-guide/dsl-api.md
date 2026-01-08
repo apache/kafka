@@ -4994,7 +4994,7 @@ Stateful
 
 
 
-Transformers removal and migration to processors
+### Transformers removal and migration to processors
 
 As of Kafka 4.0, several deprecated methods in the Kafka Streams API, such as `transform`, `flatTransform`, `transformValues`, `flatTransformValues`, and `process` have been removed. These methods have been replaced with the more versatile Processor API. This guide provides detailed steps for migrating existing code to use the new Processor API and explains the benefits of the changes.
 
