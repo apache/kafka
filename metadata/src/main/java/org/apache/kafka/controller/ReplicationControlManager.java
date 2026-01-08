@@ -524,7 +524,7 @@ public class ReplicationControlManager {
                 prevPartitionInfo.replicas, newPartitionInfo.replicas, prevPartitionInfo.isr, newPartitionInfo.isr);
         } else if (log.isDebugEnabled()) {
             log.debug("Replayed partition change {} for topic {}. " +
-                "(partitionEpoch: {}, leaderEpoch: {}, replicaSet: {} -> {}, isr: {} -> {}),",
+                "(partitionEpoch: {}, leaderEpoch: {}, replicaSet: {} -> {}, isr: {} -> {})",
                 record, topicInfo.name, newPartitionInfo.partitionEpoch, newPartitionInfo.leaderEpoch,
                 prevPartitionInfo.replicas, newPartitionInfo.replicas, prevPartitionInfo.isr, newPartitionInfo.isr);
         }
@@ -1154,10 +1154,10 @@ public class ReplicationControlManager {
                     partition = partition.merge(change);
                     String partitionChangeInfo = String.format("isr: %s -> %s, replicaSet: %s -> %s, " +
                             "partitionEpoch: %d -> %d, leaderEpoch: %d -> %d",
-                        priorIsr, Arrays.toString(partition.isr()), priorReplicaSet, Arrays.toString(partition.replicas()),
+                        priorIsr, Arrays.toString(partition.isr), priorReplicaSet, Arrays.toString(partition.replicas),
                         priorPartitionEpoch, partition.partitionEpoch, priorLeaderEpoch, partition.leaderEpoch);
                     if (log.isDebugEnabled()) {
-                        log.debug("Node {} has altered ISR for {}-{}. {}"
+                        log.debug("Node {} has altered ISR for {}-{}. {}",
                             request.brokerId(), topic.name, partitionId, partitionChangeInfo);
                     }
                     if (change.leader() != request.brokerId() &&
@@ -1175,7 +1175,7 @@ public class ReplicationControlManager {
                         // metadata record. We usually only do one or the other.
                         Errors error = NEW_LEADER_ELECTED;
                         log.info("AlterPartition request from node {} for {}-{} completed " +
-                            "the ongoing partition reassignment and triggered a leadership change. {}. Returning {}."
+                            "the ongoing partition reassignment and triggered a leadership change. {}. Returning {}.",
                             request.brokerId(), topic.name, partitionId, partitionChangeInfo, error);
                         responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                             setPartitionIndex(partitionId).
@@ -1183,7 +1183,7 @@ public class ReplicationControlManager {
                         continue;
                     } else if (isReassignmentInProgress(partition)) {
                         log.info("AlterPartition request from node {} for {}-{} completed " +
-                            "the ongoing partition reassignment. {}" +
+                            "the ongoing partition reassignment. {}",
                             request.brokerId(), topic.name, partitionId, partitionChangeInfo);
                     }
                 }
@@ -1260,8 +1260,9 @@ public class ReplicationControlManager {
             return UNKNOWN_TOPIC_OR_PARTITION;
         }
 
-        String isrAndReplicaSetInfo = String.format("Proposed ISR was {} and current ISR is {}. " +
-            "Current replica set is {}.", partitionData.newIsrWithEpochs(), partition.isr, partition.replicas);
+        String isrAndReplicaSetInfo = String.format("Proposed ISR was %s and current ISR is %s. " +
+            "Current replica set is %s.",
+            partitionData.newIsrWithEpochs(), Arrays.toString(partition.isr), Arrays.toString(partition.replicas));
 
         // If the partition leader has a higher leader/partition epoch, then it is likely
         // that this node is no longer the active controller. We return NOT_CONTROLLER in
@@ -1309,7 +1310,7 @@ public class ReplicationControlManager {
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR. {}", brokerId,
-                    topic.name, partitionId, partitionData.newIsrWithEpochs(), isrAndReplicaSetInfo);
+                    topic.name, partitionId, isrAndReplicaSetInfo);
 
             return INVALID_REQUEST;
         }
@@ -1809,8 +1810,8 @@ public class ReplicationControlManager {
             TopicControlInfo topic = topics.get(topicIdPartition.topicId());
 
             PartitionRegistration partition = topic.parts.get(partitionId);
-            String isrAndReplicaSetInfo = String.format("Current ISR is {}. Current replica set is {}.",
-                partition.isr, partition.replicas);
+            String isrAndReplicaSetInfo = String.format("Current ISR is %s. Current replica set is %s.",
+                Arrays.toString(partition.isr), Arrays.toString(partition.replicas));
 
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 ApiError result = electLeader(topic.name, partitionId,
