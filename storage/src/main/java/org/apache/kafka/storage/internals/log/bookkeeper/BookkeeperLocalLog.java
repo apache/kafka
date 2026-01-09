@@ -19,12 +19,14 @@ package org.apache.kafka.storage.internals.log.bookkeeper;
 import io.netty.buffer.ByteBuf;
 import org.apache.bookkeeper.mledger.AsyncCallbacks;
 import org.apache.bookkeeper.mledger.Entry;
+import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
 import org.apache.bookkeeper.mledger.Position;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.bookkeeper.mledger.impl.OpAddEntry;
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -49,11 +51,13 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.util.Collections;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEntryCallback {
     private static final Logger log = LoggerFactory.getLogger(BookkeeperLocalLog.class);
@@ -66,7 +70,7 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
     private final AtomicInteger pendingAddEntries = new AtomicInteger();
     private volatile boolean isFenced = false;
     protected final OffsetAndTimestampIndex index;
-    private final AsyncTransactionIndex txnIndex;
+    protected final AsyncTransactionIndex txnIndex;
     protected final Executor mlExecutor;
 
     /**
@@ -133,6 +137,78 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
             //  ignore
         }
         return Collections.emptyList();
+    }
+
+    @Override
+    public void checkIfMemoryMappedBufferClosed() {
+        // no-op
+    }
+
+    public CompletableFuture<Void> recoverFrom(long startOffset, Consumer<MemoryRecords> consumer) {
+        Position lac = managedLedger.getLastConfirmedEntry();
+        if (lac == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        String cursorName = "kafka-replay-" + HexFormat.of().formatHex(RandomUtils.insecure().randomBytes(8));
+        index.findOffsetPositionAsync(startOffset, false)
+                .thenApply(position -> {
+                    try {
+                        return managedLedger.newNonDurableCursor(position, cursorName);
+                    } catch (ManagedLedgerException e) {
+                        throw Errors.KAFKA_STORAGE_ERROR.exception(e.getMessage());
+                    }
+                })
+                .thenAccept(cursor -> {
+                    recoverEntries(cursor, consumer, future);
+                })
+                .exceptionally(t -> {
+                    log.error("Unable to find the Entry Position of {}", startOffset, t);
+                    future.completeExceptionally(t);
+                    return null;
+                });
+        future.thenAccept(v ->
+                managedLedger.asyncDeleteCursor(cursorName, new AsyncCallbacks.DeleteCursorCallback() {
+                    @Override
+                    public void deleteCursorComplete(Object ctx) {
+
+                    }
+
+                    @Override
+                    public void deleteCursorFailed(ManagedLedgerException exception, Object ctx) {
+
+                    }
+                }, null));
+        return future;
+    }
+
+    private void recoverEntries(ManagedCursor cursor, Consumer<MemoryRecords> consumer, CompletableFuture<Void> future) {
+        cursor.asyncReadEntries(5, new AsyncCallbacks.ReadEntriesCallback() {
+            @Override
+            public void readEntriesComplete(List<Entry> entries, Object ctx) {
+                if (entries.isEmpty()) {
+                    future.complete(null);
+                    return;
+                }
+                try {
+                    consumer.accept(KafkaEntryFormatter.decode(entries));
+                } catch (Throwable t) {
+                    future.completeExceptionally(t);
+                    return;
+                }
+                Position lastPosition = entries.get(entries.size() - 1).getPosition();
+                if (lastPosition.compareTo(managedLedger.getLastConfirmedEntry()) >= 0) {
+                    future.complete(null);
+                } else {
+                    recoverEntries(cursor, consumer, future);
+                }
+            }
+
+            @Override
+            public void readEntriesFailed(ManagedLedgerException exception, Object ctx) {
+                future.completeExceptionally(exception);
+            }
+        }, null, managedLedger.getLastConfirmedEntry());
     }
 
     @Override

@@ -34,6 +34,7 @@ import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.UnexpectedAppendOffsetException;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReader;
 import org.apache.kafka.storage.internals.log.AsyncProducerStateManager;
@@ -45,9 +46,12 @@ import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetsListener;
 import org.apache.kafka.storage.internals.log.LogValidator;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
+import org.apache.kafka.storage.internals.log.ProducerAppendInfo;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -55,10 +59,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public class BookkeeperUnifiedLog extends UnifiedLog {
+    private static final Logger log = LoggerFactory.getLogger(BookkeeperUnifiedLog.class);
     private final BookkeeperLocalLog bookkeeperLocalLog;
     private final AsyncProducerStateManager producerStateManager;
+    private final AtomicBoolean recovering = new AtomicBoolean(false);
+    private final CompletableFuture<Void> initializeFuture = new CompletableFuture<>();
 
     public BookkeeperUnifiedLog(long logStartOffset, BookkeeperLocalLog localLog, BrokerTopicStats brokerTopicStats,
                                 int producerIdExpirationCheckIntervalMs, LeaderEpochFileCache leaderEpochCache,
@@ -71,8 +80,91 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     }
 
     @Override
-    public void removeExpiredProducers(long currentTimeMs) {
+    protected void initializePartitionMetadata() {
+        // noop
+    }
 
+    @Override
+    protected void updateLogStartOffset(long offset) throws IOException {
+        // noop
+    }
+
+    @Override
+    public void updateLocalLogStartOffset(long offset) throws IOException {
+        // noop
+    }
+
+    @Override
+    protected void initializeTopicId() {
+        // TODO
+    }
+
+    @Override
+    public int deleteOldSegments() throws IOException {
+        return 0;
+    }
+
+    public CompletableFuture<Void> initialize() {
+        if (!recovering.compareAndSet(false, true)) {
+            return initializeFuture;
+        }
+
+        CompletableFuture<Void> producerRecoverFuture = producerStateManager.recoverSnapshotAsync();
+        CompletableFuture<Void> transactionRecoverFuture = bookkeeperLocalLog.txnIndex.recoverSnapshot();
+        CompletableFuture.allOf(producerRecoverFuture, transactionRecoverFuture)
+                .thenCompose(ignore -> {
+                    long producerMapEndOffset = producerStateManager.mapEndOffset();
+                    long transactionMapEndOffset = bookkeeperLocalLog.txnIndex.mapEndOffset();
+                    if (transactionMapEndOffset < producerMapEndOffset) {
+                        // TODO
+                        log.warn("Transaction map end offset {} is less than producer map end offset {}, " +
+                                "which means that some transactions may be missing. " +
+                                "This can happen when the transaction log is truncated before the producer state log.",
+                                transactionMapEndOffset, producerMapEndOffset);
+                    }
+                    long currentOffset = bookkeeperLocalLog.logEndOffset();
+                    if (producerMapEndOffset >= currentOffset && transactionMapEndOffset >= currentOffset) {
+                        return CompletableFuture.completedFuture(null);
+                    }
+                    long startRecoverOffset = Math.min(producerMapEndOffset, transactionMapEndOffset);
+                    return bookkeeperLocalLog.recoverFrom(startRecoverOffset, new RecoveryRecordsConsumer());
+                })
+                .thenAccept(ignore -> initializeFuture.complete(null))
+                .exceptionally(t -> {
+                    log.error("Failed to recover log", t);
+                    initializeFuture.completeExceptionally(t);
+                    return null;
+                });
+        return initializeFuture;
+    }
+
+    // TRANSLATE FROM: LogSegment.updateProducerState(...)
+    private class RecoveryRecordsConsumer implements Consumer<MemoryRecords> {
+        @Override
+        public void accept(MemoryRecords records) {
+            for (RecordBatch batch : records.batches()) {
+                long mapEndOffset = batch.lastOffset() + 1;
+                long txnMapEndOffset = bookkeeperLocalLog.txnIndex.mapEndOffset();
+                if (batch.hasProducerId()) {
+                    long producerId = batch.producerId();
+                    ProducerAppendInfo appendInfo = producerStateManager.prepareUpdate(producerId, AppendOrigin.REPLICATION);
+                    Optional<CompletedTxn> maybeCompletedTxn = appendInfo.append(batch, Optional.empty());
+                    producerStateManager.update(appendInfo);
+                    if (maybeCompletedTxn.isPresent()) {
+                        CompletedTxn completedTxn = maybeCompletedTxn.get();
+                        long lastStableOffset = producerStateManager.lastStableOffset(completedTxn);
+                        if (completedTxn.isAborted() && txnMapEndOffset < mapEndOffset) {
+                            bookkeeperLocalLog.txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset));
+                        }
+                        producerStateManager.completeTxn(completedTxn);
+                    }
+                }
+                if (txnMapEndOffset < mapEndOffset) {
+                    bookkeeperLocalLog.txnIndex.updateMapEndOffset(mapEndOffset);
+                }
+                producerStateManager.updateMapEndOffset(mapEndOffset);
+            }
+        }
     }
 
     @Override
@@ -216,7 +308,7 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
                 appendInfo.setLastOffset(duplicate.lastOffset());
                 appendInfo.setLogAppendTime(duplicate.timestamp());
                 // TODO
-//                appendInfo.setLogStartOffset(logStartOffset);
+                // appendInfo.setLogStartOffset(logStartOffset);
                 future.complete(appendInfo);
                 return;
             }
@@ -226,12 +318,16 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
                         // Should run on ML executor
                         result.updatedProducers().values().forEach(producerStateManager::update);
                         for (CompletedTxn completedTxn : result.completedTxns()) {
-                            // long lastStableOffset = producerStateManager.lastStableOffset(completedTxn); todo
-                            // TODO update txn index
+                            long lastStableOffset = producerStateManager.lastStableOffset(completedTxn);
+                            if (completedTxn.isAborted()) {
+                                bookkeeperLocalLog.txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset));
+                            }
                             producerStateManager.completeTxn(completedTxn);
                         }
-                        producerStateManager.updateMapEndOffset(appendInfo.lastOffset() + 1);
-//                        maybeIncrementFirstUnstableOffset();
+                        long mapEndOffset = appendInfo.lastOffset() + 1;
+                        bookkeeperLocalLog.txnIndex.updateMapEndOffset(mapEndOffset);
+                        producerStateManager.updateMapEndOffset(mapEndOffset);
+                        maybeIncrementFirstUnstableOffset();
                         future.complete(appendInfo);
                     })
                     .exceptionally(t -> {
@@ -241,6 +337,21 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
         });
 
         return future;
+    }
+
+    @Override
+    protected void maybeIncrementFirstUnstableOffset() {
+        Optional<LogOffsetMetadata> updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset();
+        if (updatedFirstUnstableOffset.isPresent() &&
+                (updatedFirstUnstableOffset.get().messageOffsetOnly() || updatedFirstUnstableOffset.get().messageOffset < logStartOffset)) {
+            long offset = Math.max(updatedFirstUnstableOffset.get().messageOffset, logStartOffset);
+            updatedFirstUnstableOffset = Optional.of(maybeConvertToOffsetMetadata(offset));
+        }
+
+        if (updatedFirstUnstableOffset != this.firstUnstableOffsetMetadata) {
+            log.debug("First unstable offset updated to {}", updatedFirstUnstableOffset);
+            this.firstUnstableOffsetMetadata = updatedFirstUnstableOffset;
+        }
     }
 
     @Override
@@ -288,8 +399,8 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     }
 
     @Override
-    public CompletableFuture<LogOffsetMetadata> maybeConvertToOffsetMetadataAsync(long offset) {
-        return super.maybeConvertToOffsetMetadataAsync(offset);
+    public LogOffsetMetadata maybeConvertToOffsetMetadata(long offset) {
+        return new LogOffsetMetadata(offset);
     }
 
     @Override

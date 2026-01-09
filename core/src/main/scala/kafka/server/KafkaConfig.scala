@@ -337,6 +337,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   def logDirFailureTimeoutMs: Long = getLong(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG)
 
+  def logImplementationName: String = getString(ServerLogConfigs.LOG_ASYNC_MODE)
+
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG)
   val defaultReplicationFactor: Int = getInt(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG)

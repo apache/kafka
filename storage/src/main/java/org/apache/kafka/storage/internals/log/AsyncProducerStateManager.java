@@ -110,11 +110,6 @@ public class AsyncProducerStateManager extends ProducerStateManager {
     }
 
     @Override
-    public void onLogStartOffsetIncremented(long logStartOffset) {
-        // todo
-    }
-
-    @Override
     public void deleteSnapshotsBefore(long offset) throws IOException {
         throw new UnsupportedOperationException("Not supported");
     }

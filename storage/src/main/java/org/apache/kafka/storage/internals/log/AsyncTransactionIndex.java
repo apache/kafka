@@ -56,16 +56,19 @@ public class AsyncTransactionIndex {
         this.index = new ConcurrentSkipListMap<>(Long::compareTo);
     }
 
-    public void append(AbortedTxn abortedTxn, long mapEndOffset) {
+    public void append(AbortedTxn abortedTxn) {
         lastOffset.ifPresent(offset -> {
             if (offset >= abortedTxn.lastOffset())
                 throw new IllegalArgumentException(
                         "The last offset of appended transactions must increase sequentially, " +
                                 "but abortedTxn.lastOffset() " + " is not greater than current last offset " + offset);
         });
-        this.mapEndOffset = mapEndOffset;
         lastOffset = OptionalLong.of(abortedTxn.lastOffset());
         index.put(abortedTxn.lastOffset(), abortedTxn);
+    }
+
+    public void updateMapEndOffset(long mapEndOffset) {
+        this.mapEndOffset = mapEndOffset;
     }
 
     public long mapEndOffset() {
@@ -123,8 +126,9 @@ public class AsyncTransactionIndex {
                     } else {
                         TransactionIndexSnapshot snapshot = TransactionIndexSnapshot.fromByteArray(opt.get().getValue());
                         for (AbortedTxn abortedTxn : snapshot.abortedTxns()) {
-                            append(abortedTxn, snapshot.mapEndOffset);
+                            append(abortedTxn);
                         }
+                        updateMapEndOffset(snapshot.mapEndOffset());
                         lastOffset = OptionalLong.of(snapshot.lastOffset());
                         lastSnapshotOffset = snapshot.lastOffset();
                         future.complete(null);

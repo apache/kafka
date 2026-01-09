@@ -127,7 +127,7 @@ public class UnifiedLog implements AutoCloseable {
     // localLog The LocalLog instance containing non-empty log segments recovered from disk
     private final LocalLog localLog;
     private final BrokerTopicStats brokerTopicStats;
-    protected final ProducerStateManager producerStateManager;
+    private final ProducerStateManager producerStateManager;
     private final boolean remoteStorageSystemEnable;
     private final ScheduledFuture<?> producerExpireCheck;
     private final int producerIdExpirationCheckIntervalMs;
@@ -147,7 +147,7 @@ public class UnifiedLog implements AutoCloseable {
      * that this could result in disagreement between replicas depending on when they began replicating the log.
      * In the worst case, the LSO could be seen by a consumer to go backwards.
      */
-    private volatile Optional<LogOffsetMetadata> firstUnstableOffsetMetadata = Optional.empty();
+    protected volatile Optional<LogOffsetMetadata> firstUnstableOffsetMetadata = Optional.empty();
     private volatile Optional<PartitionMetadataFile> partitionMetadataFile = Optional.empty();
     // This is the offset(inclusive) until which segments are copied to the remote storage.
     private volatile long highestOffsetInRemoteStorage = -1L;
@@ -480,7 +480,7 @@ public class UnifiedLog implements AutoCloseable {
      *   - If we were provided a topic ID when creating the log and one does not yet exist
      *     set _topicId and write to the partition metadata file.
      */
-    private void initializeTopicId() {
+    protected void initializeTopicId() {
         PartitionMetadataFile partMetadataFile = partitionMetadataFile.orElseThrow(() ->
                 new KafkaException("The partitionMetadataFile should have been initialized"));
 
@@ -736,7 +736,7 @@ public class UnifiedLog implements AutoCloseable {
         }
     }
 
-    private void initializePartitionMetadata() {
+    protected void initializePartitionMetadata() {
         synchronized (lock) {
             File partitionMetadata = PartitionMetadataFile.newFile(dir());
             partitionMetadataFile = Optional.of(new PartitionMetadataFile(partitionMetadata, logDirFailureChannel()));
@@ -784,7 +784,7 @@ public class UnifiedLog implements AutoCloseable {
         }
     }
 
-    private void updateLogStartOffset(long offset) throws IOException {
+    protected void updateLogStartOffset(long offset) throws IOException {
         logStartOffset = offset;
         if (highWatermark() < offset) {
             updateHighWatermark(offset);
@@ -1889,15 +1889,6 @@ public class UnifiedLog implements AutoCloseable {
             return localLog.convertToOffsetMetadataOrThrow(offset);
         } catch (OffsetOutOfRangeException ignore) {
             return new LogOffsetMetadata(offset);
-        }
-    }
-
-
-    public CompletableFuture<LogOffsetMetadata> maybeConvertToOffsetMetadataAsync(long offset) {
-        try {
-            return CompletableFuture.completedFuture(maybeConvertToOffsetMetadata(offset));
-        } catch (Throwable t) {
-            return CompletableFuture.failedFuture(t);
         }
     }
 

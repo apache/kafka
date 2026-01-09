@@ -1375,6 +1375,9 @@ class ReplicaManager(val config: KafkaConfig,
   private def delayedProduceRequestRequired(requiredAcks: Short,
                                             entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                                             localProduceResults: Map[TopicIdPartition, LogAppendResult]): Boolean = {
+    if (config.logImplementationName.equals("ML")) {
+      return false
+    }
     requiredAcks == -1 &&
     entriesPerPartition.nonEmpty &&
     localProduceResults.values.count(_.exception.isDefined) < entriesPerPartition.size

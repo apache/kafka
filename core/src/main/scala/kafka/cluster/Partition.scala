@@ -279,6 +279,8 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  private val asyncLogMode: Boolean = logManager.initialDefaultConfig.asyncLogMode
+
   def removeListener(listener: PartitionListener): Unit = {
     listeners.remove(listener)
   }
@@ -873,6 +875,10 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica): Unit = {
+    if (asyncLogMode) {
+      return
+    }
+
     val needsIsrUpdate = !partitionState.isInflight && canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
       needsExpandIsr(followerReplica)
     }
@@ -893,10 +899,16 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def needsExpandIsr(followerReplica: Replica): Boolean = {
+    if (asyncLogMode) {
+      return false
+    }
     canAddReplicaToIsr(followerReplica.brokerId) && isFollowerInSync(followerReplica)
   }
 
   private def canAddReplicaToIsr(followerReplicaId: Int): Boolean = {
+    if (asyncLogMode) {
+      return false
+    }
     val current = partitionState
     !current.isInflight &&
       !current.isr.contains(followerReplicaId) &&
@@ -1007,6 +1019,9 @@ class Partition(val topicPartition: TopicPartition,
    * @return true if the HW was incremented, and false otherwise.
    */
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
+    if (asyncLogMode) {
+      return true
+    }
     if (isUnderMinIsr) {
       trace(s"Not increasing HWM because partition is under min ISR(ISR=${partitionState.isr}")
       return false
@@ -1086,6 +1101,9 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def maybeShrinkIsr(): Unit = {
+    if (asyncLogMode) {
+      return
+    }
     def needsIsrUpdate: Boolean = {
       !partitionState.isInflight && inReadLock(leaderIsrUpdateLock) {
         needsShrinkIsr()
@@ -1126,6 +1144,9 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def needsShrinkIsr(): Boolean = {
+    if (asyncLogMode) {
+      return false
+    }
     leaderLogIfLocal.exists { _ => getOutOfSyncReplicas(replicaLagTimeMaxMs).nonEmpty }
   }
 
@@ -1133,6 +1154,9 @@ class Partition(val topicPartition: TopicPartition,
                                   leaderEndOffset: Long,
                                   currentTimeMs: Long,
                                   maxLagMs: Long): Boolean = {
+    if (asyncLogMode) {
+      return false
+    }
     getReplica(replicaId).fold(true) { followerReplica =>
       !followerReplica.stateSnapshot.isCaughtUp(leaderEndOffset, currentTimeMs, maxLagMs)
     }
@@ -1152,6 +1176,9 @@ class Partition(val topicPartition: TopicPartition,
    * If an ISR update is in-flight, we will return an empty set here
    **/
   def getOutOfSyncReplicas(maxLagMs: Long): Set[Int] = {
+    if (logManager.initialDefaultConfig.asyncLogMode) {
+      return Set.empty
+    }
     val current = partitionState
     if (!current.isInflight) {
       val candidateReplicaIds = (current.isr.asScala.map(_.toInt) - localBrokerId).toSet
