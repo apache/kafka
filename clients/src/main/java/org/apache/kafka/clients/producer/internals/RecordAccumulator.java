@@ -1045,7 +1045,9 @@ public class RecordAccumulator {
                 log.warn("Skipping deallocating a batch that has already been deallocated. Batch is {}, created time is {}", batch, batch.createdMs);
             } else {
                 if (batch.isInflight()) {
-                    throw new IllegalStateException("Attempting to deallocate a batch that is not inflight. Batch is " + batch);
+                    // Create a fresh ByteBuffer to give to BufferPool to reuse since we can't safely call deallocate with the ProduceBatch's buffer
+                    free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
+                    throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
                 }
                 batch.markBufferDeallocated();
                 free.deallocate(batch.buffer(), batch.initialCapacity());
@@ -1156,11 +1158,11 @@ public class RecordAccumulator {
             }
             batch.abort(reason);
             if (batch.isInflight()) {
-                completeBatch(batch);
-            } else {
                 // KAFKA-19012: if the batch has been sent it might still be in use by the network client so we cannot allow it to be reused yet.
                 // We skip deallocating it now. When the request in network client completes with a response, either completeBatch() or 
                 // failBatch() will be called with deallocateBatch=true. The buffer associated with the batch will be deallocated then.
+                completeBatch(batch);
+            } else {
                 completeAndDeallocateBatch(batch);
             }
         }
