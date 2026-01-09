@@ -1056,7 +1056,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                       Optional<Integer> acquisitionLockTimeoutMs) {
         if (partitionError.exception() != null) {
             boolean retry = false;
-            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH || partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH ||
+                partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
                 // If the leader has changed, there's no point in retrying the operation because the acquisition locks
                 // will have been released.
                 // If the topic or partition has been deleted, we do not retry the failed acknowledgements.
@@ -1318,11 +1319,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Sets the error code in the acknowledgements and sends the response
          * through a background event.
          */
-        void handleAcknowledgeErrorCode(TopicIdPartition tip, Errors acknowledgeErrorCode, boolean isRenewAck, Optional<Integer> acquisitionLockTimeoutMs) {
+        void handleAcknowledgeErrorCode(TopicIdPartition tip, Errors acknowledgeErrorCode, boolean checkForRenewAcknowledgements, Optional<Integer> acquisitionLockTimeoutMs) {
             Acknowledgements acks = inFlightAcknowledgements.remove(tip);
             if (acks != null) {
                 acks.complete(acknowledgeErrorCode.exception());
-                resultHandler.complete(tip, acks, requestType, isRenewAck, acquisitionLockTimeoutMs);
+                resultHandler.complete(tip, acks, requestType, checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
             } else {
                 log.error("Invalid partition {} received in ShareAcknowledge response", tip);
             }
@@ -1454,17 +1455,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Handle the result of a ShareAcknowledge request sent to one or more nodes and
          * signal the completion when all results are known.
          */
-        public void complete(TopicIdPartition partition, Acknowledgements acknowledgements, AcknowledgeRequestType type, boolean isRenewAck, Optional<Integer> acquisitionLockTimeoutMs) {
+        public void complete(TopicIdPartition partition, Acknowledgements acknowledgements, AcknowledgeRequestType type, boolean checkForRenewAcknowledgements, Optional<Integer> acquisitionLockTimeoutMs) {
             if (type.equals(AcknowledgeRequestType.COMMIT_ASYNC)) {
                 if (acknowledgements != null) {
-                    maybeSendShareAcknowledgementEvent(Map.of(partition, acknowledgements), isRenewAck, acquisitionLockTimeoutMs);
+                    maybeSendShareAcknowledgementEvent(Map.of(partition, acknowledgements), checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
                 }
             } else {
                 if (acknowledgements != null) {
                     result.put(partition, acknowledgements);
                 }
                 if (remainingResults != null && remainingResults.decrementAndGet() == 0) {
-                    maybeSendShareAcknowledgementEvent(result, isRenewAck, acquisitionLockTimeoutMs);
+                    maybeSendShareAcknowledgementEvent(result, checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
                     future.ifPresent(future -> future.complete(result));
                 }
             }
