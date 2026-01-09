@@ -1976,21 +1976,6 @@ kafka.server.IsrExpirationTest:
 - testIsrExpirationIfNoFetchRequestMade
 kafka.server.JoinGroupRequestTest:
 - testJoinGroupWithOldConsumerGroupProtocol
-kafka.server.KRaftClusterTest:
-- testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir
-- testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir
-- testControllerFailover
-- testCreateClusterAndRestartControllerNode
-- testDirectToControllerCommunicationFailsOnOlderMetadataVersion
-- testIncreaseNumIoThreads
-- testOldBootstrapMetadataFile
-- testOverlyLargeCreateTopics
-- testRegisteredControllerEndpoints
-- testSingleControllerSingleBrokerCluster
-- testSnapshotCount
-- testStartupWithNonDefaultKControllerDynamicConfiguration
-- testTimedOutHeartbeats
-- testTopicDeletedAndRecreatedWhileBrokerIsDown
 kafka.server.KafkaApisTest:
 - requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException
 - shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion

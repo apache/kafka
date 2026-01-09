@@ -122,15 +122,19 @@ org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
 - testHighWatermarkShouldNotAdvanceIfUnderMinIsr
 - testLastKnownLeaderShouldBeElectedIfEmptyElr
 org.apache.kafka.server.KRaftClusterTest:
+- testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir
+- testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir
 - testAuthorizerFailureFoundInControllerStartup
 - testClientQuotas
 - testClusterWithLowerCaseListeners
+- testControllerFailover
 - testCreateClusterAndClose
 - testCreateClusterAndCreateAndManyTopics
 - testCreateClusterAndCreateListDeleteTopic
 - testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation
 - testCreateClusterAndPerformReassignment
 - testCreateClusterAndRestartBrokerNode
+- testCreateClusterAndRestartControllerNode
 - testCreateClusterAndWaitForBrokerInRunningState
 - testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer
 - testCreateClusterWithAdvertisedPortZero
@@ -139,11 +143,21 @@ org.apache.kafka.server.KRaftClusterTest:
 - testDescribeKRaftVersion
 - testDescribeQuorumRequestToBrokers
 - testDescribeQuorumRequestToControllers
+- testDirectToControllerCommunicationFailsOnOlderMetadataVersion
+- testIncreaseNumIoThreads
 - testIncrementalAlterConfigs
+- testOldBootstrapMetadataFile
+- testOverlyLargeCreateTopics
 - testReconfigureControllerAuthorizer
 - testReconfigureControllerClientQuotas
+- testRegisteredControllerEndpoints
 - testRemoteLogManagerInstantiation
 - testSetLog4jConfigurations
+- testSingleControllerSingleBrokerCluster
+- testSnapshotCount
+- testStartupWithNonDefaultKControllerDynamicConfiguration
+- testTimedOutHeartbeats
+- testTopicDeletedAndRecreatedWhileBrokerIsDown
 - testUnregisterBroker
 - testUpdateMetadataVersion
 org.apache.kafka.server.LogManagerIntegrationTest:
