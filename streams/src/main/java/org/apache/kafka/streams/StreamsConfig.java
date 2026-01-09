@@ -1318,6 +1318,8 @@ public class StreamsConfig extends AbstractConfig {
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
+        public static final String ENABLE_PROCESS_PROCESSVALUE_FIX = "__enable.process.processValue.fix__";
+
         public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
             // note: we did disable testing "processing threads"` in SmokeTestDriverIntegrationTest due to
             // high failure rate, and the feature being incomplete with no active work
@@ -1329,15 +1331,25 @@ public class StreamsConfig extends AbstractConfig {
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
+            return getBoolean(value, key, defaultValue);
+
+        }
+
+        public static boolean getBoolean(final Properties configs, final String key, final boolean defaultValue) {
+            final Object value = configs.getOrDefault(key, defaultValue);
+            return getBoolean(value, key, defaultValue);
+        }
+
+        private static boolean getBoolean(final Object value, final String key, final boolean defaultValue) {
             if (value instanceof Boolean) {
                 return (boolean) value;
             } else if (value instanceof String) {
                 return Boolean.parseBoolean((String) value);
             } else {
                 log.warn(
-                    "Invalid value ({}) on internal configuration '{}'. Please specify a true/false value.",
-                    value,
-                    key
+                        "Invalid value ({}) on internal configuration '{}'. Please specify a true/false value.",
+                        value,
+                        key
                 );
                 return defaultValue;
             }

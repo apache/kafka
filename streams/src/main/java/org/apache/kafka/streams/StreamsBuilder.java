@@ -48,6 +48,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.ENABLE_PROCESS_PROCESSVALUE_FIX;
+
 /**
  * {@code StreamsBuilder} provides the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
@@ -107,7 +109,14 @@ public class StreamsBuilder {
     public StreamsBuilder(final Properties properties) {
         topology = newTopology(properties);
         internalTopologyBuilder = topology.internalTopologyBuilder;
-        internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
+        internalStreamsBuilder = new InternalStreamsBuilder(
+                internalTopologyBuilder,
+                StreamsConfig.InternalConfig.getBoolean(
+                        properties,
+                        ENABLE_PROCESS_PROCESSVALUE_FIX,
+                        false
+                )
+        );
     }
 
     @Deprecated
