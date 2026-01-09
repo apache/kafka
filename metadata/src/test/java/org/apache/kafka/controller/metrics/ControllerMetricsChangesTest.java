@@ -24,11 +24,13 @@ import org.apache.kafka.image.TopicDelta;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -197,5 +199,17 @@ public class ControllerMetricsChangesTest {
         assertEquals(1, changes.globalPartitionsChange());
         assertEquals(0, changes.offlinePartitionsChange());
         assertEquals(1, changes.partitionsWithoutPreferredLeaderChange());
+    }
+
+    @Test
+    public void testTopicElectionResult() {
+        ControllerMetricsChanges changes = new ControllerMetricsChanges();
+        TopicImage image = new TopicImage("foo", FOO_ID, Collections.emptyMap());
+        TopicDelta delta = new TopicDelta(image);
+        delta.replay(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(Arrays.asList(0, 1)).setReplicas(Arrays.asList(0, 1, 2)));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(2).setIsr(Arrays.asList(2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+
+        changes.handleTopicChange(image, delta);
+        assertEquals(1, changes.uncleanLeaderElection());
     }
 }

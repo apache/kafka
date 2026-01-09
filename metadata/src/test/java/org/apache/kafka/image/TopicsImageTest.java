@@ -353,6 +353,32 @@ public class TopicsImageTest {
     }
 
     @Test
+    public void testTopicDeltaElectionStatsWithEmptyImage() {
+        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Collections.emptyMap());
+        TopicDelta delta = new TopicDelta(image);
+        delta.replay(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(Arrays.asList(0, 1)).setReplicas(Arrays.asList(0, 1, 2)));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(2).setIsr(Arrays.asList(2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(1, delta.partitionToUncleanLeaderElectionCount().get(0));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setIsr(Arrays.asList(1, 2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()));
+        assertEquals(1, delta.partitionToUncleanLeaderElectionCount().get(0));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(0).setIsr(Arrays.asList(0)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(2, delta.partitionToUncleanLeaderElectionCount().get(0));
+        delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(1).setIsr(Arrays.asList(1)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(3, delta.partitionToUncleanLeaderElectionCount().get(0));
+    }
+
+    @Test
+    public void testTopicDeltaElectionStatsWithNonEmptyImage() {
+        Map<Integer, PartitionRegistration> partitions = new HashMap<>();
+        partitions.put(0, new PartitionRegistration(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(Arrays.asList(0, 1)).setReplicas(Arrays.asList(0, 1, 2))));
+        partitions.put(1, new PartitionRegistration(new PartitionRecord().setPartitionId(1).setLeader(-1).setIsr(Arrays.asList()).setEligibleLeaderReplicas(Arrays.asList(0, 1)).setReplicas(Arrays.asList(0, 1, 2))));
+        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), partitions);
+        TopicDelta delta = new TopicDelta(image);
+        delta.replay(new PartitionRecord().setPartitionId(0).setLeader(2).setIsr(Arrays.asList(2)).setReplicas(Arrays.asList(0, 1, 2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
+        assertEquals(1, delta.partitionToUncleanLeaderElectionCount().get(0));
+    }
+
+    @Test
     public void testLocalReassignmentChanges() {
         int localId = 3;
         Uuid zooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");

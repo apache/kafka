@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 public final class TopicDelta {
     private final TopicImage image;
     private final Map<Integer, PartitionRegistration> partitionChanges = new HashMap<>();
+    private Map<Integer, Integer> partitionToUncleanLeaderElectionCount = new HashMap<>();
 
     public TopicDelta(TopicImage image) {
         this.image = image;
@@ -67,20 +68,40 @@ public final class TopicDelta {
         return image.id();
     }
 
+    public Map<Integer, Integer> partitionToUncleanLeaderElectionCount() {
+        return partitionToUncleanLeaderElectionCount;
+    }
+
     public void replay(PartitionRecord record) {
+        int partitionId = record.partitionId();
+        PartitionRegistration prevPartition = partitionChanges.get(partitionId);
+        if (prevPartition == null) {
+            prevPartition = image.partitions().get(partitionId);
+        }
+        if (prevPartition != null) {
+            updateElectionStats(partitionId, prevPartition, record.leader(), record.leaderRecoveryState());
+        }
         partitionChanges.put(record.partitionId(), new PartitionRegistration(record));
     }
 
     public void replay(PartitionChangeRecord record) {
-        PartitionRegistration partition = partitionChanges.get(record.partitionId());
-        if (partition == null) {
-            partition = image.partitions().get(record.partitionId());
-            if (partition == null) {
+        int partitionId = record.partitionId();
+        PartitionRegistration prevPartition = partitionChanges.get(partitionId);
+        if (prevPartition == null) {
+            prevPartition = image.partitions().get(partitionId);
+            if (prevPartition == null) {
                 throw new RuntimeException("Unable to find partition " +
-                    record.topicId() + ":" + record.partitionId());
+                    record.topicId() + ":" + partitionId);
             }
         }
-        partitionChanges.put(record.partitionId(), partition.merge(record));
+        updateElectionStats(partitionId, prevPartition, record.leader(), record.leaderRecoveryState());
+        partitionChanges.put(record.partitionId(), prevPartition.merge(record));
+    }
+
+    private void updateElectionStats(int partitionId, PartitionRegistration prevPartition, int newLeader, byte newLeaderRecoveryState) {
+        if (PartitionRegistration.electionWasUnclean(newLeaderRecoveryState)) {
+            partitionToUncleanLeaderElectionCount.put(partitionId, partitionToUncleanLeaderElectionCount.getOrDefault(partitionId, 0) + 1);
+        }
     }
 
     public TopicImage apply() {
