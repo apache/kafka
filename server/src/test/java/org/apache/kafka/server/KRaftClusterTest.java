@@ -65,7 +65,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.controller.QuorumController;
-import org.apache.kafka.controller.QuorumControllerIntegrationTestUtils;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerState;
@@ -119,6 +118,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1342,7 +1342,7 @@ public class KRaftClusterTest {
             var controller = cluster.controllers().values().iterator().next();
             controller.controller().waitForReadyBrokers(3).get();
             TestUtils.retryOnExceptionWithTimeout(60000, () -> {
-                var latch = QuorumControllerIntegrationTestUtils.pause((QuorumController) controller.controller());
+                var latch = pause((QuorumController) controller.controller());
                 Thread.sleep(1001);
                 latch.countDown();
                 assertEquals(0, controller.sharedServer().controllerServerMetrics().fencedBrokerCount());
@@ -1350,6 +1350,19 @@ public class KRaftClusterTest {
                     "Expected timedOutHeartbeats to be greater than 0.");
             });
         }
+    }
+
+    // Duplicate method to decouple the dependency on the metadata module.
+    private CountDownLatch pause(QuorumController controller) {
+        final CountDownLatch latch = new CountDownLatch(1);
+        controller.appendControlEvent("pause", () -> {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                LOG.info("Interrupted while waiting for unpause.", e);
+            }
+        });
+        return latch;
     }
 
     @Test

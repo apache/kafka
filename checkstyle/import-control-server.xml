@@ -69,7 +69,6 @@
   <!-- utilities for testing -->
   <allow pkg="org.apache.kafka.test" />
   <allow class="org.apache.kafka.controller.QuorumController" />
-  <allow class="org.apache.kafka.controller.QuorumControllerIntegrationTestUtils" />
 
   <!-- persistent collection factories/non-library-specific wrappers -->
   <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
