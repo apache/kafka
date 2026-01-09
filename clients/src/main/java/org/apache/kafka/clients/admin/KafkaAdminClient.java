@@ -28,6 +28,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
@@ -59,6 +60,7 @@ import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeStreamsGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.ListShareGroupOffsetsHandler;
@@ -4518,11 +4520,16 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<NodeApiVersions> nodeApiVersionsFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final NodeProvider nodeProvider = options.nodeId().isPresent() ?
             new ConstantNodeIdProvider(options.nodeId().getAsInt(), true) : new LeastLoadedBrokerOrActiveKController();
         final Call call = new Call(
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
+
+            private NodeApiVersions createNodeApiVersion(final ApiVersionsResponse response) {
+                return new NodeApiVersions(response.data().apiKeys(), response.data().supportedFeatures());
+            }
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
                 final Map<String, FinalizedVersionRange> finalizedFeatures = new HashMap<>();
@@ -4555,8 +4562,11 @@ public class KafkaAdminClient extends AdminClient {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
                 if (apiVersionsResponse.data().errorCode() == Errors.NONE.code()) {
                     future.complete(createFeatureMetadata(apiVersionsResponse));
+                    nodeApiVersionsFuture.complete(createNodeApiVersion(apiVersionsResponse));
                 } else {
-                    future.completeExceptionally(Errors.forCode(apiVersionsResponse.data().errorCode()).exception());
+                    Exception excpetion = Errors.forCode(apiVersionsResponse.data().errorCode()).exception();
+                    future.completeExceptionally(excpetion);
+                    nodeApiVersionsFuture.completeExceptionally(excpetion);
                 }
             }
 
@@ -4567,7 +4577,7 @@ public class KafkaAdminClient extends AdminClient {
         };
 
         runnable.call(call, now);
-        return new DescribeFeaturesResult(future);
+        return new InternalDescribeFeaturesResult(future, nodeApiVersionsFuture);
     }
 
     @Override

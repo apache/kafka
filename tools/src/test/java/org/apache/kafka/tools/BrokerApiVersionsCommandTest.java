@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -35,7 +32,6 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -110,16 +106,5 @@ public class BrokerApiVersionsCommandTest {
         assertTrue(lineIter.hasNext());
         assertEquals(")", lineIter.next());
         assertFalse(lineIter.hasNext());
-    }
-
-    @ClusterTest
-    public void testAdminSendNoBlock(ClusterInstance clusterInstance) {
-        Properties props = new Properties();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        try (BrokerApiVersionsCommand.AdminClient admin = BrokerApiVersionsCommand.AdminClient.create(props, false)) {
-            int brokerId = clusterInstance.brokers().keySet().iterator().next();
-            KafkaFuture<NodeApiVersions> future =  admin.getNodeApiVersions(new Node(brokerId + 1, "localhost", 9093, null));
-            assertTrue(future.isCompletedExceptionally());
-        }
     }
 }
