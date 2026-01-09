@@ -48,6 +48,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -55,13 +56,13 @@ import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.SimpleApiVersionManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.quota.ClientQuotaManager;
 import org.apache.kafka.server.quota.ControllerMutationQuotaManager;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
@@ -116,6 +117,7 @@ public class KRaftMetadataRequestBenchmark {
             clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
             replicaQuotaManager, replicaQuotaManager, Optional.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
+    private final ShareCoordinator shareCoordinator = Mockito.mock(ShareCoordinator.class);
     private final SharePartitionManager sharePartitionManager = Mockito.mock(SharePartitionManager.class);
     private final ClientMetricsManager clientMetricsManager = Mockito.mock(ClientMetricsManager.class);
     private final GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
@@ -186,6 +188,7 @@ public class KRaftMetadataRequestBenchmark {
                 setForwardingManager(forwardingManager).
                 setReplicaManager(replicaManager).
                 setGroupCoordinator(groupCoordinator).
+                setShareCoordinator(shareCoordinator).
                 setTxnCoordinator(transactionCoordinator).
                 setAutoTopicCreationManager(autoTopicCreationManager).
                 setBrokerId(brokerId).

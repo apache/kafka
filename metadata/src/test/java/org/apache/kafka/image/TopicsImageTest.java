@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.ClearElrRecord;
@@ -57,18 +58,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
 @Timeout(value = 40)
 public class TopicsImageTest {
     public static final TopicsImage IMAGE1;
-
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
-
-    static final TopicsDelta DELTA1;
 
     static final TopicsImage IMAGE2;
 
-    static final List<TopicImage> TOPIC_IMAGES1;
+    private static final TopicsDelta DELTA1;
+    private static final List<TopicImage> TOPIC_IMAGES1;
 
     private static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
@@ -95,17 +93,14 @@ public class TopicsImageTest {
         return map;
     }
 
-    public static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
-
+    private static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
     private static final Uuid FOO_UUID2 = Uuid.fromString("9d3lha5qv8DoIl93jf8pbX");
-
     private static final Uuid BAR_UUID = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
-
     private static final Uuid BAZ_UUID = Uuid.fromString("tgHBnRglT5W_RlENnuG5vg");
-
     private static final Uuid BAM_UUID = Uuid.fromString("b66ybsWIQoygs01vdjH07A");
-
     private static final Uuid BAM_UUID2 = Uuid.fromString("yd6Sq3a9aK1G8snlKv7ag5");
+
+    private static final TopicIdPartition FOO_0 = new TopicIdPartition(FOO_UUID, new TopicPartition("foo", 0));
 
     static {
         TOPIC_IMAGES1 = List.of(
@@ -193,7 +188,7 @@ public class TopicsImageTest {
         );
     }
 
-    private PartitionRegistration newPartition(int[] replicas) {
+    private static PartitionRegistration newPartition(int[] replicas) {
         Uuid[] directories = new Uuid[replicas.length];
         for (int i = 0; i < replicas.length; i++) {
             directories[i] = DirectoryId.random();
@@ -258,10 +253,8 @@ public class TopicsImageTest {
             changes.leaders().keySet()
         );
         assertEquals(
-            new HashSet<>(
-                List.of(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
-                    new TopicPartition("bam", 1))
-            ),
+            Set.of(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
+                    new TopicPartition("bam", 1)),
             changes.followers().keySet()
         );
 
@@ -657,11 +650,11 @@ public class TopicsImageTest {
             newTopicsByNameMap(List.of()));
         TopicsDelta delta = new TopicsDelta(image);
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
-        topicRecords.addAll(List.of(
+        topicRecords.add(
             new ApiMessageAndVersion(
                 new ClearElrRecord().setTopicName("non-exist"),
                 CLEAR_ELR_RECORD.highestSupportedVersion()
-            ))
+            )
         );
         assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
     }
@@ -868,7 +861,7 @@ public class TopicsImageTest {
         assertEquals(BAR_UUID, map.get("bar"));
         assertFalse(map.containsKey("baz"));
         assertNull(map.get("baz"));
-        HashSet<Uuid> uuids = new HashSet<>();
+        Set<Uuid> uuids = new HashSet<>();
         map.values().iterator().forEachRemaining(uuids::add);
         Set<Uuid> expectedUuids = Set.of(
             Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
@@ -887,7 +880,7 @@ public class TopicsImageTest {
         assertEquals("bar", map.get(BAR_UUID));
         assertFalse(map.containsKey(BAZ_UUID));
         assertNull(map.get(BAZ_UUID));
-        HashSet<String> names = new HashSet<>();
+        Set<String> names = new HashSet<>();
         map.values().iterator().forEachRemaining(names::add);
         Set<String> expectedNames = Set.of("foo", "bar");
         assertEquals(expectedNames, names);
@@ -902,10 +895,32 @@ public class TopicsImageTest {
     public void testTopicsDeltaCreateThenDelete() {
         TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
         delta.replay(new TopicRecord().setName("test").setTopicId(FOO_UUID));
-        assertEquals(delta.createdTopicIds().contains(FOO_UUID), true);
-        assertEquals(delta.deletedTopicIds().contains(FOO_UUID), false);
+        assertTrue(delta.createdTopicIds().contains(FOO_UUID));
+        assertFalse(delta.deletedTopicIds().contains(FOO_UUID));
         delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID));
-        assertEquals(delta.deletedTopicIds().contains(FOO_UUID), false);
-        assertEquals(delta.createdTopicIds().contains(FOO_UUID), false);
+        assertFalse(delta.deletedTopicIds().contains(FOO_UUID));
+        assertFalse(delta.createdTopicIds().contains(FOO_UUID));
+    }
+
+    @Test
+    public void testPartitionReplicasWithEmptyImage() {
+        TopicsImage image = topicsImage(List.of());
+        assertTrue(image.partitionReplicas(FOO_UUID, 0).isEmpty());
+    }
+
+    @Test
+    public void testPartitionReplicas() {
+        TopicsImage image = topicsImage(List.of(
+                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2}))
+        ));
+        assertEquals(List.of(0, 1, 2), image.partitionReplicas(FOO_UUID, 0));
+    }
+
+    private static TopicsImage topicsImage(List<TopicImage> topics) {
+        TopicsImage retval = TopicsImage.EMPTY;
+        for (TopicImage topic : topics) {
+            retval = retval.including(topic);
+        }
+        return retval;
     }
 }

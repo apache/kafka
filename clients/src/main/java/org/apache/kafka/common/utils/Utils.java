@@ -681,8 +681,8 @@ public final class Utils {
     }
 
     /**
-     * Converts a Properties object to a Map<String, String>, calling {@link #toString} to ensure all keys and values
-     * are Strings.
+     * Converts a Properties object to a {@code Map<String, String>}, calling {@link #toString} to ensure all keys and
+     * values are Strings.
      */
     public static Map<String, String> propsToStringMap(Properties props) {
         Map<String, String> result = new HashMap<>();
@@ -1394,11 +1394,16 @@ public final class Utils {
 
     /**
      * A Collector that offers two kinds of convenience:
-     * 1. You can specify the concrete type of the returned Map
-     * 2. You can turn a stream of Entries directly into a Map without having to mess with a key function
-     *    and a value function. In particular, this is handy if all you need to do is apply a filter to a Map's entries.
-     *
-     *
+     * <ol>
+     * <li>
+     * You can specify the concrete type of the returned Map
+     * </li>
+     * <li>
+     * You can turn a stream of Entries directly into a Map without having to mess with a key function
+     * and a value function. In particular, this is handy if all you need to do is apply a filter to a Map's entries.
+     * </li>
+     * </ol>
+     * <p>
      * One thing to be wary of: These types are too "distant" for IDE type checkers to warn you if you
      * try to do something like build a TreeMap of non-Comparable elements. You'd get a runtime exception for that.
      *
@@ -1406,7 +1411,7 @@ public final class Utils {
      * @param <K> The Map key type
      * @param <V> The Map value type
      * @param <M> The type of the Map itself.
-     * @return new Collector<Map.Entry<K, V>, M, M>
+     * @return new {@code Collector<Map.Entry<K, V>, M, M>}
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
         return new Collector<>() {
