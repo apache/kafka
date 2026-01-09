@@ -1044,12 +1044,12 @@ public class RecordAccumulator {
             if (batch.isBufferDeallocated()) {
                 log.warn("Skipping deallocating a batch that has already been deallocated. Batch is {}, created time is {}", batch, batch.createdMs);
             } else {
+                batch.markBufferDeallocated();
                 if (batch.isInflight()) {
                     // Create a fresh ByteBuffer to give to BufferPool to reuse since we can't safely call deallocate with the ProduceBatch's buffer
                     free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
                     throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
                 }
-                batch.markBufferDeallocated();
                 free.deallocate(batch.buffer(), batch.initialCapacity());
             }
         }
