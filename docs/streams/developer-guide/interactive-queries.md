@@ -384,7 +384,7 @@ There are many ways to add an RPC layer. The only requirements are that the RPC 
 
 ## Exposing the RPC endpoints of your application
 
-To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](config-streams.html#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/42/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html).
+To enable remote state store discovery in a distributed Kafka Streams application, you must set the [configuration property](config-streams.html#streams-developer-guide-required-configs) in the config properties. The `application.server` property defines a unique `host:port` pair that points to the RPC endpoint of the respective instance of a Kafka Streams application. The value of this configuration property will vary across the instances of your application. When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html).
 
 **Tip**
 
@@ -429,7 +429,7 @@ This example shows how to configure and run a Kafka Streams application that sup
 
 ## Discovering and accessing application instances and their local state stores
 
-The following methods return [StreamsMetadata](/42/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
+The following methods return [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) objects, which provide meta-information about application instances such as their RPC endpoint and locally available state stores.
 
   * `KafkaStreams#allMetadata()`: find all instances of this application
   * `KafkaStreams#allMetadataForStore(String storeName)`: find those applications instances that manage local instances of the state store "storeName"
@@ -440,7 +440,7 @@ The following methods return [StreamsMetadata](/42/javadoc/org/apache/kafka/stre
 
 Attention
 
-If `application.server` is not configured for an application instance, then the above methods will not find any [StreamsMetadata](/42/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) for it.
+If `application.server` is not configured for an application instance, then the above methods will not find any [StreamsMetadata](/{version}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html) for it.
 
 For example, we can now find the `StreamsMetadata` for the state store named "word-count" that we defined in the code example shown in the previous section:
     

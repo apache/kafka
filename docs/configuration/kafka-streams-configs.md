@@ -26,4 +26,4 @@ type: docs
 -->
 
 
-Below is the Kafka Streams client library configuration. {{< include-html file="/static/42/generated/streams_config.html" >}} 
+Below is the Kafka Streams client library configuration. {{< include-html file="/static/{version}/generated/streams_config.html" >}} 

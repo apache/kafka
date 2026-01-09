@@ -185,14 +185,14 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
       * The `topics.blacklist` was removed from the `org.apache.kafka.connect.mirror.MirrorSourceConfig` Please use `topics.exclude` instead. 
       * The `groups.blacklist` was removed from the `org.apache.kafka.connect.mirror.MirrorSourceConfig` Please use `groups.exclude` instead. 
     * **Tools**
-      * The `kafka.common.MessageReader` class was removed. Please use the [`org.apache.kafka.tools.api.RecordReader`](/42/javadoc/org/apache/kafka/tools/api/RecordReader.html) interface to build custom readers for the `kafka-console-producer` tool. 
+      * The `kafka.common.MessageReader` class was removed. Please use the [`org.apache.kafka.tools.api.RecordReader`](/{version}/javadoc/org/apache/kafka/tools/api/RecordReader.html) interface to build custom readers for the `kafka-console-producer` tool. 
       * The `kafka.tools.DefaultMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.DefaultMessageFormatter` class instead. 
       * The `kafka.tools.LoggingMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.LoggingMessageFormatter` class instead. 
       * The `kafka.tools.NoOpMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.NoOpMessageFormatter` class instead. 
       * The `--whitelist` option was removed from the `kafka-console-consumer` command line tool. Please use `--include` instead. 
       * Redirections from the old tools packages have been removed: `kafka.admin.FeatureCommand`, `kafka.tools.ClusterTool`, `kafka.tools.EndToEndLatency`, `kafka.tools.StateChangeLogMerger`, `kafka.tools.StreamsResetter`, `kafka.tools.JmxTool`. 
       * The `--authorizer`, `--authorizer-properties`, and `--zk-tls-config-file` options were removed from the `kafka-acls` command line tool. Please use `--bootstrap-server` or `--bootstrap-controller` instead. 
-      * The `kafka.serializer.Decoder` trait was removed, please use the [`org.apache.kafka.tools.api.Decoder`](/42/javadoc/org/apache/kafka/tools/api/Decoder.html) interface to build custom decoders for the `kafka-dump-log` tool. 
+      * The `kafka.serializer.Decoder` trait was removed, please use the [`org.apache.kafka.tools.api.Decoder`](/{version}/javadoc/org/apache/kafka/tools/api/Decoder.html) interface to build custom decoders for the `kafka-dump-log` tool. 
       * The `kafka.coordinator.group.OffsetsMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.OffsetsMessageFormatter` class instead. 
       * The `kafka.coordinator.group.GroupMetadataMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter` class instead. 
       * The `kafka.coordinator.transaction.TransactionLogMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.TransactionLogMessageFormatter` class instead. 

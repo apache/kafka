@@ -26,4 +26,4 @@ type: docs
 -->
 
 
-Below is the Kafka Admin client library configuration. {{< include-html file="/static/42/generated/admin_client_config.html" >}} 
+Below is the Kafka Admin client library configuration. {{< include-html file="/static/{version}/generated/admin_client_config.html" >}} 

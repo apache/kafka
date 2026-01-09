@@ -26,4 +26,4 @@ type: docs
 -->
 
 
-Below is the consumer and share consumer configuration: {{< include-html file="/static/42/generated/consumer_config.html" >}} 
+Below is the consumer and share consumer configuration: {{< include-html file="/static/{version}/generated/consumer_config.html" >}} 

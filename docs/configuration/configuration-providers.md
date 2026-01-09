@@ -30,11 +30,11 @@ Use configuration providers to load configuration data from external sources. Th
 
 You have the following options:
 
-  * Use a custom provider by creating a class implementing the [`ConfigProvider`](/42/javadoc/org/apache/kafka/common/config/provider/ConfigProvider.html) interface and packaging it into a JAR file. 
+  * Use a custom provider by creating a class implementing the [`ConfigProvider`](/{version}/javadoc/org/apache/kafka/common/config/provider/ConfigProvider.html) interface and packaging it into a JAR file. 
   * Use a built-in provider:
-    * [`DirectoryConfigProvider`](/42/javadoc/org/apache/kafka/common/config/provider/DirectoryConfigProvider.html)
-    * [`EnvVarConfigProvider`](/42/javadoc/org/apache/kafka/common/config/provider/EnvVarConfigProvider.html)
-    * [`FileConfigProvider`](/42/javadoc/org/apache/kafka/common/config/provider/FileConfigProvider.html)
+    * [`DirectoryConfigProvider`](/{version}/javadoc/org/apache/kafka/common/config/provider/DirectoryConfigProvider.html)
+    * [`EnvVarConfigProvider`](/{version}/javadoc/org/apache/kafka/common/config/provider/EnvVarConfigProvider.html)
+    * [`FileConfigProvider`](/{version}/javadoc/org/apache/kafka/common/config/provider/FileConfigProvider.html)
 
 
 

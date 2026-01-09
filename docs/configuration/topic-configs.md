@@ -49,4 +49,4 @@ To remove an override you can do
     $ bin/kafka-configs.sh --bootstrap-server localhost:9092  --entity-type topics --entity-name my-topic
       --alter --delete-config max.message.bytes
 
-Below is the topic configuration. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override. {{< include-html file="/static/42/generated/topic_config.html" >}} 
+Below is the topic configuration. The server's default configuration for this property is given under the Server Default Property heading. A given server default config value only applies to a topic if it does not have an explicit topic config override. {{< include-html file="/static/{version}/generated/topic_config.html" >}} 

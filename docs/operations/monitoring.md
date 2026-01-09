@@ -3286,7 +3286,7 @@ kafka.producer:type=producer-metrics,client-id=([-.\w]+)
 
 ### Producer Sender Metrics
 
-{{< include-html file="/static/42/generated/producer_metrics.html" >}} 
+{{< include-html file="/static/{version}/generated/producer_metrics.html" >}} 
 
 ## Consumer monitoring
 
@@ -3806,11 +3806,11 @@ kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)
 
 ### Consumer Fetch Metrics
 
-{{< include-html file="/static/42/generated/consumer_metrics.html" >}} 
+{{< include-html file="/static/{version}/generated/consumer_metrics.html" >}} 
 
 ## Connect Monitoring
 
-A Connect worker process contains all the producer and consumer metrics as well as metrics specific to Connect. The worker process itself has a number of metrics, while each connector and task have additional metrics. {{< include-html file="/static/42/generated/connect_metrics.html" >}} 
+A Connect worker process contains all the producer and consumer metrics as well as metrics specific to Connect. The worker process itself has a number of metrics, while each connector and task have additional metrics. {{< include-html file="/static/{version}/generated/connect_metrics.html" >}} 
 
 ## Streams Monitoring
 
