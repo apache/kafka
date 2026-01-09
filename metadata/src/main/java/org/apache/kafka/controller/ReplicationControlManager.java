@@ -519,14 +519,14 @@ public class ReplicationControlManager {
 
         if (record.removingReplicas() != null || record.addingReplicas() != null) {
             log.info("Replayed partition assignment change {} for topic {}. " +
-                    "(partitionEpoch: {}, leaderEpoch: {}, replicaSet: {} -> {}, isr: {} -> {})",
-                record, topicInfo.name, newPartitionInfo.partitionEpoch, newPartitionInfo.leaderEpoch,
-                prevPartitionInfo.replicas, newPartitionInfo.replicas, prevPartitionInfo.isr, newPartitionInfo.isr);
+                    "(isr: {} -> {}, replicaSet: {} -> {}, partitionEpoch: {}, leaderEpoch: {})",
+                record, topicInfo.name, prevPartitionInfo.isr, newPartitionInfo.isr, prevPartitionInfo.replicas,
+                newPartitionInfo.replicas, newPartitionInfo.partitionEpoch, newPartitionInfo.leaderEpoch);
         } else if (log.isDebugEnabled()) {
             log.debug("Replayed partition change {} for topic {}. " +
-                "(partitionEpoch: {}, leaderEpoch: {}, replicaSet: {} -> {}, isr: {} -> {})",
-                record, topicInfo.name, newPartitionInfo.partitionEpoch, newPartitionInfo.leaderEpoch,
-                prevPartitionInfo.replicas, newPartitionInfo.replicas, prevPartitionInfo.isr, newPartitionInfo.isr);
+                    "(isr: {} -> {}, replicaSet: {} -> {}, partitionEpoch: {}, leaderEpoch: {})",
+                record, topicInfo.name, prevPartitionInfo.isr, newPartitionInfo.isr, prevPartitionInfo.replicas,
+                newPartitionInfo.replicas, newPartitionInfo.partitionEpoch, newPartitionInfo.leaderEpoch);
         }
     }
 
@@ -1175,7 +1175,7 @@ public class ReplicationControlManager {
                         // metadata record. We usually only do one or the other.
                         Errors error = NEW_LEADER_ELECTED;
                         log.info("AlterPartition request from node {} for {}-{} completed " +
-                            "the ongoing partition reassignment and triggered a leadership change. {}. Returning {}.",
+                            "the ongoing partition reassignment and triggered a leadership change {}. Returning {}.",
                             request.brokerId(), topic.name, partitionId, partitionChangeInfo, error);
                         responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                             setPartitionIndex(partitionId).
@@ -1260,9 +1260,11 @@ public class ReplicationControlManager {
             return UNKNOWN_TOPIC_OR_PARTITION;
         }
 
-        String isrAndReplicaSetInfo = String.format("Proposed ISR was %s and current ISR is %s. " +
-            "Current replica set is %s.",
-            partitionData.newIsrWithEpochs(), Arrays.toString(partition.isr), Arrays.toString(partition.replicas));
+        String partitionChangeInfo = String.format("Proposed ISR was %s and current ISR is %s. " +
+                "Current replica set is %s. Proposed partitionEpoch was %d and current partitionEpoch is %d. " +
+                "Proposed leaderEpoch was %d and current leaderEpoch is %d.",
+            partitionData.newIsrWithEpochs(), Arrays.toString(partition.isr), Arrays.toString(partition.replicas),
+            partitionData.partitionEpoch(), partition.partitionEpoch, partitionData.leaderEpoch(), partition.leaderEpoch);
 
         // If the partition leader has a higher leader/partition epoch, then it is likely
         // that this node is no longer the active controller. We return NOT_CONTROLLER in
@@ -1271,27 +1273,27 @@ public class ReplicationControlManager {
             log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current leader epoch is {}, which is greater than the local value {}. {}",
                 brokerId, topic.name, partitionId, partition.leaderEpoch, partitionData.leaderEpoch(),
-                isrAndReplicaSetInfo);
+                partitionChangeInfo);
             return NOT_CONTROLLER;
         }
         if (partitionData.partitionEpoch() > partition.partitionEpoch) {
             log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current partition epoch is {}, which is greater than the local value {}. {}",
                 brokerId, topic.name, partitionId, partition.partitionEpoch, partitionData.partitionEpoch(),
-                isrAndReplicaSetInfo);
+                partitionChangeInfo);
             return NOT_CONTROLLER;
         }
         if (partitionData.leaderEpoch() < partition.leaderEpoch) {
             log.debug("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current leader epoch is {}, not {}. {}", brokerId, topic.name,
-                    partitionId, partition.leaderEpoch, partitionData.leaderEpoch(), isrAndReplicaSetInfo);
+                    partitionId, partition.leaderEpoch, partitionData.leaderEpoch(), partitionChangeInfo);
 
             return FENCED_LEADER_EPOCH;
         }
         if (brokerId != partition.leader) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current leader is {}. {}", brokerId, topic.name,
-                    partitionId, partition.leader, isrAndReplicaSetInfo);
+                    partitionId, partition.leader, partitionChangeInfo);
 
             return INVALID_REQUEST;
         }
@@ -1299,7 +1301,7 @@ public class ReplicationControlManager {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the current partition epoch is {}, not {}. {}", brokerId,
                     topic.name, partitionId, partition.partitionEpoch,
-                    partitionData.partitionEpoch(), isrAndReplicaSetInfo);
+                    partitionData.partitionEpoch(), partitionChangeInfo);
 
             return INVALID_UPDATE_VERSION;
         }
@@ -1310,7 +1312,7 @@ public class ReplicationControlManager {
         if (!Replicas.validateIsr(partition.replicas, newIsr)) {
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR. {}", brokerId,
-                    topic.name, partitionId, isrAndReplicaSetInfo);
+                    topic.name, partitionId, partitionChangeInfo);
 
             return INVALID_REQUEST;
         }
@@ -1318,7 +1320,7 @@ public class ReplicationControlManager {
             // The ISR must always include the current leader.
             log.error("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified an invalid ISR that doesn't include itself. {}",
-                    brokerId, topic.name, partitionId, isrAndReplicaSetInfo);
+                    brokerId, topic.name, partitionId, partitionChangeInfo);
 
             return INVALID_REQUEST;
         }
@@ -1327,7 +1329,7 @@ public class ReplicationControlManager {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the ISR had more than one replica while the leader was still " +
                     "recovering from an unclean leader election {}. {}",
-                    brokerId, topic.name, partitionId, leaderRecoveryState, isrAndReplicaSetInfo);
+                    brokerId, topic.name, partitionId, leaderRecoveryState, partitionChangeInfo);
 
             return INVALID_REQUEST;
         }
@@ -1335,7 +1337,7 @@ public class ReplicationControlManager {
                 leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "the leader recovery state cannot change from RECOVERED to RECOVERING. {}",
-                    brokerId, topic.name, partitionId, isrAndReplicaSetInfo);
+                    brokerId, topic.name, partitionId, partitionChangeInfo);
 
             return INVALID_REQUEST;
         }
@@ -1344,7 +1346,7 @@ public class ReplicationControlManager {
         if (!ineligibleReplicas.isEmpty()) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified ineligible replicas {} in the new ISR. {}",
-                    brokerId, topic.name, partitionId, ineligibleReplicas, isrAndReplicaSetInfo);
+                    brokerId, topic.name, partitionId, ineligibleReplicas, partitionChangeInfo);
             return INELIGIBLE_REPLICA;
         }
 
@@ -1810,23 +1812,23 @@ public class ReplicationControlManager {
             TopicControlInfo topic = topics.get(topicIdPartition.topicId());
 
             PartitionRegistration partition = topic.parts.get(partitionId);
-            String isrAndReplicaSetInfo = String.format("Current ISR is %s. Current replica set is %s.",
-                Arrays.toString(partition.isr), Arrays.toString(partition.replicas));
+            String partitionInfo = String.format("(isr: %s, replicaSet: %s, partitionEpoch: %d, leaderEpoch: %d)",
+                Arrays.toString(partition.isr), Arrays.toString(partition.replicas), partition.partitionEpoch, partition.leaderEpoch);
 
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 ApiError result = electLeader(topic.name, partitionId,
                         ElectionType.UNCLEAN, records);
                 if (result.error().equals(Errors.NONE)) {
                     log.info("Triggering unclean leader election for offline partition {}-{}. {}",
-                            topic.name, partitionId, isrAndReplicaSetInfo);
+                            topic.name, partitionId, partitionInfo);
                 } else {
                     log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}. {}",
-                            topic.name, partitionId, result.error(), isrAndReplicaSetInfo);
+                            topic.name, partitionId, result.error(), partitionInfo);
                 }
             } else if (log.isDebugEnabled()) {
                 log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
                                 "because unclean leader election is disabled for this topic. {}",
-                        topic.name, partitionId, isrAndReplicaSetInfo);
+                        topic.name, partitionId, partitionInfo);
             }
         }
     }
