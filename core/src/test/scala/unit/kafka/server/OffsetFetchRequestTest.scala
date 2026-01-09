@@ -568,7 +568,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   @ClusterTest
   def testFetchOffsetWithRecreatedTopic(): Unit = {
     // There are two ways to ensure that committed of recreated topics are not returned.
-    // 1) When a topic is deleted, GroupCoordinatorService#onPartitionsDeleted is called to
+    // 1) When a topic is deleted, GroupCoordinatorService#onMetadataUpdate is called to
     //    delete all its committed offsets.
     // 2) Since version 10 of the OffsetCommit API, the topic id is stored alongside the
     //    committed offset. When it is queried, it is only returned iff the topic id of
