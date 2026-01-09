@@ -56,7 +56,7 @@ Prerequisites
 
 # Step 1: Run the application reset tool
 
-If you are using **streams rebalance protocol** (available since AK 4.2), use the [Streams groups CLI](kafka-streams-group-sh.html#reset-offsets).
+If you are using **streams rebalance protocol** (available since AK 4.2), use the [Streams groups CLI](kafka-streams-group-sh#reset-offsets).
 
 If you are using **classic rebalance protocol** , run the classic application reset tool as described below.
 
