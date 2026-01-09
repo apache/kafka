@@ -267,16 +267,10 @@ public class KRaftTopicCreatorTest {
             requestHeader, null, null, 0, 0, false, null, null, envelopeResponse
         );
 
-        try {
-            argumentCaptor.getValue().onComplete(clientResponse);
-            ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
-            assertTrue(exception.getCause() instanceof RuntimeException);
-        } catch (RuntimeException e) {
-            assertTrue(responseFuture.isCompletedExceptionally());
-            ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
-            assertTrue(exception.getCause() instanceof RuntimeException);
-        }
+        argumentCaptor.getValue().onComplete(clientResponse);
         assertTrue(responseFuture.isCompletedExceptionally());
+        ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
+        assertTrue(exception.getCause() instanceof RuntimeException);
     }
 
     @Test

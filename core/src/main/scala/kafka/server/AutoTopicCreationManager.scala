@@ -226,7 +226,7 @@ class DefaultAutoTopicCreationManager(
             }
           })
         } else {
-          throw new IllegalStateException("CreateTopicsResponse future completed with null response and no exception")
+          warn("CreateTopicsResponse future completed with null response and no exception")
         }
     }
 
@@ -343,12 +343,15 @@ class DefaultAutoTopicCreationManager(
         // Log any errors from the topic creation attempt
         if (throwable != null) {
           logError(creatableTopics, throwable)
-          cacheTopicCreationErrors(creatableTopics.keys.toSet, throwable.getMessage, timeoutMs)
+          val errorMessage = Option(throwable.getMessage).getOrElse(throwable.toString)
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, errorMessage, timeoutMs)
         } else if (response != null) {
           debug(s"Auto topic creation completed for ${creatableTopics.keys} with response $response.")
           cacheTopicCreationErrorsFromResponse(response, timeoutMs)
         } else {
-          throw new IllegalStateException("CreateTopicsResponse future completed with null response and no exception")
+          val ex = new IllegalStateException("CreateTopicsResponse future completed with null response and no exception")
+          error(s"Auto topic creation failed for ${creatableTopics.keys} due to unexpected future completion state", ex)
+          cacheTopicCreationErrors(creatableTopics.keys.toSet, ex.getMessage, timeoutMs)
         }
     }
   }

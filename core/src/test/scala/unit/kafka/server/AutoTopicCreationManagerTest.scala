@@ -184,8 +184,7 @@ class AutoTopicCreationManagerTest {
     val response = new CreateTopicsResponse(createTopicsResponseData)
     topicCreator.setResponseForWithoutPrincipal(response)
 
-    // Calling twice with the same topic will only trigger one call to topicCreator
-    // because the second call will see the topic as already in-flight
+    // First call to create topic - should trigger the topic creator
     createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal)
 
     assertEquals(1, topicCreator.withoutPrincipalCallCount, "Should have called createTopicWithoutPrincipal once")
