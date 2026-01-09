@@ -75,7 +75,7 @@ With the DSL, you can define [processor topologies](../core-concepts.html#stream
 
 After the application is run, the defined processor topologies are continuously executed (i.e., the processing plan is put into action). A step-by-step guide for writing a stream processing application using the DSL is provided below.
 
-For a complete list of available API functionality, see also the [Streams](/43/javadoc/org/apache/kafka/streams/package-summary.html) API docs.
+For a complete list of available API functionality, see also the [Streams](/{version}/javadoc/org/apache/kafka/streams/package-summary.html) API docs.
 
 ### KStream
 
@@ -167,7 +167,7 @@ Description
 
 
 
-Creates a KStream from the specified Kafka input topics and interprets the data as a record stream. A `KStream` represents a _partitioned_ record stream. [(details)](/43/javadoc/org/apache/kafka/streams/StreamsBuilder.html#stream\(java.lang.String\))
+Creates a KStream from the specified Kafka input topics and interprets the data as a record stream. A `KStream` represents a _partitioned_ record stream. [(details)](/{version}/javadoc/org/apache/kafka/streams/StreamsBuilder.html#stream\(java.lang.String\))
 
 In the case of a KStream, the local KStream instance of every application instance will be populated with data from only **a subset** of the partitions of the input topic. Collectively, across all application instances, all input topic partitions are read and processed.
     
@@ -208,7 +208,7 @@ Several variants of `stream` exist. For example, you can specify a regex pattern
 
 
 
-Reads the specified Kafka input topic into a KTable. The topic is interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE (when the record value is not `null`) or as DELETE (when the value is `null`) for that key. [(details)](/43/javadoc/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String\(java.lang.String\))
+Reads the specified Kafka input topic into a KTable. The topic is interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE (when the record value is not `null`) or as DELETE (when the value is `null`) for that key. [(details)](/{version}/javadoc/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String\(java.lang.String\))
 
 In the case of a KTable, the local KTable instance of every application instance will be populated with data from only **a subset** of the partitions of the input topic. Collectively, across all application instances, all input topic partitions are read and processed.
 
@@ -237,7 +237,7 @@ Several variants of `table` exist, for example to specify the `auto.offset.reset
 
 
 
-Reads the specified Kafka input topic into a GlobalKTable. The topic is interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE (when the record value is not `null`) or as DELETE (when the value is `null`) for that key. [(details)](/43/javadoc/org/apache/kafka/streams/StreamsBuilder.html#globalTable-java.lang.String\(java.lang.String\))
+Reads the specified Kafka input topic into a GlobalKTable. The topic is interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE (when the record value is not `null`) or as DELETE (when the value is `null`) for that key. [(details)](/{version}/javadoc/org/apache/kafka/streams/StreamsBuilder.html#globalTable-java.lang.String\(java.lang.String\))
 
 In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will be populated with data from **all** the partitions of the input topic.
 
@@ -311,7 +311,7 @@ Description
 
 
 
-Branch (or split) a `KStream` based on the supplied predicates into one or more `KStream` instances. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#split\(\)))
+Branch (or split) a `KStream` based on the supplied predicates into one or more `KStream` instances. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#split\(\)))
 
 Predicates are evaluated in order. A record is placed to one and only one output stream on the first match: if the n-th predicate evaluates to true, the record is placed to n-th stream. If a record does not match any predicates, it will be routed to the default branch, or dropped if no default branch is created.
 
@@ -392,7 +392,7 @@ A multicast is implemented as a broadcast plus filters.
 
 
 
-Evaluates a boolean function for each element and retains those for which the function returns true. ([KStream details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#filter-org.apache.kafka.streams.kstream.Predicate-), [KTable details](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#filter-org.apache.kafka.streams.kstream.Predicate-))
+Evaluates a boolean function for each element and retains those for which the function returns true. ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#filter-org.apache.kafka.streams.kstream.Predicate-), [KTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#filter-org.apache.kafka.streams.kstream.Predicate-))
     
     
     KStream<String, Long> stream = ...;
@@ -419,7 +419,7 @@ Evaluates a boolean function for each element and retains those for which the fu
 
 
 
-Evaluates a boolean function for each element and drops those for which the function returns true. ([KStream details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#filterNot-org.apache.kafka.streams.kstream.Predicate-), [KTable details](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#filterNot-org.apache.kafka.streams.kstream.Predicate-))
+Evaluates a boolean function for each element and drops those for which the function returns true. ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#filterNot-org.apache.kafka.streams.kstream.Predicate-), [KTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#filterNot-org.apache.kafka.streams.kstream.Predicate-))
     
     
     KStream<String, Long> stream = ...;
@@ -446,7 +446,7 @@ Evaluates a boolean function for each element and drops those for which the func
 
 
 
-Takes one record and produces zero, one, or more records. You can modify the record keys and values, including their types. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMap-org.apache.kafka.streams.kstream.KeyValueMapper-))
+Takes one record and produces zero, one, or more records. You can modify the record keys and values, including their types. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMap-org.apache.kafka.streams.kstream.KeyValueMapper-))
 
 **Marks the stream for data re-partitioning:** Applying a grouping or a join after `flatMap` will result in re-partitioning of the records. If possible use `flatMapValues` instead, which will not cause data re-partitioning.
     
@@ -482,7 +482,7 @@ Takes one record and produces zero, one, or more records. You can modify the rec
 
 
 
-Takes one record and produces zero, one, or more records, while retaining the key of the original record. You can modify the record values and the value type. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMapValues-org.apache.kafka.streams.kstream.ValueMapper-))
+Takes one record and produces zero, one, or more records, while retaining the key of the original record. You can modify the record values and the value type. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMapValues-org.apache.kafka.streams.kstream.ValueMapper-))
 
 `flatMapValues` is preferable to `flatMap` because it will not cause data re-partitioning. However, you cannot modify the key or key type like `flatMap` does.
     
@@ -511,7 +511,7 @@ Takes one record and produces zero, one, or more records, while retaining the ke
 
 
 
-**Terminal operation.** Performs a stateless action on each record. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#foreach-org.apache.kafka.streams.kstream.ForeachAction-))
+**Terminal operation.** Performs a stateless action on each record. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#foreach-org.apache.kafka.streams.kstream.ForeachAction-))
 
 You would use `foreach` to cause _side effects_ based on the input data (similar to `peek`) and then _stop_ _further processing_ of the input data (unlike `peek`, which is not a terminal operation).
 
@@ -541,7 +541,7 @@ You would use `foreach` to cause _side effects_ based on the input data (similar
 
 
 
-Groups the records by the existing key. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupByKey--))
+Groups the records by the existing key. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupByKey--))
 
 Grouping is a prerequisite for aggregating a stream or a table and ensures that data is properly partitioned ("keyed") for subsequent operations.
 
@@ -586,7 +586,7 @@ Grouping is a prerequisite for aggregating a stream or a table and ensures that 
 
 
 
-Groups the records by a _new_ key, which may be of a different key type. When grouping a table, you may also specify a new value and value type. `groupBy` is a shorthand for `selectKey(...).groupByKey()`. ([KStream details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-), [KTable details](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-))
+Groups the records by a _new_ key, which may be of a different key type. When grouping a table, you may also specify a new value and value type. `groupBy` is a shorthand for `selectKey(...).groupByKey()`. ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-), [KTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-))
 
 Grouping is a prerequisite for aggregating a stream or a table and ensures that data is properly partitioned ("keyed") for subsequent operations.
 
@@ -638,7 +638,7 @@ Grouping is a prerequisite for aggregating a stream or a table and ensures that 
 
 
 
-Cogrouping allows to aggregate multiple input streams in a single operation. The different (already grouped) input streams must have the same key type and may have different values types. [KGroupedStream#cogroup()](/43/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html#cogroup) creates a new cogrouped stream with a single input stream, while [CogroupedKStream#cogroup()](/43/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#cogroup) adds a grouped stream to an existing cogrouped stream. A `CogroupedKStream` may be [windowed](/43/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy) before it is [aggregated](/43/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate). 
+Cogrouping allows to aggregate multiple input streams in a single operation. The different (already grouped) input streams must have the same key type and may have different values types. [KGroupedStream#cogroup()](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html#cogroup) creates a new cogrouped stream with a single input stream, while [CogroupedKStream#cogroup()](/{version}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#cogroup) adds a grouped stream to an existing cogrouped stream. A `CogroupedKStream` may be [windowed](/{version}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#windowedBy) before it is [aggregated](/{version}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html#aggregate). 
 
 Cogroup does not cause a repartition as it has the prerequisite that the input streams are grouped. In the process of creating these groups they will have already been repartitioned if the stream was already marked for repartitioning.
     
@@ -673,7 +673,7 @@ Cogroup does not cause a repartition as it has the prerequisite that the input s
 
 
 
-Takes one record and produces one record. You can modify the record key and value, including their types. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#map-org.apache.kafka.streams.kstream.KeyValueMapper-))
+Takes one record and produces one record. You can modify the record key and value, including their types. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#map-org.apache.kafka.streams.kstream.KeyValueMapper-))
 
 **Marks the stream for data re-partitioning:** Applying a grouping or a join after `map` will result in re-partitioning of the records. If possible use `mapValues` instead, which will not cause data re-partitioning.
     
@@ -704,7 +704,7 @@ Takes one record and produces one record. You can modify the record key and valu
 
 
 
-Takes one record and produces one record, while retaining the key of the original record. You can modify the record value and the value type. ([KStream details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-), [KTable details](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-))
+Takes one record and produces one record, while retaining the key of the original record. You can modify the record value and the value type. ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-), [KTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-))
 
 `mapValues` is preferable to `map` because it will not cause data re-partitioning. However, it does not allow you to modify the key or key type like `map` does.
     
@@ -731,7 +731,7 @@ Takes one record and produces one record, while retaining the key of the origina
 
 
 
-Merges records of two streams into one larger stream. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#merge-org.apache.kafka.streams.kstream.KStream-)) 
+Merges records of two streams into one larger stream. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#merge-org.apache.kafka.streams.kstream.KStream-)) 
 
 There is no ordering guarantee between records from different streams in the merged stream. Relative order is preserved within each input stream though (ie, records within the same input stream are processed in order)
     
@@ -759,7 +759,7 @@ There is no ordering guarantee between records from different streams in the mer
 
 
 
-Performs a stateless action on each record, and returns an unchanged stream. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#peek-org.apache.kafka.streams.kstream.ForeachAction-))
+Performs a stateless action on each record, and returns an unchanged stream. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#peek-org.apache.kafka.streams.kstream.ForeachAction-))
 
 You would use `peek` to cause _side effects_ based on the input data (similar to `foreach`) and _continue_ _processing_ the input data (unlike `foreach`, which is a terminal operation). `peek` returns the input stream as-is; if you need to modify the input stream, use `map` or `mapValues` instead.
 
@@ -791,7 +791,7 @@ You would use `peek` to cause _side effects_ based on the input data (similar to
 
 
 
-**Terminal operation.** Prints the records to `System.out`. See Javadocs for serde and `toString()` caveats. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#print--))
+**Terminal operation.** Prints the records to `System.out`. See Javadocs for serde and `toString()` caveats. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#print--))
 
 Calling `print()` is the same as calling `foreach((key, value) -> System.out.println(key + ", " + value))`
 
@@ -822,7 +822,7 @@ Calling `print()` is the same as calling `foreach((key, value) -> System.out.pri
 
 
 
-Assigns a new key - possibly of a new key type - to each record. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#selectKey-org.apache.kafka.streams.kstream.KeyValueMapper-))
+Assigns a new key - possibly of a new key type - to each record. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#selectKey-org.apache.kafka.streams.kstream.KeyValueMapper-))
 
 Calling `selectKey(mapper)` is the same as calling `map((key, value) -> mapper(key, value), value)`.
 
@@ -852,7 +852,7 @@ Calling `selectKey(mapper)` is the same as calling `map((key, value) -> mapper(k
 
 
 
-Get the changelog stream of this table. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#toStream--))
+Get the changelog stream of this table. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#toStream--))
     
     
     KTable<byte[], String> table = ...;
@@ -878,7 +878,7 @@ Get the changelog stream of this table. ([details](/43/javadoc/org/apache/kafka/
 
 
 
-Convert an event stream into a table, or say a changelog stream. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#toTable--))
+Convert an event stream into a table, or say a changelog stream. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#toTable--))
     
     
     KStream<byte[], String> stream = ...;
@@ -902,7 +902,7 @@ Convert an event stream into a table, or say a changelog stream. ([details](/43/
 
 
 
-Manually trigger repartitioning of the stream with desired number of partitions. ([details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#repartition--))
+Manually trigger repartitioning of the stream with desired number of partitions. ([details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#repartition--))
 
 Kafka Streams will manage the topic for `repartition()`. Generated topic is treated as internal topic, as a result data will be purged automatically as any other internal repartition topic. In addition, you can specify the desired number of partitions, which allows to easily scale in/out downstream sub-topologies. `repartition()` operation always triggers repartitioning of the stream, as a result it can be used with embedded Processor API methods (like `process()` et al.) that do not trigger auto repartitioning when key changing operation is performed beforehand. 
     
@@ -919,9 +919,9 @@ Stateful transformations depend on state for processing inputs and producing out
 
 **Note:** Following store types are used regardless of the possibly specified type (via the parameter `materialized`): 
 
-  * non-windowed aggregations and non-windowed KTables use [TimestampedKeyValueStore](/43/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html)s or [VersionedKeyValueStore](/43/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html)s, depending on whether the parameter `materialized` is versioned
-  * time-windowed aggregations and KStream-KStream joins use [TimestampedWindowStore](/43/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html)s
-  * session windowed aggregations use [SessionStore](/43/javadoc/org/apache/kafka/streams/state/SessionStore.html)s (there is no timestamped session store as of now)
+  * non-windowed aggregations and non-windowed KTables use [TimestampedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedKeyValueStore.html)s or [VersionedKeyValueStore](/{version}/javadoc/org/apache/kafka/streams/state/VersionedKeyValueStore.html)s, depending on whether the parameter `materialized` is versioned
+  * time-windowed aggregations and KStream-KStream joins use [TimestampedWindowStore](/{version}/javadoc/org/apache/kafka/streams/state/TimestampedWindowStore.html)s
+  * session windowed aggregations use [SessionStore](/{version}/javadoc/org/apache/kafka/streams/state/SessionStore.html)s (there is no timestamped session store as of now)
 
 
 
@@ -996,7 +996,7 @@ Description
 
 
 
-**Rolling aggregation.** Aggregates the values of (non-windowed) records by the grouped key or cogrouped. Aggregating is a generalization of `reduce` and allows, for example, the aggregate value to have a different type than the input values. ([KGroupedStream details](/43/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html), [KGroupedTable details](/43/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html) [KGroupedTable details](/43/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html))
+**Rolling aggregation.** Aggregates the values of (non-windowed) records by the grouped key or cogrouped. Aggregating is a generalization of `reduce` and allows, for example, the aggregate value to have a different type than the input values. ([KGroupedStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html), [KGroupedTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html) [KGroupedTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/CogroupedKStream.html))
 
 When aggregating a _grouped stream_ , you must provide an initializer (e.g., `aggValue = 0`) and an "adder" aggregator (e.g., `aggValue + curValue`). When aggregating a _grouped table_ , you must additionally provide a "subtractor" aggregator (think: `aggValue - oldValue`).
 
@@ -1061,7 +1061,7 @@ See the example at the bottom of this section for a visualization of the aggrega
 
 
 
-**Windowed aggregation.** Aggregates the values of records, per window, by the grouped key. Aggregating is a generalization of `reduce` and allows, for example, the aggregate value to have a different type than the input values. ([TimeWindowedKStream details](/43/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html), [SessionWindowedKStream details](/43/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html))
+**Windowed aggregation.** Aggregates the values of records, per window, by the grouped key. Aggregating is a generalization of `reduce` and allows, for example, the aggregate value to have a different type than the input values. ([TimeWindowedKStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html), [SessionWindowedKStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html))
 
 You must provide an initializer (e.g., `aggValue = 0`), "adder" aggregator (e.g., `aggValue + curValue`), and a window. When windowing based on sessions, you must additionally provide a "session merger" aggregator (e.g., `mergedAggValue = leftAggValue + rightAggValue`).
 
@@ -1129,7 +1129,7 @@ See the example at the bottom of this section for a visualization of the aggrega
 
 
 
-**Rolling aggregation.** Counts the number of records by the grouped key. ([KGroupedStream details](/43/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html), [KGroupedTable details](/43/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html))
+**Rolling aggregation.** Counts the number of records by the grouped key. ([KGroupedStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html), [KGroupedTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html))
 
 Several variants of `count` exist, see Javadocs for details.
     
@@ -1170,7 +1170,7 @@ Detailed behavior for `KGroupedTable`:
 
 
 
-**Windowed aggregation.** Counts the number of records, per window, by the grouped key. ([TimeWindowedKStream details](/43/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html), [SessionWindowedKStream details](/43/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html))
+**Windowed aggregation.** Counts the number of records, per window, by the grouped key. ([TimeWindowedKStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html), [SessionWindowedKStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html))
 
 The windowed `count` turns a `TimeWindowedKStream<K, V>` or `SessionWindowedKStream<K, V>` into a windowed `KTable<Windowed<K>, V>`.
 
@@ -1217,7 +1217,7 @@ Detailed behavior:
 
 
 
-**Rolling aggregation.** Combines the values of (non-windowed) records by the grouped key. The current record value is combined with the last reduced value, and a new reduced value is returned. The result value type cannot be changed, unlike `aggregate`. ([KGroupedStream details](/43/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html), [KGroupedTable details](/43/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html))
+**Rolling aggregation.** Combines the values of (non-windowed) records by the grouped key. The current record value is combined with the last reduced value, and a new reduced value is returned. The result value type cannot be changed, unlike `aggregate`. ([KGroupedStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html), [KGroupedTable details](/{version}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html))
 
 When reducing a _grouped stream_ , you must provide an "adder" reducer (e.g., `aggValue + curValue`). When reducing a _grouped table_ , you must additionally provide a "subtractor" reducer (e.g., `aggValue - oldValue`).
 
@@ -1274,7 +1274,7 @@ See the example at the bottom of this section for a visualization of the aggrega
 
 
 
-**Windowed aggregation.** Combines the values of records, per window, by the grouped key. The current record value is combined with the last reduced value, and a new reduced value is returned. Records with `null` key or value are ignored. The result value type cannot be changed, unlike `aggregate`. ([TimeWindowedKStream details](/43/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html), [SessionWindowedKStream details](/43/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html))
+**Windowed aggregation.** Combines the values of records, per window, by the grouped key. The current record value is combined with the last reduced value, and a new reduced value is returned. Records with `null` key or value are ignored. The result value type cannot be changed, unlike `aggregate`. ([TimeWindowedKStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html), [SessionWindowedKStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html))
 
 The windowed `reduce` turns a `TimeWindowedKStream<K, V>` or a `SessionWindowedKStream<K, V>` into a windowed `KTable<Windowed<K>, V>`.
 
@@ -2154,7 +2154,7 @@ Description
 
 
 
-Performs an INNER JOIN of this stream with another stream. Even though this operation is windowed, the joined stream will be of type `KStream<K, ...>` rather than `KStream<Windowed<K>, ...>`. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-)
+Performs an INNER JOIN of this stream with another stream. Even though this operation is windowed, the joined stream will be of type `KStream<K, ...>` rather than `KStream<Windowed<K>, ...>`. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
 
@@ -2207,7 +2207,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 
 
-Performs a LEFT JOIN of this stream with another stream. Even though this operation is windowed, the joined stream will be of type `KStream<K, ...>` rather than `KStream<Windowed<K>, ...>`. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-)
+Performs a LEFT JOIN of this stream with another stream. Even though this operation is windowed, the joined stream will be of type `KStream<K, ...>` rather than `KStream<Windowed<K>, ...>`. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
 
@@ -2262,7 +2262,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 
 
-Performs an OUTER JOIN of this stream with another stream. Even though this operation is windowed, the joined stream will be of type `KStream<K, ...>` rather than `KStream<Windowed<K>, ...>`. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#outerJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-)
+Performs an OUTER JOIN of this stream with another stream. Even though this operation is windowed, the joined stream will be of type `KStream<K, ...>` rather than `KStream<Windowed<K>, ...>`. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#outerJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
 
@@ -2307,7 +2307,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 **Note:** If you use the old and now deprecated API to specify the grace period, i.e., `JoinWindows.of(...).grace(...)`, left/outer join results are emitted eagerly, and the observed result might differ from the result shown below.
 
-The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied [ValueJoiner](/43/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html) for the `join`, `leftJoin`, and `outerJoin` methods, respectively, whenever a new input record is received on either side of the join. An empty table cell denotes that the `ValueJoiner` is not called at all.  
+The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied [ValueJoiner](/{version}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html) for the `join`, `leftJoin`, and `outerJoin` methods, respectively, whenever a new input record is received on either side of the join. An empty table cell denotes that the `ValueJoiner` is not called at all.  
   
 <table>  
 <tr>  
@@ -2952,7 +2952,7 @@ Description
 
 
 
-Performs an INNER JOIN of this table with another table. The result is an ever-updating KTable that represents the "current" result of the join. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
+Performs an INNER JOIN of this table with another table. The result is an ever-updating KTable that represents the "current" result of the join. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
     
@@ -2997,7 +2997,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 
 
-Performs a LEFT JOIN of this table with another table. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
+Performs a LEFT JOIN of this table with another table. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
     
@@ -3044,7 +3044,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 
 
-Performs an OUTER JOIN of this table with another table. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KTable.html#outerJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
+Performs an OUTER JOIN of this table with another table. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KTable.html#outerJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
     
@@ -3077,7 +3077,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 </td> </tr> </table>
 
-**Semantics of table-table equi-joins:** The semantics of the various table-table equi-join variants are explained below. To improve the readability of the table, you can assume that (1) all records have the same key (and thus the key in the table is omitted) and that (2) all records are processed in timestamp order. The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied [ValueJoiner](/43/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html) for the `join`, `leftJoin`, and `outerJoin` methods, respectively, whenever a new input record is received on either side of the join. An empty table cell denotes that the `ValueJoiner` is not called at all.  
+**Semantics of table-table equi-joins:** The semantics of the various table-table equi-join variants are explained below. To improve the readability of the table, you can assume that (1) all records have the same key (and thus the key in the table is omitted) and that (2) all records are processed in timestamp order. The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied [ValueJoiner](/{version}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html) for the `join`, `leftJoin`, and `outerJoin` methods, respectively, whenever a new input record is received on either side of the join. An empty table cell denotes that the `ValueJoiner` is not called at all.  
   
 <table>  
 <tr>  
@@ -3875,7 +3875,7 @@ Description
 
 
 
-Performs an INNER JOIN of this stream with the table, effectively doing a table lookup. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
+Performs an INNER JOIN of this stream with the table, effectively doing a table lookup. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
 
@@ -3929,7 +3929,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 
 
-Performs a LEFT JOIN of this stream with the table, effectively doing a table lookup. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
+Performs a LEFT JOIN of this stream with the table, effectively doing a table lookup. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 **Data must be co-partitioned** : The input data for both sides must be co-partitioned.
 
@@ -3971,7 +3971,7 @@ See the semantics overview at the bottom of this section for a detailed descript
 
 </td> </tr> </table>
 
-**Semantics of stream-table joins:** The semantics of the various stream-table join variants are explained below. To improve the readability of the table we assume that (1) all records have the same key (and thus we omit the key in the table) and that (2) all records are processed in timestamp order. The columns INNER JOIN and LEFT JOIN denote what is passed as arguments to the user-supplied [ValueJoiner](/43/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html) for the `join` and `leftJoin` methods, respectively, whenever a new input record is received on either side of the join. An empty table cell denotes that the `ValueJoiner` is not called at all.  
+**Semantics of stream-table joins:** The semantics of the various stream-table join variants are explained below. To improve the readability of the table we assume that (1) all records have the same key (and thus we omit the key in the table) and that (2) all records are processed in timestamp order. The columns INNER JOIN and LEFT JOIN denote what is passed as arguments to the user-supplied [ValueJoiner](/{version}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html) for the `join` and `leftJoin` methods, respectively, whenever a new input record is received on either side of the join. An empty table cell denotes that the `ValueJoiner` is not called at all.  
   
 <table>  
 <tr>  
@@ -4362,7 +4362,7 @@ Description
 
 
 
-Performs an INNER JOIN of this stream with the global table, effectively doing a table lookup. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-)
+Performs an INNER JOIN of this stream with the global table, effectively doing a table lookup. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 The `GlobalKTable` is fully bootstrapped upon (re)start of a `KafkaStreams` instance, which means the table is fully populated with all the data in the underlying topic that is available at the time of the startup. The actual data processing begins only once the bootstrapping has completed.
 
@@ -4406,7 +4406,7 @@ Detailed behavior:
 
 
 
-Performs a LEFT JOIN of this stream with the global table, effectively doing a table lookup. [(details)](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-)
+Performs a LEFT JOIN of this stream with the global table, effectively doing a table lookup. [(details)](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-)
 
 The `GlobalKTable` is fully bootstrapped upon (re)start of a `KafkaStreams` instance, which means the table is fully populated with all the data in the underlying topic that is available at the time of the startup. The actual data processing begins only once the bootstrapping has completed.
 
@@ -5693,7 +5693,7 @@ Description
 
 
 
-**Terminal operation.** Write the records to Kafka topic(s). ([KStream details](/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#to\(java.lang.String\)))
+**Terminal operation.** Write the records to Kafka topic(s). ([KStream details](/{version}/javadoc/org/apache/kafka/streams/kstream/KStream.html#to\(java.lang.String\)))
 
 When to provide serdes explicitly:
 

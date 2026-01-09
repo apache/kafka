@@ -34,7 +34,7 @@ The essential configurations are the following:
   * `controller.quorum.bootstrap.servers`
   * `controller.listener.names` 
 
-Broker configurations and defaults are discussed in more detail below. {{< include-html file="/static/43/generated/kafka_config.html" >}} 
+Broker configurations and defaults are discussed in more detail below. {{< include-html file="/static/{version}/generated/kafka_config.html" >}} 
 
 More details about broker configuration can be found in the scala class `kafka.server.KafkaConfig`.
 
