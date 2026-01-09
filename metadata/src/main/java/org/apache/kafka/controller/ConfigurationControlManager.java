@@ -30,6 +30,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.image.ConfigurationDelta;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
@@ -51,6 +52,7 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
@@ -327,6 +329,12 @@ public class ConfigurationControlManager {
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
         TimelineHashMap<String, String> existingConfigsSnapshot = configData.get(configResource);
         if (existingConfigsSnapshot != null) {
+            for (String name : existingConfigsSnapshot.keySet()) {
+                Set<String> validConfigs = ConfigurationDelta.getValidConfigs();
+                if (validConfigs != null && !validConfigs.contains(name)) {
+                    existingConfigsSnapshot.remove(name);
+                }
+            }
             allConfigs.putAll(existingConfigsSnapshot);
             existingConfigsMap.putAll(existingConfigsSnapshot);
         }

@@ -41,6 +41,11 @@ public final class ConfigurationDelta {
         VALID_CONFIGS_REF.compareAndSet(null, immutableValidConfigs);
     }
 
+    public static Set<String> getValidConfigs() {
+        Set<String> validConfigs = VALID_CONFIGS_REF.get();
+        return validConfigs == null ? null : Collections.unmodifiableSet(validConfigs);
+    }
+
     public ConfigurationDelta(ConfigurationImage image) {
         this.image = image;
     }
