@@ -211,6 +211,16 @@ The import order is a part of static check. please call `spotlessApply` to optim
 
     ./gradlew spotlessApply
 
+#### Rewrite
+The build system incorporates [Moderne](https://moderne.io/) rewrite capabilities for automated code transformations.
+
+- **Convention** (e.g., JUnit's naming rules)
+- **Refactor** safely (e.g., rename methods, migrate APIs)
+- **Modernize** (e.g., Java 8 → Java 17 features)
+- **Patterns** (e.g., replace `Vector` with `ArrayList`)
+
+`./gradlew rewriteDryRun`
+
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
 You can run spotbugs using:

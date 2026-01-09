@@ -88,12 +88,6 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
         );
     }
 
-    private static boolean matchingTopic(ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse previousTopic, TopicIdPartition currentTopic) {
-        if (previousTopic == null)
-            return false;
-        return previousTopic.topicId().equals(currentTopic.topicId());
-    }
-
     public static ShareAcknowledgeResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
         return partitionResponse(topicIdPartition.topicPartition().partition(), error);
     }

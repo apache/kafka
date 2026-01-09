@@ -139,8 +139,9 @@ jobs:
         # --info:         For now, we'll generate lots of logs while setting up the GH Actions
         # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
-        run: |
-          ./gradlew --build-cache --info $SCAN_ARG check releaseTarGz -x test
+        run: ./gradlew --build-cache --info $SCAN_ARG check releaseTarGz -x test
+      - name: Sanity Check
+        run: ./gradlew --build-cache rewriteDryRun
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4

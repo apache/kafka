@@ -39,9 +39,12 @@ plugins {
 
   id "com.github.spotbugs" version '6.4.4' apply false
   id 'org.scoverage' version '8.1' apply false
+  id 'org.openrewrite.rewrite' version '7.22.0' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
   id 'com.diffplug.spotless' version "8.0.0"
 }
+
+apply from: "$rootDir/gradle/rewrite.gradle"
 
 ext {
   minClientJavaVersion = 11
