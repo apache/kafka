@@ -49,6 +49,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -1545,19 +1546,18 @@ public class GroupCoordinatorShardTest {
             metricsShard
         );
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        List<DeletedTopic> deletedTopics = List.of(new DeletedTopic(fooTopicId, "foo"));
+
         List<CoordinatorRecord> records = List.of(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
             "group",
             "foo",
             0
         ));
 
-        when(offsetMetadataManager.onTopicsDeleted(
-            Set.of("foo")
-        )).thenReturn(records);
+        when(offsetMetadataManager.onTopicsDeleted(deletedTopics)).thenReturn(records);
 
-        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.onTopicsDeleted(
-            Set.of("foo")
-        );
+        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.onTopicsDeleted(deletedTopics);
 
         assertEquals(records, result.records());
         assertNull(result.response());

@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
@@ -58,7 +59,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -1079,24 +1079,27 @@ public class OffsetMetadataManager {
     /**
      * Remove offsets of the topics that have been deleted.
      *
-     * @param deletedTopicNames   The names of the topics that have been deleted.
+     * @param deletedTopics   The topics that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
     public List<CoordinatorRecord> onTopicsDeleted(
-        Set<String> deletedTopicNames
+        List<DeletedTopic> deletedTopics
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         Consumer<Offsets> delete = offsetsToClean -> {
             offsetsToClean.offsetsByGroup.forEach((groupId, topicOffsets) -> {
-                deletedTopicNames.forEach(topic -> {
-                    var partitionOffsets = topicOffsets.get(topic);
+                for (DeletedTopic deletedTopic : deletedTopics) {
+                    var partitionOffsets = topicOffsets.get(deletedTopic.name());
                     if (partitionOffsets != null) {
-                        partitionOffsets.keySet().forEach(partition -> {
-                            appendOffsetCommitTombstone(groupId, topic, partition, records);
+                        partitionOffsets.forEach((partition, offsetAndMetadata) -> {
+                            // Delete if the topic ID matches or if the stored topic ID is ZERO_UUID (legacy records).
+                            if (offsetAndMetadata.topicId.equals(Uuid.ZERO_UUID) || offsetAndMetadata.topicId.equals(deletedTopic.id())) {
+                                appendOffsetCommitTombstone(groupId, deletedTopic.name(), partition, records);
+                            }
                         });
                     }
-                });
+                }
             });
         };
 

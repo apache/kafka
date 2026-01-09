@@ -51,6 +51,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
@@ -285,9 +286,9 @@ public class OffsetMetadataManagerTest {
         }
 
         public List<CoordinatorRecord> deleteTopics(
-            Set<String> deletedTopicNames
+            List<DeletedTopic> deletedTopics
         ) {
-            List<CoordinatorRecord> records = offsetMetadataManager.onTopicsDeleted(deletedTopicNames);
+            List<CoordinatorRecord> records = offsetMetadataManager.onTopicsDeleted(deletedTopics);
             records.forEach(this::replay);
             return records;
         }
@@ -3549,10 +3550,12 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testOnTopicsDeleted() {
+    public void testOnTopicsDeletedWithZeroTopicId() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
-        // Commit offsets.
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        // Commit offsets with ZERO_UUID (legacy behavior).
         context.commitOffset("grp-0", "foo", 1, 100, 1, context.time.milliseconds());
         context.commitOffset("grp-0", "foo", 2, 200, 1, context.time.milliseconds());
         context.commitOffset("grp-0", "foo", 3, 300, 1, context.time.milliseconds());
@@ -3565,8 +3568,8 @@ public class OffsetMetadataManagerTest {
         context.commitOffset(100L, "grp-2", "foo", 2, 200, 1, context.time.milliseconds());
         context.commitOffset(100L, "grp-2", "foo", 3, 300, 1, context.time.milliseconds());
 
-        // Delete topics.
-        List<CoordinatorRecord> records = context.deleteTopics(Set.of("foo"));
+        // Delete topics. Offsets with ZERO_UUID should be deleted for backwards compatibility.
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(fooTopicId, "foo")));
 
         // Verify. All partitions for topic "foo" should be deleted.
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
@@ -3589,6 +3592,77 @@ public class OffsetMetadataManagerTest {
         assertFalse(context.hasOffset("grp-2", "foo", 1));
         assertFalse(context.hasOffset("grp-2", "foo", 2));
         assertFalse(context.hasOffset("grp-2", "foo", 3));
+    }
+
+    @Test
+    public void testOnTopicsDeletedWithMatchingTopicId() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        // Commit offsets with the topic ID.
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", fooTopicId, "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", fooTopicId, "foo", 2, 200, 1, context.time.milliseconds());
+
+        // Delete topics with matching topic ID.
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(fooTopicId, "foo")));
+
+        // Verify offsets are deleted.
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2)
+        );
+
+        assertEquals(new HashSet<>(expectedRecords), new HashSet<>(records));
+
+        assertFalse(context.hasOffset("grp-0", "foo", 1));
+        assertFalse(context.hasOffset("grp-0", "foo", 2));
+    }
+
+    @Test
+    public void testOnTopicsDeletedWithMismatchedTopicId() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        Uuid oldTopicId = Uuid.randomUuid();
+        Uuid newTopicId = Uuid.randomUuid();
+
+        // Commit offsets with the NEW topic ID (simulating offset for recreated topic).
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", newTopicId, "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", newTopicId, "foo", 2, 200, 1, context.time.milliseconds());
+
+        // Delete topics with OLD topic ID (simulating deletion of old topic).
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(oldTopicId, "foo")));
+
+        // Verify offsets are NOT deleted because topic IDs don't match.
+        assertEquals(0, records.size());
+
+        assertTrue(context.hasOffset("grp-0", "foo", 1));
+        assertTrue(context.hasOffset("grp-0", "foo", 2));
+    }
+
+    @Test
+    public void testOnTopicsDeletedWithMixedTopicIds() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        // Commit offsets: some with matching topic ID, some with ZERO_UUID (legacy).
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", fooTopicId, "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", Uuid.ZERO_UUID, "foo", 2, 200, 1, context.time.milliseconds());
+
+        // Delete topics.
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(fooTopicId, "foo")));
+
+        // Verify both offsets are deleted (matching ID and legacy ZERO_UUID).
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2)
+        );
+
+        assertEquals(new HashSet<>(expectedRecords), new HashSet<>(records));
+
+        assertFalse(context.hasOffset("grp-0", "foo", 1));
+        assertFalse(context.hasOffset("grp-0", "foo", 2));
     }
 
     private void verifyReplay(

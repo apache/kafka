@@ -95,6 +95,7 @@ import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -2279,29 +2280,29 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private void handlePartitionsDeletion(TopicsDelta topicsDelta) {
         var deletedTopicIds = topicsDelta.deletedTopicIds();
-        var deletedTopicNames = new HashSet<String>();
+        var deletedTopics = new ArrayList<DeletedTopic>();
 
         deletedTopicIds.forEach(topicId -> {
             var topicImage = topicsDelta.image().getTopic(topicId);
             if (topicImage != null) {
-                deletedTopicNames.add(topicImage.name());
+                deletedTopics.add(new DeletedTopic(topicId, topicImage.name()));
             }
         });
 
         var futures = new ArrayList<CompletableFuture<Void>>();
 
-        if (!deletedTopicNames.isEmpty()) {
+        if (!deletedTopics.isEmpty()) {
             // Schedule offset deletion.
             futures.addAll(
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
                         "on-topics-deleted",
                         Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                        coordinator -> coordinator.onTopicsDeleted(deletedTopicNames)
+                        coordinator -> coordinator.onTopicsDeleted(deletedTopics)
                     ),
                     exception -> {
                         log.error("Could not delete offsets for deleted topics {} due to: {}.",
-                            deletedTopicNames, exception.getMessage(), exception);
+                            deletedTopics, exception.getMessage(), exception);
                         return null;
                     }
                 )
