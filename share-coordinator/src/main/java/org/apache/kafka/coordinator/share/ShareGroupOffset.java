@@ -35,6 +35,7 @@ public class ShareGroupOffset {
     public static final int NO_TIMESTAMP = 0;
     public static final int UNINITIALIZED_EPOCH = 0;
     public static final int UNINITIALIZED_DELIVERY_COMPLETE_COUNT = -1;
+    public static final int UNINITIALIZED_START_OFFSET = -1;
     public static final int DEFAULT_EPOCH = 0;
 
     private final int snapshotEpoch;
@@ -160,14 +161,18 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
-        // This method is invoked during InitializeShareGroupStateRequest. Since the deliveryCompleteCount is not yet
-        // known at this stage, it is initialized to its default value.
+        // This method is invoked during InitializeShareGroupStateRequest. If the start offset is uninitialized (when the 
+        // share partition is being initialized for the first time), the consumption hasn't started yet, and lag cannot
+        // be calculated. Thus, deliveryCompleteCount is also set as -1. But, if start offset is a non-negative value (when 
+        // the start offset is altered), the lag can be calculated from that point onward. Hence, we set deliveryCompleteCount
+        // to 0 in that case.
+        int deliveryCompleteCount = data.startOffset() == UNINITIALIZED_START_OFFSET ? UNINITIALIZED_DELIVERY_COMPLETE_COUNT : 0;
         return new ShareGroupOffset(
             snapshotEpoch,
             data.stateEpoch(),
             UNINITIALIZED_EPOCH,
             data.startOffset(),
-            UNINITIALIZED_DELIVERY_COMPLETE_COUNT,
+            deliveryCompleteCount,
             List.of(),
             timestamp,
             timestamp

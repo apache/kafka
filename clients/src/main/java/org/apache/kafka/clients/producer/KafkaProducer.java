@@ -248,17 +248,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
 
-    private static final String INIT_TXN_TIMEOUT_MSG = "InitTransactions timed out — " +
+    private static final String INIT_TXN_TIMEOUT_MSG = "InitTransactions timed out - " +
             "did not complete coordinator discovery or " +
             "receive the InitProducerId response within max.block.ms.";
 
     private static final String SEND_OFFSETS_TIMEOUT_MSG =
-            "SendOffsetsToTransaction timed out – did not reach the coordinator or " +
+            "SendOffsetsToTransaction timed out - did not reach the coordinator or " +
                     "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
     private static final String COMMIT_TXN_TIMEOUT_MSG =
-            "CommitTransaction timed out – did not complete EndTxn with the transaction coordinator within max.block.ms";
+            "CommitTransaction timed out - did not complete EndTxn with the transaction coordinator within max.block.ms";
     private static final String ABORT_TXN_TIMEOUT_MSG =
-            "AbortTransaction timed out – did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
+            "AbortTransaction timed out - did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
     
     private final String clientId;
     // Visible for testing

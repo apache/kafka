@@ -35,7 +35,6 @@ import scala.jdk.CollectionConverters._
   serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,streams"),
     new ClusterConfigProperty(key = "group.streams.initial.rebalance.delay.ms", value = "0")
   )
@@ -111,12 +110,8 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     assertEquals(expectedResponse, streamsGroupHeartbeatResponse)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer,streams"),
-    )
-  )
-  def testStreamsGroupHeartbeatIsInaccessibleWhenUnstableLatestVersionNotEnabled(): Unit = {
+  @ClusterTest
+  def testStreamsGroupHeartbeatIsInaccessibleWhenOffsetTopicNotExist(): Unit = {
     val topology = new StreamsGroupHeartbeatRequestData.Topology()
       .setEpoch(1)
       .setSubtopologies(List().asJava)

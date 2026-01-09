@@ -665,6 +665,8 @@ public interface Admin extends AutoCloseable {
      * replicas with the topics replication factor.</li>
      * <li>Subclasses of {@link org.apache.kafka.common.KafkaException}
      * if the request is invalid in some way.</li>
+     * <li>{@link org.apache.kafka.common.errors.InvalidPartitionsException}
+     * if the requested partition count is less than or equal to the current partition count.</li>
      * </ul>
      *
      * @param newPartitions The topics which should have new partitions created, and corresponding parameters

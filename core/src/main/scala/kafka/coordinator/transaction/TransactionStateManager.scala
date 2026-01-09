@@ -35,7 +35,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicIdPartition, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{TransactionLog, TransactionLogConfig, TransactionMetadata, TransactionState, TransactionStateManagerConfig, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
@@ -183,7 +183,7 @@ class TransactionStateManager(brokerId: Int,
                 if (recordsBuilder == null) {
                   recordsBuilder = MemoryRecords.builder(
                     ByteBuffer.allocate(math.min(16384, maxBatchSize)),
-                    TransactionLog.EnforcedCompression,
+                    TransactionLog.ENFORCED_COMPRESSION,
                     TimestampType.CREATE_TIME,
                     0L,
                     maxBatchSize
@@ -290,7 +290,7 @@ class TransactionStateManager(brokerId: Int,
     inReadLock(stateLock) {
       replicaManager.appendRecords(
         timeout = config.requestTimeoutMs,
-        requiredAcks = TransactionLog.EnforcedRequiredAcks,
+        requiredAcks = TransactionLog.ENFORCED_REQUIRED_ACKS,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(replicaManager.topicIdPartition(transactionPartition) -> tombstoneRecords),
@@ -495,19 +495,21 @@ class TransactionStateManager(brokerId: Int,
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                TransactionLog.readTxnRecordKey(record.key) match {
-                  case Left(version) =>
-                    warn(s"Unknown message key with version $version" +
-                      s" while loading transaction state from $topicPartition. Ignoring it. " +
-                      "It could be a left over from an aborted upgrade.")
-                  case Right(transactionalId) =>
-                    // load transaction metadata along with transaction state
-                    TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
-                      case None =>
-                        loadedTransactions.remove(transactionalId)
-                      case Some(txnMetadata) =>
-                        loadedTransactions.put(transactionalId, txnMetadata)
-                    }
+                val transactionalId = try Some(TransactionLog.readTxnRecordKey(record.key))
+                catch {
+                  case e: IllegalStateException =>
+                    warn(s"Unknown message key version while loading transaction state from $topicPartition. " +
+                      s"Ignoring it. It could be a left over from an aborted upgrade", e)
+                    None
+                }
+                transactionalId.foreach { txnId =>
+                  // load transaction metadata along with transaction state
+                  val txnMetadata = TransactionLog.readTxnRecordValue(txnId, record.value)
+                  if (txnMetadata == null) {
+                    loadedTransactions.remove(txnId)
+                  } else {
+                    loadedTransactions.put(txnId, txnMetadata)
+                  }
                 }
               }
               currOffset = batch.nextOffset
@@ -663,7 +665,7 @@ class TransactionStateManager(brokerId: Int,
     val valueBytes = TransactionLog.valueToBytes(newMetadata, transactionVersionLevel())
     val timestamp = time.milliseconds()
 
-    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
+    val records = MemoryRecords.withRecords(TransactionLog.ENFORCED_COMPRESSION, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val transactionStateTopicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val transactionStateTopicIdPartition = replicaManager.topicIdPartition(transactionStateTopicPartition)
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
@@ -806,7 +808,7 @@ class TransactionStateManager(brokerId: Int,
           if (append) {
             replicaManager.appendRecords(
               timeout = newMetadata.txnTimeoutMs.toLong,
-              requiredAcks = TransactionLog.EnforcedRequiredAcks,
+              requiredAcks = TransactionLog.ENFORCED_REQUIRED_ACKS,
               internalTopicsAllowed = true,
               origin = AppendOrigin.COORDINATOR,
               entriesPerPartition = recordsPerPartition,

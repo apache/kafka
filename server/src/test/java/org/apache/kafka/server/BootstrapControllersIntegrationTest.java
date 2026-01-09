@@ -49,6 +49,8 @@ import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -58,6 +60,7 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
@@ -226,28 +229,89 @@ public class BootstrapControllersIntegrationTest {
     }
 
     private void testIncrementalAlterConfigs(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+        Collection<Integer> nodeIds = usingBootstrapControllers ?
+                clusterInstance.controllerIds() : clusterInstance.brokers().keySet();
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
-            int nodeId = usingBootstrapControllers ?
-                    clusterInstance.controllers().values().iterator().next().config().nodeId() :
-                    clusterInstance.brokers().values().iterator().next().config().nodeId();
-            ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
-            ConfigResource defaultResource = new ConfigResource(BROKER, "");
-            Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
-                    nodeResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"), AlterConfigOp.OpType.SET)),
-                    defaultResource, List.of(new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"), AlterConfigOp.OpType.SET))
-            );
-            admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
-            TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                Config config = admin.describeConfigs(List.of(nodeResource)).
-                        all().get(1, TimeUnit.MINUTES).get(nodeResource);
-                ConfigEntry entry = config.entries().stream().
-                        filter(e -> e.name().equals("my.custom.config")).
-                        findFirst().orElseThrow();
-                assertEquals(DYNAMIC_BROKER_CONFIG, entry.source(),
-                        "Expected entry for my.custom.config to come from DYNAMIC_BROKER_CONFIG. " +
-                                "Instead, the entry was: " + entry);
-            });
+            for (int nodeId : nodeIds) {
+                ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
+                ConfigResource defaultResource = new ConfigResource(BROKER, "");
+                String nodeMaxConnectionsValue = String.valueOf(1000 + nodeId);
+                String defaultMaxConnectionsValue = String.valueOf(2000 + nodeId);
+                String defaultConnectionRateValue = String.valueOf(2000 + nodeId);
+
+                // Set configs: MAX_CONNECTIONS_CONFIG for per-broker, both configs for default
+                Map<ConfigResource, Collection<AlterConfigOp>> alterations = Map.of(
+                        nodeResource, List.of(
+                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, nodeMaxConnectionsValue), AlterConfigOp.OpType.SET)
+                        ),
+                        defaultResource, List.of(
+                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, defaultMaxConnectionsValue), AlterConfigOp.OpType.SET),
+                                new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, defaultConnectionRateValue), AlterConfigOp.OpType.SET)
+                        )
+                );
+                admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
+                
+                // Verify per-broker configs: MAX_CONNECTIONS_CONFIG and MAX_CONNECTION_CREATION_RATE_CONFIG
+                verifyConfigValue(admin, nodeResource, SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+                        DYNAMIC_BROKER_CONFIG, nodeMaxConnectionsValue);
+                verifyConfigValue(admin, nodeResource, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
+                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
+                
+                // Verify default broker configs: MAX_CONNECTIONS_CONFIG and MAX_CONNECTION_CREATION_RATE_CONFIG
+                verifyConfigValue(admin, defaultResource, SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultMaxConnectionsValue);
+                verifyConfigValue(admin, defaultResource, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
+                        DYNAMIC_DEFAULT_BROKER_CONFIG, defaultConnectionRateValue);
+
+                Object node = (usingBootstrapControllers ? clusterInstance.controllers() : clusterInstance.brokers()).get(nodeId);
+                // Verify that SocketServer has actually updated the max connection limit in ConnectionQuotas
+                // The per-broker config should take precedence over the default config
+                verifySocketServerMaxConnectionsUpdated(node, Integer.parseInt(nodeMaxConnectionsValue));
+                // Verify MAX_CONNECTION_CREATION_RATE_CONFIG is also updated
+                // The default config value should be used (per-broker config doesn't set this)
+                verifySocketServerMaxConnectionCreationRateUpdated(node, Integer.parseInt(defaultConnectionRateValue));
+            }
         }
+    }
+
+    private void verifySocketServerMaxConnectionsUpdated(Object node, int expectedMaxConnections) throws Exception {
+        Object socketServer = node.getClass().getMethod("socketServer").invoke(node);
+        Object connectionQuotas = socketServer.getClass().getMethod("connectionQuotas").invoke(socketServer);
+        java.lang.reflect.Field field = connectionQuotas.getClass().getDeclaredField("brokerMaxConnections");
+        field.setAccessible(true);
+        int actualMaxConnections = ((Number) field.get(connectionQuotas)).intValue();
+        assertEquals(expectedMaxConnections, actualMaxConnections,
+                "SocketServer ConnectionQuotas.brokerMaxConnections should be " + expectedMaxConnections +
+                " but was " + actualMaxConnections);
+    }
+    
+    private void verifySocketServerMaxConnectionCreationRateUpdated(Object node, int expectedMaxConnectionCreationRate) throws Exception {
+        Metrics metrics = (Metrics) node.getClass().getMethod("metrics").invoke(node);
+        KafkaMetric metric = metrics.metrics().entrySet().stream()
+                .filter(entry -> "broker-connection-accept-rate".equals(entry.getKey().name()))
+                .map(java.util.Map.Entry::getValue)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Broker connection rate metric not found"));
+        double actualBound = metric.config().quota().bound();
+        assertEquals(expectedMaxConnectionCreationRate, actualBound,
+                "Connection creation rate quota should be " + expectedMaxConnectionCreationRate + " but was " + actualBound);
+    }
+    
+    private void verifyConfigValue(Admin admin, ConfigResource resource, String configName,
+                                   org.apache.kafka.clients.admin.ConfigEntry.ConfigSource expectedSource,
+                                   String expectedValue) throws Exception {
+        TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
+            Config config = admin.describeConfigs(List.of(resource)).all().get(1, TimeUnit.MINUTES).get(resource);
+            ConfigEntry entry = config.entries().stream()
+                    .filter(e -> e.name().equals(configName))
+                    .findFirst().orElseThrow();
+            assertEquals(expectedSource, entry.source(),
+                    "Expected entry for " + configName + " to come from " + expectedSource +
+                    ". Instead, the entry was: " + entry);
+            assertEquals(expectedValue, entry.value(),
+                    "Expected value for " + configName + " to be " + expectedValue +
+                    ". Instead, the value was: " + entry.value());
+        });
     }
 
     @ClusterTest(brokers = 3)
@@ -356,5 +420,15 @@ public class BootstrapControllersIntegrationTest {
             assertNotNull(configEntry);
             assertEquals("2", configEntry.value());
         }
+    }
+
+    @ClusterTest(controllers = 1, standalone = true)
+    public void testIncrementalAlterConfigsBySingleControllerWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, true);
+    }
+
+    @ClusterTest(controllers = 3, standalone = true)
+    public void testIncrementalAlterConfigsByAllControllersWithDynamicQuorum(ClusterInstance clusterInstance) throws Exception {
+        testIncrementalAlterConfigs(clusterInstance, true);
     }
 }
