@@ -58,7 +58,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
 
     // Visible for testing
     final AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
-    private final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
+    final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
     private final AtomicLong backoffDeadlineMs = new AtomicLong(NO_RETRY);
 
