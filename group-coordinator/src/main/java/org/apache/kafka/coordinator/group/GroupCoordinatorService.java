@@ -2266,9 +2266,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         metadataImage = wrappedImage;
         runtime.onMetadataUpdate(wrappedDelta, wrappedImage);
 
-        // Handle partition deletions from the delta.
+        // Handle topic deletions from the delta.
         if (delta.topicsDelta() != null && !delta.topicsDelta().deletedTopicIds().isEmpty()) {
-            handlePartitionsDeletion(delta.topicsDelta());
+            handleTopicsDeletion(delta.topicsDelta());
         }
     }
 
@@ -2278,7 +2278,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      *
      * @param topicsDelta The topics delta containing deleted topic IDs.
      */
-    private void handlePartitionsDeletion(TopicsDelta topicsDelta) {
+    private void handleTopicsDeletion(TopicsDelta topicsDelta) {
         var deletedTopicIds = topicsDelta.deletedTopicIds();
         var deletedTopics = new ArrayList<DeletedTopic>();
 
