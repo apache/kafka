@@ -862,7 +862,9 @@ public class Sender implements Runnable {
                 maybeRemoveAndDeallocateBatchLater(batch);
             }
         } else {
-            this.accumulator.deallocate(batch);
+            if (deallocateBatch) {
+                this.accumulator.deallocate(batch);
+            }
         }
     }
 
