@@ -240,7 +240,7 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
       * All public APIs, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of `JoinWindows.of()` and `JoinWindows#grace()`. See [KAFKA-17531](https://issues.apache.org/jira/browse/KAFKA-17531) for details. 
       * The most important changes are highlighted in the [Kafka Streams upgrade guide](/43/streams/upgrade-guide/#streams-api-changes-in-400). 
       * For a full list of changes, see [KAFKA-12822](https://issues.apache.org/jira/browse/KAFKA-12822). 
-      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/43/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors). 
+      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/43/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
   * Other changes: 
     * The minimum Java version required by clients and Kafka Streams applications has been increased from Java 8 to Java 11 while brokers, connect and tools now require Java 17. See [KIP-750](https://cwiki.apache.org/confluence/x/P4vOCg) and [KIP-1013](https://cwiki.apache.org/confluence/x/Bov5E) for more details. 
     * Java 23 support has been added in Apache Kafka 4.0. 
