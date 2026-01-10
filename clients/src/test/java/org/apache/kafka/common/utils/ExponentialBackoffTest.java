@@ -20,6 +20,7 @@ package org.apache.kafka.common.utils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ExponentialBackoffTest {
@@ -53,5 +54,15 @@ public class ExponentialBackoffTest {
         assertEquals(200, exponentialBackoff.backoff(1));
         assertEquals(400, exponentialBackoff.backoff(2));
         assertEquals(400, exponentialBackoff.backoff(3));
+    }
+
+    @Test
+    public void testExponentialBackoffWithInvalidJitter() {
+        assertEquals("jitter must be between 0 and 1, but got -1.0",
+                assertThrows(IllegalArgumentException.class,
+                        () -> new ExponentialBackoff(100, 2, 400, -1)).getMessage());
+        assertEquals("jitter must be between 0 and 1, but got 3000.0",
+                assertThrows(IllegalArgumentException.class,
+                        () -> new ExponentialBackoff(100, 2, 400, 3000)).getMessage());
     }
 }

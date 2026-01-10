@@ -502,6 +502,49 @@ public class ReassignPartitionsCommandTest {
         }
     }
 
+    @ClusterTest(types = {Type.KRAFT})
+    public void testGenerateAssignmentWithOneBootstrapServerShutdownWontTimeout() throws Exception {
+        var brokerIdToShutdown = 0;
+        createTopics();
+        var foo0 = new TopicPartition("foo", 0);
+        produceMessages(foo0.topic(), foo0.partition(), 100);
+
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            String topicsToMoveJson = """
+                    {
+                        "topics": [
+                            { "topic": "foo" }
+                        ],
+                        "version": 1
+                    }
+                    """;
+            clusterInstance.shutdownBroker(brokerIdToShutdown);
+            TestUtils.waitForCondition(
+                    () -> clusterInstance.aliveBrokers().size() == 4,
+                    "Waiting for broker to shutdown failed"
+            );
+            generateAssignment(admin, topicsToMoveJson, "1,2,3", false);
+        }
+    }
+    
+    @ClusterTest(types = {Type.KRAFT})
+    public void testExecuteAssignmentWithOneBootstrapServerShutdownWontTimeout() throws Exception {
+        var brokerIdToShutdown = 0;
+        createTopics();
+        var foo0 = new TopicPartition("foo", 0);
+        produceMessages(foo0.topic(), foo0.partition(), 100);
+        clusterInstance.shutdownBroker(brokerIdToShutdown);
+        TestUtils.waitForCondition(
+            () -> clusterInstance.aliveBrokers().size() == 4,
+            "Waiting for broker to shutdown failed"
+        );
+        // Execute the assignment
+        String assignment = "{\"version\":1,\"partitions\":" +
+            "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
+            "]}";
+        runExecuteAssignment(false, assignment, -1L, -1L);
+    }
+    
     private void createTopics() {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Map<Integer, List<Integer>> fooReplicasAssignments = new HashMap<>();

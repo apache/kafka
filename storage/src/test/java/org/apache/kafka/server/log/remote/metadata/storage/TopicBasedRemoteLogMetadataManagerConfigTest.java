@@ -28,15 +28,18 @@ import org.junit.jupiter.api.Test;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_ADMIN_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
@@ -161,6 +164,10 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         assertTrue(configString.contains("reconnect.backoff.ms=100"));
     }
 
+    private Map<String, Object> createValidConfigProps() {
+        return this.createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+
     private Map<String, Object> createValidConfigProps(Map<String, Object> commonClientConfig,
                                                        Map<String, Object> producerConfig,
                                                        Map<String, Object> consumerConfig,
@@ -217,5 +224,21 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         };
         Arrays.stream(sensitiveConfigKeys)
                 .forEach(config -> assertTrue(configString.contains(config + "=(redacted)")));
+    }
+
+    @Test
+    public void testDefaultMinIsr() {
+        Map<String, Object> props = createValidConfigProps();
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertEquals(DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR, rlmmConfig.metadataTopicMinIsr());
+    }
+
+    @Test
+    public void testCustomMinIsr() {
+        Map<String, Object> props = createValidConfigProps();
+        short customMinIsr = 3;
+        props.put(REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr);
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+        assertEquals(customMinIsr, rlmmConfig.metadataTopicMinIsr());
     }
 }

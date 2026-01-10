@@ -25,9 +25,9 @@ import java.util.Objects;
  * part of the left join (true) or right join (false). This class is only useful when a state
  * store needs to be shared between left and right processors, and each processor needs to
  * access the key of the other processor.
- *
+ * <p>
  * Note that it might be cleaner to have two layers for such usages: first a KeyAndJoinSide, where the Key
- * is in the form of a <timestamp, key>; but with the nested structure serdes would need extra byte array copies.
+ * is in the form of a {@code <timestamp, key>}; but with the nested structure serdes would need extra byte array copies.
  * Since it is only used in a single place today we decided to combine them into a single type / serde.
  */
 public class TimestampedKeyAndJoinSide<K> {

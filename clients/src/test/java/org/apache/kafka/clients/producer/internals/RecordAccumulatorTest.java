@@ -39,6 +39,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
@@ -58,17 +59,22 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -77,6 +83,7 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -888,7 +895,7 @@ public class RecordAccumulatorTest {
         readyNodes = accum.ready(metadataCache, time.milliseconds()).readyNodes;
         assertEquals(Collections.singleton(node1), readyNodes, "Our partition's leader should be ready");
         Map<Integer, List<ProducerBatch>> drained = accum.drain(metadataCache, readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertEquals(drained.get(node1.id()).size(), 1, "There should be only one batch.");
+        assertEquals(1, drained.get(node1.id()).size(), "There should be only one batch.");
         time.sleep(1000L);
         accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
 
@@ -1060,6 +1067,41 @@ public class RecordAccumulatorTest {
         assertEquals(2, acked.get(), "Both message should have been acked.");
         assertTrue(future2.isDone());
         assertEquals(1, future2.get().offset());
+    }
+
+    // here I am testing the hasRoomFor() behaviour
+    // It allows the first record no matter the size
+    // but does not allow the second record
+    @Test
+    public void testHasRoomForAllowsOversizedFirstRecordButRejectsSubsequentRecords() {
+        long now = time.milliseconds();
+        int smallBatchSize = 1024;
+
+        // Create a large record that exceeds batch size limit
+        byte[] largeValue = new byte[4 * 1024]; // 4KB > 1KB
+
+        // Create a small buffer that cannot fit the large record
+        ByteBuffer buffer = ByteBuffer.allocate(smallBatchSize);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, 0L);
+
+        // testing existing code:
+        // hasRoomFor() should return true for first record regardless of size
+        boolean hasRoomForFirst = builder.hasRoomFor(now, ByteBuffer.wrap(key), ByteBuffer.wrap(largeValue), Record.EMPTY_HEADERS);
+        assertTrue(hasRoomForFirst, "hasRoomFor() should return true for first record regardless of size when numRecords == 0");
+
+        // append the first oversized record - should succeed
+        builder.append(now, ByteBuffer.wrap(key), ByteBuffer.wrap(largeValue), Record.EMPTY_HEADERS);
+        assertEquals(1, builder.numRecords(), "Should have successfully appended the first oversized record");
+
+        // now append another large record when numRecords > 0
+        boolean hasRoomForSecond = builder.hasRoomFor(now, ByteBuffer.wrap(key), ByteBuffer.wrap(largeValue), Record.EMPTY_HEADERS);
+        assertFalse(hasRoomForSecond, "hasRoomFor() should return false for oversized record when numRecords > 0");
+
+        // Now append with a smaller record that would normally fit but
+        // this too should be rejected due to limited buffer space
+        byte[] smallValue = new byte[100]; // Small record
+        boolean hasRoomForSmall = builder.hasRoomFor(now, ByteBuffer.wrap(key), ByteBuffer.wrap(smallValue), Record.EMPTY_HEADERS);
+        assertFalse(hasRoomForSmall, "hasRoomFor() should return false for any record when buffer is full from oversized first record");
     }
 
     @Test
@@ -1664,5 +1706,187 @@ public class RecordAccumulatorTest {
         int randomPartition() {
             return mockRandom == null ? super.randomPartition() : mockRandom.getAndIncrement();
         }
+    }
+
+    /**
+     * This test verifies that RecordAccumulator's batch splitting functionality
+     * correctly handles oversized batches
+     * by splitting them down to individual records when necessary. It ensures that:
+     * 1. The splitting process can reduce batches to single-record size
+     * 2. The process does not enter infinite recursion loops
+     * 3. No records are lost or duplicated during splitting
+     * 4. The correct batch state is maintained throughout the process
+     */
+    @Test
+    public void testSplitAndReenqueuePreventInfiniteRecursion() throws InterruptedException {
+        // Initialize test environment with a large batch size
+        long now = time.milliseconds();
+        int batchSize = 1024 * 1024; // 1MB batch size
+        RecordAccumulator accum = createTestRecordAccumulator(batchSize, 10 * batchSize, Compression.gzip().build(),
+                10);
+
+        // Create a large producer batch manually (bypassing the accumulator's normal
+        // append process)
+        ByteBuffer buffer = ByteBuffer.allocate(batchSize);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE, TimestampType.CREATE_TIME, 0L);
+        ProducerBatch bigBatch = new ProducerBatch(tp1, builder, now, true);
+
+        // Populate the batch with multiple records (100 records of 1KB each)
+        byte[] largeValue = new byte[1024]; // Each record is 1KB
+        for (int i = 0; i < 100; i++) {
+            ByteBuffer keyBytes = ByteBuffer.allocate(4);
+            keyBytes.putInt(i); // Use the loop counter as the key for verification later
+            FutureRecordMetadata result = bigBatch.tryAppend(time.milliseconds(), keyBytes.array(), largeValue,
+                    Record.EMPTY_HEADERS, null, time.milliseconds());
+            assertNotNull(result);
+        }
+        bigBatch.close();
+
+        time.sleep(101L); // Ensure the batch has time to become ready for processing
+
+        // Add the batch to the accumulator for splitting
+        accum.reenqueue(bigBatch, time.milliseconds());
+
+        // Iteratively split batches until we find single-record batches
+        // This section tests the core batch splitting functionality
+        int splitOperations = 0;
+        int maxSplitOperations = 100; // Safety limit to prevent infinite recursion
+        boolean foundSingleRecordBatch = false;
+
+        // Use a comparator that puts the batch with the most records first
+        Comparator<ProducerBatch> reverseComparator = (batch1, batch2) -> Integer.compare(batch2.recordCount,
+                batch1.recordCount);
+
+        while (splitOperations < maxSplitOperations && !foundSingleRecordBatch) {
+            // Get the current batches for this topic-partition
+            Deque<ProducerBatch> tp1Deque = accum.getDeque(tp1);
+            if (tp1Deque.isEmpty()) {
+                break;
+            }
+
+            // Find the batch with the most records
+            PriorityQueue<ProducerBatch> tp1PriorityQue = new PriorityQueue<>(reverseComparator);
+            tp1PriorityQue.addAll(tp1Deque);
+            ProducerBatch batch = tp1PriorityQue.poll();
+            if (batch == null) {
+                break;
+            }
+
+            // If we've found a batch with only one record, we've reached our goal
+            if (batch.recordCount == 1) {
+                foundSingleRecordBatch = true;
+                break;
+            }
+
+            // Remove the batch from the deque before splitting it
+            tp1Deque.remove(batch);
+
+            // Split the batch and track the operation
+            int numSplitBatches = accum.splitAndReenqueue(batch);
+            splitOperations++;
+
+            // If splitting produced no new batches (shouldn't happen with multi-record
+            // batches)
+            // mark the batch as complete
+            if (numSplitBatches == 0) {
+                assertEquals(1, batch.recordCount, "Unsplittable batch should have only 1 record");
+                batch.complete(0L, 0L);
+                foundSingleRecordBatch = true;
+            }
+        }
+
+        // Verification section: Check that the splitting process worked as expected
+
+        // Verify that we found a single-record batch, proving that splitting can reach
+        // that level
+        assertTrue(foundSingleRecordBatch, "Should eventually produce batches with single records");
+
+        // Verify we didn't hit our safety limit, which would indicate potential
+        // infinite recursion
+        assertTrue(splitOperations < maxSplitOperations,
+                "Should not hit the safety limit, indicating no infinite recursion");
+
+        // Verify all remaining batches have at most one record
+        Deque<ProducerBatch> finalDeque = accum.getDeque(tp1);
+
+        Map<Integer, Boolean> keyFoundMap = new HashMap<>();
+        // Check each batch and verify record integrity
+        for (ProducerBatch batch : finalDeque) {
+            assertTrue(batch.recordCount <= 1, "All remaining batches should have at most 1 record");
+
+            // Extract the record and its key
+            MemoryRecords batchRecords = batch.records();
+            Iterator<Record> recordIterator = batchRecords.records().iterator();
+            Record singleRecord = recordIterator.next();
+
+            // Track keys to ensure no duplicates (putIfAbsent returns null if the key
+            // wasn't present)
+            assertNull(keyFoundMap.putIfAbsent(singleRecord.key().getInt(), true),
+                    "Each key should appear exactly once in the split batches");
+        }
+
+        // Verify all original records are accounted for (no data loss)
+        assertEquals(100, keyFoundMap.size(), "All original 100 records should be present after splitting");
+    }
+
+    @Test
+    public void testProduceRequestResultAwaitAllDependents() throws Exception {
+        ProduceRequestResult parent = new ProduceRequestResult(tp1);
+
+        // make two dependent ProduceRequestResults -- mimicking split batches
+        ProduceRequestResult dependent1 = new ProduceRequestResult(tp1);
+        ProduceRequestResult dependent2 = new ProduceRequestResult(tp1);
+
+        // add dependents
+        parent.addDependent(dependent1);
+        parent.addDependent(dependent2);
+
+        parent.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        parent.done();
+
+        // parent.completed() should return true (only checks latch)
+        assertTrue(parent.completed(), "Parent should be completed after done()");
+
+        // awaitAllDependents() should block because dependents are not complete
+        final AtomicBoolean awaitCompleted = new AtomicBoolean(false);
+        final AtomicReference<Exception> awaitException = new AtomicReference<>();
+
+        // to prove awaitAllDependents() is blocking, we run it in a separate thread
+        Thread awaitThread = new Thread(() -> {
+            try {
+                parent.awaitAllDependents();
+                awaitCompleted.set(true);
+            } catch (Exception e) {
+                awaitException.set(e);
+            }
+        });
+        awaitThread.start();
+        Thread.sleep(5);
+
+        // verify awaitAllDependents() is blocking
+        assertFalse(awaitCompleted.get(),
+            "awaitAllDependents() should block because dependents are not complete");
+
+        // now complete the first dependent
+        dependent1.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        dependent1.done();
+
+        Thread.sleep(5);
+
+        // this should still be blocking because dependent2 is not complete
+        assertFalse(awaitCompleted.get(),
+            "awaitAllDependents() should still block because dependent2 is not complete");
+
+        // now complete the second dependent
+        dependent2.set(0L, RecordBatch.NO_TIMESTAMP, null);
+        dependent2.done();
+
+        // now awaitAllDependents() should complete
+        awaitThread.join(5000);
+
+        assertNull(awaitException.get(), "awaitAllDependents() should not throw exception");
+        assertTrue(awaitCompleted.get(),
+            "awaitAllDependents() should complete after all dependents are done");
+        assertFalse(awaitThread.isAlive(), "await thread should have completed");
     }
 }

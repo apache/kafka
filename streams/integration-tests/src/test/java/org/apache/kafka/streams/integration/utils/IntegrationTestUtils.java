@@ -848,9 +848,8 @@ public class IntegrationTestUtils {
                 return finalAccumData.equals(finalExpected);
 
             };
-            final String conditionDetails = "Did not receive all " + expectedRecords + " records from topic " +
-                topic + " (got " + accumData + ")";
-            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+            TestUtils.waitForCondition(valuesRead, waitTime, () -> "Did not receive all " + expectedRecords + " records from topic " +
+                    topic + " (got " + accumData + ")");
         }
         return accumData;
     }
@@ -1337,6 +1336,8 @@ public class IntegrationTestUtils {
         public final Map<TopicPartition, AtomicLong> changelogToStartOffset = new ConcurrentHashMap<>();
         public final Map<TopicPartition, AtomicLong> changelogToEndOffset = new ConcurrentHashMap<>();
         public final Map<TopicPartition, AtomicLong> changelogToTotalNumRestored = new ConcurrentHashMap<>();
+        private final Map<TopicPartition, AtomicLong> changelogToRestoreStartTime = new ConcurrentHashMap<>();
+        private final Map<TopicPartition, AtomicLong> changelogToRestoreEndTime = new ConcurrentHashMap<>();
         private final AtomicLong restored;
 
         public TrackingStateRestoreListener() {
@@ -1355,6 +1356,7 @@ public class IntegrationTestUtils {
             changelogToStartOffset.put(topicPartition, new AtomicLong(startingOffset));
             changelogToEndOffset.put(topicPartition, new AtomicLong(endingOffset));
             changelogToTotalNumRestored.put(topicPartition, new AtomicLong(0L));
+            changelogToRestoreStartTime.put(topicPartition, new AtomicLong(System.nanoTime()));
         }
 
         @Override
@@ -1372,6 +1374,7 @@ public class IntegrationTestUtils {
             if (restored != null) {
                 restored.addAndGet(totalRestored);
             }
+            changelogToRestoreEndTime.put(topicPartition, new AtomicLong(System.nanoTime()));
         }
 
         public long totalNumRestored() {
@@ -1380,6 +1383,11 @@ public class IntegrationTestUtils {
                 totalNumRestored += numRestored.get();
             }
             return totalNumRestored;
+        }
+
+        public Map<TopicPartition, Long> changelogToRestoreTime() {
+            return changelogToRestoreStartTime.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> changelogToRestoreEndTime.get(e.getKey()).get() - e.getValue().get()));
         }
     }
 

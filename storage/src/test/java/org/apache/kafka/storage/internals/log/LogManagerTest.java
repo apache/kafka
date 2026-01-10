@@ -16,26 +16,15 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.DirectoryId;
-import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
-import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.PartitionRegistration;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -44,12 +33,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class LogManagerTest {
-
-    private static final TopicIdPartition FOO_0 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 0));
-    private static final TopicIdPartition FOO_1 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 1));
-    private static final TopicIdPartition BAR_0 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 0));
-    private static final TopicIdPartition BAR_1 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 1));
-    private static final TopicIdPartition QUUX_0 = new TopicIdPartition(Uuid.fromString("YS9owjv5TG2OlsvBM0Qw6g"), new TopicPartition("quux", 0));
 
     @SuppressWarnings("unchecked")
     @Test
@@ -83,93 +66,11 @@ public class LogManagerTest {
     }
 
     @Test
-    public void testIsStrayKraftReplicaWithEmptyImage() {
-        TopicsImage image = topicsImage(List.of());
-        List<UnifiedLog> onDisk = Stream.of(FOO_0, FOO_1, BAR_0, BAR_1, QUUX_0).map(this::mockLog).toList();
-        assertTrue(onDisk.stream().allMatch(log -> LogManager.isStrayKraftReplica(0, image, log)));
-    }
-
-    @Test
-    public void testIsStrayKraftReplicaInImage() {
-        TopicsImage image = topicsImage(List.of(
-            topicImage(Map.of(
-                    FOO_0, List.of(0, 1, 2))),
-            topicImage(Map.of(
-                    BAR_0, List.of(0, 1, 2),
-                    BAR_1, List.of(0, 1, 2)))
-        ));
-        List<UnifiedLog> onDisk = Stream.of(FOO_0, FOO_1, BAR_0, BAR_1, QUUX_0).map(this::mockLog).toList();
-        Set<TopicPartition> expectedStrays = Stream.of(FOO_1, QUUX_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-
-        onDisk.forEach(log -> assertEquals(expectedStrays.contains(log.topicPartition()), LogManager.isStrayKraftReplica(0, image, log)));
-    }
-
-    @Test
-    public void testIsStrayKraftReplicaInImageWithRemoteReplicas() {
-        TopicsImage image = topicsImage(List.of(
-            topicImage(Map.of(
-                    FOO_0, List.of(0, 1, 2))),
-            topicImage(Map.of(
-                    BAR_0, List.of(1, 2, 3),
-                    BAR_1, List.of(2, 3, 0)))
-        ));
-        List<UnifiedLog> onDisk = Stream.of(FOO_0, BAR_0, BAR_1).map(this::mockLog).toList();
-        Set<TopicPartition> expectedStrays = Stream.of(BAR_0).map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-        onDisk.forEach(log -> assertEquals(expectedStrays.contains(log.topicPartition()), LogManager.isStrayKraftReplica(0, image, log)));
-    }
-
-    @Test
-    public void testIsStrayKraftMissingTopicId() {
+    public void testIsStrayReplica() {
         UnifiedLog log = mock(UnifiedLog.class);
-        when(log.topicId()).thenReturn(Optional.empty());
-        assertTrue(LogManager.isStrayKraftReplica(0, topicsImage(List.of()), log));
-    }
-
-    private TopicsImage topicsImage(List<TopicImage> topics) {
-        TopicsImage retval = TopicsImage.EMPTY;
-        for (TopicImage topic : topics) {
-            retval = retval.including(topic);
-        }
-        return retval;
-    }
-
-    private TopicImage topicImage(Map<TopicIdPartition, List<Integer>> partitions) {
-        String topicName = null;
-        Uuid topicId = null;
-        for (TopicIdPartition partition : partitions.keySet()) {
-            if (topicId == null) {
-                topicId = partition.topicId();
-            } else if (!topicId.equals(partition.topicId())) {
-                throw new IllegalArgumentException("partition topic IDs did not match");
-            }
-            if (topicName == null) {
-                topicName = partition.topic();
-            } else if (!topicName.equals(partition.topic())) {
-                throw new IllegalArgumentException("partition topic names did not match");
-            }
-        }
-        if (topicId == null) {
-            throw new IllegalArgumentException("Invalid empty partitions map.");
-        }
-        Map<Integer, PartitionRegistration> partitionRegistrations = partitions.entrySet().stream().collect(
-                Collectors.toMap(
-                        entry -> entry.getKey().partition(),
-                        entry -> new PartitionRegistration.Builder()
-                                .setReplicas(entry.getValue().stream().mapToInt(Integer::intValue).toArray())
-                                .setDirectories(DirectoryId.unassignedArray(entry.getValue().size()))
-                                .setIsr(entry.getValue().stream().mapToInt(Integer::intValue).toArray())
-                                .setLeader(entry.getValue().get(0))
-                                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
-                                .setLeaderEpoch(0)
-                                .setPartitionEpoch(0)
-                                .build()));
-        return new TopicImage(topicName, topicId, partitionRegistrations);
-    }
-
-    private UnifiedLog mockLog(TopicIdPartition topicIdPartition) {
-        UnifiedLog log = mock(UnifiedLog.class);
-        when(log.topicId()).thenReturn(Optional.of(topicIdPartition.topicId()));
-        when(log.topicPartition()).thenReturn(topicIdPartition.topicPartition());
-        return log;
+        when(log.topicId()).thenReturn(Optional.of(Uuid.ONE_UUID));
+        assertTrue(LogManager.isStrayReplica(List.of(), 0, log));
+        assertTrue(LogManager.isStrayReplica(List.of(1, 2, 3), 0, log));
+        assertFalse(LogManager.isStrayReplica(List.of(0, 1, 2), 0, log));
     }
 }

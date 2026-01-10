@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.coordinator.transaction.{TransactionMetadata, TransactionState, TxnTransitMetadata}
+import org.apache.kafka.coordinator.transaction.{TransactionLog, TransactionMetadata, TransactionState, TxnTransitMetadata}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
@@ -759,6 +759,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )
 
@@ -803,6 +804,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )
 
@@ -842,6 +844,7 @@ class TransactionStateManagerTest {
       ArgumentMatchers.eq((-1).toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      any(),
       any(),
       any(),
       any(),
@@ -899,6 +902,7 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )
 
@@ -913,13 +917,10 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          TransactionLog.readTxnRecordKey(record.key) match {
-            case Right(transactionalId) =>
-              assertNull(record.value)
-              expiredTransactionalIds += transactionalId
-              assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
-            case Left(value) => fail(s"Failed to read transactional id from tombstone: $value")
-          }
+          val transactionalId = TransactionLog.readTxnRecordKey(record.key).asInstanceOf[String]
+          assertNull(record.value)
+          expiredTransactionalIds += transactionalId
+          assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
         }
       }
     }
@@ -1115,6 +1116,7 @@ class TransactionStateManagerTest {
       callbackCapture.capture(),
       any(),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => callbackCapture.getValue.apply(
       recordsCapture.getValue.map { case (topicPartition, records) =>
@@ -1179,7 +1181,7 @@ class TransactionStateManagerTest {
       val partitionId = transactionManager.partitionFor(transactionalId1)
       val topicPartition = new TopicIdPartition(transactionTopicId, partitionId, TRANSACTION_STATE_TOPIC_NAME)
       val expectedTombstone = new SimpleRecord(time.milliseconds(), TransactionLog.keyToBytes(transactionalId1), null)
-      val expectedRecords = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, expectedTombstone)
+      val expectedRecords = MemoryRecords.withRecords(TransactionLog.ENFORCED_COMPRESSION, expectedTombstone)
       assertEquals(Set(topicPartition), appendedRecords.keySet)
       assertEquals(Seq(expectedRecords), appendedRecords(topicPartition).toSeq)
     } else {
@@ -1265,6 +1267,7 @@ class TransactionStateManagerTest {
       origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicIdPartition, MemoryRecords]],
       capturedArgument.capture(),
+      any(),
       any(),
       any(),
       any()

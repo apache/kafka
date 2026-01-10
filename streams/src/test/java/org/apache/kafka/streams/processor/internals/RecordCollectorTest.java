@@ -1961,6 +1961,7 @@ public class RecordCollectorTest {
 
                     }
 
+                    @SuppressWarnings("deprecation")
                     @Override
                     public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context, final ProducerRecord<byte[], byte[]> record, final Exception exception) {
                         sourceRawData[0] = context.sourceRawKey();
@@ -1978,15 +1979,14 @@ public class RecordCollectorTest {
         assertNull(sourceRawData[1]);
     }
 
-
     @Test
     public void shouldHaveRawDataDuringExceptionInSerialization() {
         final byte[][] sourceRawData = new byte[][]{new byte[]{}, new byte[]{}};
         try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
             final RecordCollector collector = newRecordCollector(
                     new ProductionExceptionHandler() {
+                        @SuppressWarnings({"deprecation", "rawtypes"})
                         @Override
-                        @SuppressWarnings({"rawtypes", "unused"})
                         public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context, final ProducerRecord record, final Exception exception, final SerializationExceptionOrigin origin) {
                             sourceRawData[0] = context.sourceRawKey();
                             sourceRawData[1] = context.sourceRawValue();

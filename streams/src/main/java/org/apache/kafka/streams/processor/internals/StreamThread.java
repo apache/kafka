@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.CloseOptions;
+import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -40,7 +42,9 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -89,12 +93,14 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.adminClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerClientId;
@@ -335,6 +341,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private long lastPurgeMs;
     private long lastPartitionAssignedMs = -1L;
     private int numIterations;
+    private boolean streamsGroupReady = false;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
@@ -342,6 +349,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
+    private final Optional<DefaultStreamsRebalanceListener> defaultStreamsRebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Admin adminClient;
@@ -363,11 +371,20 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
-    private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicReference<org.apache.kafka.streams.CloseOptions.GroupMembershipOperation> leaveGroupRequested =
+        new AtomicReference<>(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
     private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
-    private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
+
+    private final WindowedSum pollLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum totalCommitLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum processLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum punctuateLatencyWindowedSum = new WindowedSum();
+    private final WindowedSum runOnceLatencyWindowedSum = new WindowedSum();
+    private final MetricConfig metricsConfig;
+
+    private boolean latencyWindowsInitialized = false;
 
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
@@ -393,15 +410,12 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final Runnable shutdownErrorHook,
                                       final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
 
-        final boolean stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
-
         final String threadId = clientId + THREAD_ID_SUBSTRING + threadIdx;
         final String stateUpdaterId = threadId.replace(THREAD_ID_SUBSTRING, STATE_UPDATER_ID_SUBSTRING);
-        final String restorationThreadId = stateUpdaterEnabled ? stateUpdaterId : threadId;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
         final LogContext logContext = new LogContext(logPrefix);
-        final LogContext restorationLogContext = stateUpdaterEnabled ? new LogContext(String.format("state-updater [%s] ", restorationThreadId)) : logContext;
+        final LogContext restorationLogContext = new LogContext(String.format("state-updater [%s] ", stateUpdaterId));
         final Logger log = LoggerFactory.getLogger(StreamThread.class);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
@@ -411,7 +425,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         referenceContainer.clientTags = config.getClientTags();
 
         log.info("Creating restore consumer client for thread {}", threadId);
-        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(restorationThreadId));
+        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(stateUpdaterId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
         final StoreChangelogReader changelogReader = new StoreChangelogReader(
@@ -432,7 +446,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             cache,
             time,
             clientSupplier,
@@ -440,7 +453,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             threadIdx,
             processId,
             logContext,
-            stateUpdaterEnabled,
             proceessingThreadsEnabled
         );
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
@@ -448,20 +460,17 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             threadId,
-            logContext,
-            stateUpdaterEnabled);
+            logContext);
 
         final Tasks tasks = new Tasks(logContext);
         final boolean processingThreadsEnabled =
             InternalConfig.processingThreadsEnabled(config.originals());
 
         final DefaultTaskManager schedulingTaskManager =
-            maybeCreateSchedulingTaskManager(processingThreadsEnabled, stateUpdaterEnabled, topologyMetadata, time, threadId, tasks);
+            maybeCreateSchedulingTaskManager(processingThreadsEnabled, topologyMetadata, time, threadId, tasks);
         final StateUpdater stateUpdater =
-            maybeCreateStateUpdater(
-                stateUpdaterEnabled,
+            createStateUpdater(
                 streamsMetrics,
                 config,
                 restoreConsumer,
@@ -499,7 +508,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, threadId, consumerConfigs);
+        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, consumerConfigs);
 
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
@@ -539,8 +548,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final StreamsConfig config,
                                                        final KafkaClientSupplier clientSupplier,
                                                        final UUID processId,
-                                                       final Logger log,
-                                                       final String threadId,
                                                        final Map<String, Object> consumerConfigs) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
@@ -616,16 +623,11 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private static DefaultTaskManager maybeCreateSchedulingTaskManager(final boolean processingThreadsEnabled,
-                                                                       final boolean stateUpdaterEnabled,
                                                                        final TopologyMetadata topologyMetadata,
                                                                        final Time time,
                                                                        final String threadId,
                                                                        final Tasks tasks) {
         if (processingThreadsEnabled) {
-            if (!stateUpdaterEnabled) {
-                throw new IllegalStateException("Processing threads require the state updater to be enabled");
-            }
-
             final DefaultTaskManager defaultTaskManager = new DefaultTaskManager(
                 time,
                 threadId,
@@ -640,29 +642,24 @@ public class StreamThread extends Thread implements ProcessingThread {
         return null;
     }
 
-    private static StateUpdater maybeCreateStateUpdater(final boolean stateUpdaterEnabled,
-                                                                final StreamsMetricsImpl streamsMetrics,
-                                                                final StreamsConfig streamsConfig,
-                                                                final Consumer<byte[], byte[]> restoreConsumer,
-                                                                final ChangelogReader changelogReader,
-                                                                final TopologyMetadata topologyMetadata,
-                                                                final Time time,
-                                                                final String clientId,
-                                                                final int threadIdx) {
-        if (stateUpdaterEnabled) {
-            final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
-            return new DefaultStateUpdater(
-                name,
-                streamsMetrics,
-                streamsConfig,
-                restoreConsumer,
-                changelogReader,
-                topologyMetadata,
-                time
-            );
-        } else {
-            return null;
-        }
+    private static StateUpdater createStateUpdater(final StreamsMetricsImpl streamsMetrics,
+                                                        final StreamsConfig streamsConfig,
+                                                        final Consumer<byte[], byte[]> restoreConsumer,
+                                                        final ChangelogReader changelogReader,
+                                                        final TopologyMetadata topologyMetadata,
+                                                        final Time time,
+                                                        final String clientId,
+                                                        final int threadIdx) {
+        final String name = clientId + STATE_UPDATER_ID_SUBSTRING + threadIdx;
+        return new DefaultStateUpdater(
+            name,
+            streamsMetrics,
+            streamsConfig,
+            restoreConsumer,
+            changelogReader,
+            topologyMetadata,
+            time
+        );
     }
 
     private static Optional<StreamsRebalanceData.HostInfo> parseHostInfo(final String endpoint) {
@@ -800,6 +797,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
+        this.metricsConfig = streamsMetrics.metricsRegistry().config();
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -839,6 +837,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
+        this.defaultStreamsRebalanceListener = streamsRebalanceData.map(data ->
+            new DefaultStreamsRebalanceListener(
+                this.log,
+                time,
+                data,
+                this,
+                taskManager,
+                streamsMetrics,
+                getName()
+            )
+        );
         this.taskManager = taskManager;
         this.stateUpdater = stateUpdater;
         this.restoreConsumer = restoreConsumer;
@@ -858,7 +867,6 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.processingThreadsEnabled(config.originals());
         this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
 
@@ -888,13 +896,12 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         boolean cleanRun = false;
         try {
-            if (stateUpdaterEnabled) {
-                taskManager.init();
-            }
+            taskManager.init();
+            initLatencyWindowsIfNeeded(time.milliseconds());
             cleanRun = runLoop();
         } catch (final Throwable e) {
             failedStreamThreadSensor.record();
-            requestLeaveGroupDuringShutdown();
+            leaveGroupRequested.set(org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
@@ -1007,27 +1014,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
             }
 
-
-            if (!stateUpdaterEnabled && !restoreConsumerInstanceIdFuture.isDone()) {
-                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
-                    try {
-                        restoreConsumerInstanceIdFuture.complete(restoreConsumer.clientInstanceId(Duration.ZERO));
-                    } catch (final IllegalStateException disabledError) {
-                        // if telemetry is disabled on a client, we swallow the error,
-                        // to allow returning a partial result for all other clients
-                        restoreConsumerInstanceIdFuture.complete(null);
-                    } catch (final TimeoutException swallow) {
-                        // swallow
-                    } catch (final Exception error) {
-                        restoreConsumerInstanceIdFuture.completeExceptionally(error);
-                    }
-                } else {
-                    restoreConsumerInstanceIdFuture.completeExceptionally(
-                        new TimeoutException("Could not retrieve restore consumer client instance id.")
-                    );
-                }
-            }
-
             if (!producerInstanceIdFuture.isDone()) {
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
@@ -1050,10 +1036,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
             }
 
-            if (mainConsumerInstanceIdFuture.isDone()
-                && (!stateUpdaterEnabled && restoreConsumerInstanceIdFuture.isDone())
-                && producerInstanceIdFuture.isDone()) {
-
+            if (mainConsumerInstanceIdFuture.isDone() && producerInstanceIdFuture.isDone()) {
                 fetchDeadlineClientInstanceId = -1L;
             }
         }
@@ -1146,24 +1129,12 @@ public class StreamThread extends Thread implements ProcessingThread {
                 if (mainConsumer instanceof ConsumerWrapper) {
                     ((ConsumerWrapper) mainConsumer).subscribe(
                         topologyMetadata.allFullSourceTopicNames(),
-                        new DefaultStreamsRebalanceListener(
-                            log,
-                            time,
-                            streamsRebalanceData.get(),
-                            this,
-                            taskManager
-                        )
+                        defaultStreamsRebalanceListener.get()
                     );
                 } else {
                     ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
                         topologyMetadata.allFullSourceTopicNames(),
-                        new DefaultStreamsRebalanceListener(
-                            log,
-                            time,
-                            streamsRebalanceData.get(),
-                            this,
-                            taskManager
-                        )
+                        defaultStreamsRebalanceListener.get()
                     );
                 }
             } else {
@@ -1204,7 +1175,15 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollLatency = pollPhase();
         totalPolledSinceLastSummary += 1;
 
-        handleStreamsRebalanceData();
+        if (streamsRebalanceData.isPresent()) {
+            // Always handle status codes (e.g., MISSING_SOURCE_TOPICS, INCORRECTLY_PARTITIONED_TOPICS)
+            // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
+            handleStreamsRebalanceData();
+
+            if (!streamsGroupReady) {
+                return;
+            }
+        }
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1215,10 +1194,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             return;
         }
 
-        if (!stateUpdaterEnabled) {
-            initializeAndRestorePhase();
-        }
-
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
         advanceNowAndComputeLatency();
@@ -1227,8 +1202,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
-        if (state == State.RUNNING
-            || (stateUpdaterEnabled && isStartingRunningOrPartitionAssigned())) {
+        if (isStartingRunningOrPartitionAssigned()) {
 
             taskManager.updateLags();
 
@@ -1243,9 +1217,7 @@ public class StreamThread extends Thread implements ProcessingThread {
              */
             do {
 
-                if (stateUpdaterEnabled) {
-                    checkStateUpdater();
-                }
+                checkStateUpdater();
 
                 log.debug("Processing tasks with {} iterations.", numIterations);
                 final int processed = taskManager.process(numIterations, time);
@@ -1314,11 +1286,13 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
+
+        recordWindowedSum(now, pollLatency, totalCommitLatency, totalProcessLatency, totalPunctuateLatency, runOnceLatency);
+        recordRatio(now, pollLatencyWindowedSum, pollRatioSensor);
+        recordRatio(now, totalCommitLatencyWindowedSum, commitRatioSensor);
+        recordRatio(now, processLatencyWindowedSum, processRatioSensor);
+        recordRatio(now, punctuateLatencyWindowedSum, punctuateRatioSensor);
         processRecordsSensor.record(totalProcessed, now);
-        processRatioSensor.record((double) totalProcessLatency / runOnceLatency, now);
-        punctuateRatioSensor.record((double) totalPunctuateLatency / runOnceLatency, now);
-        pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
-        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
         final long timeSinceLastLog = now - lastLogSummaryMs;
         if (logSummaryIntervalMs > 0 && timeSinceLastLog > logSummaryIntervalMs) {
@@ -1355,7 +1329,15 @@ public class StreamThread extends Thread implements ProcessingThread {
         taskManager.resumePollingForPartitionsWithAvailableSpace();
         pollLatency = pollPhase();
 
-        handleStreamsRebalanceData();
+        if (streamsRebalanceData.isPresent()) {
+            // Always handle status codes (e.g., MISSING_SOURCE_TOPICS, INCORRECTLY_PARTITIONED_TOPICS)
+            // regardless of streamsGroupReady, as these may throw exceptions that need to be handled.
+            handleStreamsRebalanceData();
+
+            if (!streamsGroupReady) {
+                return;
+            }
+        }
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1393,8 +1375,10 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         now = time.milliseconds();
         final long runOnceLatency = now - startMs;
-        pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
-        commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
+
+        recordWindowedSum(now, pollLatency, totalCommitLatency, 0, 0, runOnceLatency);
+        recordRatio(now, pollLatencyWindowedSum, pollRatioSensor);
+        recordRatio(now, totalCommitLatencyWindowedSum, commitRatioSensor);
 
         if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
             log.info("Committed {} total tasks since the last update", totalCommittedSinceLastSummary);
@@ -1402,37 +1386,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             totalCommittedSinceLastSummary = 0L;
             lastLogSummaryMs = now;
         }
-    }
-
-    private void initializeAndRestorePhase() {
-        final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = partitions -> resetOffsets(partitions, null);
-        final State stateSnapshot = state;
-        // only try to initialize the assigned tasks
-        // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (stateSnapshot == State.PARTITIONS_ASSIGNED
-            || stateSnapshot == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
-
-            log.debug("State is {}; initializing tasks if necessary", stateSnapshot);
-
-            if (taskManager.tryToCompleteRestoration(now, offsetResetter)) {
-                log.info("Restoration took {} ms for all active tasks {}", time.milliseconds() - lastPartitionAssignedMs,
-                    taskManager.activeTaskIds());
-                setState(State.RUNNING);
-            }
-
-            if (log.isDebugEnabled()) {
-                log.debug("Initialization call done. State is {}", state);
-            }
-        }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Idempotently invoking restoration logic in state {}", state);
-        }
-        // we can always let changelog reader try restoring in order to initialize the changelogs;
-        // if there's no active restoring or standby updating it would not try to fetch any data
-        // After KAFKA-13873, we only restore the not paused tasks.
-        changelogReader.restore(taskManager.notPausedTasks());
-        log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
     private void checkStateUpdater() {
@@ -1464,15 +1417,11 @@ public class StreamThread extends Thread implements ProcessingThread {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
-        if (state == State.PARTITIONS_ASSIGNED && !stateUpdaterEnabled) {
-            // try to fetch some records with zero poll millis
-            // to unblock the restoration as soon as possible
-            records = pollRequests(Duration.ZERO);
-        } else if (state == State.PARTITIONS_REVOKED) {
+        if (state == State.PARTITIONS_REVOKED) {
             // try to fetch some records with zero poll millis to unblock
             // other useful work while waiting for the join response
             records = pollRequests(Duration.ZERO);
-        } else if (state == State.RUNNING || state == State.STARTING || (state == State.PARTITIONS_ASSIGNED && stateUpdaterEnabled)) {
+        } else if (state == State.RUNNING || state == State.STARTING || state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);
@@ -1532,17 +1481,29 @@ public class StreamThread extends Thread implements ProcessingThread {
         try {
             records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
+            log.info("Found no valid offset for {} partitions, resetting.", e.partitions().size());
             resetOffsets(e.partitions(), e);
         }
 
         return records;
     }
 
+    /**
+     * Sets the readiness state of the Streams group for this thread.
+     *
+     * @param ready {@code true} if the Streams group is ready to process records; {@code false} otherwise.
+     *              When set to {@code true}, this thread may transition to an active processing state.
+     *              When set to {@code false}, the thread will not process records until the group is ready.
+     */
+    public void setStreamsGroupReady(final boolean ready) {
+        streamsGroupReady = ready;
+    }
+
     public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
             boolean hasMissingSourceTopics = false;
             String missingTopicsDetail = null;
-            
+
             for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
@@ -1555,7 +1516,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                     throw new TopologyException(errorMsg);
                 }
             }
-            
+
             if (hasMissingSourceTopics) {
                 handleMissingSourceTopicsWithTimeout(missingTopicsDetail);
             } else {
@@ -1581,28 +1542,32 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void handleMissingSourceTopicsWithTimeout(final String missingTopicsDetail) {
+        // Use 2 * heartbeatIntervalMs as the timeout ensures at least one heartbeat is sent before raising the exception
+        final int heartbeatIntervalMs = streamsRebalanceData.get().heartbeatIntervalMs();
+        final long timeoutMs = 2L * heartbeatIntervalMs;
+
         // Start timeout tracking on first encounter with missing topics
         if (topicsReadyTimer == null) {
-            topicsReadyTimer = time.timer(maxPollTimeMs);
-            log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.", 
-                missingTopicsDetail, maxPollTimeMs);
+            topicsReadyTimer = time.timer(timeoutMs);
+            log.info("Missing source topics detected: {}. Will wait up to {}ms before failing.",
+                missingTopicsDetail, timeoutMs);
         } else {
             topicsReadyTimer.update();
         }
-        
+
         if (topicsReadyTimer.isExpired()) {
             final long elapsedTime = topicsReadyTimer.elapsedMs();
-            final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.", 
+            final String errorMsg = String.format("Missing source topics: %s. Timeout exceeded after %dms.",
                 missingTopicsDetail, elapsedTime);
             log.error(errorMsg);
-            
+
             throw new MissingSourceTopicException(errorMsg);
         } else {
-            log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms", 
+            log.debug("Missing source topics: {}. Elapsed time: {}ms, timeout in: {}ms",
                 missingTopicsDetail, topicsReadyTimer.elapsedMs(), topicsReadyTimer.remainingMs());
         }
     }
-    
+
 
     static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
@@ -1647,14 +1612,14 @@ public class StreamThread extends Thread implements ProcessingThread {
                         addToResetList(
                             partition,
                             seekToBeginning,
-                            "Setting topic '{}' to consume from earliest offset",
+                            "Setting topic '{}' to consume from 'earliest' offset",
                             loggedTopics
                         );
                     } else if (resetPolicy == AutoOffsetResetStrategy.LATEST) {
                         addToResetList(
                             partition,
                             seekToEnd,
-                            "Setting topic '{}' to consume from latest offset",
+                            "Setting topic '{}' to consume from 'latest' offset",
                             loggedTopics
                         );
                     } else if (resetPolicy.type() == AutoOffsetResetStrategy.StrategyType.BY_DURATION) {
@@ -1662,7 +1627,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                             partition,
                             seekByDuration,
                             resetPolicy.duration().get(),
-                            "Setting topic '{}' to consume from by_duration:{}",
+                            "Setting topic '{}' to consume from 'by_duration:{}'",
                             resetPolicy.duration().get().toString(),
                             loggedTopics
                         );
@@ -1778,12 +1743,12 @@ public class StreamThread extends Thread implements ProcessingThread {
     private void addToResetList(
         final TopicPartition partition,
         final Set<TopicPartition> partitions,
-        final String resetPolicy,
+        final String logMessage,
         final Set<String> loggedTopics
     ) {
         final String topic = partition.topic();
         if (loggedTopics.add(topic)) {
-            log.info("Setting topic '{}' to consume from {} offset", topic, resetPolicy);
+            log.info(logMessage, topic);
         }
         partitions.add(partition);
     }
@@ -1829,18 +1794,12 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
 
             committed = taskManager.commit(
-                taskManager.allOwnedTasks()
+                taskManager.allRunningTasks()
                     .values()
                     .stream()
                     .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
                     .collect(Collectors.toSet())
             );
-
-            if ((now - lastPurgeMs) > purgeTimeMs) {
-                // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommittedRecords();
-                lastPurgeMs = now;
-            }
 
             if (committed == -1) {
                 log.debug("Unable to commit as we are in the middle of a rebalance, will try again when it completes.");
@@ -1850,6 +1809,12 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
         } else {
             committed = taskManager.maybeCommitActiveTasksPerUserRequested();
+        }
+
+        if ((now - lastPurgeMs) > purgeTimeMs) {
+            // try to purge the committed records for repartition topics if possible
+            taskManager.maybePurgeCommittedRecords();
+            lastPurgeMs = now;
         }
 
         return committed;
@@ -1873,10 +1838,13 @@ public class StreamThread extends Thread implements ProcessingThread {
      * <p>
      * Note that there is nothing to prevent this function from being called multiple times
      * (e.g., in testing), hence the state is set only the first time
+     *
+     * @param operation the group membership operation to apply on shutdown. Must be one of LEAVE_GROUP or REMAIN_IN_GROUP.
      */
-    public void shutdown() {
+    public void shutdown(final org.apache.kafka.streams.CloseOptions.GroupMembershipOperation operation) {
         log.info("Informed to shut down");
         final State oldState = setState(State.PENDING_SHUTDOWN);
+        leaveGroupRequested.set(operation);
         if (oldState == State.CREATED) {
             // The thread may not have been started. Take responsibility for shutting down
             completeShutdown(true);
@@ -1909,18 +1877,14 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close changelog reader due to the following error:", e);
         }
         try {
-            if (leaveGroupRequested.get()) {
-                mainConsumer.unsubscribe();
-            }
-        } catch (final Throwable e) {
-            log.error("Failed to unsubscribe due to the following error: ", e);
-        }
-        try {
-            mainConsumer.close();
+            final GroupMembershipOperation membershipOperation =
+                leaveGroupRequested.get() == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP ? LEAVE_GROUP : REMAIN_IN_GROUP;
+            mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
         }
         try {
+            // restore consumer isn't part of a consumer group so we use REMAIN_IN_GROUP to skip any leaveGroup checks
             restoreConsumer.close();
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
@@ -2038,10 +2002,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         return groupInstanceID;
     }
 
-    public void requestLeaveGroupDuringShutdown() {
-        leaveGroupRequested.set(true);
-    }
-
     public Map<MetricName, Metric> producerMetrics() {
         return taskManager.producerMetrics();
     }
@@ -2074,18 +2034,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
         result.put(getName() + "-consumer", mainConsumerInstanceIdFuture);
 
-        if (stateUpdaterEnabled) {
-            restoreConsumerInstanceIdFuture = stateUpdater.restoreConsumerInstanceId(timeout);
-        } else {
-            if (restoreConsumerInstanceIdFuture.isDone()) {
-                if (restoreConsumerInstanceIdFuture.isCompletedExceptionally()) {
-                    restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
-                    setDeadline = true;
-                }
-            } else {
-                setDeadline = true;
-            }
-        }
+        restoreConsumerInstanceIdFuture = stateUpdater.restoreConsumerInstanceId(timeout);
+
         result.put(getName() + "-restore-consumer", restoreConsumerInstanceIdFuture);
 
         if (producerInstanceIdFuture.isDone()) {
@@ -2136,5 +2086,47 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Optional<StreamsRebalanceData> streamsRebalanceData() {
         return streamsRebalanceData;
+    }
+
+    /**
+     * Initialize both WindowedSum instances at exactly the same timestamp so
+     * their windows are aligned from the very beginning.
+     */
+    private void initLatencyWindowsIfNeeded(final long now) {
+        if (!latencyWindowsInitialized) {
+            // Start both windows at the same instant with a zero record
+            pollLatencyWindowedSum.record(metricsConfig, 0.0, now);
+            totalCommitLatencyWindowedSum.record(metricsConfig, 0, now);
+            processLatencyWindowedSum.record(metricsConfig, 0, now);
+            punctuateLatencyWindowedSum.record(metricsConfig, 0, now);
+            runOnceLatencyWindowedSum.record(metricsConfig, 0.0, now);
+            latencyWindowsInitialized = true;
+        }
+    }
+
+    private void recordWindowedSum(final long now,
+                                   final double pollLatency,
+                                   final double totalCommitLatency,
+                                   final double processLatency,
+                                   final double punctuateLatency,
+                                   final double runOnceLatency) {
+        pollLatencyWindowedSum.record(metricsConfig, pollLatency, now);
+        totalCommitLatencyWindowedSum.record(metricsConfig, totalCommitLatency, now);
+        processLatencyWindowedSum.record(metricsConfig, processLatency, now);
+        punctuateLatencyWindowedSum.record(metricsConfig, punctuateLatency, now);
+        runOnceLatencyWindowedSum.record(metricsConfig, runOnceLatency, now);
+    }
+
+    private void recordRatio(final long now, final WindowedSum windowedSum, final Sensor ratioSensor) {
+        final double runOnceLatencyWindow =
+            runOnceLatencyWindowedSum.measure(metricsConfig, now);
+
+        if (runOnceLatencyWindow > 0.0) {
+            final double latencyWindow =
+                windowedSum.measure(metricsConfig, now);
+            ratioSensor.record(latencyWindow / runOnceLatencyWindow);
+        } else {
+            ratioSensor.record(0.0, now);
+        }
     }
 }

@@ -23,7 +23,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#deleteConsumerGroups(Collection <String>, DeleteConsumerGroupsOptions)} call.
+ * The result of the {@link Admin#deleteConsumerGroups(Collection, DeleteConsumerGroupsOptions)} call for
+ * {@code Collection<String>} input.
  */
 public class DeleteConsumerGroupsResult {
     private final Map<String, KafkaFuture<Void>> futures;

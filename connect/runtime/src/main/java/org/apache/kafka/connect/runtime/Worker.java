@@ -1248,7 +1248,7 @@ public final class Worker {
         final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
 
         try {
-            return plugins.pluginLoader(klass, PluginUtils.connectorVersionRequirement(version));
+            return plugins.connectorLoader(klass, PluginUtils.connectorVersionRequirement(version));
         } catch (InvalidVersionSpecificationException  | VersionedPluginLoadingException e) {
             throw new ConnectException(
                     String.format("Failed to get class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);

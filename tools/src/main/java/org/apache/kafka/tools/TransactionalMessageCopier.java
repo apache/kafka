@@ -301,6 +301,7 @@ public class TransactionalMessageCopier {
         }
     }
 
+    @SuppressWarnings("removal")
     public static void runEventLoop(Namespace parsedArgs) {
         final String transactionalId = parsedArgs.getString("transactionalId");
         final String outputTopic = parsedArgs.getString("outputTopic");

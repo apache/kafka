@@ -50,6 +50,20 @@ import java.util.function.Function;
  */
 public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
+    /**
+     * The interval between updating the last committed offset during loading, in offsets. Smaller
+     * values commit more often at the expense of loading times when the workload is simple and does
+     * not create collections that need to participate in {@link CoordinatorPlayback} snapshotting.
+     * Larger values commit less often and allow more temporary data to accumulate before the next
+     * commit when the workload creates many temporary collections that need to be snapshotted.
+     *
+     * The value of 16,384 was chosen as a trade-off between the performance of these two workloads.
+     *
+     * When changing this value, please run the GroupCoordinatorShardLoadingBenchmark to evaluate
+     * the relative change in performance.
+     */
+    public static final long DEFAULT_COMMIT_INTERVAL_OFFSETS = 16384;
+
     private static final Logger LOG = LoggerFactory.getLogger(CoordinatorLoaderImpl.class);
 
     private final Time time;
@@ -57,22 +71,25 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
     private final Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier;
     private final Deserializer<T> deserializer;
     private final int loadBufferSize;
+    private final long commitIntervalOffsets;
 
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
     private final KafkaScheduler scheduler = new KafkaScheduler(1);
 
     public CoordinatorLoaderImpl(
-            Time time,
-            Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier,
-            Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier,
-            Deserializer<T> deserializer,
-            int loadBufferSize
+        Time time,
+        Function<TopicPartition, Optional<UnifiedLog>> partitionLogSupplier,
+        Function<TopicPartition, Optional<Long>> partitionLogEndOffsetSupplier,
+        Deserializer<T> deserializer,
+        int loadBufferSize,
+        long commitIntervalOffsets
     ) {
         this.time = time;
         this.partitionLogSupplier = partitionLogSupplier;
         this.partitionLogEndOffsetSupplier = partitionLogEndOffsetSupplier;
         this.deserializer = deserializer;
         this.loadBufferSize = loadBufferSize;
+        this.commitIntervalOffsets = commitIntervalOffsets;
         this.scheduler.startup();
     }
 
@@ -89,7 +106,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
         long startTimeMs = time.milliseconds();
         try {
             ScheduledFuture<?> result = scheduler.scheduleOnce(String.format("Load coordinator from %s", tp),
-                    () -> doLoad(tp, coordinator, future, startTimeMs));
+                () -> doLoad(tp, coordinator, future, startTimeMs));
             if (result.isCancelled()) {
                 future.completeExceptionally(new RuntimeException("Coordinator loader is closed."));
             }
@@ -100,17 +117,17 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
     }
 
     private void doLoad(
-            TopicPartition tp,
-            CoordinatorPlayback<T> coordinator,
-            CompletableFuture<LoadSummary> future,
-            long startTimeMs
+        TopicPartition tp,
+        CoordinatorPlayback<T> coordinator,
+        CompletableFuture<LoadSummary> future,
+        long startTimeMs
     ) {
         long schedulerQueueTimeMs = time.milliseconds() - startTimeMs;
         try {
             Optional<UnifiedLog> logOpt = partitionLogSupplier.apply(tp);
             if (logOpt.isEmpty()) {
                 future.completeExceptionally(new NotLeaderOrFollowerException(
-                        "Could not load records from " + tp + " because the log does not exist."));
+                    "Could not load records from " + tp + " because the log does not exist."));
                 return;
             }
 
@@ -121,7 +138,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             long currentOffset = log.logStartOffset();
             LoadStats stats = new LoadStats();
 
-            long previousHighWatermark = -1L;
+            long lastCommittedOffset = -1L;
             while (shouldFetchNextBatch(currentOffset, logEndOffset(tp), stats.readAtLeastOneRecord)) {
                 FetchDataInfo fetchDataInfo = log.read(currentOffset, loadBufferSize, FetchIsolation.LOG_END, true);
 
@@ -133,17 +150,16 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                     buffer = memoryRecords.buffer();
                 }
 
-                ReplayResult replayResult = processMemoryRecords(tp, log, memoryRecords, coordinator, stats, currentOffset, previousHighWatermark);
+                ReplayResult replayResult = processMemoryRecords(tp, log, memoryRecords, coordinator, stats, currentOffset, lastCommittedOffset);
                 currentOffset = replayResult.nextOffset;
-                previousHighWatermark = replayResult.highWatermark;
+                lastCommittedOffset = replayResult.lastCommittedOffset;
             }
 
             long endTimeMs = time.milliseconds();
 
             if (logEndOffset(tp) == -1L) {
                 future.completeExceptionally(new NotLeaderOrFollowerException(
-                        String.format("Stopped loading records from %s because the partition is not online or is no longer the leader.", tp)
-                ));
+                    String.format("Stopped loading records from %s because the partition is not online or is no longer the leader.", tp)));
             } else if (isRunning.get()) {
                 future.complete(new LoadSummary(startTimeMs, endTimeMs, schedulerQueueTimeMs, stats.numRecords, stats.numBytes));
             } else {
@@ -186,7 +202,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             if (buffer.capacity() < bytesNeeded) {
                 if (loadBufferSize < bytesNeeded) {
                     LOG.warn("Loaded metadata from {} with buffer larger ({} bytes) than" +
-                            " configured buffer size ({} bytes).", tp, bytesNeeded, loadBufferSize);
+                        " configured buffer size ({} bytes).", tp, bytesNeeded, loadBufferSize);
                 }
 
                 buffer = ByteBuffer.allocate(bytesNeeded);
@@ -202,15 +218,14 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
     }
 
     private ReplayResult processMemoryRecords(
-            TopicPartition tp,
-            UnifiedLog log,
-            MemoryRecords memoryRecords,
-            CoordinatorPlayback<T> coordinator,
-            LoadStats loadStats,
-            long currentOffset,
-            long previousHighWatermark
+        TopicPartition tp,
+        UnifiedLog log,
+        MemoryRecords memoryRecords,
+        CoordinatorPlayback<T> coordinator,
+        LoadStats loadStats,
+        long currentOffset,
+        long lastCommittedOffset
     ) {
-
         for (MutableRecordBatch batch : memoryRecords.batches()) {
             if (batch.isControlBatch()) {
                 for (Record record : batch) {
@@ -220,8 +235,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                     if (controlRecord == ControlRecordType.COMMIT) {
                         if (LOG.isTraceEnabled()) {
                             LOG.trace("Replaying end transaction marker from {} at offset {} to commit" +
-                                            " transaction with producer id {} and producer epoch {}.",
-                                    tp, record.offset(), batch.producerId(), batch.producerEpoch());
+                                " transaction with producer id {} and producer epoch {}.",
+                                tp, record.offset(), batch.producerId(), batch.producerEpoch());
                         }
                         coordinator.replayEndTransactionMarker(
                                 batch.producerId(),
@@ -231,8 +246,8 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                     } else if (controlRecord == ControlRecordType.ABORT) {
                         if (LOG.isTraceEnabled()) {
                             LOG.trace("Replaying end transaction marker from {} at offset {} to abort" +
-                                            " transaction with producer id {} and producer epoch {}.",
-                                    tp, record.offset(), batch.producerId(), batch.producerEpoch());
+                                " transaction with producer id {} and producer epoch {}.",
+                                tp, record.offset(), batch.producerId(), batch.producerEpoch());
                         }
                         coordinator.replayEndTransactionMarker(
                                 batch.producerId(),
@@ -250,7 +265,7 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                         coordinatorRecordOpt = Optional.ofNullable(deserializer.deserialize(record.key(), record.value()));
                     } catch (Deserializer.UnknownRecordTypeException ex) {
                         LOG.warn("Unknown record type {} while loading offsets and group metadata from {}." +
-                                " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
+                            " Ignoring it. It could be a left over from an aborted upgrade.", ex.unknownType(), tp);
                     } catch (RuntimeException ex) {
                         String msg = String.format("Deserializing record %s from %s failed.", record, tp);
                         LOG.error(msg, ex);
@@ -261,18 +276,18 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
                         try {
                             if (LOG.isTraceEnabled()) {
                                 LOG.trace("Replaying record {} from {} at offset {} with producer id {}" +
-                                        " and producer epoch {}.", coordinatorRecord, tp, record.offset(), batch.producerId(), batch.producerEpoch());
+                                    " and producer epoch {}.", coordinatorRecord, tp, record.offset(), batch.producerId(), batch.producerEpoch());
                             }
                             coordinator.replay(
-                                    record.offset(),
-                                    batch.producerId(),
-                                    batch.producerEpoch(),
-                                    coordinatorRecord
+                                record.offset(),
+                                batch.producerId(),
+                                batch.producerEpoch(),
+                                coordinatorRecord
                             );
                         } catch (RuntimeException ex) {
                             String msg = String.format("Replaying record %s from %s at offset %d with producer id %d and" +
-                                            " producer epoch %d failed.", coordinatorRecord, tp, record.offset(),
-                                    batch.producerId(), batch.producerEpoch());
+                                " producer epoch %d failed.", coordinatorRecord, tp, record.offset(),
+                                batch.producerId(), batch.producerEpoch());
                             LOG.error(msg, ex);
                             throw new RuntimeException(msg, ex);
                         }
@@ -288,14 +303,18 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
             if (currentOffset >= currentHighWatermark) {
                 coordinator.updateLastWrittenOffset(currentOffset);
 
-                if (currentHighWatermark > previousHighWatermark) {
+                if (currentHighWatermark > lastCommittedOffset) {
                     coordinator.updateLastCommittedOffset(currentHighWatermark);
-                    previousHighWatermark = currentHighWatermark;
+                    lastCommittedOffset = currentHighWatermark;
                 }
+            } else if (currentOffset - lastCommittedOffset >= commitIntervalOffsets) {
+                coordinator.updateLastWrittenOffset(currentOffset);
+                coordinator.updateLastCommittedOffset(currentOffset);
+                lastCommittedOffset = currentOffset;
             }
         }
         loadStats.numBytes += memoryRecords.sizeInBytes();
-        return new ReplayResult(currentOffset, previousHighWatermark);
+        return new ReplayResult(currentOffset, lastCommittedOffset);
     }
 
     /**
@@ -320,14 +339,13 @@ public class CoordinatorLoaderImpl<T> implements CoordinatorLoader<T> {
 
         @Override
         public String toString() {
-            return "LoadStats{" +
-                    "numRecords=" + numRecords +
-                    ", numBytes=" + numBytes +
-                    ", readAtLeastOneRecord=" + readAtLeastOneRecord +
-                    '}';
+            return "LoadStats(" +
+                "numRecords=" + numRecords +
+                ", numBytes=" + numBytes +
+                ", readAtLeastOneRecord=" + readAtLeastOneRecord +
+                ')';
         }
     }
 
-    private record ReplayResult(long nextOffset, long highWatermark) {
-    }
+    private record ReplayResult(long nextOffset, long lastCommittedOffset) { }
 }

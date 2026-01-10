@@ -66,12 +66,12 @@ jobs:
     name: Load Test Catalog
     steps:
       - name: Checkout main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
 
       - name: Checkout test-catalog
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: 'test-catalog'
           persist-credentials: false
@@ -118,7 +118,7 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
           ref: ${{ github.sha }}  # this is the default, just being explicit.
@@ -127,7 +127,7 @@ jobs:
       - name: Setup Gradle
         uses: ./.github/actions/setup-gradle
         with:
-          java-version: 24
+          java-version: 25
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
@@ -181,7 +181,7 @@ jobs:
       fail-fast: false
       matrix:
         # If we change these, make sure to adjust ci-complete.yml
-        java: [ 24, 17 ]
+        java: [ 25, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
         exclude:
@@ -192,7 +192,7 @@ jobs:
     name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
           ref: ${{ needs.configure.outputs.sha }}
@@ -210,7 +210,7 @@ jobs:
       # the overall workflow, so we'll continue here without a test catalog.
       - name: Load Test Catalog
         id: load-test-catalog
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         continue-on-error: true
         with:
           name: combined-test-catalog
@@ -270,7 +270,7 @@ jobs:
           python .github/scripts/junit.py \
            --path build/junit-xml >> $GITHUB_STEP_SUMMARY
 
-  # This job downloads all the JUnit XML files and thread dumps from the JDK 24 test runs.
+  # This job downloads all the JUnit XML files and thread dumps from the JDK 25 test runs.
   # If any test job fails, we will not run this job. Also, if any thread dump artifacts
   # are present, this means there was a timeout in the tests and so we will not proceed
   # with catalog creation.
@@ -282,13 +282,13 @@ jobs:
       uploaded-test-catalog: ${{ steps.archive-test-catalog.outcome == 'success' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: false
       - name: Download Thread Dumps
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
-          pattern: junit-thread-dumps-24-*
+          pattern: junit-thread-dumps-25-*
           path: thread-dumps
           merge-multiple: true
       - name: Check For Thread Dump
@@ -300,9 +300,9 @@ jobs:
               exit 1;
           fi
       - name: Download JUnit XMLs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
-          pattern: junit-xml-24-*  # Only look at JDK 24 tests for the test catalog
+          pattern: junit-xml-25-*  # Only look at JDK 25 tests for the test catalog
           path: junit-xml
           merge-multiple: true
       - name: Collate Test Catalog
@@ -334,7 +334,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout Test Catalog
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: true  # Needed to commit and push later
           ref: test-catalog
@@ -342,7 +342,7 @@ jobs:
         run: |
           rm -rf test-catalog
       - name: Download Test Catalog
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: test-catalog
           path: test-catalog

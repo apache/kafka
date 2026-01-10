@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -110,6 +112,9 @@ public final class Utils {
     public static final String NL = System.lineSeparator();
 
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    private static final VarHandle INT_HANDLE =
+            MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
 
     /**
      * Get a sorted list representation of a collection.
@@ -500,11 +505,11 @@ public final class Utils {
 
         // Initialize the hash to a random value
         int h = seed ^ length;
-        int length4 = length / 4;
+        int length4 = length >> 2;
 
         for (int i = 0; i < length4; i++) {
-            final int i4 = i * 4;
-            int k = (data[i4 + 0] & 0xff) + ((data[i4 + 1] & 0xff) << 8) + ((data[i4 + 2] & 0xff) << 16) + ((data[i4 + 3] & 0xff) << 24);
+            final int i4 = i << 2;
+            int k = (int) INT_HANDLE.get(data, i4);
             k *= m;
             k ^= k >>> r;
             k *= m;
@@ -513,13 +518,14 @@ public final class Utils {
         }
 
         // Handle the last few bytes of the input array
-        switch (length % 4) {
+        int index = length4 << 2;
+        switch (length - index) {
             case 3:
-                h ^= (data[(length & ~3) + 2] & 0xff) << 16;
+                h ^= (data[index + 2] & 0xff) << 16;
             case 2:
-                h ^= (data[(length & ~3) + 1] & 0xff) << 8;
+                h ^= (data[index + 1] & 0xff) << 8;
             case 1:
-                h ^= data[length & ~3] & 0xff;
+                h ^= data[index] & 0xff;
                 h *= m;
         }
 
@@ -675,8 +681,8 @@ public final class Utils {
     }
 
     /**
-     * Converts a Properties object to a Map<String, String>, calling {@link #toString} to ensure all keys and values
-     * are Strings.
+     * Converts a Properties object to a {@code Map<String, String>}, calling {@link #toString} to ensure all keys and
+     * values are Strings.
      */
     public static Map<String, String> propsToStringMap(Properties props) {
         Map<String, String> result = new HashMap<>();
@@ -857,7 +863,7 @@ public final class Utils {
     public static void delete(final File rootFile) throws IOException {
         if (rootFile == null)
             return;
-        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 if (exc instanceof NoSuchFileException) {
@@ -1388,11 +1394,16 @@ public final class Utils {
 
     /**
      * A Collector that offers two kinds of convenience:
-     * 1. You can specify the concrete type of the returned Map
-     * 2. You can turn a stream of Entries directly into a Map without having to mess with a key function
-     *    and a value function. In particular, this is handy if all you need to do is apply a filter to a Map's entries.
-     *
-     *
+     * <ol>
+     * <li>
+     * You can specify the concrete type of the returned Map
+     * </li>
+     * <li>
+     * You can turn a stream of Entries directly into a Map without having to mess with a key function
+     * and a value function. In particular, this is handy if all you need to do is apply a filter to a Map's entries.
+     * </li>
+     * </ol>
+     * <p>
      * One thing to be wary of: These types are too "distant" for IDE type checkers to warn you if you
      * try to do something like build a TreeMap of non-Comparable elements. You'd get a runtime exception for that.
      *
@@ -1400,10 +1411,10 @@ public final class Utils {
      * @param <K> The Map key type
      * @param <V> The Map value type
      * @param <M> The type of the Map itself.
-     * @return new Collector<Map.Entry<K, V>, M, M>
+     * @return new {@code Collector<Map.Entry<K, V>, M, M>}
      */
     public static <K, V, M extends Map<K, V>> Collector<Map.Entry<K, V>, M, M> entriesToMap(final Supplier<M> mapSupplier) {
-        return new Collector<Map.Entry<K, V>, M, M>() {
+        return new Collector<>() {
             @Override
             public Supplier<M> supplier() {
                 return mapSupplier;

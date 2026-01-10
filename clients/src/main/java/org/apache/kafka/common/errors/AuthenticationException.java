@@ -23,13 +23,13 @@ import javax.net.ssl.SSLException;
  * On authentication failure, clients abort the operation requested and raise one
  * of the subclasses of this exception:
  * <ul>
- *   </li>{@link SaslAuthenticationException} if SASL handshake fails with invalid credentials
+ *   <li>{@link SaslAuthenticationException} if SASL handshake fails with invalid credentials
  *   or any other failure specific to the SASL mechanism used for authentication</li>
  *   <li>{@link UnsupportedSaslMechanismException} if the SASL mechanism requested by the client
  *   is not supported on the broker.</li>
  *   <li>{@link IllegalSaslStateException} if an unexpected request is received on during SASL
  *   handshake. This could be due to misconfigured security protocol.</li>
- *   <li>{@link SslAuthenticationException} if SSL handshake failed due to any {@link SSLException}.
+ *   <li>{@link SslAuthenticationException} if SSL handshake failed due to any {@link SSLException}.</li>
  * </ul>
  */
 public class AuthenticationException extends InvalidConfigurationException {

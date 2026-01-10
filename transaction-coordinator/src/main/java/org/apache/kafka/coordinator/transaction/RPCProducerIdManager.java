@@ -51,7 +51,8 @@ public class RPCProducerIdManager implements ProducerIdManager {
     private final String logPrefix;
 
     private final int brokerId;
-    private final Time time;
+    // Visible for testing
+    final Time time;
     private final Supplier<Long> brokerEpochSupplier;
     private final NodeToControllerChannelManager controllerChannel;
 
@@ -129,9 +130,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
 
             @Override
             public void onComplete(ClientResponse response) {
-                if (response.responseBody() instanceof AllocateProducerIdsResponse) {
-                    handleAllocateProducerIdsResponse((AllocateProducerIdsResponse) response.responseBody());
-                }
+                handleAllocateProducerIdsResponse(response);
             }
 
             @Override
@@ -142,7 +141,30 @@ public class RPCProducerIdManager implements ProducerIdManager {
         });
     }
 
-    protected void handleAllocateProducerIdsResponse(AllocateProducerIdsResponse response) {
+    private void handleUnsuccessfulResponse() {
+        // There is no need to compare and set because only one thread
+        // handles the AllocateProducerIds response.
+        backoffDeadlineMs.set(time.milliseconds() + RETRY_BACKOFF_MS);
+        requestInFlight.set(false);
+    }
+
+    protected void handleAllocateProducerIdsResponse(ClientResponse clientResponse) {
+        if (clientResponse.authenticationException() != null) {
+            log.error("{} Unable to allocate producer id because of an authentication exception", logPrefix, clientResponse.authenticationException());
+            handleUnsuccessfulResponse();
+            return;
+        }
+        if (clientResponse.versionMismatch() != null) {
+            log.error("{} Unable to allocate producer id because of a version mismatch exception", logPrefix, clientResponse.versionMismatch());
+            handleUnsuccessfulResponse();
+            return;
+        }
+        if (!clientResponse.hasResponse()) {
+            log.error("{} Unable to allocate producer id because of empty response from controller", logPrefix);
+            handleUnsuccessfulResponse();
+            return;
+        }
+        AllocateProducerIdsResponse response = (AllocateProducerIdsResponse) clientResponse.responseBody();
         var data = response.data();
         var successfulResponse = false;
         var errors = Errors.forCode(data.errorCode());
@@ -161,10 +183,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
                 log.error("{} Received error code {} from the controller.", logPrefix, errors);
         }
         if (!successfulResponse) {
-            // There is no need to compare and set because only one thread
-            // handles the AllocateProducerIds response.
-            backoffDeadlineMs.set(time.milliseconds() + RETRY_BACKOFF_MS);
-            requestInFlight.set(false);
+            handleUnsuccessfulResponse();
         }
     }
 
