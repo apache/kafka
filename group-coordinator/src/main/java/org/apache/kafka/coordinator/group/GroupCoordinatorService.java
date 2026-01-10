@@ -100,6 +100,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -129,13 +130,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -274,6 +275,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
+                    .withCachedBufferMaxBytesSupplier(config::cachedBufferMaxBytes)
                     .build();
 
             return new GroupCoordinatorService(
@@ -2216,62 +2218,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#onPartitionsDeleted(List, BufferSupplier)}.
-     */
-    @Override
-    public void onPartitionsDeleted(
-        List<TopicPartition> topicPartitions,
-        BufferSupplier bufferSupplier
-    ) throws ExecutionException, InterruptedException {
-        throwIfNotActive();
-
-        CompletableFuture.allOf(
-            FutureUtils.mapExceptionally(
-                runtime.scheduleWriteAllOperation(
-                    "on-partition-deleted",
-                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                    coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
-                ),
-                exception -> {
-                    log.error("Could not delete offsets for deleted partitions {} due to: {}.",
-                        topicPartitions, exception.getMessage(), exception
-                    );
-                    return null;
-                }
-            ).toArray(new CompletableFuture<?>[0])
-        ).get();
-
-        // At this point the metadata will not have been updated
-        // with the deleted topics. However, we must guard against it.
-        if (metadataImage == null || metadataImage.equals(CoordinatorMetadataImage.EMPTY)) {
-            return;
-        }
-
-        Set<Uuid> topicIds = topicPartitions.stream()
-            .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
-            .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
-            .collect(Collectors.toSet());
-
-        if (topicIds.isEmpty()) {
-            return;
-        }
-
-        CompletableFuture.allOf(
-            FutureUtils.mapExceptionally(
-                runtime.scheduleWriteAllOperation(
-                    "maybe-cleanup-share-group-state",
-                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                    coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
-                ),
-                exception -> {
-                    log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
-                    return null;
-                }
-            ).toArray(new CompletableFuture<?>[0])
-        ).get();
-    }
-
-    /**
      * See {@link GroupCoordinator#onElection(int, int)}.
      */
     @Override
@@ -2310,10 +2256,79 @@ public class GroupCoordinatorService implements GroupCoordinator {
         MetadataImage newImage
     ) {
         throwIfNotActive();
-        var wrappedImage = newImage == null ? null : new KRaftCoordinatorMetadataImage(newImage);
-        var wrappedDelta = delta == null ? null : new KRaftCoordinatorMetadataDelta(delta);
+        Objects.requireNonNull(delta, "delta must be provided");
+        Objects.requireNonNull(newImage, "newImage must be provided");
+
+        // Update the metadata image and propagate to runtime.
+        var wrappedImage = new KRaftCoordinatorMetadataImage(newImage);
+        var wrappedDelta = new KRaftCoordinatorMetadataDelta(delta);
         metadataImage = wrappedImage;
         runtime.onMetadataUpdate(wrappedDelta, wrappedImage);
+
+        // Handle partition deletions from the delta.
+        if (delta.topicsDelta() != null && !delta.topicsDelta().deletedTopicIds().isEmpty()) {
+            handlePartitionsDeletion(delta.topicsDelta());
+        }
+    }
+
+    /**
+     * Handles the deletion of topic partitions by scheduling write operations
+     * to delete committed offsets and clean up share group state.
+     *
+     * @param topicsDelta The topics delta containing deleted topic IDs.
+     */
+    private void handlePartitionsDeletion(TopicsDelta topicsDelta) {
+        var topicPartitions = new ArrayList<TopicPartition>();
+        var topicIds = topicsDelta.deletedTopicIds();
+
+        topicIds.forEach(topicId -> {
+            var topicImage = topicsDelta.image().getTopic(topicId);
+            if (topicImage != null) {
+                topicImage.partitions().keySet().forEach(partitionId ->
+                    topicPartitions.add(new TopicPartition(topicImage.name(), partitionId))
+                );
+            }
+        });
+
+        var futures = new ArrayList<CompletableFuture<Void>>();
+
+        if (!topicPartitions.isEmpty()) {
+            // Schedule offset deletion.
+            futures.addAll(
+                FutureUtils.mapExceptionally(
+                    runtime.scheduleWriteAllOperation(
+                        "on-partition-deleted",
+                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                        coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
+                    ),
+                    exception -> {
+                        log.error("Could not delete offsets for deleted partitions {} due to: {}.",
+                            topicPartitions, exception.getMessage(), exception);
+                        return null;
+                    }
+                )
+            );
+        }
+
+        if (!topicIds.isEmpty()) {
+            // Schedule share group state cleanup.
+            futures.addAll(
+                FutureUtils.mapExceptionally(
+                    runtime.scheduleWriteAllOperation(
+                        "maybe-cleanup-share-group-state",
+                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                        coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                    ),
+                    exception -> {
+                        log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                        return null;
+                    }
+                )
+            );
+        }
+
+        // Wait for all operations to complete.
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).join();
     }
 
     /**
@@ -2413,11 +2428,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     // NOT_ENOUGH_REPLICAS and REQUEST_TIMED_OUT to COORDINATOR_NOT_AVAILABLE,
                     // COORDINATOR_NOT_AVAILABLE is also not handled by consumers on versions prior to
                     // 3.9.
-                    OffsetFetchResponse.groupError(
+                OffsetFetchResponse.groupError(
                             request,
                             Errors.NOT_COORDINATOR,
                             context.requestVersion()
-                    );
+                );
             default -> handleOperationException(
                     operationName,
                     request,
