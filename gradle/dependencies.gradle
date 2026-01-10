@@ -123,7 +123,7 @@ versions += [
   // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
   scalafmt: "3.10.2",
   scoverage: "2.5.1",
-  slf4j: "1.7.36",
+  slf4j: "2.0.17",
   snappy: "1.1.10.7",
   spotbugs: "4.9.8",
   mockOAuth2Server: "2.2.1",
@@ -224,7 +224,7 @@ libs += [
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
-  slf4jLog4j2: "org.apache.logging.log4j:log4j-slf4j-impl:$versions.log4j2",
+  slf4jLog4j2: "org.apache.logging.log4j:log4j-slf4j2-impl:$versions.log4j2",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   spotbugs: "com.github.spotbugs:spotbugs-annotations:$versions.spotbugs",
   swaggerAnnotations: "io.swagger.core.v3:swagger-annotations:$swaggerVersion",
