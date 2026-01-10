@@ -42,9 +42,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
 })
 public class BrokerApiVersionsCommandTest {
+
     @ClusterTest
-    public void testBrokerApiVersionsCommandOutput(ClusterInstance clusterInstance) {
+    public void testBrokerApiVersionsCommandOutputUsingBrokerServer(ClusterInstance clusterInstance) {
         testBrokerApiVersionsCommandOutput(clusterInstance, false);
+    }
+
+    @ClusterTest
+    public void testBrokerApiVersionsCommandOutputUsingController(ClusterInstance clusterInstance) {
         testBrokerApiVersionsCommandOutput(clusterInstance, true);
     }
 
