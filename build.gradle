@@ -33,14 +33,14 @@ plugins {
   id 'idea'
   id 'jacoco'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '12.1.8'
+  id 'org.owasp.dependencycheck' version '12.2.0'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
 
-  id "com.github.spotbugs" version '6.4.4' apply false
+  id "com.github.spotbugs" version '6.4.8' apply false
   id 'org.scoverage' version '8.1' apply false
   id 'com.gradleup.shadow' version '8.3.9' apply false
-  id 'com.diffplug.spotless' version "8.0.0"
+  id 'com.diffplug.spotless' version "8.2.1"
 }
 
 ext {
