@@ -115,7 +115,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
                     requestInFlight.compareAndSet(false, true)) {
                 sendRequest();
                 // Reset backoff after a successful send.
-                backoffDeadlineMs.set(NO_RETRY);
+                backoffDeadlineMs.compareAndSet(retryTimestamp, NO_RETRY);
             }
         }
     }
