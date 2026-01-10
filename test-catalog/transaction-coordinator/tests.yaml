@@ -5,6 +5,7 @@ org.apache.kafka.coordinator.transaction.ProducerIdManagerTest:
 - testRetryBackoffOnAuthException
 - testRetryBackoffOnNoResponse
 - testRetryBackoffOnVersionMismatch
+- testSanityCheckProhibitsOverlappingBlocks
 - testUnrecoverableErrors
 org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerdeTest:
 - testDeserialize
