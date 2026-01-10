@@ -406,7 +406,7 @@ public class RecordAccumulatorTest {
                 for (ProducerBatch batch : batches) {
                     for (Record record : batch.records().records())
                         read++;
-                    accum.deallocate(batch);
+                    accum.completeAndDeallocateBatch(batch);
                 }
             }
         }
@@ -670,7 +670,7 @@ public class RecordAccumulatorTest {
 
         for (List<ProducerBatch> batches: results.values())
             for (ProducerBatch batch: batches)
-                accum.deallocate(batch);
+                accum.completeAndDeallocateBatch(batch);
 
         // should be complete with no unsent records.
         accum.awaitFlushCompletion();
@@ -1669,7 +1669,7 @@ public class RecordAccumulatorTest {
         assertEquals(1, batches.values().iterator().next().size());
         ProducerBatch batch = batches.values().iterator().next().get(0);
         int numSplitBatches = accum.splitAndReenqueue(batch);
-        accum.deallocate(batch);
+        accum.completeAndDeallocateBatch(batch);
 
         return numSplitBatches;
     }
@@ -1693,7 +1693,7 @@ public class RecordAccumulatorTest {
                     } else {
                         batch.complete(0L, 0L);
                     }
-                    accum.deallocate(batch);
+                    accum.completeAndDeallocateBatch(batch);
                 }
             }
         } while (batchDrained);
