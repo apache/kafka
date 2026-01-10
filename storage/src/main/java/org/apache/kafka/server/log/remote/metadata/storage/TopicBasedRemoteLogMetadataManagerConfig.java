@@ -139,10 +139,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         initializationRetryIntervalMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP);
         initializationRetryMaxTimeoutMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_PROP);
         clientIdPrefix = REMOTE_LOG_METADATA_CLIENT_PREFIX + "_" + props.get(BROKER_ID);
-        initializeProducerConsumerAdminProperties(props);
+        initializeClientProperties(props);
     }
 
-    private void initializeProducerConsumerAdminProperties(Map<String, ?> configs) {
+    private void initializeClientProperties(Map<String, ?> configs) {
         Map<String, Object> commonClientConfigs = new HashMap<>();
         Map<String, Object> producerOnlyConfigs = new HashMap<>();
         Map<String, Object> consumerOnlyConfigs = new HashMap<>();
@@ -168,7 +168,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         consumerProps = createConsumerProps(allConsumerConfigs);
         Map<String, Object> allAdminConfigs = new HashMap<>(commonClientConfigs);
         allAdminConfigs.putAll(adminOnlyConfigs);
-        adminProps = allAdminConfigs;
+        adminProps = createAdminProps(allAdminConfigs);
     }
 
     public String remoteLogMetadataTopicName() {
@@ -241,6 +241,12 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        return Collections.unmodifiableMap(props);
+    }
+
+    private Map<String, Object> createAdminProps(Map<String, Object> allAdminConfigs) {
+        Map<String, Object> props = new HashMap<>(allAdminConfigs);
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_admin");
         return Collections.unmodifiableMap(props);
     }
 

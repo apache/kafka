@@ -98,7 +98,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
     }
 
     @Test
-    public void testCommonProducerConsumerOverridesConfig() {
+    public void testCommonClientOverridesConfig() {
         Map.Entry<String, Long> overrideEntry =
                 new AbstractMap.SimpleImmutableEntry<>(CommonClientConfigs.METADATA_MAX_AGE_CONFIG, 60000L);
         Map<String, Object> commonClientConfig = new HashMap<>();
@@ -165,7 +165,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
     }
 
     private Map<String, Object> createValidConfigProps() {
-        return this.createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+        return this.createValidConfigProps(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
     }
 
     private Map<String, Object> createValidConfigProps(Map<String, Object> commonClientConfig,
