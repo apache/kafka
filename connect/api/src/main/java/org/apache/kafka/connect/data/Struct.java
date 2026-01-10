@@ -225,7 +225,10 @@ public class Struct {
      * fails, throws a {@link DataException}.
      */
     public void validate() {
-        for (Field field : schema.fields()) {
+        List<Field> fields = schema.fields();
+        int numFields = fields.size();
+        for (int i = 0; i < numFields; i++) {
+            Field field = fields.get(i);
             Schema fieldSchema = field.schema();
             Object value = values[field.index()];
             if (value == null && (fieldSchema.isOptional() || fieldSchema.defaultValue() != null))
