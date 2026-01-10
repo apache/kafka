@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ClusterTestDefaults(types = {Type.KRAFT}, serverProperties = {
+@ClusterTestDefaults(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
     @ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true"),
 })
 public class BrokerApiVersionsCommandTest {
@@ -63,14 +63,14 @@ public class BrokerApiVersionsCommandTest {
         });
         Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();
         assertTrue(lineIter.hasNext());
-        ApiMessageType.ListenerType listenerType;
+        ApiMessageType.ListenerType listenerType = usingBootstrapController ?
+                ApiMessageType.ListenerType.CONTROLLER : ApiMessageType.ListenerType.BROKER;
 
         if (usingBootstrapController) {
-            assertEquals(clusterInstance.bootstrapControllers() + " (id: 3000 rack: null isFenced: false) -> (", lineIter.next());
-            listenerType = ApiMessageType.ListenerType.CONTROLLER;
+            int id = clusterInstance.type() == Type.CO_KRAFT ? 0 : 3000;
+            assertEquals(clusterInstance.bootstrapControllers() + " (id: " + id + " rack: null isFenced: false) -> (", lineIter.next());
         } else {
             assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
-            listenerType = ApiMessageType.ListenerType.BROKER;
         }
 
         EnumSet<ApiKeys> apiKeys = ApiKeys.clientApis();
@@ -106,6 +106,8 @@ public class BrokerApiVersionsCommandTest {
                 lineBuilder.append(apiKey.name).append("(").append(apiKey.id).append("): UNSUPPORTED").append(terminator);
             }
             assertTrue(lineIter.hasNext());
+//            System.err.println("111 " + lineBuilder);
+//            System.err.println("222 " + lineIter.next());
             assertEquals(lineBuilder.toString(), lineIter.next());
         }
         assertTrue(lineIter.hasNext());

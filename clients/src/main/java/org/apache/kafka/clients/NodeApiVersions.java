@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
@@ -52,6 +53,9 @@ public class NodeApiVersions {
     private final Map<String, Short> finalizedFeatures;
 
     private final long finalizedFeaturesEpoch;
+
+    // The listener types (BROKER or CONTROLLER) for filtering APIs in toString()
+    private final Collection<ApiMessageType.ListenerType> listenerTypes;
 
     /**
      * Create a NodeApiVersions object with the current ApiVersions.
@@ -104,7 +108,16 @@ public class NodeApiVersions {
             Collection<ApiVersion> nodeApiVersions,
             Collection<SupportedFeatureKey> nodeSupportedFeatures
     ) {
-        this(nodeApiVersions, nodeSupportedFeatures, Collections.emptyList(), -1);
+        this(nodeApiVersions, nodeSupportedFeatures, Collections.emptyList(), -1,
+                List.of(ApiMessageType.ListenerType.CONTROLLER, ApiMessageType.ListenerType.BROKER));
+    }
+
+    public NodeApiVersions(
+            Collection<ApiVersion> nodeApiVersions,
+            Collection<SupportedFeatureKey> nodeSupportedFeatures,
+            Collection<ApiMessageType.ListenerType> listenerTypes
+    ) {
+        this(nodeApiVersions, nodeSupportedFeatures, Collections.emptyList(), -1, listenerTypes);
     }
 
     public NodeApiVersions(
@@ -113,10 +126,25 @@ public class NodeApiVersions {
             Collection<ApiVersionsResponseData.FinalizedFeatureKey> nodeFinalizedFeatures,
             long finalizedFeaturesEpoch
     ) {
+        this(nodeApiVersions, nodeSupportedFeatures, nodeFinalizedFeatures, finalizedFeaturesEpoch,
+                List.of(ApiMessageType.ListenerType.CONTROLLER, ApiMessageType.ListenerType.BROKER));
+    }
+
+    public NodeApiVersions(
+            Collection<ApiVersion> nodeApiVersions,
+            Collection<SupportedFeatureKey> nodeSupportedFeatures,
+            Collection<ApiVersionsResponseData.FinalizedFeatureKey> nodeFinalizedFeatures,
+            long finalizedFeaturesEpoch,
+            Collection<ApiMessageType.ListenerType> listenerTypes
+    ) {
+        this.listenerTypes = listenerTypes;
         for (ApiVersion nodeApiVersion : nodeApiVersions) {
             if (ApiKeys.hasId(nodeApiVersion.apiKey())) {
                 ApiKeys nodeApiKey = ApiKeys.forId(nodeApiVersion.apiKey());
-                supportedVersions.put(nodeApiKey, nodeApiVersion);
+                // Filter by listenerTypes if specified
+                if (listenerTypes.stream().anyMatch(nodeApiKey::inScope)) {
+                    supportedVersions.put(nodeApiKey, nodeApiVersion);
+                }
             } else {
                 // Newer brokers may support ApiKeys we don't know about
                 unknownApis.add(nodeApiVersion);
@@ -191,13 +219,16 @@ public class NodeApiVersions {
 
         // Also handle the case where some apiKey types are not specified at all in the given ApiVersions,
         // which may happen when the remote is too old.
-        for (ApiKeys apiKey : ApiKeys.clientApis()) {
-            if (!apiKeysText.containsKey(apiKey.id)) {
-                String bld = apiKey.name + "(" +
-                        apiKey.id + "): " + "UNSUPPORTED";
-                apiKeysText.put(apiKey.id, bld);
+        for (ApiMessageType.ListenerType listenerType : listenerTypes) {
+            for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+                if (!apiKeysText.containsKey(apiKey.id)) {
+                    String bld = apiKey.name + "(" +
+                            apiKey.id + "): " + "UNSUPPORTED";
+                    apiKeysText.put(apiKey.id, bld);
+                }
             }
         }
+
         String separator = lineBreaks ? ",\n\t" : ", ";
         StringBuilder bld = new StringBuilder();
         bld.append("(");

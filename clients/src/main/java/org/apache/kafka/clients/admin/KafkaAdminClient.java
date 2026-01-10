@@ -118,6 +118,7 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.message.CreateAclsRequestData;
@@ -4528,7 +4529,10 @@ public class KafkaAdminClient extends AdminClient {
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             private NodeApiVersions createNodeApiVersion(final ApiVersionsResponse response) {
-                return new NodeApiVersions(response.data().apiKeys(), response.data().supportedFeatures());
+                return new NodeApiVersions(response.data().apiKeys(), response.data().supportedFeatures(),
+                        metadataManager.usingBootstrapControllers() ?
+                                List.of(ApiMessageType.ListenerType.CONTROLLER, ApiMessageType.ListenerType.BROKER) :
+                                List.of(ApiMessageType.ListenerType.BROKER));
             }
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
