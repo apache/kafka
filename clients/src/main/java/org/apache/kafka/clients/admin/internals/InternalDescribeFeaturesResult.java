@@ -25,8 +25,6 @@ import org.apache.kafka.common.KafkaFuture;
  * Internal result class for describeFeatures that exposes API version information.
  * This class is intended for use by internal Kafka tools that need access to the raw API versions
  * returned in the ApiVersionsResponse.
- *
- * <p>The API of this class is evolving.</p>
  */
 public class InternalDescribeFeaturesResult extends DescribeFeaturesResult {
 
