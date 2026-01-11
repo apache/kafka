@@ -1748,27 +1748,27 @@ class AbstractFetcherThreadTest {
    * All Local Segments Retained
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at offset zero,
+   *  - Validate follower behavior when starting from the last tiered offset, the leader's log starts at offset zero,
    *   and all local log segments are retained.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Leader LogStartOffset: **0**
-   * - Leader LocalLogStartOffset: **0** (all segments retained locally)
-   * - Replica Start offset Strategy: **TieredOffset**
+   *  - TieredStorage: **Enabled**
+   *  - Leader LogStartOffset: **0**
+   *  - Leader LocalLogStartOffset: **0** (all segments retained locally)
+   *  - Should replica from the last tiered offset: **True**
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 0
-   * - Some segments are uploaded to tiered storage (with earliestPendingUploadOffset = 150)
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader log contains record batches starting from offset 0
+   *  - Some segments are uploaded to tiered storage (with earliestPendingUploadOffset = 150)
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower adapts to tiered storage configuration:
+   *  - Follower adapts to tiered storage configuration:
    *    - LogStartOffset remains 0
    *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
    *    - LogEndOffset advances to 200 after fetching all records
-   * 2. HighWatermark aligns with the leader (199)
-   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   *  - HighWatermark aligns with the leader (199)
+   *  - Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
    */
   @Test
   @Disabled
@@ -1819,29 +1819,29 @@ class AbstractFetcherThreadTest {
    * and All Local Segments Deleted
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at offset zero,
+   *  - Validate follower behavior when starting from the last tiered offset, the leader's log starts at offset zero,
    *   but local segments below a certain offset have been deleted.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **0**
-   * - Leader LocalLogStartOffset: **100** (segments below offset 100 deleted locally)
-   * - EarliestPendingUploadOffset: **150**
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **0**
+   *  - Leader LocalLogStartOffset: **100** (segments below offset 100 deleted locally)
+   *  - EarliestPendingUploadOffset: **150**
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 100, with local segments below 100 deleted
-   * - Some segments are pending upload to tiered storage (from offset 150)
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader log contains record batches starting from offset 100, with local segments below 100 deleted
+   *  - Some segments are pending upload to tiered storage (from offset 150)
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower adapts to tiered storage configuration:
+   *  - Follower adapts to tiered storage configuration:
    *    - LogStartOffset initializes to 0 (matching leader's logical start)
    *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
    *    - LogEndOffset advances to 200 after fetching all records
-   * 2. HighWatermark aligns with the leader (199)
-   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
-   * 4. The follower correctly handles the gap between LogStartOffset (0) and LocalLogStartOffset (150)
+   *  - HighWatermark aligns with the leader (199)
+   *  - Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   *  - The follower correctly handles the gap between LogStartOffset (0) and LocalLogStartOffset (150)
    */
   @Test
   def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetZeroAllLocalSegmentsDeleted(): Unit = {
@@ -1891,29 +1891,29 @@ class AbstractFetcherThreadTest {
    * and All Local Segments Retained
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at a non-zero offset,
+   *  - Validate follower behavior when starting from the last tiered offset, the leader's log starts at a non-zero offset,
    *   and all local log segments from the start offset are retained.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **10** (non-zero)
-   * - Leader LocalLogStartOffset: **10** (equal to LogStartOffset, all segments retained)
-   * - EarliestPendingUploadOffset: **150**
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **10** (non-zero)
+   *  - Leader LocalLogStartOffset: **10** (equal to LogStartOffset, all segments retained)
+   *  - EarliestPendingUploadOffset: **150**
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 10 (non-zero start)
-   * - Some segments are pending upload to tiered storage (from offset 150)
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader log contains record batches starting from offset 10 (non-zero start)
+   *  - Some segments are pending upload to tiered storage (from offset 150)
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower adapts to tiered storage configuration:
+   *  - Follower adapts to tiered storage configuration:
    *    - LogStartOffset initializes to 10 (matching leader's logical start)
    *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
    *    - LogEndOffset advances to 200 after fetching all records
-   * 2. HighWatermark aligns with the leader (199)
-   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
-   * 4. The follower correctly handles the gap between LogStartOffset (10) and LocalLogStartOffset (150)
+   *  - HighWatermark aligns with the leader (199)
+   *  - Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   *  - The follower correctly handles the gap between LogStartOffset (10) and LocalLogStartOffset (150)
    *    when segments in that range exist in tiered storage
    */
   @Test
@@ -1963,29 +1963,29 @@ class AbstractFetcherThreadTest {
    * and All Local Segments Deleted
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset, the leader's log starts at a non-zero offset,
+   *  - Validate follower behavior when starting from the last tiered offset, the leader's log starts at a non-zero offset,
    *   and local segments between log start offset and a higher offset have been deleted.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **10** (non-zero)
-   * - Leader LocalLogStartOffset: **100** (segments between 10 and 100 deleted locally)
-   * - EarliestPendingUploadOffset: **150**
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **10** (non-zero)
+   *  - Leader LocalLogStartOffset: **100** (segments between 10 and 100 deleted locally)
+   *  - EarliestPendingUploadOffset: **150**
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 100, with local segments below 100 deleted
-   * - Some segments are pending upload to tiered storage (from offset 150)
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader log contains record batches starting from offset 100, with local segments below 100 deleted
+   *  - Some segments are pending upload to tiered storage (from offset 150)
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower adapts to tiered storage configuration:
+   *  - Follower adapts to tiered storage configuration:
    *    - LogStartOffset initializes to 10 (matching leader's logical start)
    *    - LocalLogStartOffset updates to 150 (matching the earliest pending upload offset)
    *    - LogEndOffset advances to 200 after fetching all records
-   * 2. HighWatermark aligns with the leader (199)
-   * 3. Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
-   * 4. The follower correctly handles two gaps:
+   *  - HighWatermark aligns with the leader (199)
+   *  - Only segments after LocalLogStartOffset (150) are fetched, resulting in 2 record batches
+   *  - The follower correctly handles two gaps:
    *    - Between LogStartOffset (10) and leader's LocalLogStartOffset (100)
    *    - Between leader's LocalLogStartOffset (100) and EarliestPendingUploadOffset (150)
    */
@@ -2036,32 +2036,32 @@ class AbstractFetcherThreadTest {
    * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset - All Leader Segments Deleted Locally
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset and all leader's segments
+   *  - Validate follower behavior when starting from the last tiered offset and all leader's segments
    *   have been uploaded to tiered storage and deleted locally (complete local emptiness).
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **Parameterized (0 or 10)**
-   * - Leader LocalLogStartOffset: **151** (equals LogEndOffset)
-   * - EarliestPendingUploadOffset: **151** (all segments uploaded)
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **Parameterized (0 or 10)**
+   *  - Leader LocalLogStartOffset: **151** (equals LogEndOffset)
+   *  - EarliestPendingUploadOffset: **151** (all segments uploaded)
    *
    * Scenario:
-   * - The leader has historical record batches (at offsets 100 and 150)
-   * - All segments have been uploaded to tiered storage and deleted locally
-   * - LocalLogStartOffset equals LogEndOffset (151), indicating empty local storage
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
-   * - The test is parameterized to run with LogStartOffset values of 0 and 10
+   *  - The leader has historical record batches (at offsets 100 and 150)
+   *  - All segments have been uploaded to tiered storage and deleted locally
+   *  - LocalLogStartOffset equals LogEndOffset (151), indicating empty local storage
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The test is parameterized to run with LogStartOffset values of 0 and 10
    *
    * Expected Outcomes:
-   * 1. Follower properly adapts to leader's empty local state:
+   *  - Follower properly adapts to leader's empty local state:
    *    - LogStartOffset initializes to match leader's (0 or 10)
    *    - LocalLogStartOffset and LogEndOffset both set to 151 (matching leader)
    *    - HighWatermark sets to 151 (matching leader)
-   * 2. No record batches are fetched (log size remains 0)
-   * 3. Follower remains in FETCHING state but doesn't receive any data
-   * 4. Subsequent fetch operations don't change the follower's state
-   * 5. Follower correctly handles the gap between LogStartOffset and LocalLogStartOffset
+   *  - No record batches are fetched (log size remains 0)
+   *  - Follower remains in FETCHING state but doesn't receive any data
+   *  - Subsequent fetch operations don't change the follower's state
+   *  - Follower correctly handles the gap between LogStartOffset and LocalLogStartOffset
    *    when all segments are in tiered storage only
    */
   @ParameterizedTest
@@ -2114,33 +2114,33 @@ class AbstractFetcherThreadTest {
    * Test: Empty Follower Fetch with Tiered Storage Disabled, fetch from Last Tiered Offset enabled, and Leader LogStartOffset Zero
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset but tiered storage is disabled,
+   *  - Validate follower behavior when starting from the last tiered offset but tiered storage is disabled,
    *   and the leader's log starts at offset zero.
    *
    * Conditions:
-   * - TieredStorage: **Disabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **0**
-   * - Leader LocalLogStartOffset: **0** (equals LogStartOffset, all segments retained)
-   * - EarliestPendingUploadOffset: **N/A** (tiered storage disabled)
+   *  - TieredStorage: **Disabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **0**
+   *  - Leader LocalLogStartOffset: **0** (equals LogStartOffset, all segments retained)
+   *  - EarliestPendingUploadOffset: **N/A** (tiered storage disabled)
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 0
-   * - Tiered storage is disabled, so all segments are local
-   * - The follower starts with an empty log but enabled with data replication from the last tiered offset
-   * - Even though fetch from last tiered offset is enabled, with tiered storage disabled it should follow like
+   *  - The leader log contains record batches starting from offset 0
+   *  - Tiered storage is disabled, so all segments are local
+   *  - The follower starts with an empty log but enabled with data replication from the last tiered offset
+   *  - Even though fetch from last tiered offset is enabled, with tiered storage disabled it should follow like
    *   standard fetch
    *
    * Expected Outcomes:
-   * 1. Follower adapts to non-tiered environment despite fetch from last tiered offset enabled:
+   *  - Follower adapts to non-tiered environment despite fetch from last tiered offset enabled:
    *    - LogStartOffset initializes to 0 (matching leader's start)
    *    - LocalLogStartOffset equals LogStartOffset (0)
    *    - LogEndOffset advances to 200 after fetching all records
-   * 2. HighWatermark aligns with the leader (199)
-   * 3. All segments are fetched sequentially from the beginning:
+   *  - HighWatermark aligns with the leader (199)
+   *  - All segments are fetched sequentially from the beginning:
    *    - First fetch: 1 record batch, logEndOffset = 1
    *    - After additional fetches: 3 record batches, logEndOffset = 200
-   * 4. Even with fetch from last tiered offset enabled, follower behavior matches traditional fetch
+   *  - Even with fetch from last tiered offset enabled, follower behavior matches traditional fetch
    *    pattern when tiered storage is disabled
    */
   @Test
@@ -2189,33 +2189,33 @@ class AbstractFetcherThreadTest {
    * Test: Empty Follower Fetch with Tiered Storage Disabled, fetch from Last Tiered Offset enabled, and Leader LogStartOffset Non-Zero
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset but tiered storage is disabled
+   *  - Validate follower behavior when starting from the last tiered offset but tiered storage is disabled
    *   and the leader's log starts at a non-zero offset.
    *
    * Conditions:
-   * - TieredStorage: **Disabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **10** (non-zero)
-   * - Leader LocalLogStartOffset: **10** (equals LogStartOffset, all segments retained)
-   * - EarliestPendingUploadOffset: **N/A** (tiered storage disabled)
+   *  - TieredStorage: **Disabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **10** (non-zero)
+   *  - Leader LocalLogStartOffset: **10** (equals LogStartOffset, all segments retained)
+   *  - EarliestPendingUploadOffset: **N/A** (tiered storage disabled)
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 10 (non-zero)
-   * - Tiered storage is disabled, so all segments are local
-   * - The follower starts with an empty log but enabled with data replication from the last tiered offset
-   * - Even though fetch from last tiered offset is enabled, with tiered storage disabled it should follow like
+   *  - The leader log contains record batches starting from offset 10 (non-zero)
+   *  - Tiered storage is disabled, so all segments are local
+   *  - The follower starts with an empty log but enabled with data replication from the last tiered offset
+   *  - Even though fetch from last tiered offset is enabled, with tiered storage disabled it should follow like
    *   standard fetch
    *
    * Expected Outcomes:
-   * 1. Follower adapts to non-tiered environment despite tiered strategy:
+   *  - Follower adapts to non-tiered environment despite tiered strategy:
    *    - LogStartOffset initializes to 10 (matching leader's start)
    *    - LogEndOffset initially sets to 10, then advances as records are fetched
    *    - After all fetches, LogEndOffset reaches 200
-   * 2. HighWatermark aligns with the leader (199)
-   * 3. All segments are fetched sequentially from the leader's start offset:
+   *  - HighWatermark aligns with the leader (199)
+   *  - All segments are fetched sequentially from the leader's start offset:
    *    - First fetch: logEndOffset = 10, but no records fetched yet
    *    - After additional fetches: 3 record batches, logEndOffset = 200
-   * 4. Even with fetch from last tiered offset enabled, follower behavior matches traditional fetch
+   *  - Even with fetch from last tiered offset enabled, follower behavior matches traditional fetch
    *    pattern when tiered storage is disabled, properly handling non-zero start offsets
    */
   @Test
@@ -2263,32 +2263,32 @@ class AbstractFetcherThreadTest {
    * No Segments Uploaded
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *  - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
    *   when the leader's log starts at a non-zero offset but no segments have been uploaded to tiered storage.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **10** (non-zero)
-   * - Leader LocalLogStartOffset: **10** (equals LogStartOffset, all segments retained)
-   * - EarliestPendingUploadOffset: **-1** (no segments uploaded or pending upload)
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **10** (non-zero)
+   *  - Leader LocalLogStartOffset: **10** (equals LogStartOffset, all segments retained)
+   *  - EarliestPendingUploadOffset: **-1** (no segments uploaded or pending upload)
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 10 (non-zero)
-   * - Tiered storage is enabled, but no segments have been uploaded or are pending upload
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
-   * - With no segments in tiered storage, follower should replicate from leader's start offset
+   *  - The leader log contains record batches starting from offset 10 (non-zero)
+   *  - Tiered storage is enabled, but no segments have been uploaded or are pending upload
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - With no segments in tiered storage, follower should replicate from leader's start offset
    *
    * Expected Outcomes:
-   * 1. Follower properly initializes with leader's state:
+   *  - Follower properly initializes with leader's state:
    *    - LogStartOffset initializes to 10 (matching leader's start)
    *    - LocalLogStartOffset equals LogStartOffset (10)
    *    - LogEndOffset initially sets to 10, then advances as records are fetched
-   * 2. HighWatermark initially set to 10, then aligned with leader (199) after fetching
-   * 3. All segments are fetched sequentially from the leader's start offset:
+   *  - HighWatermark initially set to 10, then aligned with leader (199) after fetching
+   *  - All segments are fetched sequentially from the leader's start offset:
    *    - First fetch: logEndOffset = 10, but no records fetched yet
    *    - After additional fetches: 3 record batches, logEndOffset = 200
-   * 4. When tiered storage is enabled but no segments are uploaded, and fetch from tiered offset enabled, it
+   *  - When tiered storage is enabled but no segments are uploaded, and fetch from tiered offset enabled, it
    *    correctly falls back to fetching all segments from the logical start offset
    */
   @Test
@@ -2340,32 +2340,32 @@ class AbstractFetcherThreadTest {
    * No Segments Uploaded
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *  - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
    *   when the leader's log starts at offset zero and no segments have been uploaded to tiered storage.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **0**
-   * - Leader LocalLogStartOffset: **0** (equals LogStartOffset, all segments retained)
-   * - EarliestPendingUploadOffset: **-1** (no segments uploaded or pending upload)
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **0**
+   *  - Leader LocalLogStartOffset: **0** (equals LogStartOffset, all segments retained)
+   *  - EarliestPendingUploadOffset: **-1** (no segments uploaded or pending upload)
    *
    * Scenario:
-   * - The leader log contains record batches starting from offset 0
-   * - Tiered storage is enabled, but no segments have been uploaded or are pending upload
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
-   * - With no segments in tiered storage, follower should replicate from leader's start offset (0)
+   *  - The leader log contains record batches starting from offset 0
+   *  - Tiered storage is enabled, but no segments have been uploaded or are pending upload
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - With no segments in tiered storage, follower should replicate from leader's start offset (0)
    *
    * Expected Outcomes:
-   * 1. Follower properly initializes with leader's state:
+   *  - Follower properly initializes with leader's state:
    *    - LogStartOffset initializes to 0 (matching leader's start)
    *    - LocalLogStartOffset equals LogStartOffset (0)
    *    - First fetch returns 1 record batch, setting logEndOffset to 1
-   * 2. HighWatermark immediately aligned with leader (199) after first fetch
-   * 3. All segments are fetched sequentially from the leader's start offset:
+   *  - HighWatermark immediately aligned with leader (199) after first fetch
+   *  - All segments are fetched sequentially from the leader's start offset:
    *    - First fetch: 1 record batch, logEndOffset = 1
    *    - After additional fetches: 3 record batches, logEndOffset = 200
-   * 4. When tiered storage is enabled but no segments are uploaded, and fetch from tiered offset enabled, it
+   *  - When tiered storage is enabled but no segments are uploaded, and fetch from tiered offset enabled, it
    *    correctly falls back to traditional fetch behavior from offset 0
    */
   @Test
@@ -2418,34 +2418,34 @@ class AbstractFetcherThreadTest {
    * Segments Uploaded and a newly elected Leader
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
-   *   when the leader is newly elected and has local segments that start after the logical log start offset,
-   *   but doesn't yet have information about tiered segments.
+   *  - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *    when the leader is newly elected and has local segments that start after the logical log start offset,
+   *    but doesn't yet have information about tiered segments.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **10** (non-zero)
-   * - Leader LocalLogStartOffset: **100** (greater than LogStartOffset, indicating tiered segments should exist)
-   * - EarliestPendingUploadOffset: **-1** (leader doesn't know about tiered segments yet)
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **10** (non-zero)
+   *  - Leader LocalLogStartOffset: **100** (greater than LogStartOffset, indicating tiered segments should exist)
+   *  - EarliestPendingUploadOffset: **-1** (leader doesn't know about tiered segments yet)
    *
    * Scenario:
-   * - The leader's local log contains record batches starting from offset 100
-   * - The leader's logical log starts at offset 10 (implying offsets 10-99 should be in tiered storage)
-   * - However, leader reports earliestPendingUploadOffset as -1, indicating it's not aware of tiered segments
-   * - This represents a newly elected leader that hasn't completed initialization of tiered storage state
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader's local log contains record batches starting from offset 100
+   *  - The leader's logical log starts at offset 10 (implying offsets 10-99 should be in tiered storage)
+   *  - However, leader reports earliestPendingUploadOffset as -1, indicating it's not aware of tiered segments
+   *  - This represents a newly elected leader that hasn't completed initialization of tiered storage state
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower detects the inconsistent state and responds properly:
+   *  - Follower detects the inconsistent state and responds properly:
    *    - Remains in FETCHING state but doesn't fetch any records
    *    - Fetch offset remains at 0 (unchanged)
    *    - Sets a delay before retry to allow leader to complete initialization
-   * 2. Follower's state remains unchanged:
+   *  - Follower's state remains unchanged:
    *    - LogEndOffset remains at 0
    *    - No records are fetched until leader initializes properly
-   * 3. The fetch will be retried after some delay, allowing leader time to initialize
-   * 4. This graceful handling prevents replication issues during leader transition
+   *  - The fetch will be retried after some delay, allowing leader time to initialize
+   *  - This graceful handling prevents replication issues during leader transition
    */
   @Test
   def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetNonZeroSegmentsUploadedNewlyElectedLeader(): Unit = {
@@ -2499,36 +2499,36 @@ class AbstractFetcherThreadTest {
    * Slow Local Segment Deletion
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *  - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
    *   when the leader's logical log start offset is higher than its local log start offset due to
    *   a lag in local segment deletion after tiering.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **110** (non-zero)
-   * - Leader LocalLogStartOffset: **100** (less than LogStartOffset, indicating slow local segment deletion)
-   * - EarliestPendingUploadOffset: **150** (segments up to this offset are already tiered)
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **110** (non-zero)
+   *  - Leader LocalLogStartOffset: **100** (less than LogStartOffset, indicating slow local segment deletion)
+   *  - EarliestPendingUploadOffset: **150** (segments up to this offset are already tiered)
    *
    * Scenario:
-   * - The leader's local log contains record batches starting from offset 100
-   * - The leader's logical log starts at offset 110 (implying offsets 100-109 are deleted logically but not physically)
-   * - Segments up to offset 150 have been uploaded to tiered storage
-   * - This represents a leader where segment deletion is lagging behind the logical truncation point
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader's local log contains record batches starting from offset 100
+   *  - The leader's logical log starts at offset 110 (implying offsets 100-109 are deleted logically but not physically)
+   *  - Segments up to offset 150 have been uploaded to tiered storage
+   *  - This represents a leader where segment deletion is lagging behind the logical truncation point
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower initializes based on tiered offsets:
+   *  - Follower initializes based on tiered offsets:
    *    - LocalLogStartOffset initializes to 150 (earliestPendingUploadOffset)
    *    - LogEndOffset initially set to 150 as well
    *    - No records fetched in first call
-   * 2. After additional fetch operations:
+   *  - After additional fetch operations:
    *    - LogStartOffset is properly set to 110 (matching leader's logical start)
    *    - LocalLogStartOffset remains at 150 (based on tiered storage boundary)
    *    - LogEndOffset advances to 200 after fetching all records
-   * 3. Follower correctly fetches only the non-tiered segments (150-199)
-   * 4. Follower properly ignores leader's locally retained but logically deleted segments (100-109)
-   * 5. HighWatermark aligns with leader (199)
+   *  - Follower correctly fetches only the non-tiered segments (150-199)
+   *  - Follower properly ignores leader's locally retained but logically deleted segments (100-109)
+   *  - HighWatermark aligns with leader (199)
    */
   @Test
   def testEmptyFollowerFetchLastTieredOffsetLeaderLogStartOffsetNonZeroSlowLocalSegmentDeletion(): Unit = {
@@ -2579,37 +2579,37 @@ class AbstractFetcherThreadTest {
    * Than Leader LogStartOffset
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *  - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
    *   when the leader's earliest pending upload offset is less than its log start offset
    *   (a scenario that can occur after log truncation).
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **100** (non-zero)
-   * - Leader LocalLogStartOffset: **100** (equals LogStartOffset)
-   * - EarliestPendingUploadOffset: **50** (less than LogStartOffset, indicating truncation)
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **100** (non-zero)
+   *  - Leader LocalLogStartOffset: **100** (equals LogStartOffset)
+   *  - EarliestPendingUploadOffset: **50** (less than LogStartOffset, indicating truncation)
    *
    * Scenario:
-   * - The leader's local log contains record batches starting from offset 100
-   * - The leader reports earliestPendingUploadOffset as 50, which is less than its LogStartOffset of 100
-   * - This represents a case where segments that were pending upload were truncated
-   *   or where offsets were adjusted after a leader change
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader's local log contains record batches starting from offset 100
+   *  - The leader reports earliestPendingUploadOffset as 50, which is less than its LogStartOffset of 100
+   *  - This represents a case where segments that were pending upload were truncated
+   *    or where offsets were adjusted after a leader change
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower initialization prioritizes leader's log start offset:
+   *  - Follower initialization prioritizes leader's log start offset:
    *    - LocalLogStartOffset initializes to 100 (leader's LogStartOffset)
    *    - LogEndOffset initially set to 100 as well
    *    - No records fetched in first call
-   * 2. After additional fetch operations:
+   *  - After additional fetch operations:
    *    - LogStartOffset remains at 100 (matching leader's logical start)
    *    - LocalLogStartOffset remains at 100
    *    - LogEndOffset advances to 200 after fetching all records
-   * 3. Follower correctly ignores the anomalous earliestPendingUploadOffset (50)
+   *  - Follower correctly ignores the anomalous earliestPendingUploadOffset (50)
    *    and uses the leader's LogStartOffset (100) as the fetch starting point
-   * 4. All 3 record batches are fetched from the leader (100, 150, 199)
-   * 5. HighWatermark aligns with leader (199)
+   *  - All 3 record batches are fetched from the leader (100, 150, 199)
+   *  - HighWatermark aligns with leader (199)
    */
   @Test
   def testEmptyFollowerFetchLastTieredOffsetEarliestOffsetToUploadLessThanLeaderLogStartOffset(): Unit = {
@@ -2657,36 +2657,36 @@ class AbstractFetcherThreadTest {
    * Test: Empty Follower Fetch with data replication starting from Last Tiered Offset, Retryable Remote Storage Exception
    *
    * Purpose:
-   * - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
+   *  - Validate follower behavior when starting from the last tiered offset with tiered storage enabled,
    *   when there's a temporary failure accessing the remote tiered storage.
    *
    * Conditions:
-   * - TieredStorage: **Enabled**
-   * - Replica Start offset Strategy: **TieredOffset**
-   * - Leader LogStartOffset: **0**
-   * - Leader LocalLogStartOffset: **0** (equals LogStartOffset)
-   * - EarliestPendingUploadOffset: **150**
-   * - Remote Storage: **Temporarily unavailable** (throws RetriableRemoteStorageException)
+   *  - TieredStorage: **Enabled**
+   *  - Should replica from the last tiered offset: **True**
+   *  - Leader LogStartOffset: **0**
+   *  - Leader LocalLogStartOffset: **0** (equals LogStartOffset)
+   *  - EarliestPendingUploadOffset: **150**
+   *  - Remote Storage: **Temporarily unavailable** (throws RetriableRemoteStorageException)
    *
    * Scenario:
-   * - The leader's local log contains record batches starting from offset 0
-   * - The leader reports earliestPendingUploadOffset as 150, indicating tiered storage is being used
-   * - When attempting to build the remote log state, a RetriableRemoteStorageException is thrown
-   * - This represents a temporary failure in accessing the remote storage service
-   * - The follower starts with an empty log and starts data replication from the last tiered offset
+   *  - The leader's local log contains record batches starting from offset 0
+   *  - The leader reports earliestPendingUploadOffset as 150, indicating tiered storage is being used
+   *  - When attempting to build the remote log state, a RetriableRemoteStorageException is thrown
+   *  - This represents a temporary failure in accessing the remote storage service
+   *  - The follower starts with an empty log and starts data replication from the last tiered offset
    *
    * Expected Outcomes:
-   * 1. Follower correctly handles the temporary remote storage failure:
+   *  - Follower correctly handles the temporary remote storage failure:
    *    - The partition is NOT marked as failed (since the error is retryable)
    *    - Remains in FETCHING state
    *    - Fetch offset remains unchanged at 0
-   * 2. Follower schedules a retry:
+   *  - Follower schedules a retry:
    *    - Sets a delay before the next fetch attempt
    *    - Preserves the fetchOffset and other state for retry
-   * 3. Follower's log state remains unchanged during the error:
+   *  - Follower's log state remains unchanged during the error:
    *    - LogEndOffset remains at 0
    *    - No records are fetched until remote storage is accessible
-   * 4. The leader epoch tracking is maintained (lastFetchedEpoch = 0)
+   *  - The leader epoch tracking is maintained (lastFetchedEpoch = 0)
    */
   @Test
   @Disabled
