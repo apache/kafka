@@ -1749,9 +1749,18 @@ public class ShareConsumerTest {
 
             shareConsumer.subscribe(Set.of("topic abc"));
 
-            // The exception depends upon a metadata response which arrives asynchronously. If the delay is
-            // too short, the poll might return before the error is known.
-            assertThrows(InvalidTopicException.class, () -> shareConsumer.poll(Duration.ofMillis(10000)));
+            // The exception depends upon a metadata response which arrives asynchronously.
+            InvalidTopicException[] exception = {null};
+            waitForCondition(() -> {
+                try {
+                    shareConsumer.poll(Duration.ofMillis(500));
+                } catch (InvalidTopicException e) {
+                    exception[0] = e;
+                } catch (Throwable e) {
+                    fail("An InvalidTopicException should be thrown. But " + e.getClass() + " is thrown");
+                }
+                return exception[0] != null;
+            }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "An InvalidTopicException should be thrown.");
         }
     }
 
