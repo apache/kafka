@@ -52,7 +52,7 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
 ### Notable changes in 4.0.1
 
   * The filename for rotated `state-change.log` files has been updated from `stage-change.log.[date]` to `state-change.log.[date]` in the log4j2.yaml configuration file. See [KAFKA-19576](https://issues.apache.org/jira/browse/KAFKA-19576) for details. 
-  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (removed with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/41/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
+  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (removed with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/40/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
 
 
 
