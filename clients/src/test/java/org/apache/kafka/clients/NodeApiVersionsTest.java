@@ -44,7 +44,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUnsupportedVersionsToString() {
-        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList());
+        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList(), List.of(ApiMessageType.ListenerType.BROKER));
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
@@ -65,7 +65,7 @@ public class NodeApiVersionsTest {
     @Test
     public void testVersionsToString() {
         List<ApiVersion> versionList = new ArrayList<>();
-        for (ApiKeys apiKey : ApiKeys.values()) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER)) {
             if (apiKey == ApiKeys.DELETE_TOPICS) {
                 versionList.add(new ApiVersion()
                         .setApiKey(apiKey.id)
@@ -73,10 +73,10 @@ public class NodeApiVersionsTest {
                         .setMaxVersion((short) 10001));
             } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
+        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList(), List.of(ApiMessageType.ListenerType.BROKER));
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.values()) {
+        for (ApiKeys apiKey : ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER)) {
             bld.append(prefix);
             if (apiKey == ApiKeys.DELETE_TOPICS) {
                 bld.append("DeleteTopics(20): 10000 to 10001 [unusable: node too new]");
