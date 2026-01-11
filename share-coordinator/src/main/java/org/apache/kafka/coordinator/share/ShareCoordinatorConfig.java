@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -57,7 +56,9 @@ public class ShareCoordinatorConfig {
 
     public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG = "share.coordinator.snapshot.update.records.per.snapshot";
     public static final int SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DEFAULT = 500;
-    public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC = "The number of update records the share coordinator writes between snapshot records.";
+    public static final String SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_DOC = "The number of update records the share coordinator writes between snapshot records. " +
+        "Smaller values speed up recovery but increase write overhead; larger values reduce write overhead but increase recovery time. " +
+        "Set to 0 to write a complete snapshot for every state change.";
 
     public static final String WRITE_TIMEOUT_MS_CONFIG = "share.coordinator.write.timeout.ms";
     public static final int WRITE_TIMEOUT_MS_DEFAULT = 5000;
@@ -142,7 +143,6 @@ public class ShareCoordinatorConfig {
         pruneIntervalMs = config.getInt(STATE_TOPIC_PRUNE_INTERVAL_MS_CONFIG);
         coldPartitionSnapshotIntervalMs = config.getInt(COLD_PARTITION_SNAPSHOT_INTERVAL_MS_CONFIG);
         this.config = config;
-        validate();
     }
 
     public int shareCoordinatorStateTopicNumPartitions() {
@@ -200,7 +200,7 @@ public class ShareCoordinatorConfig {
     public int shareCoordinatorColdPartitionSnapshotIntervalMs() {
         return coldPartitionSnapshotIntervalMs;
     }
-    
+
     /**
      * The maximum buffer size that the share coordinator can cache.
      *
@@ -208,10 +208,5 @@ public class ShareCoordinatorConfig {
      */
     public int shareCoordinatorCachedBufferMaxBytes() {
         return config.getInt(CACHED_BUFFER_MAX_BYTES_CONFIG);
-    }
-
-    private void validate() {
-        Utils.require(snapshotUpdateRecordsPerSnapshot >= 0 && snapshotUpdateRecordsPerSnapshot <= 500,
-            String.format("%s must be between [0, 500]", SNAPSHOT_UPDATE_RECORDS_PER_SNAPSHOT_CONFIG));
     }
 }
