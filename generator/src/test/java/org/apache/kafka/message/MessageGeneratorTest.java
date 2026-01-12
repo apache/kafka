@@ -93,7 +93,7 @@ public class MessageGeneratorTest {
                 "{",
                 "  \"apiKey\": 0,",
                 "  \"type\": \"response\",",
-                "  \"name\": \"FooBarRespose\",",
+                "  \"name\": \"FooBarResponse\",",
                 "  \"validVersions\": \"none\"",
                 "}")), MessageSpec.class);
 
