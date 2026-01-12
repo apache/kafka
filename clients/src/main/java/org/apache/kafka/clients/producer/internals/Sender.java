@@ -171,7 +171,12 @@ public class Sender implements Runnable {
 
     private void maybeRemoveAndDeallocateBatch(ProducerBatch batch) {
         maybeRemoveFromInflightBatches(batch);
-        this.accumulator.deallocate(batch);
+        this.accumulator.completeAndDeallocateBatch(batch);
+    }
+
+    private void maybeRemoveAndDeallocateBatchLater(ProducerBatch batch) {
+        maybeRemoveFromInflightBatches(batch);
+        this.accumulator.completeBatch(batch);
     }
 
     /**
@@ -354,6 +359,24 @@ public class Sender implements Runnable {
         return false;
     }
 
+    private void failExpiredBatches(List<ProducerBatch> expiredBatches, long now, boolean deallocateBuffer) {
+        // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
+        // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
+        // we need to reset the producer id here.
+        if (!expiredBatches.isEmpty())
+            log.trace("Expired {} batches in accumulator", expiredBatches.size());
+        for (ProducerBatch expiredBatch : expiredBatches) {
+            String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
+                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation. "
+                + "The request has not been sent, or no server response has been received yet.";
+            failBatch(expiredBatch, new TimeoutException(errorMessage), false, deallocateBuffer);
+            if (transactionManager != null && expiredBatch.inRetry()) {
+                // This ensures that no new batches are drained until the current in flight batches are fully resolved.
+                transactionManager.markSequenceUnresolved(expiredBatch);
+            }
+        }
+    }
+
     private long sendProducerData(long now) {
         MetadataSnapshot metadataSnapshot = metadata.fetchMetadataSnapshot();
         // get the list of partitions with data ready to send
@@ -405,23 +428,10 @@ public class Sender implements Runnable {
         accumulator.resetNextBatchExpiryTime();
         List<ProducerBatch> expiredInflightBatches = getExpiredInflightBatches(now);
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
-        expiredBatches.addAll(expiredInflightBatches);
 
-        // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
-        // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
-        // we need to reset the producer id here.
-        if (!expiredBatches.isEmpty())
-            log.trace("Expired {} batches in accumulator", expiredBatches.size());
-        for (ProducerBatch expiredBatch : expiredBatches) {
-            String errorMessage = "Expiring " + expiredBatch.recordCount + " record(s) for " + expiredBatch.topicPartition
-                + ":" + (now - expiredBatch.createdMs) + " ms has passed since batch creation. " 
-                + "The request has not been sent, or no server response has been received yet.";
-            failBatch(expiredBatch, new TimeoutException(errorMessage), false);
-            if (transactionManager != null && expiredBatch.inRetry()) {
-                // This ensures that no new batches are drained until the current in flight batches are fully resolved.
-                transactionManager.markSequenceUnresolved(expiredBatch);
-            }
-        }
+        failExpiredBatches(expiredBatches, now, true);
+        failExpiredBatches(expiredInflightBatches, now, false);
+
         sensors.updateProduceRequestMetrics(batches);
 
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
@@ -524,6 +534,7 @@ public class Sender implements Runnable {
         if (accumulator.hasIncomplete()) {
             log.error("Aborting producer batches due to fatal error", exception);
             accumulator.abortBatches(exception);
+            inFlightBatches.clear();
         }
     }
 
@@ -659,6 +670,7 @@ public class Sender implements Runnable {
      */
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
                                long now, Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo) {
+        batch.setInflight(false);
         Errors error = response.error;
 
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 && !batch.isDone() &&
@@ -696,7 +708,7 @@ public class Sender implements Runnable {
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
-                failBatch(batch, response, batch.attempts() < this.retries);
+                failBatch(batch, response, batch.attempts() < this.retries, true);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
@@ -749,12 +761,16 @@ public class Sender implements Runnable {
 
         if (batch.complete(response.baseOffset, response.logAppendTime)) {
             maybeRemoveAndDeallocateBatch(batch);
+        } else {
+            // Always safe to call deallocate because the batch keeps track of whether or not it was deallocated yet
+            this.accumulator.deallocate(batch);
         }
     }
 
     private void failBatch(ProducerBatch batch,
                            ProduceResponse.PartitionResponse response,
-                           boolean adjustSequenceNumbers) {
+                           boolean adjustSequenceNumbers,
+                           boolean deallocateBatch) {
         final RuntimeException topLevelException;
         if (response.error == Errors.TOPIC_AUTHORIZATION_FAILED)
             topLevelException = new TopicAuthorizationException(Collections.singleton(batch.topicPartition.topic()));
@@ -764,7 +780,7 @@ public class Sender implements Runnable {
             topLevelException = response.error.exception(response.errorMessage);
 
         if (response.recordErrors == null || response.recordErrors.isEmpty()) {
-            failBatch(batch, topLevelException, adjustSequenceNumbers);
+            failBatch(batch, topLevelException, adjustSequenceNumbers, deallocateBatch);
         } else {
             Map<Integer, RuntimeException> recordErrorMap = new HashMap<>(response.recordErrors.size());
             for (ProduceResponse.RecordError recordError : response.recordErrors) {
@@ -803,23 +819,25 @@ public class Sender implements Runnable {
                 }
             };
 
-            failBatch(batch, topLevelException, recordExceptions, adjustSequenceNumbers);
+            failBatch(batch, topLevelException, recordExceptions, adjustSequenceNumbers, deallocateBatch);
         }
     }
 
     private void failBatch(
         ProducerBatch batch,
         RuntimeException topLevelException,
-        boolean adjustSequenceNumbers
+        boolean adjustSequenceNumbers,
+        boolean deallocateBatch
     ) {
-        failBatch(batch, topLevelException, batchIndex -> topLevelException, adjustSequenceNumbers);
+        failBatch(batch, topLevelException, batchIndex -> topLevelException, adjustSequenceNumbers, deallocateBatch);
     }
 
     private void failBatch(
         ProducerBatch batch,
         RuntimeException topLevelException,
         Function<Integer, RuntimeException> recordExceptions,
-        boolean adjustSequenceNumbers
+        boolean adjustSequenceNumbers,
+        boolean deallocateBatch
     ) {
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
 
@@ -833,7 +851,20 @@ public class Sender implements Runnable {
                     log.debug("Encountered error when transaction manager was handling a failed batch", e);
                 }
             }
-            maybeRemoveAndDeallocateBatch(batch);
+            if (deallocateBatch) {
+                maybeRemoveAndDeallocateBatch(batch);
+            } else {
+                // Fix for KAFKA-19012
+                // The pooled ByteBuffer associated with this batch might still be in use by the network client so we
+                // cannot allow it to be reused yet. We skip deallocating it now. When the request in the network client 
+                // completes with a response, either completeBatch() or failBatch() will be called with deallocateBatch=true.
+                // The buffer associated with the batch will be deallocated then.
+                maybeRemoveAndDeallocateBatchLater(batch);
+            }
+        } else {
+            if (deallocateBatch) {
+                this.accumulator.deallocate(batch);
+            }
         }
     }
 
@@ -886,6 +917,7 @@ public class Sender implements Runnable {
                     .setIndex(tp.partition())
                     .setRecords(records));
             recordsByPartition.put(tp, batch);
+            batch.setInflight(true);
         }
 
         String transactionalId = null;

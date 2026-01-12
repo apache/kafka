@@ -95,11 +95,13 @@ import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -136,7 +138,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -2218,63 +2219,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#onPartitionsDeleted(List, BufferSupplier)}.
-     */
-    @Override
-    public void onPartitionsDeleted(
-        List<TopicPartition> topicPartitions,
-        BufferSupplier bufferSupplier
-    ) throws ExecutionException, InterruptedException {
-        throwIfNotActive();
-
-        var futures = new ArrayList<CompletableFuture<Void>>();
-
-        // Handle the partition deletion for committed offsets.
-        futures.addAll(
-            FutureUtils.mapExceptionally(
-                runtime.scheduleWriteAllOperation(
-                    "on-partition-deleted",
-                    Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                    coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
-                ),
-                exception -> {
-                    log.error("Could not delete offsets for deleted partitions {} due to: {}.",
-                        topicPartitions, exception.getMessage(), exception
-                    );
-                    return null;
-                }
-            )
-        );
-
-        // Handle the topic deletion for share state.
-        if (metadataImage != null) {
-            var topicIds = topicPartitions.stream()
-                .filter(tp -> metadataImage.topicMetadata(tp.topic()).isPresent())
-                .map(tp -> metadataImage.topicMetadata(tp.topic()).get().id())
-                .collect(Collectors.toSet());
-
-            if (!topicIds.isEmpty()) {
-                futures.addAll(
-                    FutureUtils.mapExceptionally(
-                        runtime.scheduleWriteAllOperation(
-                            "maybe-cleanup-share-group-state",
-                            Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                            coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
-                        ),
-                        exception -> {
-                            log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
-                            return null;
-                        }
-                    )
-                );
-            }
-        }
-
-        // Wait on the results.
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0]));
-    }
-
-    /**
      * See {@link GroupCoordinator#onElection(int, int)}.
      */
     @Override
@@ -2315,10 +2259,75 @@ public class GroupCoordinatorService implements GroupCoordinator {
         throwIfNotActive();
         Objects.requireNonNull(delta, "delta must be provided");
         Objects.requireNonNull(newImage, "newImage must be provided");
+
+        // Update the metadata image and propagate to runtime.
         var wrappedImage = new KRaftCoordinatorMetadataImage(newImage);
         var wrappedDelta = new KRaftCoordinatorMetadataDelta(delta);
         metadataImage = wrappedImage;
         runtime.onMetadataUpdate(wrappedDelta, wrappedImage);
+
+        // Handle topic deletions from the delta.
+        if (delta.topicsDelta() != null && !delta.topicsDelta().deletedTopicIds().isEmpty()) {
+            handleTopicsDeletion(delta.topicsDelta());
+        }
+    }
+
+    /**
+     * Handles the deletion of topics by scheduling write operations
+     * to delete committed offsets and clean up share group state.
+     *
+     * @param topicsDelta The topics delta containing deleted topic IDs.
+     */
+    private void handleTopicsDeletion(TopicsDelta topicsDelta) {
+        var deletedTopicIds = topicsDelta.deletedTopicIds();
+        var deletedTopics = new ArrayList<DeletedTopic>();
+
+        deletedTopicIds.forEach(topicId -> {
+            var topicImage = topicsDelta.image().getTopic(topicId);
+            if (topicImage != null) {
+                deletedTopics.add(new DeletedTopic(topicId, topicImage.name()));
+            }
+        });
+
+        var futures = new ArrayList<CompletableFuture<Void>>();
+
+        if (!deletedTopics.isEmpty()) {
+            // Schedule offset deletion.
+            futures.addAll(
+                FutureUtils.mapExceptionally(
+                    runtime.scheduleWriteAllOperation(
+                        "on-topics-deleted",
+                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                        coordinator -> coordinator.onTopicsDeleted(deletedTopics)
+                    ),
+                    exception -> {
+                        log.error("Could not delete offsets for deleted topics {} due to: {}.",
+                            deletedTopics, exception.getMessage(), exception);
+                        return null;
+                    }
+                )
+            );
+        }
+
+        if (!deletedTopicIds.isEmpty()) {
+            // Schedule share group state cleanup.
+            futures.addAll(
+                FutureUtils.mapExceptionally(
+                    runtime.scheduleWriteAllOperation(
+                        "maybe-cleanup-share-group-state",
+                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                        coordinator -> coordinator.maybeCleanupShareGroupState(deletedTopicIds)
+                    ),
+                    exception -> {
+                        log.error("Unable to cleanup state for the deleted topics {}", deletedTopicIds, exception);
+                        return null;
+                    }
+                )
+            );
+        }
+
+        // Wait for all operations to complete.
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).join();
     }
 
     /**
