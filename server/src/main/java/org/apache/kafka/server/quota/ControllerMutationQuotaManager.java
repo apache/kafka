@@ -25,8 +25,8 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.network.Session;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
-import org.apache.kafka.server.network.Session;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

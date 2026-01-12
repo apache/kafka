@@ -34,8 +34,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.network.RequestConvertToJson
-import org.apache.kafka.server.network.Session
+import org.apache.kafka.network.{RequestConvertToJson, Session}
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
