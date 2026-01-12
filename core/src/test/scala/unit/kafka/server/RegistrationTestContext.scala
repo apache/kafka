@@ -44,7 +44,7 @@ class SimpleControllerNodeProvider extends ControllerNodeProvider {
 
   def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
 
-  override def getControllerInfo(): ControllerInformation = new ControllerInformation(Optional.ofNullable(node.get()),
+  override def get(): ControllerInformation = new ControllerInformation(Optional.ofNullable(node.get()),
     listenerName, securityProtocol, saslMechanism)
 }
 

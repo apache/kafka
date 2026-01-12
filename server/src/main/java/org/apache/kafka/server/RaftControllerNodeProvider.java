@@ -61,7 +61,7 @@ public class RaftControllerNodeProvider implements ControllerNodeProvider {
 
     @SuppressWarnings("resource")
     @Override
-    public ControllerInformation getControllerInfo() {
+    public ControllerInformation get() {
         OptionalInt leaderIdOpt = raftManager.client().leaderAndEpoch().leaderId();
 
         Optional<Node> node = leaderIdOpt.isPresent()

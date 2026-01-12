@@ -81,7 +81,7 @@ class MockNodeToControllerChannelManager(
         queueItem.callback.onTimeout()
         unsentIterator.remove()
       } else {
-        controllerNodeProvider.getControllerInfo().node.toScala match {
+        controllerNodeProvider.get().node.toScala match {
           case Some(controller) if client.ready(controller, time.milliseconds()) =>
             val clientRequest = client.newClientRequest(
               controller.idString,

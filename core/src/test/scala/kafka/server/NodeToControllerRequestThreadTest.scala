@@ -61,7 +61,7 @@ class NodeToControllerRequestThreadTest {
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
+    when(controllerNodeProvider.get()).thenReturn(emptyControllerInfo)
 
     val retryTimeoutMs = 30000
     val testRequestThread = new NodeToControllerRequestThread(
@@ -99,7 +99,7 @@ class NodeToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(2, java.util.Map.of("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
@@ -142,7 +142,7 @@ class NodeToControllerRequestThreadTest {
     val oldController = new Node(oldControllerId, "host1", 1234)
     val newController = new Node(newControllerId, "host2", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(
+    when(controllerNodeProvider.get()).thenReturn(
       controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, java.util.Map.of("a", 2))
@@ -191,7 +191,7 @@ class NodeToControllerRequestThreadTest {
     val oldController = new Node(oldControllerId, "host1", port)
     val newController = new Node(newControllerId, "host2", port)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(
+    when(controllerNodeProvider.get()).thenReturn(
       controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
@@ -253,7 +253,7 @@ class NodeToControllerRequestThreadTest {
     val oldController = new Node(oldControllerId, "host1", port)
     val newController = new Node(newControllerId, "host2", port)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(
+    when(controllerNodeProvider.get()).thenReturn(
       controllerInfo(Some(oldController)),
       controllerInfo(Some(newController))
     )
@@ -322,7 +322,7 @@ class NodeToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val controller = new Node(controllerId, "host1", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(controller)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(controller)))
 
     val retryTimeoutMs = 30000
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
@@ -371,7 +371,7 @@ class NodeToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
 
     val callbackResponse = new AtomicReference[ClientResponse]()
     val completionHandler = new ControllerRequestCompletionHandler {
@@ -409,7 +409,7 @@ class NodeToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
 
     val callbackResponse = new AtomicReference[ClientResponse]()
     val completionHandler = new ControllerRequestCompletionHandler {
@@ -446,7 +446,7 @@ class NodeToControllerRequestThreadTest {
     val mockClient = new MockClient(time, metadata)
 
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
+    when(controllerNodeProvider.get()).thenReturn(emptyControllerInfo)
 
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,   new ManualMetadataUpdater(),

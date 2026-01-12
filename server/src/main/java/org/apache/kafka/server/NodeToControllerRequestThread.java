@@ -142,12 +142,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
             queueItem.callback().onComplete(response);
         } else if (response.wasDisconnected()) {
             updateControllerAddress(null);
-            try {
-                requestQueue.putFirst(queueItem);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Thread interrupted while re-queuing request after disconnection", e);
-            }
+            requestQueue.addFirst(queueItem);
         } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
             log.debug("Request {} received NOT_CONTROLLER exception. Disconnecting the " +
                             "connection to the stale controller {}",
@@ -180,11 +175,11 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
 
     @Override
     public void doWork() {
-        final ControllerInformation controllerInformation = controllerNodeProvider.getControllerInfo();
         if (activeControllerAddress().isPresent()) {
             super.pollOnce(Long.MAX_VALUE);
         } else {
             log.debug("Controller isn't cached, looking for local metadata changes");
+            final ControllerInformation controllerInformation = controllerNodeProvider.get();
             Optional<Node> nodeOptional = controllerInformation.node();
             if (nodeOptional.isPresent()) {
                 Node controllerNode = nodeOptional.get();

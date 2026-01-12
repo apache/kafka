@@ -17,9 +17,10 @@
 
 package org.apache.kafka.server;
 
+import java.util.function.Supplier;
+
 /**
  * Discovers the active controller node and provides connection details for communicating with it.
  */
-public interface ControllerNodeProvider {
-    ControllerInformation getControllerInfo();
+public interface ControllerNodeProvider extends Supplier<ControllerInformation> {
 }

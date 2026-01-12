@@ -86,7 +86,7 @@ class ForwardingManagerTest {
     val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody, requestHeader.apiVersion,
       requestCorrelationId + 1)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo)
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
     client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.NONE))
 
@@ -110,7 +110,7 @@ class ForwardingManagerTest {
     val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody,
       requestHeader.apiVersion, requestCorrelationId)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo)
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
     client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.UNSUPPORTED_VERSION))
 
@@ -127,7 +127,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(emptyControllerInfo)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))
@@ -151,7 +151,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))
@@ -177,7 +177,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo)
 
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
     client.prepareUnsupportedVersionResponse(isEnvelopeRequest)
@@ -198,7 +198,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo)
 
     client.createPendingAuthenticationError(controllerInfo.node.get, 50)
 
@@ -222,7 +222,7 @@ class ForwardingManagerTest {
     val responseBuffer = RequestTestUtils.serializeResponseWithHeader(responseBody,
       requestHeader.apiVersion, requestCorrelationId)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo)
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
     client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.UNSUPPORTED_VERSION))
 
@@ -244,7 +244,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(controllerInfo)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))

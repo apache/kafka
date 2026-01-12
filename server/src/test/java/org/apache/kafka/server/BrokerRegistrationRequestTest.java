@@ -232,7 +232,7 @@ class BrokerRegistrationRequestTest {
         }
 
         @Override
-        public ControllerInformation getControllerInfo() {
+        public ControllerInformation get() {
             return new ControllerInformation(
                     node(),
                     listenerName(),

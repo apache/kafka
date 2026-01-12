@@ -56,12 +56,10 @@ import java.util.Optional;
  */
 public class NodeToControllerChannelManagerImpl implements NodeToControllerChannelManager {
     private static final Logger log = LoggerFactory.getLogger(NodeToControllerChannelManagerImpl.class);
-    private final ControllerNodeProvider controllerNodeProvider;
     private final Time time;
     private final Metrics metrics;
     private final AbstractKafkaConfig config;
     private final String channelName;
-    private final String threadNamePrefix;
     private final Long retryTimeoutMs;
 
     private final LogContext logContext;
@@ -69,24 +67,17 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
     private final ApiVersions apiVersions = new ApiVersions();
     private final NodeToControllerRequestThread requestThread;
 
-    @SuppressWarnings("this-escape")
     public NodeToControllerChannelManagerImpl(ControllerNodeProvider controllerNodeProvider, Time time, Metrics metrics, AbstractKafkaConfig config, String channelName, String threadNamePrefix, Long retryTimeoutMs) {
-        this.controllerNodeProvider = controllerNodeProvider;
         this.time = time;
         this.metrics = metrics;
         this.config = config;
         this.channelName = channelName;
-        this.threadNamePrefix = threadNamePrefix;
         this.retryTimeoutMs = retryTimeoutMs;
         this.logContext = new LogContext(String.format("[NodeToControllerChannelManager id=%s name=%s] ",
                 config.getInt(KRaftConfigs.NODE_ID_CONFIG), channelName));
-        this.requestThread = newRequestThread();
-    }
-
-    NodeToControllerRequestThread newRequestThread() {
         String threadName = String.format("%sto-controller-%s-channel-manager", threadNamePrefix, channelName);
-        ControllerInformation controllerInformation = controllerNodeProvider.getControllerInfo();
-        return new NodeToControllerRequestThread(
+        ControllerInformation controllerInformation = controllerNodeProvider.get();
+        this.requestThread = new NodeToControllerRequestThread(
                 buildNetworkClient(controllerInformation),
                 manualMetadataUpdater,
                 controllerNodeProvider,
