@@ -1038,7 +1038,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
         Set<Uuid> deletedTopicIds
     ) {
-        return groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
+        final long startTimeMs = time.milliseconds();
+        final var result = groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
+
+        log.info("Generated {} records in {} milliseconds while cleaning share group state for topics {}.",
+            result.records().size(), time.milliseconds() - startTimeMs, deletedTopicIds);
+
+        return result;
     }
 
     /**

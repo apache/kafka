@@ -30,7 +30,7 @@ type: docs
 
 # Removed ZooKeeper Features
 
-This section documents differences in behavior between KRaft mode and ZooKeeper mode. Specifically, several configurations, metrics and features have changed or are no longer required in KRaft mode. To migrate an existing cluster from ZooKeeper mode to KRaft mode, please refer to the [ZooKeeper to KRaft Migration](/39/documentation.html#kraft_zk_migration) section. 
+This section documents differences in behavior between KRaft mode and ZooKeeper mode. Specifically, several configurations, metrics and features have changed or are no longer required in KRaft mode. To migrate an existing cluster from ZooKeeper mode to KRaft mode, please refer to the [ZooKeeper to KRaft Migration](/39/operations/kraft/#zookeeper-to-kraft-migration) section. 
 
 ## Configurations
 
