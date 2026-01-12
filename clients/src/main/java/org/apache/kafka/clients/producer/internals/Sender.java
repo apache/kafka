@@ -80,7 +80,7 @@ public class Sender implements Runnable {
 
     private final Logger log;
 
-    /* the client for sending requests to the Kafka cluster*/
+    /* the client for sending requests to the Kafka cluster */
     private final KafkaClient client;
 
     /* the record accumulator that batches records */
