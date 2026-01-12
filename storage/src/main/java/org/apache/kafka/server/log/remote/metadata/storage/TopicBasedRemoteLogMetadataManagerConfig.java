@@ -207,6 +207,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return logDir;
     }
 
+    // Used for testing
     public Map<String, Object> commonProperties() {
         return commonProps;
     }
@@ -261,7 +262,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", metadataTopicMinIsr=" + metadataTopicMinIsr +
                 ", initializationRetryMaxTimeoutMs=" + initializationRetryMaxTimeoutMs +
                 ", initializationRetryIntervalMs=" + initializationRetryIntervalMs +
-                ", commonProps=" + configMapToRedactedString(commonProps, AdminClientConfig.configDef()) +
                 ", consumerProps=" + configMapToRedactedString(consumerProps, ConsumerConfig.configDef()) +
                 ", producerProps=" + configMapToRedactedString(producerProps, ProducerConfig.configDef()) +
                 ", adminProps=" + configMapToRedactedString(adminProps, AdminClientConfig.configDef()) +
