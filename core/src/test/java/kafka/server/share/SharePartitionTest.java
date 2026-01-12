@@ -12069,6 +12069,46 @@ public class SharePartitionTest {
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(14L).memberId());
     }
 
+    @Test
+    public void testInvalidAcknowledgeTypeInBatchAcknowledgement() {
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(1, 10);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 10);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Invalid acknowledge type 5.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(1, 10, List.of((byte) 5))));
+        assertTrue(ackResult.isCompletedExceptionally());
+        assertFutureThrows(InvalidRequestException.class, ackResult);
+    }
+
+    @Test
+    public void testInvalidAcknowledgeTypeInSubsetAcknowledgement() {
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(1, 10);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 10);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Invalid acknowledge type -1.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(2, 3, List.of((byte) -1))));
+        assertTrue(ackResult.isCompletedExceptionally());
+        assertFutureThrows(InvalidRequestException.class, ackResult);
+    }
+
     /**
      * This function produces transactional data of a given no. of records followed by a transactional marker (COMMIT/ABORT).
      */

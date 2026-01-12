@@ -23,7 +23,6 @@ import kafka.log.LogManager
 import kafka.server.share.SharePartitionManager
 import kafka.server.{KafkaConfig, ReplicaManager}
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
@@ -40,7 +39,6 @@ import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.storage.internals.log.{LogManager => JLogManager}
 
 import java.util.concurrent.CompletableFuture
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 
@@ -187,22 +185,6 @@ class BrokerMetadataPublisher(
             s"coordinator with local changes in $deltaName", t)
         }
         try {
-          // Notify the group coordinator about deleted topics.
-          val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
-          topicsDelta.deletedTopicIds().forEach { id =>
-            val topicImage = topicsDelta.image().getTopic(id)
-            topicImage.partitions().keySet().forEach {
-              id => deletedTopicPartitions += new TopicPartition(topicImage.name(), id)
-            }
-          }
-          if (deletedTopicPartitions.nonEmpty) {
-            groupCoordinator.onPartitionsDeleted(deletedTopicPartitions.asJava, RequestLocal.noCaching.bufferSupplier)
-          }
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
-            s"coordinator with deleted partitions in $deltaName", t)
-        }
-        try {
           // Notify the share coordinator about deleted topics.
           val deletedTopicIds = topicsDelta.deletedTopicIds()
           if (!deletedTopicIds.isEmpty) {
@@ -341,7 +323,19 @@ class BrokerMetadataPublisher(
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
         metadataCache.getAllTopics().asScala,
-        isStray = log => JLogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
+        isStray = log => {
+          if (log.topicId().isEmpty) {
+            // Missing topic ID could result from storage failure or unclean shutdown after topic creation but before flushing
+            // data to the `partition.metadata` file. And before appending data to the log, the `partition.metadata` is always
+            // flushed to disk. So if the topic ID is missing, it mostly means no data was appended, and we can treat this as
+            // a stray log.
+            info(s"The topicId does not exist in $log, treat it as a stray log.")
+            true
+          } else {
+            val replicas = newImage.topics.partitionReplicas(log.topicId.get, log.topicPartition.partition)
+            JLogManager.isStrayReplica(replicas, brokerId, log)
+          }
+        }
       )
 
       // Rename all future replicas which are in the same directory as the

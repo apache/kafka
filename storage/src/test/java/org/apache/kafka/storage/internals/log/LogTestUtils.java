@@ -16,11 +16,18 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.RequestLocal;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 public class LogTestUtils {
     public static LogSegment createSegment(long offset, File logDir, int indexIntervalBytes, Time time) throws IOException {
@@ -32,5 +39,120 @@ public class LogTestUtils {
 
         // Create and return the LogSegment instance
         return new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time);
+    }
+
+
+    /**
+     * Append an end transaction marker (commit or abort) to the log as a leader.
+     *
+     * @param transactionVersion the transaction version (1 = TV1, 2 = TV2) etc. Must be explicitly specified.
+     *                          TV2 markers require strict epoch validation (markerEpoch > currentEpoch),
+     *                          while legacy markers use relaxed validation (markerEpoch >= currentEpoch).
+     */
+    public static LogAppendInfo appendEndTxnMarkerAsLeader(UnifiedLog log,
+                                                           long producerId,
+                                                           short producerEpoch,
+                                                           ControlRecordType controlType,
+                                                           long timestamp,
+                                                           int coordinatorEpoch,
+                                                           int leaderEpoch,
+                                                           short transactionVersion) {
+        MemoryRecords records = endTxnRecords(controlType, producerId, producerEpoch, 0L, coordinatorEpoch, leaderEpoch, timestamp);
+
+        return log.appendAsLeader(records, leaderEpoch, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion);
+    }
+
+    public static MemoryRecords endTxnRecords(ControlRecordType controlRecordType,
+                                              long producerId,
+                                              short epoch,
+                                              long offset,
+                                              int coordinatorEpoch,
+                                              int partitionLeaderEpoch,
+                                              long timestamp) {
+        EndTransactionMarker marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch);
+        return MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, epoch, marker);
+    }
+
+    public static class LogConfigBuilder {
+        private final Map<String, Object> configs = new HashMap<>();
+
+        public LogConfigBuilder segmentMs(long segmentMs) {
+            configs.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs);
+            return this;
+        }
+
+        public LogConfigBuilder segmentBytes(int segmentBytes) {
+            configs.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes);
+            return this;
+        }
+
+        public LogConfigBuilder retentionMs(long retentionMs) {
+            configs.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs);
+            return this;
+        }
+
+        public LogConfigBuilder localRetentionMs(long localRetentionMs) {
+            configs.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs);
+            return this;
+        }
+
+        public LogConfigBuilder retentionBytes(long retentionBytes) {
+            configs.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes);
+            return this;
+        }
+
+        public LogConfigBuilder localRetentionBytes(long localRetentionBytes) {
+            configs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes);
+            return this;
+        }
+
+        public LogConfigBuilder segmentJitterMs(long segmentJitterMs) {
+            configs.put(TopicConfig.SEGMENT_JITTER_MS_CONFIG, segmentJitterMs);
+            return this;
+        }
+
+        public LogConfigBuilder cleanupPolicy(String cleanupPolicy) {
+            configs.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy);
+            return this;
+        }
+
+        public LogConfigBuilder maxMessageBytes(int maxMessageBytes) {
+            configs.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes);
+            return this;
+        }
+
+        public LogConfigBuilder indexIntervalBytes(int indexIntervalBytes) {
+            configs.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, indexIntervalBytes);
+            return this;
+        }
+
+        public LogConfigBuilder segmentIndexBytes(int segmentIndexBytes) {
+            configs.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, segmentIndexBytes);
+            return this;
+        }
+
+        public LogConfigBuilder fileDeleteDelayMs(long fileDeleteDelayMs) {
+            configs.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, fileDeleteDelayMs);
+            return this;
+        }
+
+        public LogConfigBuilder remoteLogStorageEnable(boolean remoteLogStorageEnable) {
+            configs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable);
+            return this;
+        }
+
+        public LogConfigBuilder remoteLogCopyDisable(boolean remoteLogCopyDisable) {
+            configs.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, remoteLogCopyDisable);
+            return this;
+        }
+
+        public LogConfigBuilder remoteLogDeleteOnDisable(boolean remoteLogDeleteOnDisable) {
+            configs.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, remoteLogDeleteOnDisable);
+            return this;
+        }
+
+        public LogConfig build() {
+            return new LogConfig(configs);
+        }
     }
 }

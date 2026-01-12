@@ -27,7 +27,7 @@ import kafka.server.share.SharePartitionManager
 import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
@@ -124,7 +124,7 @@ class BrokerMetadataPublisherTest {
           override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
         })
       broker.brokerMetadataPublisher.dynamicConfigPublisher = publisher
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         assertEquals(0, numTimesReloadCalled.get())
         admin.incrementalAlterConfigs(singletonMap(
@@ -170,7 +170,7 @@ class BrokerMetadataPublisherTest {
       broker.sharedServer.loader.removeAndClosePublisher(broker.brokerMetadataPublisher).get(1, TimeUnit.MINUTES)
       broker.metadataPublishers.remove(broker.brokerMetadataPublisher)
       broker.sharedServer.loader.installPublishers(List(publisher).asJava).get(1, TimeUnit.MINUTES)
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = cluster.admin()
       try {
         admin.createTopics(singletonList(new NewTopic("foo", 1, 1.toShort))).all().get()
       } finally {

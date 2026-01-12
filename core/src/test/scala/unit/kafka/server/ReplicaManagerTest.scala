@@ -58,8 +58,9 @@ import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.raft.KRaftConfigs
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition, TransactionVersion}
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -93,7 +94,7 @@ import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, Future, TimeUnit}
 import java.util.function.{BiConsumer, Consumer}
 import java.util.stream.IntStream
@@ -5513,6 +5514,17 @@ class ReplicaManagerTest {
 
     try {
       val spiedPartition = spy(Partition(tpId, time, replicaManager))
+
+      // Prevent promotion of future replica
+      val blockPromotion = new AtomicBoolean(true)
+      doAnswer { invocation =>
+        if (blockPromotion.compareAndSet(true, false)) {
+          false
+        } else {
+          invocation.callRealMethod()
+        }
+      }.when(spiedPartition).maybeReplaceCurrentWithFutureReplica()
+
       replicaManager.addOnlinePartition(tp, spiedPartition)
 
       val leaderDelta = topicsCreateDelta(localId, isStartIdLeader = true, partitions = List(0, 1), List.empty, topic, topicIds(topic))
@@ -5525,9 +5537,6 @@ class ReplicaManagerTest {
       val newReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(_ == firstLogDir).head
       replicaManager.alterReplicaLogDirs(Map(tp -> newReplicaFolder.getAbsolutePath))
 
-      // Prevent promotion of future replica
-      doReturn(false).when(spiedPartition).maybeReplaceCurrentWithFutureReplica()
-
       // Make sure the future log is created with the correct topic ID.
       val futureLog = replicaManager.futureLocalLogOrException(tp)
       assertEquals(Optional.of(topicId), futureLog.topicId)
@@ -5535,8 +5544,6 @@ class ReplicaManagerTest {
       // Move the replica to the third log directory
       val finalReplicaFolder = replicaManager.logManager.liveLogDirs.filterNot(it => it == firstLogDir || it == newReplicaFolder).head
       replicaManager.alterReplicaLogDirs(Map(tp -> finalReplicaFolder.getAbsolutePath))
-
-      reset(spiedPartition)
 
       TestUtils.waitUntilTrue(() => {
         replicaManager.replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
