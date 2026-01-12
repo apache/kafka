@@ -245,8 +245,8 @@ public class StateDirectory implements AutoCloseable {
                         inputPartitions
                     );
                     final StartupContext initContext = new StartupContext(id, config, stateManager);
-                    // TODO: we need to pass a proper logPrefix
-                    StateManagerUtil.registerStartupStateStores(log, "", subTopology, stateManager, this, initContext);
+                    final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
+                    StateManagerUtil.registerStartupStateStores(log, threadLogPrefix, subTopology, stateManager, this, initContext);
                     for (final StateStore stateStore : subTopology.stateStores()) {
                         if (!stateStore.isOpen()) {
                             throw new IllegalStateException("StateStore [" + stateStore.name() + "] is not open");
