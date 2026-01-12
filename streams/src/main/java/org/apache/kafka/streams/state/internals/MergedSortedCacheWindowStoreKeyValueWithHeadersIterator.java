@@ -23,10 +23,10 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.ValueAndTimestampWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 class MergedSortedCacheWindowStoreKeyValueWithHeadersIterator
-    extends AbstractMergedSortedCacheStoreIterator<Windowed<Bytes>, Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>, ValueAndTimestampWithHeaders<byte[]>> {
+    extends AbstractMergedSortedCacheStoreIterator<Windowed<Bytes>, Windowed<Bytes>, ValueTimestampHeaders<byte[]>, ValueTimestampHeaders<byte[]>> {
 
     private final StateSerdes<Bytes, byte[]> serdes;
     private final long windowSize;
@@ -36,7 +36,7 @@ class MergedSortedCacheWindowStoreKeyValueWithHeadersIterator
 
     MergedSortedCacheWindowStoreKeyValueWithHeadersIterator(
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator,
-        final KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> underlyingIterator,
+        final KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> underlyingIterator,
         final StateSerdes<Bytes, byte[]> serdes,
         final long windowSize,
         final SegmentedCacheFunction cacheFunction,
@@ -48,7 +48,7 @@ class MergedSortedCacheWindowStoreKeyValueWithHeadersIterator
 
     MergedSortedCacheWindowStoreKeyValueWithHeadersIterator(
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator,
-        final KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> underlyingIterator,
+        final KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> underlyingIterator,
         final StateSerdes<Bytes, byte[]> serdes,
         final long windowSize,
         final SegmentedCacheFunction cacheFunction,
@@ -70,7 +70,7 @@ class MergedSortedCacheWindowStoreKeyValueWithHeadersIterator
     }
 
     @Override
-    KeyValue<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> deserializeStorePair(final KeyValue<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> pair) {
+    KeyValue<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> deserializeStorePair(final KeyValue<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> pair) {
         return pair;
     }
 
@@ -81,8 +81,8 @@ class MergedSortedCacheWindowStoreKeyValueWithHeadersIterator
     }
 
     @Override
-    ValueAndTimestampWithHeaders<byte[]> deserializeCacheValue(final LRUCacheEntry cacheEntry) {
-        return ValueAndTimestampWithHeaders.makeAllowNullable(
+    ValueTimestampHeaders<byte[]> deserializeCacheValue(final LRUCacheEntry cacheEntry) {
+        return ValueTimestampHeaders.makeAllowNullable(
             cacheEntry.value(),
             cacheEntry.context().timestamp(),
             cacheEntry.context().headers()

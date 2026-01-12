@@ -19,7 +19,7 @@ import java.time.Instant;
  * @param <K> Type of keys
  * @param <V> Type of values
  */
-public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, ValueAndTimestampWithHeaders<V>> {
+public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, ValueTimestampHeaders<V>> {
 
     /**
      * Put a key-value-timestamp pair, along with its associated Kafka headers, into the window
@@ -52,11 +52,11 @@ public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, 
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if the given key is {@code null}
      */
-    WindowStoreIterator<ValueAndTimestampWithHeaders<V>> fetchWithHeaders(K key, long timeFrom, long timeTo);
+    WindowStoreIterator<ValueTimestampHeaders<V>> fetchWithHeaders(K key, long timeFrom, long timeTo);
 
-    default WindowStoreIterator<ValueAndTimestampWithHeaders<V>> backwardFetchWithHeaders(final K key,
-                                                                                          final long timeFrom,
-                                                                                          final long timeTo) {
+    default WindowStoreIterator<ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K key,
+                                                                                   final long timeFrom,
+                                                                                   final long timeTo) {
         throw new UnsupportedOperationException("This API is not supported by this implementation of TimestampedWindowStoreWithHeaders.");
     }
 
@@ -75,12 +75,12 @@ public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, 
      * @return an iterator over windowed key-value-timestamp-header pairs {@code <Windowed<K>, ValueTimestampHeaders<V>>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> fetchWithHeaders(K keyFrom, K keyTo, long timeFrom, long timeTo);
+    KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchWithHeaders(K keyFrom, K keyTo, long timeFrom, long timeTo);
 
-    default KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> backwardFetchWithHeaders(final K keyFrom,
-                                                                                                    final K keyTo,
-                                                                                                    final long timeFrom,
-                                                                                                    final long timeTo) {
+    default KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K keyFrom,
+                                                                                             final K keyTo,
+                                                                                             final long timeFrom,
+                                                                                             final long timeTo) {
         throw new UnsupportedOperationException("This API is not supported by this implementation of TimestampedWindowStoreWithHeaders.");
     }
 
@@ -97,10 +97,10 @@ public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, 
      * @return an iterator over windowed key-value-timestamp-header pairs {@code <Windowed<K>, ValueTimestampHeaders<V>>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> fetchAllWithHeaders(long timeFrom, long timeTo);
+    KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAllWithHeaders(long timeFrom, long timeTo);
 
-    default KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> backwardFetchAllWithHeaders(final long timeFrom,
-                                                                                                       final long timeTo) {
+    default KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAllWithHeaders(final long timeFrom,
+                                                                                                final long timeTo) {
         throw new UnsupportedOperationException("This API is not supported by this implementation of TimestampedWindowStoreWithHeaders.");
     }
 
@@ -108,39 +108,39 @@ public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, 
 
     // The default Instant methods rely on the long-based methods above, simplifying the implementation.
 
-    default WindowStoreIterator<ValueAndTimestampWithHeaders<V>> fetchWithHeaders(final K key,
-                                                                                  final Instant timeFrom,
-                                                                                  final Instant timeTo) throws IllegalArgumentException {
+    default WindowStoreIterator<ValueTimestampHeaders<V>> fetchWithHeaders(final K key,
+                                                                           final Instant timeFrom,
+                                                                           final Instant timeTo) throws IllegalArgumentException {
         return fetchWithHeaders(key, timeFrom.toEpochMilli(), timeTo.toEpochMilli());
     }
 
-    default WindowStoreIterator<ValueAndTimestampWithHeaders<V>> backwardFetchWithHeaders(final K key,
-                                                                                          final Instant timeFrom,
-                                                                                          final Instant timeTo) throws IllegalArgumentException {
+    default WindowStoreIterator<ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K key,
+                                                                                   final Instant timeFrom,
+                                                                                   final Instant timeTo) throws IllegalArgumentException {
         return backwardFetchWithHeaders(key, timeFrom.toEpochMilli(), timeTo.toEpochMilli());
     }
 
-    default KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> fetchWithHeaders(final K keyFrom,
-                                                                                            final K keyTo,
-                                                                                            final Instant timeFrom,
-                                                                                            final Instant timeTo) throws IllegalArgumentException {
+    default KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchWithHeaders(final K keyFrom,
+                                                                                     final K keyTo,
+                                                                                     final Instant timeFrom,
+                                                                                     final Instant timeTo) throws IllegalArgumentException {
         return fetchWithHeaders(keyFrom, keyTo, timeFrom.toEpochMilli(), timeTo.toEpochMilli());
     }
 
-    default KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> backwardFetchWithHeaders(final K keyFrom,
-                                                                                                    final K keyTo,
-                                                                                                    final Instant timeFrom,
-                                                                                                    final Instant timeTo) throws IllegalArgumentException {
+    default KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K keyFrom,
+                                                                                             final K keyTo,
+                                                                                             final Instant timeFrom,
+                                                                                             final Instant timeTo) throws IllegalArgumentException {
         return backwardFetchWithHeaders(keyFrom, keyTo, timeFrom.toEpochMilli(), timeTo.toEpochMilli());
     }
 
-    default KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> fetchAllWithHeaders(final Instant timeFrom,
-                                                                                               final Instant timeTo) throws IllegalArgumentException {
+    default KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAllWithHeaders(final Instant timeFrom,
+                                                                                        final Instant timeTo) throws IllegalArgumentException {
         return fetchAllWithHeaders(timeFrom.toEpochMilli(), timeTo.toEpochMilli());
     }
 
-    default KeyValueIterator<Windowed<K>, ValueAndTimestampWithHeaders<V>> backwardFetchAllWithHeaders(final Instant timeFrom,
-                                                                                                       final Instant timeTo) throws IllegalArgumentException {
+    default KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAllWithHeaders(final Instant timeFrom,
+                                                                                                final Instant timeTo) throws IllegalArgumentException {
         return backwardFetchAllWithHeaders(timeFrom.toEpochMilli(), timeTo.toEpochMilli());
     }
 }

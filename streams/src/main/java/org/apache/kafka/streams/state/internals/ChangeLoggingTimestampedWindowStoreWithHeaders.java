@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
-import org.apache.kafka.streams.state.ValueAndTimestampWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
@@ -57,7 +57,7 @@ class ChangeLoggingTimestampedWindowStoreWithHeaders
 
     @Override
     public void put(final Bytes key,
-                    final ValueAndTimestampWithHeaders<byte[]> value,
+                    final ValueTimestampHeaders<byte[]> value,
                     final long windowStartTimestamp) {
         wrapped().put(key, value, windowStartTimestamp);
 
@@ -104,102 +104,102 @@ class ChangeLoggingTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public ValueAndTimestampWithHeaders<byte[]> fetch(final Bytes key,
-                                                      final long timestamp) {
+    public ValueTimestampHeaders<byte[]> fetch(final Bytes key,
+                                               final long timestamp) {
         return wrapped().fetch(key, timestamp);
     }
 
     @Override
-    public WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> fetch(final Bytes key,
-                                                                           final long from,
-                                                                           final long to) {
+    public WindowStoreIterator<ValueTimestampHeaders<byte[]>> fetch(final Bytes key,
+                                                                    final long from,
+                                                                    final long to) {
         return wrapped().fetch(key, from, to);
     }
 
     @Override
-    public WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> backwardFetch(final Bytes key,
-                                                                                    final long timeFrom,
-                                                                                    final long timeTo) {
+    public WindowStoreIterator<ValueTimestampHeaders<byte[]>> backwardFetch(final Bytes key,
+                                                                            final long timeFrom,
+                                                                            final long timeTo) {
         return wrapped().backwardFetch(key, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetch(final Bytes keyFrom,
-                                                                                          final Bytes keyTo,
-                                                                                          final long timeFrom,
-                                                                                          final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetch(final Bytes keyFrom,
+                                                                                  final Bytes keyTo,
+                                                                                  final long timeFrom,
+                                                                                  final long timeTo) {
         return wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardFetch(final Bytes keyFrom,
-                                                                                                  final Bytes keyTo,
-                                                                                                  final long timeFrom,
-                                                                                                  final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardFetch(final Bytes keyFrom,
+                                                                                          final Bytes keyTo,
+                                                                                          final long timeFrom,
+                                                                                          final long timeTo) {
         return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> all() {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> all() {
         return wrapped().all();
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardAll() {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardAll() {
         return wrapped().backwardAll();
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetchAll(final long timeFrom,
-                                                                                             final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetchAll(final long timeFrom,
+                                                                                     final long timeTo) {
         return wrapped().fetchAll(timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardFetchAll(final long timeFrom,
-                                                                                                     final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardFetchAll(final long timeFrom,
+                                                                                             final long timeTo) {
         return wrapped().backwardFetchAll(timeFrom, timeTo);
     }
 
     @Override
-    public WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> fetchWithHeaders(final Bytes key,
-                                                                                       final long timeFrom,
-                                                                                       final long timeTo) {
+    public WindowStoreIterator<ValueTimestampHeaders<byte[]>> fetchWithHeaders(final Bytes key,
+                                                                               final long timeFrom,
+                                                                               final long timeTo) {
         return wrapped().fetchWithHeaders(key, timeFrom, timeTo);
     }
 
     @Override
-    public WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> backwardFetchWithHeaders(final Bytes key,
-                                                                                                final long timeFrom,
-                                                                                                final long timeTo) {
+    public WindowStoreIterator<ValueTimestampHeaders<byte[]>> backwardFetchWithHeaders(final Bytes key,
+                                                                                       final long timeFrom,
+                                                                                       final long timeTo) {
         return wrapped().backwardFetchWithHeaders(key, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetchWithHeaders(final Bytes keyFrom,
-                                                                                                     final Bytes keyTo,
-                                                                                                     final long timeFrom,
-                                                                                                     final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetchWithHeaders(final Bytes keyFrom,
+                                                                                             final Bytes keyTo,
+                                                                                             final long timeFrom,
+                                                                                             final long timeTo) {
         return wrapped().fetchWithHeaders(keyFrom, keyTo, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardFetchWithHeaders(final Bytes keyFrom,
-                                                                                                             final Bytes keyTo,
-                                                                                                             final long timeFrom,
-                                                                                                             final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardFetchWithHeaders(final Bytes keyFrom,
+                                                                                                     final Bytes keyTo,
+                                                                                                     final long timeFrom,
+                                                                                                     final long timeTo) {
         return wrapped().backwardFetchWithHeaders(keyFrom, keyTo, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetchAllWithHeaders(final long timeFrom,
-                                                                                                        final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetchAllWithHeaders(final long timeFrom,
+                                                                                                final long timeTo) {
         return wrapped().fetchAllWithHeaders(timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardFetchAllWithHeaders(final long timeFrom,
-                                                                                                                final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardFetchAllWithHeaders(final long timeFrom,
+                                                                                                        final long timeTo) {
         return wrapped().backwardFetchAllWithHeaders(timeFrom, timeTo);
     }
 

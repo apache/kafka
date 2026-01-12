@@ -11,7 +11,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
-import org.apache.kafka.streams.state.ValueAndTimestampWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.nio.ByteBuffer;
@@ -62,7 +62,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
 
     @Override
     public void put(final Bytes key,
-                    final ValueAndTimestampWithHeaders<byte[]> valueAndHeaders,
+                    final ValueTimestampHeaders<byte[]> valueAndHeaders,
                     final long windowStartTimestamp) {
         if (valueAndHeaders == null) {
             put(key, null, windowStartTimestamp, 0L, null);
@@ -76,15 +76,15 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public ValueAndTimestampWithHeaders<byte[]> fetch(final Bytes key, final long timestamp) {
+    public ValueTimestampHeaders<byte[]> fetch(final Bytes key, final long timestamp) {
         final byte[] encodedValue = wrapped().get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum));
         return decodeValueWithTimestampAndHeaders(encodedValue);
     }
 
     @Override
-    public WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> fetch(final Bytes key,
-                                                                            final long timeFrom,
-                                                                            final long timeTo) {
+    public WindowStoreIterator<ValueTimestampHeaders<byte[]>> fetch(final Bytes key,
+                                                                    final long timeFrom,
+                                                                    final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(key, timeFrom, timeTo);
         return new WindowStoreHeaderIteratorWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).valuesIterator()
@@ -92,9 +92,9 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> backwardFetch(final Bytes key,
-                                                                                    final long timeFrom,
-                                                                                    final long timeTo) {
+    public WindowStoreIterator<ValueTimestampHeaders<byte[]>> backwardFetch(final Bytes key,
+                                                                            final long timeFrom,
+                                                                            final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(key, timeFrom, timeTo);
         return new WindowStoreHeaderIteratorWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).valuesIterator()
@@ -102,17 +102,17 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> fetchWithHeaders(final Bytes key,
-                                                                                      final long timeFrom,
-                                                                                      final long timeTo) {
+    public WindowStoreIterator<ValueTimestampHeaders<byte[]>> fetchWithHeaders(final Bytes key,
+                                                                               final long timeFrom,
+                                                                               final long timeTo) {
         return fetch(key, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetch(final Bytes keyFrom,
-                                                                                          final Bytes keyTo,
-                                                                                          final long timeFrom,
-                                                                                          final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetch(final Bytes keyFrom,
+                                                                                  final Bytes keyTo,
+                                                                                  final long timeFrom,
+                                                                                  final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         return new KeyValueIteratorHeaderWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator()
@@ -120,10 +120,10 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardFetch(final Bytes keyFrom,
-                                                                                                  final Bytes keyTo,
-                                                                                                  final long timeFrom,
-                                                                                                  final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardFetch(final Bytes keyFrom,
+                                                                                          final Bytes keyTo,
+                                                                                          final long timeFrom,
+                                                                                          final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         return new KeyValueIteratorHeaderWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator()
@@ -131,15 +131,15 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetchWithHeaders(Bytes keyFrom,
-                                                                                                     Bytes keyTo,
-                                                                                                     long timeFrom,
-                                                                                                     long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetchWithHeaders(Bytes keyFrom,
+                                                                                             Bytes keyTo,
+                                                                                             long timeFrom,
+                                                                                             long timeTo) {
         return fetch(keyFrom, keyTo, timeFrom, timeTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> all() {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> all() {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().all();
         return new KeyValueIteratorHeaderWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator()
@@ -147,7 +147,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardAll() {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardAll() {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardAll();
         return new KeyValueIteratorHeaderWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator()
@@ -155,7 +155,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetchAll(long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetchAll(long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchAll(timeFrom, timeTo);
         return new KeyValueIteratorHeaderWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator()
@@ -163,7 +163,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> backwardFetchAll(long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> backwardFetchAll(long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetchAll(timeFrom, timeTo);
         return new KeyValueIteratorHeaderWrapper(
             new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator()
@@ -171,7 +171,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> fetchAllWithHeaders(long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> fetchAllWithHeaders(long timeFrom, long timeTo) {
         return fetchAll(timeFrom, timeTo);
     }
 
@@ -233,7 +233,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
      * @param encodedValue the encoded byte array
      * @return ValueAndTimestampWithHeaders instance
      */
-    private ValueAndTimestampWithHeaders<byte[]> decodeValueWithTimestampAndHeaders(final byte[] encodedValue) {
+    private ValueTimestampHeaders<byte[]> decodeValueWithTimestampAndHeaders(final byte[] encodedValue) {
         if (encodedValue == null) {
             return null;
         }
@@ -257,7 +257,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
         final byte[] value = new byte[valueSize];
         buffer.get(value);
 
-        return ValueAndTimestampWithHeaders.make(value, timestamp, headers);
+        return ValueTimestampHeaders.make(value, timestamp, headers);
     }
 
     /**
@@ -351,7 +351,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
      * Iterator wrapper for single-key fetch (WindowStoreIterator).
      * Wraps the underlying iterator and decodes values on the fly.
      */
-    private class WindowStoreHeaderIteratorWrapper implements WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> {
+    private class WindowStoreHeaderIteratorWrapper implements WindowStoreIterator<ValueTimestampHeaders<byte[]>> {
         private final WindowStoreIterator<byte[]> innerIterator;
 
         WindowStoreHeaderIteratorWrapper(final WindowStoreIterator<byte[]> innerIterator) {
@@ -374,7 +374,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
         }
 
         @Override
-        public KeyValue<Long, ValueAndTimestampWithHeaders<byte[]>> next() {
+        public KeyValue<Long, ValueTimestampHeaders<byte[]>> next() {
             final KeyValue<Long, byte[]> next = innerIterator.next();
             return KeyValue.pair(
                 next.key,
@@ -387,7 +387,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
      * Iterator wrapper for range/all fetch (KeyValueIterator).
      * Wraps the underlying iterator and decodes values on the fly.
      */
-    private class KeyValueIteratorHeaderWrapper implements KeyValueIterator<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> {
+    private class KeyValueIteratorHeaderWrapper implements KeyValueIterator<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> {
         private final KeyValueIterator<Windowed<Bytes>, byte[]> innerIterator;
 
         KeyValueIteratorHeaderWrapper(final KeyValueIterator<Windowed<Bytes>, byte[]> innerIterator) {
@@ -410,7 +410,7 @@ class RocksDBTimestampedWindowStoreWithHeaders
         }
 
         @Override
-        public KeyValue<Windowed<Bytes>, ValueAndTimestampWithHeaders<byte[]>> next() {
+        public KeyValue<Windowed<Bytes>, ValueTimestampHeaders<byte[]>> next() {
             final KeyValue<Windowed<Bytes>, byte[]> next = innerIterator.next();
             return KeyValue.pair(
                 next.key,

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.ValueAndTimestampWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.function.Function;
@@ -31,21 +31,21 @@ import static org.apache.kafka.streams.state.internals.SegmentedCacheFunction.by
  * Assumes each of them is sorted by key.
  */
 class MergedSortedCacheWindowStoreWithHeadersIterator
-    extends AbstractMergedSortedCacheStoreIterator<Long, Long, ValueAndTimestampWithHeaders<byte[]>, ValueAndTimestampWithHeaders<byte[]>>
-    implements WindowStoreIterator<ValueAndTimestampWithHeaders<byte[]>> {
+    extends AbstractMergedSortedCacheStoreIterator<Long, Long, ValueTimestampHeaders<byte[]>, ValueTimestampHeaders<byte[]>>
+    implements WindowStoreIterator<ValueTimestampHeaders<byte[]>> {
 
     private final Function<byte[], Long> timestampExtractor;
 
     MergedSortedCacheWindowStoreWithHeadersIterator(
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-        final KeyValueIterator<Long, ValueAndTimestampWithHeaders<byte[]>> storeIterator,
+        final KeyValueIterator<Long, ValueTimestampHeaders<byte[]>> storeIterator,
         final boolean forward) {
         this(cacheIterator, storeIterator, forward, WindowKeySchema::extractStoreTimestamp);
     }
 
     MergedSortedCacheWindowStoreWithHeadersIterator(
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-        final KeyValueIterator<Long, ValueAndTimestampWithHeaders<byte[]>> storeIterator,
+        final KeyValueIterator<Long, ValueTimestampHeaders<byte[]>> storeIterator,
         final boolean forward,
         final Function<byte[], Long> tsExtractor) {
         super(cacheIterator, storeIterator, forward);
@@ -53,8 +53,8 @@ class MergedSortedCacheWindowStoreWithHeadersIterator
     }
 
     @Override
-    public KeyValue<Long, ValueAndTimestampWithHeaders<byte[]>> deserializeStorePair(
-        final KeyValue<Long, ValueAndTimestampWithHeaders<byte[]>> pair) {
+    public KeyValue<Long, ValueTimestampHeaders<byte[]>> deserializeStorePair(
+        final KeyValue<Long, ValueTimestampHeaders<byte[]>> pair) {
         return pair;
     }
 
@@ -65,8 +65,8 @@ class MergedSortedCacheWindowStoreWithHeadersIterator
     }
 
     @Override
-    ValueAndTimestampWithHeaders<byte[]> deserializeCacheValue(final LRUCacheEntry cacheEntry) {
-        return ValueAndTimestampWithHeaders.makeAllowNullable(
+    ValueTimestampHeaders<byte[]> deserializeCacheValue(final LRUCacheEntry cacheEntry) {
+        return ValueTimestampHeaders.makeAllowNullable(
             cacheEntry.value(),
             cacheEntry.context().timestamp(),
             cacheEntry.context().headers()
