@@ -122,7 +122,7 @@ class BrokerRegistrationRequestTest {
         }
 
         @Override
-        public void close() {
+        public void close() throws InterruptedException {
             channelManager.shutdown();
             metrics.close();
         }
