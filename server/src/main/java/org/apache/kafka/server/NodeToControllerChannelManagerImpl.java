@@ -139,15 +139,9 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
     }
 
     @Override
-    public void shutdown() {
-        try {
-            requestThread.shutdown();
-            log.info("Node to controller channel manager for {} shutdown", channelName);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("Interrupted while shutting down NodeToControllerChannelManager", e);
-        }
-
+    public void shutdown() throws InterruptedException {
+        requestThread.shutdown();
+        log.info("Node to controller channel manager for {} shutdown", channelName);
     }
 
     @Override
