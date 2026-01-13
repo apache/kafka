@@ -48,6 +48,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
         types = {Type.KRAFT},
@@ -58,6 +59,7 @@ public class ConcurrentListOffsetsRequestTest {
     private static final short REPLICAS = 1;
     private static final int PARTITION = 2;
     private static final int TIMEOUT = 1000;
+    private static final long LATCH_TIMEOUT_MS = TIMEOUT * 5L;
     private final ClusterInstance clusterInstance;
     private Admin adminClient;
     private NetworkClient networkClient;
@@ -91,7 +93,7 @@ public class ConcurrentListOffsetsRequestTest {
     @ClusterTest
     public void correctlyHandleConcurrentModificationOfPartitionLeaderCache() throws Exception {
         // making one request to prepopulate the partition leader cache so we have something to delete later
-        listAllOffsets().all().get(TIMEOUT * 2, TimeUnit.SECONDS);
+        listAllOffsets().all().get(TIMEOUT * 2L, TimeUnit.MILLISECONDS);
 
         final CountDownLatch invalidationLatch = new CountDownLatch(1);
         // Replacing the partition leader cache in order to be able to synchronize the calls so that they happen in the right order to reproduce the issue
@@ -105,7 +107,8 @@ public class ConcurrentListOffsetsRequestTest {
         // making another request(this request will face the host resolver error and remove the node from the cache)
         ListOffsetsResult failInducingResult = listAllOffsets();
         // waiting until we get to the invalidation
-        invalidationLatch.await();
+        assertTrue(invalidationLatch.await(LATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS),
+                "Timed out waiting for cache invalidation");
         // making another request. at this point the fail inducing request is waiting for this one before it deletes the keys associated with the node
         // the SynchronizedTestMap class synchronizes the calls to mimic the race condition
         ListOffsetsResult failingResult = listAllOffsets();
@@ -160,7 +163,9 @@ public class ConcurrentListOffsetsRequestTest {
                 newRequestCheckLatch.countDown();
                 try {
                     // letting the remove method proceed and actually remove the data
-                    removeCompleteLatch.await();
+                    if (!removeCompleteLatch.await(LATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                        throw new RuntimeException("Timed out waiting for cache removal");
+                    }
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -174,7 +179,9 @@ public class ConcurrentListOffsetsRequestTest {
                 // letting the caller know that we've reached the invalidation step, and it's time to send the second request
                 invalidationLatch.countDown();
                 // waiting for the second request to reach containsKey
-                newRequestCheckLatch.await();
+                if (!newRequestCheckLatch.await(LATCH_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                    throw new RuntimeException("Timed out waiting for second request");
+                }
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
