@@ -34,16 +34,18 @@ RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
     apk add --no-cache bash; \
+    mkdir opt/kafka; \
     if [ -n "$KAFKA_URL" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent procps; \
         wget -nv -O kafka.tgz "$KAFKA_URL"; \
         wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+        tar xfz kafka.tgz -C opt/kafka --strip-components 1; \
         gpg --import KEYS; \
         gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-    fi; \
-    mkdir opt/kafka; \
-    tar xfz kafka.tgz -C opt/kafka --strip-components 1;
+    else \
+        tar xfz kafka.tgz -C opt/kafka --strip-components 1; \
+    fi;
 
 # Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
 RUN /etc/kafka/docker/jsa_launch

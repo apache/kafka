@@ -80,6 +80,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     public static final String REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX = "remote.log.metadata.common.client.";
     public static final String REMOTE_LOG_METADATA_PRODUCER_PREFIX = "remote.log.metadata.producer.";
     public static final String REMOTE_LOG_METADATA_CONSUMER_PREFIX = "remote.log.metadata.consumer.";
+    public static final String REMOTE_LOG_METADATA_ADMIN_PREFIX = "remote.log.metadata.admin.";
     public static final String BROKER_ID = "broker.id";
     public static final String LOG_DIR = "log.dir";
 
@@ -118,6 +119,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
     private Map<String, Object> commonProps;
     private Map<String, Object> consumerProps;
     private Map<String, Object> producerProps;
+    private Map<String, Object> adminProps;
 
     public TopicBasedRemoteLogMetadataManagerConfig(Map<String, ?> props) {
         Objects.requireNonNull(props, "props can not be null");
@@ -137,13 +139,14 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         initializationRetryIntervalMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP);
         initializationRetryMaxTimeoutMs = (long) parsedConfigs.get(REMOTE_LOG_METADATA_INITIALIZATION_RETRY_MAX_TIMEOUT_MS_PROP);
         clientIdPrefix = REMOTE_LOG_METADATA_CLIENT_PREFIX + "_" + props.get(BROKER_ID);
-        initializeProducerConsumerProperties(props);
+        initializeClientProperties(props);
     }
 
-    private void initializeProducerConsumerProperties(Map<String, ?> configs) {
+    private void initializeClientProperties(Map<String, ?> configs) {
         Map<String, Object> commonClientConfigs = new HashMap<>();
         Map<String, Object> producerOnlyConfigs = new HashMap<>();
         Map<String, Object> consumerOnlyConfigs = new HashMap<>();
+        Map<String, Object> adminOnlyConfigs = new HashMap<>();
         for (Map.Entry<String, ?> entry : configs.entrySet()) {
             String key = entry.getKey();
             if (key.startsWith(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX)) {
@@ -152,6 +155,8 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 producerOnlyConfigs.put(key.substring(REMOTE_LOG_METADATA_PRODUCER_PREFIX.length()), entry.getValue());
             } else if (key.startsWith(REMOTE_LOG_METADATA_CONSUMER_PREFIX)) {
                 consumerOnlyConfigs.put(key.substring(REMOTE_LOG_METADATA_CONSUMER_PREFIX.length()), entry.getValue());
+            } else if (key.startsWith(REMOTE_LOG_METADATA_ADMIN_PREFIX)) {
+                adminOnlyConfigs.put(key.substring(REMOTE_LOG_METADATA_ADMIN_PREFIX.length()), entry.getValue());
             }
         }
         commonProps = new HashMap<>(commonClientConfigs);
@@ -161,6 +166,9 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         Map<String, Object> allConsumerConfigs = new HashMap<>(commonClientConfigs);
         allConsumerConfigs.putAll(consumerOnlyConfigs);
         consumerProps = createConsumerProps(allConsumerConfigs);
+        Map<String, Object> allAdminConfigs = new HashMap<>(commonClientConfigs);
+        allAdminConfigs.putAll(adminOnlyConfigs);
+        adminProps = createAdminProps(allAdminConfigs);
     }
 
     public String remoteLogMetadataTopicName() {
@@ -199,6 +207,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return logDir;
     }
 
+    // Used for testing
     public Map<String, Object> commonProperties() {
         return commonProps;
     }
@@ -209,6 +218,10 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     public Map<String, Object> producerProperties() {
         return producerProps;
+    }
+
+    public Map<String, Object> adminProperties() {
+        return adminProps;
     }
 
     private Map<String, Object> createConsumerProps(Map<String, Object> allConsumerConfigs) {
@@ -232,6 +245,12 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
         return Collections.unmodifiableMap(props);
     }
 
+    private Map<String, Object> createAdminProps(Map<String, Object> allAdminConfigs) {
+        Map<String, Object> props = new HashMap<>(allAdminConfigs);
+        props.put(AdminClientConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_admin");
+        return Collections.unmodifiableMap(props);
+    }
+
     @Override
     public String toString() {
         return "TopicBasedRemoteLogMetadataManagerConfig{" +
@@ -243,9 +262,9 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", metadataTopicMinIsr=" + metadataTopicMinIsr +
                 ", initializationRetryMaxTimeoutMs=" + initializationRetryMaxTimeoutMs +
                 ", initializationRetryIntervalMs=" + initializationRetryIntervalMs +
-                ", commonProps=" + configMapToRedactedString(commonProps, AdminClientConfig.configDef()) +
                 ", consumerProps=" + configMapToRedactedString(consumerProps, ConsumerConfig.configDef()) +
                 ", producerProps=" + configMapToRedactedString(producerProps, ProducerConfig.configDef()) +
+                ", adminProps=" + configMapToRedactedString(adminProps, AdminClientConfig.configDef()) +
                 '}';
     }
 
