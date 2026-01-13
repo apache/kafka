@@ -31,7 +31,6 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler
-import org.apache.kafka.server.ControllerNodeProvider
 import org.apache.kafka.server.ControllerInformation
 import org.apache.kafka.server.NodeToControllerRequestThread
 import org.apache.kafka.server.NodeToControllerQueueItem
@@ -40,6 +39,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
 import java.util.Optional
+import java.util.function.Supplier
 import scala.jdk.OptionConverters.RichOption
 
 
@@ -59,7 +59,7 @@ class NodeToControllerRequestThreadTest {
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
 
     when(controllerNodeProvider.get()).thenReturn(emptyControllerInfo)
 
@@ -96,7 +96,7 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val activeController = new Node(controllerId, "host", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
@@ -138,7 +138,7 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val oldController = new Node(oldControllerId, "host1", 1234)
     val newController = new Node(newControllerId, "host2", 1234)
 
@@ -186,7 +186,7 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val port = 1234
     val oldController = new Node(oldControllerId, "host1", port)
     val newController = new Node(newControllerId, "host2", port)
@@ -248,7 +248,7 @@ class NodeToControllerRequestThreadTest {
     // enable envelope API
     mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.ENVELOPE.id, 0.toShort, 0.toShort))
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val port = 1234
     val oldController = new Node(oldControllerId, "host1", port)
     val newController = new Node(newControllerId, "host2", port)
@@ -319,7 +319,7 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val controller = new Node(controllerId, "host1", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(controller)))
@@ -368,7 +368,7 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val activeController = new Node(controllerId, "host", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
@@ -406,7 +406,7 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val activeController = new Node(controllerId, "host", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
@@ -445,7 +445,7 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     when(controllerNodeProvider.get()).thenReturn(emptyControllerInfo)
 
     val testRequestThread = new NodeToControllerRequestThread(

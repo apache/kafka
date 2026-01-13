@@ -46,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * Manages a communication channel from a node to the active KRaft controller.
@@ -67,7 +68,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
     private final ApiVersions apiVersions = new ApiVersions();
     private final NodeToControllerRequestThread requestThread;
 
-    public NodeToControllerChannelManagerImpl(ControllerNodeProvider controllerNodeProvider, Time time, Metrics metrics, AbstractKafkaConfig config, String channelName, String threadNamePrefix, Long retryTimeoutMs) {
+    public NodeToControllerChannelManagerImpl(Supplier<ControllerInformation> controllerNodeProvider, Time time, Metrics metrics, AbstractKafkaConfig config, String channelName, String threadNamePrefix, Long retryTimeoutMs) {
         this.time = time;
         this.metrics = metrics;
         this.config = config;

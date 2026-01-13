@@ -27,12 +27,13 @@ import org.apache.kafka.server.config.AbstractKafkaConfig;
 
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.function.Supplier;
 
 /**
  * Finds the controller node by checking the metadata log manager.
  * This provider is used when we are using a Raft-based metadata quorum.
  */
-public class RaftControllerNodeProvider implements ControllerNodeProvider {
+public class RaftControllerNodeProvider implements Supplier<ControllerInformation> {
 
     private final RaftManager<ApiMessageAndVersion> raftManager;
     private final ListenerName listenerName;

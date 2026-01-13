@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Background thread that manages to send requests to the active controller.
@@ -54,7 +55,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
 
     private final Time time;
     private final long retryTimeoutMs;
-    private final ControllerNodeProvider controllerNodeProvider;
+    private final Supplier<ControllerInformation> controllerNodeProvider;
     private final ManualMetadataUpdater metadataUpdater;
 
     // Used for testing
@@ -65,7 +66,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
 
     public NodeToControllerRequestThread(KafkaClient initialNetworkClient,
                                          ManualMetadataUpdater metadataUpdater,
-                                         ControllerNodeProvider controllerNodeProvider,
+                                         Supplier<ControllerInformation> controllerNodeProvider,
                                          AbstractConfig config,
                                          Time time,
                                          String threadName,

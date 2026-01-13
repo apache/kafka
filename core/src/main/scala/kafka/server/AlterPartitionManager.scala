@@ -29,9 +29,9 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.server.ControllerNodeProvider
-import org.apache.kafka.server.NodeToControllerChannelManagerImpl
+import org.apache.kafka.server.{ControllerInformation, NodeToControllerChannelManagerImpl}
 
+import java.util.function.Supplier
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.jdk.OptionConverters.RichOptional
@@ -68,7 +68,7 @@ object AlterPartitionManager {
   def apply(
     config: KafkaConfig,
     scheduler: Scheduler,
-    controllerNodeProvider: ControllerNodeProvider,
+    controllerNodeProvider: Supplier[ControllerInformation],
     time: Time,
     metrics: Metrics,
     threadNamePrefix: String,

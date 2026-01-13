@@ -21,16 +21,16 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.server.ControllerNodeProvider
-import org.apache.kafka.server.NodeToControllerQueueItem
-import java.util.Optional
+import org.apache.kafka.server.{ControllerInformation, NodeToControllerQueueItem}
 
+import java.util.Optional
+import java.util.function.Supplier
 import scala.jdk.OptionConverters._
 
 class MockNodeToControllerChannelManager(
   val client: MockClient,
   time: MockTime,
-  controllerNodeProvider: ControllerNodeProvider,
+  controllerNodeProvider: Supplier[ControllerInformation],
   controllerApiVersions: NodeApiVersions = NodeApiVersions.create(),
   val retryTimeoutMs: Int = 60000,
   val requestTimeoutMs: Int = 30000

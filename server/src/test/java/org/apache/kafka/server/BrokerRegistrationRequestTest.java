@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -209,7 +210,7 @@ class BrokerRegistrationRequestTest {
     }
 
     record TestControllerNodeProvider(ClusterInstance clusterInstance)
-            implements ControllerNodeProvider {
+            implements Supplier<ControllerInformation> {
 
         public Optional<Node> node() {
             return Optional.of(new Node(
