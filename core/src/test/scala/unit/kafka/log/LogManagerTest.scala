@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify}
+import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify, when}
 
 import java.io._
 import java.lang.{Long => JLong}
@@ -1147,6 +1147,8 @@ class LogManagerTest {
     assertTrue(spyCurrentLog.dir.getName.endsWith(LogFileUtils.DELETE_DIR_SUFFIX))
 
     // Verify that flush() can be called without error (no ClosedChannelException)
+    // Mock logEndOffset > 0 to trigger actual flush (flush only happens when flushOffset > recoveryPoint)
+    when(spyCurrentLog.logEndOffset()).thenReturn(100L)
     val flushLog: Executable = () => spyCurrentLog.flush(false)
     assertDoesNotThrow(flushLog)
   }
