@@ -1743,7 +1743,7 @@ public class ShareConsumerTest {
      * to an invalid topic.
      */
     @ClusterTest
-    public void testSubscribeOnInvalidTopicThrowsInvalidTopicException() {
+    public void testSubscribeOnInvalidTopicThrowsInvalidTopicException() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
