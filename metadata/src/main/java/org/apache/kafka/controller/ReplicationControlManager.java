@@ -1147,10 +1147,11 @@ public class ReplicationControlManager {
                 if (record.isPresent()) {
                     records.add(record.get());
                     PartitionChangeRecord change = (PartitionChangeRecord) record.get().message();
-                    PartitionRegistration newPartition = partition.merge(change);
+                    PartitionRegistration originalPartition = partition
+                    partition = originalPartition.merge(change);
                     if (log.isDebugEnabled()) {
                         log.debug("Node {} has altered ISR for {}-{}. {}",
-                            request.brokerId(), topic.name, partitionId, logPartitionChangeInfo(partition, newPartition));
+                            request.brokerId(), topic.name, partitionId, logPartitionChangeInfo(originalPartition, partition));
                     }
                     if (change.leader() != request.brokerId() &&
                             change.leader() != NO_LEADER_CHANGE) {
@@ -1169,15 +1170,15 @@ public class ReplicationControlManager {
                         log.info("AlterPartition request from node {} for {}-{} completed " +
                             "the ongoing partition reassignment and triggered a leadership change {}. Returning {}.",
                             request.brokerId(), topic.name, partitionId,
-                            logPartitionChangeInfo(partition, newPartition), error);
+                            logPartitionChangeInfo(originalPartition, partition), error);
                         responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                             setPartitionIndex(partitionId).
                             setErrorCode(error.code()));
                         continue;
-                    } else if (isReassignmentInProgress(newPartition)) {
+                    } else if (isReassignmentInProgress(partition)) {
                         log.info("AlterPartition request from node {} for {}-{} completed " +
                             "the ongoing partition reassignment. {}",
-                            request.brokerId(), topic.name, partitionId, logPartitionChangeInfo(partition, newPartition));
+                            request.brokerId(), topic.name, partitionId, logPartitionChangeInfo(originalPartition, partition));
                     }
                 }
 
@@ -1189,11 +1190,11 @@ public class ReplicationControlManager {
                 responseTopicData.partitions().add(new AlterPartitionResponseData.PartitionData().
                     setPartitionIndex(partitionId).
                     setErrorCode(Errors.NONE.code()).
-                    setLeaderId(newPartition.leader).
-                    setIsr(Replicas.toList(newPartition.isr)).
-                    setLeaderRecoveryState(newPartition.leaderRecoveryState.value()).
-                    setLeaderEpoch(newPartition.leaderEpoch).
-                    setPartitionEpoch(newPartition.partitionEpoch));
+                    setLeaderId(partition.leader).
+                    setIsr(Replicas.toList(partition.isr)).
+                    setLeaderRecoveryState(partition.leaderRecoveryState.value()).
+                    setLeaderEpoch(partition.leaderEpoch).
+                    setPartitionEpoch(partition.partitionEpoch));
             }
         }
 
@@ -1201,8 +1202,7 @@ public class ReplicationControlManager {
     }
 
     private static String logPartitionChangeInfo(PartitionRegistration oldRegistration, PartitionRegistration newRegistration) {
-        return String.format("isr: %s -> %s, replicaSet: %s -> %s, " +
-                "partitionEpoch: %d -> %d, leaderEpoch: %d -> %d",
+        return String.format("isr: %s -> %s, replicaSet: %s -> %s, partitionEpoch: %d -> %d, leaderEpoch: %d -> %d",
             Arrays.toString(oldRegistration.isr), Arrays.toString(newRegistration.isr),
             Arrays.toString(oldRegistration.replicas), Arrays.toString(newRegistration.replicas),
             oldRegistration.partitionEpoch, newRegistration.partitionEpoch,
