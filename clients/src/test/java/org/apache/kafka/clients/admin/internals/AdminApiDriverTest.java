@@ -191,6 +191,88 @@ class AdminApiDriverTest {
     }
 
     @Test
+    public void testInitialLookupUsesCachedMappingSnapshot() throws Exception {
+        MockTime time = new MockTime();
+        Map<String, MockRequestScope> lookupScopes = new HashMap<>();
+        lookupScopes.put("foo", new MockRequestScope(OptionalInt.empty(), "c1"));
+        lookupScopes.put("bar", new MockRequestScope(OptionalInt.empty(), "c1"));
+
+        MockLookupStrategy<String> lookupStrategy = new MockLookupStrategy<>(lookupScopes);
+        MockAdminApiHandler<String, Long> handler = new MockAdminApiHandler<>(lookupStrategy);
+
+        Set<String> keys = Set.of("foo", "bar");
+        AdminApiFuture.SimpleAdminApiFuture<String, Long> delegate = AdminApiFuture.forKeys(keys);
+        AdminApiFuture<String, Long> future = new AdminApiFuture<>() {
+            @Override
+            public Set<String> lookupKeys() {
+                return delegate.lookupKeys();
+            }
+
+            @Override
+            public Set<String> uncachedLookupKeys() {
+                // Simulate a stale cache snapshot that reports no uncached keys.
+                return Collections.emptySet();
+            }
+
+            @Override
+            public Map<String, Integer> cachedKeyBrokerIdMapping() {
+                return Collections.singletonMap("foo", 1);
+            }
+
+            @Override
+            public void complete(Map<String, Long> values) {
+                delegate.complete(values);
+            }
+
+            @Override
+            public void completeExceptionally(Map<String, Throwable> errors) {
+                delegate.completeExceptionally(errors);
+            }
+        };
+
+        AdminApiDriver<String, Long> driver = new AdminApiDriver<>(
+            handler,
+            future,
+            time.milliseconds() + API_TIMEOUT_MS,
+            RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MAX_MS,
+            new LogContext()
+        );
+
+        lookupStrategy.reset();
+        lookupStrategy.expectLookup(Set.of("bar"), mapped("bar", 1));
+        handler.reset();
+        handler.expectRequest(Set.of("foo"), completed("foo", 15L));
+
+        List<RequestSpec<String>> requestSpecs = driver.poll();
+        assertEquals(2, requestSpecs.size(), "Driver generated an unexpected number of requests");
+
+        MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
+            ApiKeys.METADATA.latestVersion());
+        for (RequestSpec<String> requestSpec : requestSpecs) {
+            Set<String> requestKeys = requestSpec.keys;
+            if (requestKeys.equals(Set.of("bar")) || requestKeys.equals(Set.of("foo"))) {
+                driver.onResponse(time.milliseconds(), requestSpec, response, Node.noNode());
+            } else {
+                fail("Unexpected request for keys " + requestKeys);
+            }
+        }
+
+        lookupStrategy.reset();
+        handler.reset();
+        handler.expectRequest(Set.of("bar"), completed("bar", 30L));
+
+        List<RequestSpec<String>> retrySpecs = driver.poll();
+        assertEquals(1, retrySpecs.size(), "Driver generated an unexpected number of requests");
+        RequestSpec<String> retrySpec = retrySpecs.get(0);
+        assertEquals(Set.of("bar"), retrySpec.keys, "Driver sent lookup instead of fulfillment request");
+        driver.onResponse(time.milliseconds(), retrySpec, response, Node.noNode());
+
+        assertEquals(15L, delegate.get("foo").get());
+        assertEquals(30L, delegate.get("bar").get());
+    }
+
+    @Test
     public void testFulfillmentFailure() {
         TestContext ctx = TestContext.staticMapped(map(
             "foo", 0,
