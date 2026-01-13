@@ -63,6 +63,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -156,7 +157,7 @@ public class KRaftTopicCreatorTest {
             any(ControllerRequestCompletionHandler.class));
 
         AbstractRequest.Builder<?> capturedRequest = argumentCaptor.getValue();
-        assertTrue(capturedRequest instanceof CreateTopicsRequest.Builder,
+        assertInstanceOf(CreateTopicsRequest.Builder.class, capturedRequest,
             "Should send CreateTopicsRequest.Builder when no request context provided");
     }
 
@@ -270,7 +271,7 @@ public class KRaftTopicCreatorTest {
         argumentCaptor.getValue().onComplete(clientResponse);
         assertTrue(responseFuture.isCompletedExceptionally());
         ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
-        assertTrue(exception.getCause() instanceof RuntimeException);
+        assertInstanceOf(RuntimeException.class, exception.getCause());
     }
 
     @Test
@@ -379,7 +380,7 @@ public class KRaftTopicCreatorTest {
         argumentCaptor.getValue().onTimeout();
 
         ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
-        assertTrue(exception.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, exception.getCause());
         assertTrue(responseFuture.isCompletedExceptionally());
     }
 
@@ -409,7 +410,7 @@ public class KRaftTopicCreatorTest {
         argumentCaptor.getValue().onComplete(clientResponse);
 
         ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
-        assertTrue(exception.getCause() instanceof AuthenticationException);
+        assertInstanceOf(AuthenticationException.class, exception.getCause());
         assertTrue(responseFuture.isCompletedExceptionally());
     }
 
@@ -439,7 +440,7 @@ public class KRaftTopicCreatorTest {
         argumentCaptor.getValue().onComplete(clientResponse);
 
         ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
-        assertTrue(exception.getCause() instanceof UnsupportedVersionException);
+        assertInstanceOf(UnsupportedVersionException.class, exception.getCause());
         assertTrue(responseFuture.isCompletedExceptionally());
     }
 
@@ -505,7 +506,7 @@ public class KRaftTopicCreatorTest {
         argumentCaptor.getValue().onComplete(clientResponse);
 
         ExecutionException exception = assertThrows(ExecutionException.class, responseFuture::get);
-        assertTrue(exception.getCause() instanceof IllegalStateException);
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
         assertTrue(responseFuture.isCompletedExceptionally());
     }
 

@@ -54,13 +54,9 @@ public class KRaftTopicCreator implements TopicCreator {
     ) {
         CompletableFuture<CreateTopicsResponse> responseFuture = new CompletableFuture<>();
 
-        short requestVersion;
-        if (channelManager.controllerApiVersions().isEmpty()) {
-            requestVersion = ApiKeys.CREATE_TOPICS.latestVersion();
-        } else {
-            requestVersion = channelManager.controllerApiVersions().get()
-                .latestUsableVersion(ApiKeys.CREATE_TOPICS);
-        }
+        short requestVersion = channelManager.controllerApiVersions()
+            .map(v -> v.latestUsableVersion(ApiKeys.CREATE_TOPICS))
+            .orElse(ApiKeys.CREATE_TOPICS.latestVersion());
 
         RequestHeader requestHeader = new RequestHeader(
             ApiKeys.CREATE_TOPICS,
