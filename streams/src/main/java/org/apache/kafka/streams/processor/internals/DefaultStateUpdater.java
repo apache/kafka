@@ -734,7 +734,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 (double) totalRestoreLatency * (changelogReader.isRestoringActive() ? 0.0d : 1.0d)
             );
 
-            recordRatios(now);
+            recordRatios(now, totalLatency);
 
             totalCheckpointLatency = 0L;
         }
@@ -760,13 +760,11 @@ public class DefaultStateUpdater implements StateUpdater {
             standbyRestoreTimeWindowedSum.record(metricsConfig, standbyRestoreTime, now);
         }
 
-        private void recordRatios(final long now) {
+        private void recordRatios(final long now, final long totalTime) {
             final double idleTime = idleTimeWindowedSum.measure(metricsConfig, now);
             final double checkpointTime = checkpointTimeWindowedSum.measure(metricsConfig, now);
             final double activeRestoreTime = activeRestoreTimeWindowedSum.measure(metricsConfig, now);
             final double standbyRestoreTime = standbyRestoreTimeWindowedSum.measure(metricsConfig, now);
-
-            final double totalTime = idleTime + checkpointTime + activeRestoreTime + standbyRestoreTime;
 
             recordRatio(now, totalTime, idleTime, updaterMetrics.idleRatioSensor);
             recordRatio(now, totalTime, checkpointTime, updaterMetrics.checkpointRatioSensor);
