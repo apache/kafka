@@ -1145,6 +1145,10 @@ class LogManagerTest {
 
     // Verify the source log was renamed to .delete
     assertTrue(spyCurrentLog.dir.getName.endsWith(LogFileUtils.DELETE_DIR_SUFFIX))
+
+    // Verify that flush() can be called without error (no ClosedChannelException)
+    val flushLog: Executable = () => spyCurrentLog.flush(false)
+    assertDoesNotThrow(flushLog)
   }
 
   @Test
