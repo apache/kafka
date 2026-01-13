@@ -44,7 +44,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUnsupportedVersionsToString() {
-        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList(), List.of(ApiMessageType.ListenerType.BROKER));
+        NodeApiVersions versions = new NodeApiVersions(new ApiVersionCollection(), Collections.emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.clientApis()) {
@@ -73,7 +73,7 @@ public class NodeApiVersionsTest {
                         .setMaxVersion((short) 10001));
             } else versionList.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList(), List.of(ApiMessageType.ListenerType.BROKER));
+        NodeApiVersions versions = new NodeApiVersions(versionList, Collections.emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.apisForListener(ApiMessageType.ListenerType.BROKER)) {

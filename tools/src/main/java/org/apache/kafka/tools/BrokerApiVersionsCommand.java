@@ -68,7 +68,6 @@ public class BrokerApiVersionsCommand {
         }
 
         try (AdminClient adminClient = AdminClient.create(props)) {
-
             Collection<Node> nodes = adminClient.describeCluster().nodes().get();
             Map<Node, InternalDescribeFeaturesResult> nodeApiVersions = new TreeMap<>(Comparator.comparingInt(Node::id));
             nodes.forEach(node -> {
