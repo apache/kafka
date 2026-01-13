@@ -73,7 +73,7 @@ org.apache.kafka.server.log.remote.metadata.storage.RemoteLogSegmentLifecycleTes
 - testCacheSegmentsWithDeleteSegmentFinishedState
 - testRemoteLogSegmentLifeCycle
 org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfigTest:
-- testCommonProducerConsumerOverridesConfig
+- testCommonClientOverridesConfig
 - testCustomMinIsr
 - testDefaultMinIsr
 - testValidConfig
