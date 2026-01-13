@@ -1822,22 +1822,20 @@ public class ReplicationControlManager {
             int partitionId = topicIdPartition.partitionId();
             TopicControlInfo topic = topics.get(topicIdPartition.topicId());
 
-            PartitionRegistration partition = topic.parts.get(partitionId);
-
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 ApiError result = electLeader(topic.name, partitionId,
                         ElectionType.UNCLEAN, records);
                 if (result.error().equals(Errors.NONE)) {
                     log.info("Triggering unclean leader election for offline partition {}-{}. {}",
-                            topic.name, partitionId, logPartitionInfo(partition));
+                            topic.name, partitionId, logPartitionInfo(topic.parts.get(partitionId)));
                 } else {
                     log.warn("Cannot trigger unclean leader election for offline partition {}-{}: {}. {}",
-                            topic.name, partitionId, result.error(), logPartitionInfo(partition));
+                            topic.name, partitionId, result.error(), logPartitionInfo(topic.parts.get(partitionId)));
                 }
             } else if (log.isDebugEnabled()) {
                 log.debug("Cannot trigger unclean leader election for offline partition {}-{} " +
                                 "because unclean leader election is disabled for this topic. {}",
-                        topic.name, partitionId, logPartitionInfo(partition));
+                        topic.name, partitionId, logPartitionInfo(topic.parts.get(partitionId)));
             }
         }
     }
