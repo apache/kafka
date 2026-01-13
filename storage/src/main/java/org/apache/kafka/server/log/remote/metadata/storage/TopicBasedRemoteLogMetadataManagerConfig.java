@@ -247,7 +247,7 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     private Map<String, Object> createAdminProps(Map<String, Object> allAdminConfigs) {
         Map<String, Object> props = new HashMap<>(allAdminConfigs);
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_admin");
+        props.put(AdminClientConfig.CLIENT_ID_CONFIG, clientIdPrefix + "_admin");
         return Collections.unmodifiableMap(props);
     }
 
