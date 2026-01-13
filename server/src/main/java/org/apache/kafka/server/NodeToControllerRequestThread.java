@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -113,7 +112,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
                 Optional<Node> controllerAddress = activeControllerAddress();
                 if (controllerAddress.isPresent()) {
                     requestIter.remove();
-                    return Collections.singletonList(new RequestAndCompletionHandler(
+                    return List.of(new RequestAndCompletionHandler(
                             time.milliseconds(),
                             controllerAddress.get(),
                             request.request(),
@@ -123,7 +122,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
             }
         }
 
-        return Collections.emptyList();
+        return List.of();
     }
 
     void handleResponse(NodeToControllerQueueItem queueItem, ClientResponse response) {
@@ -149,12 +148,7 @@ public class NodeToControllerRequestThread extends InterBrokerSendThread {
                     queueItem.request(),
                     activeControllerAddress().map(Node::idString).orElse("null"));
             maybeDisconnectAndUpdateController();
-            try {
-                requestQueue.putFirst(queueItem);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Thread interrupted while re-queuing request after NOT_CONTROLLER", e);
-            }
+            requestQueue.addFirst(queueItem);
         } else {
             queueItem.callback().onComplete(response);
         }
