@@ -57,6 +57,7 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -358,6 +359,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Represents a deleted topic with its ID and name.
+     * Used during offset cleanup to ensure only offsets for the correct
+     * topic incarnation are deleted (preventing race conditions with topic recreation).
+     *
+     * @param id    The topic ID.
+     * @param name  The topic name.
+     */
+    public record DeletedTopic(Uuid id, String name) { }
+
+    /**
      * The group/offsets expiration key to schedule a timer task.
      *
      * Visible for testing.
@@ -620,7 +631,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             try {
                 groupMetadataManager.validateDeleteGroup(groupId);
                 numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
-                groupMetadataManager.createGroupTombstoneRecords(groupId, records);
+                groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers(groupId, records);
                 deletedGroups.add(groupId);
 
                 resultCollection.add(
@@ -806,23 +817,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long epoch
     ) throws ApiException {
-        return offsetMetadataManager.fetchOffsets(request, epoch);
-    }
-
-    /**
-     * Fetch all offsets for a given group.
-     *
-     * @param request   The OffsetFetchRequestGroup request.
-     * @param epoch     The epoch (or offset) used to read from the
-     *                  timeline data structure.
-     *
-     * @return A List of OffsetFetchResponseTopics response.
-     */
-    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        long epoch
-    ) throws ApiException {
-        return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        if (OffsetFetchRequest.requestAllOffsets(request)) {
+            return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        } else {
+            return offsetMetadataManager.fetchOffsets(request, epoch);
+        }
     }
 
     /**
@@ -1019,19 +1018,19 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Remove offsets of the partitions that have been deleted.
+     * Remove offsets of the topics that have been deleted.
      *
-     * @param topicPartitions   The partitions that have been deleted.
+     * @param deletedTopics   The topics that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> onPartitionsDeleted(
-        List<TopicPartition> topicPartitions
+    public CoordinatorResult<Void, CoordinatorRecord> onTopicsDeleted(
+        List<DeletedTopic> deletedTopics
     ) {
         final long startTimeMs = time.milliseconds();
-        final List<CoordinatorRecord> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+        final List<CoordinatorRecord> records = offsetMetadataManager.onTopicsDeleted(deletedTopics);
 
-        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
-            records.size(), time.milliseconds() - startTimeMs, topicPartitions);
+        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for topics {}.",
+            records.size(), time.milliseconds() - startTimeMs, deletedTopics);
 
         return new CoordinatorResult<>(records, false);
     }
@@ -1039,7 +1038,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
         Set<Uuid> deletedTopicIds
     ) {
-        return groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
+        final long startTimeMs = time.milliseconds();
+        final var result = groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
+
+        log.info("Generated {} records in {} milliseconds while cleaning share group state for topics {}.",
+            result.records().size(), time.milliseconds() - startTimeMs, deletedTopicIds);
+
+        return result;
     }
 
     /**
@@ -1075,7 +1080,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     @Override
     public void onLoaded(CoordinatorMetadataImage newImage) {
         CoordinatorMetadataDelta emptyDelta = newImage.emptyDelta();
-        groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
+        groupMetadataManager.onMetadataUpdate(emptyDelta, newImage);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
@@ -1094,12 +1099,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
      */
     @Override
-    public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
-        groupMetadataManager.onNewMetadataImage(newImage, delta);
+    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
+        groupMetadataManager.onMetadataUpdate(delta, newImage);
     }
 
     private static OffsetCommitKey convertLegacyOffsetCommitKey(

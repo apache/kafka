@@ -65,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ShareCompletedFetchTest {
     private static final String TOPIC_NAME = "test";
     private static final TopicIdPartition TIP = new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC_NAME);
+    private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private static final long PRODUCER_ID = 1000L;
     private static final short PRODUCER_EPOCH = 0;
 
@@ -74,8 +75,8 @@ public class ShareCompletedFetchTest {
         int numRecordsPerBatch = 10;
         int numRecords = 20;        // Records for 10-29, in 2 equal batches
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecordsPerBatch, 2))
-                .setAcquiredRecords(acquiredRecords(startingOffset, numRecords));
+            .setRecords(newRecords(startingOffset, numRecordsPerBatch, 2))
+            .setAcquiredRecords(acquiredRecords(startingOffset, numRecords));
 
         Deserializers<String, String> deserializers = newStringDeserializers();
 
@@ -89,6 +90,7 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
@@ -98,12 +100,14 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
         assertEquals(0, records.size());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
     }
 
     @Test
@@ -126,12 +130,14 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
         assertEquals(0, records.size());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
     }
 
     @Test
@@ -139,8 +145,8 @@ public class ShareCompletedFetchTest {
         long startingOffset = 10L;
         int numRecords = 10;
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords + 500))
-                .setAcquiredRecords(acquiredRecords(startingOffset + 500, numRecords));
+            .setRecords(newRecords(startingOffset, numRecords + 500))
+            .setAcquiredRecords(acquiredRecords(startingOffset + 500, numRecords));
 
         Deserializers<String, String> deserializers = newStringDeserializers();
 
@@ -154,12 +160,14 @@ public class ShareCompletedFetchTest {
         assertEquals(Optional.of((short) 1), record.deliveryCount());
         Acknowledgements acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
         batch = completedFetch.fetchRecords(deserializers, 10, true);
         records = batch.getInFlightRecords();
         assertEquals(0, records.size());
         acknowledgements = batch.getAcknowledgements();
         assertEquals(0, acknowledgements.size());
+        assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
     }
 
     @Test
@@ -167,8 +175,9 @@ public class ShareCompletedFetchTest {
         int numRecords = 10;
         Records rawRecords = newTransactionalRecords(numRecords);
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(rawRecords)
-                .setAcquiredRecords(acquiredRecords(0L, numRecords));
+            .setRecords(rawRecords)
+            .setAcquiredRecords(acquiredRecords(0L, numRecords));
+
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
             ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
@@ -176,6 +185,7 @@ public class ShareCompletedFetchTest {
             assertEquals(10, records.size());
             Acknowledgements acknowledgements = batch.getAcknowledgements();
             assertEquals(0, acknowledgements.size());
+            assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
         }
     }
 
@@ -184,8 +194,8 @@ public class ShareCompletedFetchTest {
         int startingOffset = 0;
         int numRecords = 10;
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords))
-                .setAcquiredRecords(acquiredRecords(0L, 10));
+            .setRecords(newRecords(startingOffset, numRecords))
+            .setAcquiredRecords(acquiredRecords(0L, 10));
 
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
             ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
@@ -194,13 +204,14 @@ public class ShareCompletedFetchTest {
             assertEquals(0, records.size());
             Acknowledgements acknowledgements = batch.getAcknowledgements();
             assertEquals(0, acknowledgements.size());
+            assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
         }
     }
 
     @Test
     public void testNoRecordsInFetch() {
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setPartitionIndex(0);
+            .setPartitionIndex(0);
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
@@ -209,6 +220,7 @@ public class ShareCompletedFetchTest {
             assertEquals(0, records.size());
             Acknowledgements acknowledgements = batch.getAcknowledgements();
             assertEquals(0, acknowledgements.size());
+            assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
         }
     }
 
@@ -219,7 +231,7 @@ public class ShareCompletedFetchTest {
                 Compression.NONE,
                 TimestampType.CREATE_TIME,
                 0);
-             final UUIDSerializer serializer = new UUIDSerializer()) {
+            final UUIDSerializer serializer = new UUIDSerializer()) {
             builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
             builder.append(0L, "key".getBytes(), "value".getBytes());
             Headers headers = new RecordHeaders();
@@ -229,9 +241,9 @@ public class ShareCompletedFetchTest {
             Records records = builder.build();
 
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                    .setPartitionIndex(0)
-                    .setRecords(records)
-                    .setAcquiredRecords(acquiredRecords(0L, 4));
+                .setPartitionIndex(0)
+                .setRecords(records)
+                .setAcquiredRecords(acquiredRecords(0L, 4));
 
             try (final Deserializers<UUID, UUID> deserializers = newUuidDeserializers()) {
                 ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
@@ -262,6 +274,7 @@ public class ShareCompletedFetchTest {
                 acknowledgements = batch.getAcknowledgements();
                 assertEquals(1, acknowledgements.size());
                 assertEquals(AcknowledgeType.RELEASE, acknowledgements.get(1L));
+                assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
                 // Record 2 then results in an empty batch, because record 1 has now been skipped
                 batch = completedFetch.fetchRecords(deserializers, 10, false);
@@ -279,6 +292,7 @@ public class ShareCompletedFetchTest {
                 acknowledgements = batch.getAcknowledgements();
                 assertEquals(1, acknowledgements.size());
                 assertEquals(AcknowledgeType.RELEASE, acknowledgements.get(2L));
+                assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
 
                 // Record 3 is returned in the next batch, because record 2 has now been skipped
                 batch = completedFetch.fetchRecords(deserializers, 10, false);
@@ -288,6 +302,7 @@ public class ShareCompletedFetchTest {
                 assertEquals(3L, fetchedRecords.get(0).offset());
                 acknowledgements = batch.getAcknowledgements();
                 assertEquals(0, acknowledgements.size());
+                assertEquals(DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS, batch.getAcquisitionLockTimeoutMs());
             }
         }
     }
@@ -301,8 +316,8 @@ public class ShareCompletedFetchTest {
         List<ShareFetchResponseData.AcquiredRecords> acquiredRecords = new ArrayList<>(acquiredRecords(0L, 3));
         acquiredRecords.addAll(acquiredRecords(6L, 3));
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords))
-                .setAcquiredRecords(acquiredRecords);
+            .setRecords(newRecords(startingOffset, numRecords))
+            .setAcquiredRecords(acquiredRecords);
 
         Deserializers<String, String> deserializers = newStringDeserializers();
 
@@ -324,6 +339,153 @@ public class ShareCompletedFetchTest {
     }
 
     @Test
+    public void testGapsForControlRecordsInAcquiredRange() {
+        int numRecords = 10;
+        // Create records with transaction markers (control records)
+        Records rawRecords = newTransactionalRecords(numRecords);
+
+        // Acquire all records including the control record (offset 10 is the commit marker)
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(rawRecords)
+                .setAcquiredRecords(acquiredRecords(0L, numRecords + 1));
+
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 15, true);
+            List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
+
+            // Should get 10 actual records (control records are filtered out)
+            assertEquals(10, records.size());
+
+            // Should have 1 gap for the control record at offset 10
+            Acknowledgements acknowledgements = batch.getAcknowledgements();
+            assertEquals(1, acknowledgements.size());
+            assertNull(acknowledgements.get(10L), "Offset 10 (control record) should be a GAP (null)");
+        }
+    }
+
+    @Test
+    public void testMixedRecordsAndGaps() {
+        int startingOffset = 0;
+
+        // Acquire records 0-4 (exist), 10-14 (don't exist = gaps)
+        List<ShareFetchResponseData.AcquiredRecords> acquiredRecords = new ArrayList<>();
+        acquiredRecords.add(acquiredRecords(0L, 5).get(0));
+        acquiredRecords.add(acquiredRecords(10L, 5).get(0));
+
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(newRecords(startingOffset,  10))
+                .setAcquiredRecords(acquiredRecords); // Acquire only records 0-4 and 10-14
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+
+        ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 20, true);
+        List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
+
+        // Should get 5 actual records (0-4)
+        assertEquals(5, records.size());
+        for (int i = 0; i < 5; i++) {
+            assertEquals(i, records.get(i).offset());
+        }
+
+        // Should have 5 gaps (10-14) in acknowledgements
+        Acknowledgements acknowledgements = batch.getAcknowledgements();
+        assertEquals(5, acknowledgements.size());
+
+        // Verify GAP acknowledgements for offsets 10-14
+        for (long offset = 10L; offset <= 14L; offset++) {
+            assertNull(acknowledgements.get(offset), "Offset " + offset + " should be a GAP (null)");
+        }
+    }
+
+    @Test
+    public void testAcknowledgementsIncludeOnlyGaps() {
+        int startingOffset = 0;
+        int numRecords = 10;        // Records for 0-9
+
+        // Acquire only non-existent records 15-19 (all should be gaps)
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(newRecords(startingOffset, numRecords))  // Records 0-9
+                .setAcquiredRecords(acquiredRecords(15L, 5));       // Acquire 15-19 (don't exist)
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+
+        ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 20, true);
+        List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
+
+        // Should get no actual records
+        assertEquals(0, records.size());
+
+        // Should have 5 gaps (15-19) in acknowledgements
+        Acknowledgements acknowledgements = batch.getAcknowledgements();
+        assertEquals(5, acknowledgements.size());
+
+        // Verify all are GAP acknowledgements
+        for (long offset = 15L; offset <= 19L; offset++) {
+            assertNull(acknowledgements.get(offset), "Offset " + offset + " should be a GAP (null)");
+        }
+    }
+
+    @Test
+    public void testGapsWithControlRecordsAtBeginningAndEnd() {
+        // Create transactional records: control record, data records 1-5, control record at 6
+        Time time = new MockTime();
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+
+        // Write first control record (commit marker at offset 0)
+        writeTransactionMarker(buffer, 0, time);
+
+        // Write data records 1-5
+        try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE,
+                TimestampType.CREATE_TIME,
+                1,
+                time.milliseconds(),
+                PRODUCER_ID,
+                PRODUCER_EPOCH,
+                0,
+                true,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0; i < 5; i++)
+                builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+            builder.build();
+        }
+
+        // Write second control record (commit marker at offset 6)
+        writeTransactionMarker(buffer, 6, time);
+
+        buffer.flip();
+        Records records = MemoryRecords.readableRecords(buffer);
+
+        // Acquire all offsets 0-6 (includes both control records and data records)
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(records)
+                .setAcquiredRecords(acquiredRecords(0L, 7));
+
+        ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
+            List<ConsumerRecord<String, String>> fetchedRecords = batch.getInFlightRecords();
+
+            // Should get 5 data records (1-5)
+            assertEquals(5, fetchedRecords.size());
+            assertEquals(1L, fetchedRecords.get(0).offset());
+            assertEquals(5L, fetchedRecords.get(4).offset());
+
+            // Should have 2 gaps for the control records (offsets 0 and 6)
+            Acknowledgements acknowledgements = batch.getAcknowledgements();
+            assertEquals(2, acknowledgements.size());
+            assertNull(acknowledgements.get(0L), "Offset 0 (control record) should be a GAP (null)");
+            assertNull(acknowledgements.get(6L), "Offset 6 (control record) should be a GAP (null)");
+        }
+    }
+
+    @Test
     public void testAcquireOddRecords() {
         int startingOffset = 0;
         int numRecords = 10;        // Records for 0-9
@@ -335,8 +497,8 @@ public class ShareCompletedFetchTest {
         }
 
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords))
-                .setAcquiredRecords(acquiredRecords);
+            .setRecords(newRecords(startingOffset, numRecords))
+            .setAcquiredRecords(acquiredRecords);
 
         Deserializers<String, String> deserializers = newStringDeserializers();
 
@@ -366,17 +528,17 @@ public class ShareCompletedFetchTest {
         // Offsets 5-9 will be duplicates
         List<ShareFetchResponseData.AcquiredRecords> acquiredRecords = new ArrayList<>();
         acquiredRecords.add(new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(0L)
-                .setLastOffset(9L)
-                .setDeliveryCount((short) 1));
+            .setFirstOffset(0L)
+            .setLastOffset(9L)
+            .setDeliveryCount((short) 1));
         acquiredRecords.add(new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(5L)
-                .setLastOffset(14L)
-                .setDeliveryCount((short) 2));
+            .setFirstOffset(5L)
+            .setLastOffset(14L)
+            .setDeliveryCount((short) 2));
 
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords))
-                .setAcquiredRecords(acquiredRecords);
+            .setRecords(newRecords(startingOffset, numRecords))
+            .setAcquiredRecords(acquiredRecords);
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
 
@@ -392,25 +554,24 @@ public class ShareCompletedFetchTest {
         
         // Verify first occurrence (offset 5 should have deliveryCount=1 from first range)
         ConsumerRecord<String, String> record5 = records.stream()
-                .filter(r -> r.offset() == 5L)
-                .findFirst()
-                .orElse(null);
+            .filter(r -> r.offset() == 5L)
+            .findFirst()
+            .orElse(null);
         assertNotNull(record5);
         assertEquals(Optional.of((short) 1), record5.deliveryCount());
         
         // Verify offset 10 has deliveryCount=2 from second range
         ConsumerRecord<String, String> record10 = records.stream()
-                .filter(r -> r.offset() == 10L)
-                .findFirst()
-                .orElse(null);
+            .filter(r -> r.offset() == 10L)
+            .findFirst()
+            .orElse(null);
         assertNotNull(record10);
         assertEquals(Optional.of((short) 2), record10.deliveryCount());
         
         // Verify all offsets are unique
         Set<Long> offsetSet = new HashSet<>();
         for (ConsumerRecord<String, String> record : records) {
-            assertTrue(offsetSet.add(record.offset()), 
-                    "Duplicate offset found in results: " + record.offset());
+            assertTrue(offsetSet.add(record.offset()), "Duplicate offset found in results: " + record.offset());
         }
     }
 
@@ -423,13 +584,14 @@ public class ShareCompletedFetchTest {
         ShareFetchMetricsAggregator shareFetchMetricsAggregator = new ShareFetchMetricsAggregator(shareFetchMetricsManager, partitionSet);
 
         return new ShareCompletedFetch(
-                logContext,
-                BufferSupplier.create(),
-                0,
-                TIP,
-                partitionData,
-                shareFetchMetricsAggregator,
-                ApiKeys.SHARE_FETCH.latestVersion());
+            logContext,
+            BufferSupplier.create(),
+            0,
+            TIP,
+            partitionData,
+            DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
+            shareFetchMetricsAggregator,
+            ApiKeys.SHARE_FETCH.latestVersion());
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {
@@ -481,9 +643,9 @@ public class ShareCompletedFetchTest {
 
     public static List<ShareFetchResponseData.AcquiredRecords> acquiredRecords(long firstOffset, int count) {
         ShareFetchResponseData.AcquiredRecords acquiredRecords = new ShareFetchResponseData.AcquiredRecords()
-                .setFirstOffset(firstOffset)
-                .setLastOffset(firstOffset + count - 1)
-                .setDeliveryCount((short) 1);
+            .setFirstOffset(firstOffset)
+            .setLastOffset(firstOffset + count - 1)
+            .setDeliveryCount((short) 1);
         return Collections.singletonList(acquiredRecords);
     }
 
@@ -518,11 +680,11 @@ public class ShareCompletedFetchTest {
                                         int offset,
                                         Time time) {
         MemoryRecords.writeEndTransactionalMarker(buffer,
-                offset,
-                time.milliseconds(),
-                0,
-                PRODUCER_ID,
-                PRODUCER_EPOCH,
-                new EndTransactionMarker(ControlRecordType.COMMIT, 0));
+            offset,
+            time.milliseconds(),
+            0,
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            new EndTransactionMarker(ControlRecordType.COMMIT, 0));
     }
 }

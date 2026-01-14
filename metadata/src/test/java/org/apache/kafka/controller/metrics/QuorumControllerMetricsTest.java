@@ -190,6 +190,7 @@ public class QuorumControllerMetricsTest {
         }
     }
 
+    @SuppressWarnings("unchecked") // do not warn about Gauge typecast.
     @Test
     public void testAvgIdleRatio() {
         final double delta = 0.001;

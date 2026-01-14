@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 /** Filters excluded property names or regexes. */
 public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
-    
+
     public static final String CONFIG_PROPERTIES_EXCLUDE_CONFIG = "config.properties.exclude";
     public static final String USE_DEFAULTS_FROM = "use.defaults.from";
     private static final String USE_DEFAULTS_FROM_DOC = "Which cluster's defaults (source or target) to use "
@@ -71,6 +71,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter {
             .define(CONFIG_PROPERTIES_EXCLUDE_CONFIG,
                     Type.LIST,
                     CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     Importance.HIGH,
                     CONFIG_PROPERTIES_EXCLUDE_DOC)
             .define(USE_DEFAULTS_FROM,

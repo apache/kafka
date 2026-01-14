@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -52,6 +51,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
@@ -66,6 +66,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
+import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -284,10 +285,10 @@ public class OffsetMetadataManagerTest {
             return result;
         }
 
-        public List<CoordinatorRecord> deletePartitions(
-            List<TopicPartition> topicPartitions
+        public List<CoordinatorRecord> deleteTopics(
+            List<DeletedTopic> deletedTopics
         ) {
-            List<CoordinatorRecord> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+            List<CoordinatorRecord> records = offsetMetadataManager.onTopicsDeleted(deletedTopics);
             records.forEach(this::replay);
             return records;
         }
@@ -3549,10 +3550,12 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testOnPartitionsDeleted() {
+    public void testOnTopicsDeletedWithZeroTopicId() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
-        // Commit offsets.
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        // Commit offsets with ZERO_UUID (legacy behavior).
         context.commitOffset("grp-0", "foo", 1, 100, 1, context.time.milliseconds());
         context.commitOffset("grp-0", "foo", 2, 200, 1, context.time.milliseconds());
         context.commitOffset("grp-0", "foo", 3, 300, 1, context.time.milliseconds());
@@ -3565,20 +3568,14 @@ public class OffsetMetadataManagerTest {
         context.commitOffset(100L, "grp-2", "foo", 2, 200, 1, context.time.milliseconds());
         context.commitOffset(100L, "grp-2", "foo", 3, 300, 1, context.time.milliseconds());
 
-        // Delete partitions.
-        List<CoordinatorRecord> records = context.deletePartitions(Arrays.asList(
-            new TopicPartition("foo", 1),
-            new TopicPartition("foo", 2),
-            new TopicPartition("foo", 3),
-            new TopicPartition("bar", 1)
-        ));
+        // Delete topics. Offsets with ZERO_UUID should be deleted for backwards compatibility.
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(fooTopicId, "foo")));
 
-        // Verify.
+        // Verify. All partitions for topic "foo" should be deleted.
         List<CoordinatorRecord> expectedRecords = Arrays.asList(
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 3),
-            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-1", "bar", 1),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 1),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 2),
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 3)
@@ -3589,10 +3586,83 @@ public class OffsetMetadataManagerTest {
         assertFalse(context.hasOffset("grp-0", "foo", 1));
         assertFalse(context.hasOffset("grp-0", "foo", 2));
         assertFalse(context.hasOffset("grp-0", "foo", 3));
-        assertFalse(context.hasOffset("grp-1", "bar", 1));
+        assertTrue(context.hasOffset("grp-1", "bar", 1));
+        assertTrue(context.hasOffset("grp-1", "bar", 2));
+        assertTrue(context.hasOffset("grp-1", "bar", 3));
         assertFalse(context.hasOffset("grp-2", "foo", 1));
         assertFalse(context.hasOffset("grp-2", "foo", 2));
         assertFalse(context.hasOffset("grp-2", "foo", 3));
+    }
+
+    @Test
+    public void testOnTopicsDeletedWithMatchingTopicId() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        // Commit offsets with the topic ID.
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", fooTopicId, "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", fooTopicId, "foo", 2, 200, 1, context.time.milliseconds());
+
+        // Delete topics with matching topic ID.
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(fooTopicId, "foo")));
+
+        // Verify offsets are deleted.
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2)
+        );
+
+        assertEquals(new HashSet<>(expectedRecords), new HashSet<>(records));
+
+        assertFalse(context.hasOffset("grp-0", "foo", 1));
+        assertFalse(context.hasOffset("grp-0", "foo", 2));
+    }
+
+    @Test
+    public void testOnTopicsDeletedWithMismatchedTopicId() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        Uuid oldTopicId = Uuid.randomUuid();
+        Uuid newTopicId = Uuid.randomUuid();
+
+        // Commit offsets with the NEW topic ID (simulating offset for recreated topic).
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", newTopicId, "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", newTopicId, "foo", 2, 200, 1, context.time.milliseconds());
+
+        // Delete topics with OLD topic ID (simulating deletion of old topic).
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(oldTopicId, "foo")));
+
+        // Verify offsets are NOT deleted because topic IDs don't match.
+        assertEquals(0, records.size());
+
+        assertTrue(context.hasOffset("grp-0", "foo", 1));
+        assertTrue(context.hasOffset("grp-0", "foo", 2));
+    }
+
+    @Test
+    public void testOnTopicsDeletedWithMixedTopicIds() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        // Commit offsets: some with matching topic ID, some with ZERO_UUID (legacy).
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", fooTopicId, "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(RecordBatch.NO_PRODUCER_ID, "grp-0", Uuid.ZERO_UUID, "foo", 2, 200, 1, context.time.milliseconds());
+
+        // Delete topics.
+        List<CoordinatorRecord> records = context.deleteTopics(List.of(new DeletedTopic(fooTopicId, "foo")));
+
+        // Verify both offsets are deleted (matching ID and legacy ZERO_UUID).
+        List<CoordinatorRecord> expectedRecords = Arrays.asList(
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
+            GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2)
+        );
+
+        assertEquals(new HashSet<>(expectedRecords), new HashSet<>(records));
+
+        assertFalse(context.hasOffset("grp-0", "foo", 1));
+        assertFalse(context.hasOffset("grp-0", "foo", 2));
     }
 
     private void verifyReplay(
@@ -3658,5 +3728,78 @@ public class OffsetMetadataManagerTest {
                 ).iterator()
             )
         );
+    }
+
+    @Test
+    public void testStreamsGroupOffsetCommitWithAssignmentEpochValid() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        StreamsGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedStreamsGroup("foo", true);
+
+        // Setup: topology with topic "bar" in subtopology "0"
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("bar")))));
+
+        // Member at epoch 10, with partitions assigned at epoch 4 and 5 respsectively.
+        group.updateMember(StreamsGroupMember.Builder.withDefaults("member")
+            .setMemberEpoch(10)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 4, 1, 5)),
+                Map.of(), Map.of()))
+            .build());
+
+        // Commit with member epoch 5 should succeed (5 >= assignment epoch 5)
+        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
+            new OffsetCommitRequestData()
+                .setGroupId("foo")
+                .setMemberId("member")
+                .setGenerationIdOrMemberEpoch(5)
+                .setTopics(List.of(new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName("bar")
+                    .setPartitions(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100L),
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(1)
+                            .setCommittedOffset(200L))))));
+
+        assertEquals(Errors.NONE.code(), result.response().topics().get(0).partitions().get(0).errorCode());
+        assertEquals(Errors.NONE.code(), result.response().topics().get(0).partitions().get(1).errorCode());
+        assertEquals(2, result.records().size());
+    }
+
+    @Test
+    public void testStreamsGroupOffsetCommitWithAssignmentEpochStale() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        StreamsGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedStreamsGroup("foo", true);
+
+        group.setTopology(new StreamsTopology(1, Map.of("0", new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("bar")))));
+
+        // Member at epoch 10, with partitions assigned at different epochs
+        group.updateMember(StreamsGroupMember.Builder.withDefaults("member")
+            .setMemberEpoch(10)
+            .setAssignedTasks(new TasksTupleWithEpochs(
+                Map.of("0", Map.of(0, 5, 1, 8)),
+                Map.of(), Map.of()))
+            .build());
+
+        // Commit with member epoch 7 should fail (3 < assignment epochs 8)
+        assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(
+            new OffsetCommitRequestData()
+                .setGroupId("foo")
+                .setMemberId("member")
+                .setGenerationIdOrMemberEpoch(3)
+                .setTopics(List.of(new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName("bar")
+                    .setPartitions(List.of(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100L),
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(1)
+                            .setCommittedOffset(200L)))))));
     }
 }
