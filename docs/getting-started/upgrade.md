@@ -35,7 +35,7 @@ type: docs
   * Support dynamically changing configs for dynamic quorum controllers. Previously only brokers and static quorum controllers were supported. For further details, please refer to [KAFKA-18928](https://issues.apache.org/jira/browse/KAFKA-18928). 
   * Two new configs have been introduced: `group.coordinator.cached.buffer.max.bytes` and `share.coordinator.cached.buffer.max.bytes`. They allow the respective coordinators to set the maximum buffer size retained for reuse. For further details, please refer to [KIP-1196](https://cwiki.apache.org/confluence/x/hA5JFg). 
   * The new config have been introduced: `remote.log.metadata.topic.min.isr` with 2 as default value. You can correct the min.insync.replicas for the existed __remote_log_metadata topic via kafka-configs.sh if needed. For further details, please refer to [KIP-1235](https://cwiki.apache.org/confluence/x/yommFw).
-
+  * The new config prefix `remote.log.metadata.admin.` has been introduced. It allows independent configuration of the admin client used by `TopicBasedRemoteLogMetadataManager`. For further details, please refer to [KIP-1208](https://cwiki.apache.org/confluence/x/vYqhFg).
 
 ## Upgrading to 4.2.0
 
@@ -80,7 +80,7 @@ type: docs
     * `cleanup.policy` now supports empty values, which means infinite retention. This is equivalent to setting `retention.ms=-1` and `retention.bytes=-1`   
 If `cleanup.policy` is empty and `remote.storage.enable` is set to true, the local log segments will be cleaned based on the values of `log.local.retention.bytes` and `log.local.retention.ms`.   
 If `cleanup.policy` is empty and `remote.storage.enable` is set to false, local log segments will not be deleted automatically. However, records can still be deleted explicitly through `deleteRecords` API calls, which will advance the log start offset and remove the corresponding log segments. 
-  * The `controller.quorum.auto.join.enable` has been added to `QuorumConfig`, enabling KRaft controllers to automatically join the cluster's voter set, and defaults to false. For further details, please refer to [KIP-853](https://cwiki.apache.org/confluence/x/nyH1D). 
+  * The `controller.quorum.auto.join.enable` has been added to `QuorumConfig`, enabling KRaft controllers to automatically join the cluster's voter set, and defaults to false. If the configuration is set to true the controller must be shutdown before removing the controller from the voter set to avoid the removed controller to automatically join again. For further details, please refer to [KIP-853](https://cwiki.apache.org/confluence/x/nyH1D). 
   * The AppInfo metrics will deprecate the following metric names, which will be removed in Kafka 5.0: 
     * `[name=start-time-ms, group=app-info, description=Metric indicating start-time-ms, tags={}]`
     * `[name=commit-id, group=app-info, description=Metric indicating commit-id, tags={}]`
