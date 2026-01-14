@@ -30,7 +30,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.image.ConfigurationDelta;
+import org.apache.kafka.metadata.ConfigValidator;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
@@ -52,7 +52,6 @@ import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
@@ -78,6 +77,7 @@ public class ConfigurationControlManager {
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
     private final FeatureControlManager featureControl;
+    private final ConfigValidator configValidator;
 
     static class Builder {
         private LogContext logContext = null;
@@ -89,6 +89,7 @@ public class ConfigurationControlManager {
         private Map<String, Object> staticConfig = Map.of();
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
+        private ConfigValidator configValidator = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -135,6 +136,11 @@ public class ConfigurationControlManager {
             return this;
         }
 
+        Builder setConfigValidator(ConfigValidator configValidator) {
+            this.configValidator = configValidator;
+            return this;
+        }
+
         ConfigurationControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -153,7 +159,8 @@ public class ConfigurationControlManager {
                 validator,
                 staticConfig,
                 nodeId,
-                featureControl);
+                featureControl,
+                configValidator);
         }
     }
 
@@ -165,7 +172,8 @@ public class ConfigurationControlManager {
             ConfigurationValidator validator,
             Map<String, Object> staticConfig,
             int nodeId,
-            FeatureControlManager featureControl
+            FeatureControlManager featureControl,
+            ConfigValidator configValidator
     ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
@@ -178,6 +186,7 @@ public class ConfigurationControlManager {
         this.staticConfig = Map.copyOf(staticConfig);
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
+        this.configValidator = configValidator;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -329,10 +338,11 @@ public class ConfigurationControlManager {
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
         TimelineHashMap<String, String> existingConfigsSnapshot = configData.get(configResource);
         if (existingConfigsSnapshot != null) {
-            for (String name : existingConfigsSnapshot.keySet()) {
-                Set<String> validConfigs = ConfigurationDelta.getValidConfigs();
-                if (validConfigs != null && !validConfigs.contains(name)) {
-                    existingConfigsSnapshot.remove(name);
+            if (configValidator != null) {
+                for (String name : existingConfigsSnapshot.keySet()) {
+                    if (!configValidator.isValidConfig(configResource.type(), name)) {
+                        existingConfigsSnapshot.remove(name);
+                    }
                 }
             }
             allConfigs.putAll(existingConfigsSnapshot);

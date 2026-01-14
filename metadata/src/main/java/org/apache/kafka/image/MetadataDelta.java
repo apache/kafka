@@ -40,6 +40,7 @@ import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.metadata.ConfigValidator;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Optional;
@@ -51,18 +52,26 @@ import java.util.Optional;
 public final class MetadataDelta {
     public static class Builder {
         private MetadataImage image = MetadataImage.EMPTY;
+        private ConfigValidator configValidator = null;
 
         public Builder setImage(MetadataImage image) {
             this.image = image;
             return this;
         }
 
+        public Builder setConfigValidator(ConfigValidator configValidator) {
+            this.configValidator = configValidator;
+            return this;
+        }
+
         public MetadataDelta build() {
-            return new MetadataDelta(image);
+            return new MetadataDelta(image, configValidator);
         }
     }
 
     private final MetadataImage image;
+
+    private final ConfigValidator configValidator;
 
     private FeaturesDelta featuresDelta = null;
 
@@ -83,7 +92,12 @@ public final class MetadataDelta {
     private DelegationTokenDelta delegationTokenDelta = null;
 
     public MetadataDelta(MetadataImage image) {
+        this(image, null);
+    }
+
+    public MetadataDelta(MetadataImage image, ConfigValidator configValidator) {
         this.image = image;
+        this.configValidator = configValidator;
     }
 
     public MetadataImage image() {
@@ -122,7 +136,7 @@ public final class MetadataDelta {
     }
 
     public ConfigurationsDelta getOrCreateConfigsDelta() {
-        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs());
+        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs(), configValidator);
         return configsDelta;
     }
 

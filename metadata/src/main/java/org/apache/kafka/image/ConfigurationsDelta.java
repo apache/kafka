@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
+import org.apache.kafka.metadata.ConfigValidator;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
@@ -34,9 +35,15 @@ import java.util.Map.Entry;
 public final class ConfigurationsDelta {
     private final ConfigurationsImage image;
     private final Map<ConfigResource, ConfigurationDelta> changes = new HashMap<>();
+    private final ConfigValidator configValidator;
 
     public ConfigurationsDelta(ConfigurationsImage image) {
+        this(image, null);
+    }
+
+    public ConfigurationsDelta(ConfigurationsImage image, ConfigValidator configValidator) {
         this.image = image;
+        this.configValidator = configValidator;
     }
 
     public Map<ConfigResource, ConfigurationDelta> changes() {
@@ -48,7 +55,7 @@ public final class ConfigurationsDelta {
             ConfigResource resource = entry.getKey();
             ConfigurationImage configImage = entry.getValue();
             ConfigurationDelta configDelta = changes.computeIfAbsent(resource,
-                __ -> new ConfigurationDelta(configImage));
+                __ -> new ConfigurationDelta(configImage, configValidator));
             configDelta.finishSnapshot();
         }
     }
@@ -63,7 +70,7 @@ public final class ConfigurationsDelta {
         ConfigurationImage configImage = image.resourceData().getOrDefault(resource,
                 new ConfigurationImage(resource, Map.of()));
         ConfigurationDelta delta = changes.computeIfAbsent(resource,
-            __ -> new ConfigurationDelta(configImage));
+            __ -> new ConfigurationDelta(configImage, configValidator));
         delta.replay(record);
     }
 
@@ -73,7 +80,7 @@ public final class ConfigurationsDelta {
         if (image.resourceData().containsKey(resource)) {
             ConfigurationImage configImage = image.resourceData().get(resource);
             ConfigurationDelta delta = changes.computeIfAbsent(resource,
-                __ -> new ConfigurationDelta(configImage));
+                __ -> new ConfigurationDelta(configImage, configValidator));
             delta.deleteAll();
         }
     }

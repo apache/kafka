@@ -20,21 +20,19 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
+import org.apache.kafka.metadata.ConfigValidator;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
@@ -122,36 +120,29 @@ public class ConfigurationsImageTest {
         testToImage(IMAGE2);
     }
 
-    @AfterEach
-    public void tearDown() {
-        try {
-            Field field = ConfigurationDelta.class.getDeclaredField("VALID_CONFIGS_REF");
-            field.setAccessible(true);
-            ((AtomicReference<?>) field.get(null)).set(null);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to reset validConfigsRef", e);
-        }
-    }
-
     @Test
     public void testConfigurationDeltaFiltering() {
         Set<String> validConfigs = Set.of("foo", "bar");
-        ConfigurationDelta.initializeValidConfigs(validConfigs);
+        ConfigValidator configValidator = (resourceType, configName) -> validConfigs.contains(configName);
 
-        Map<String, String> initialConfigs = Map.of("foo", "value1", "baz", "value2");
+        Map<String, String> initialConfigs = Map.of("foo", "value1");
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
 
-        ConfigurationDelta delta = new ConfigurationDelta(image);
+        ConfigurationDelta delta = new ConfigurationDelta(image, configValidator);
+        // "bar" is valid, should be added
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
-            .setName("bar").setValue("value3"));
+            .setName("bar").setValue("value2"));
+        // "qux" is invalid, should be filtered out in replay()
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
-            .setName("qux").setValue("value4"));
+            .setName("qux").setValue("value3"));
 
         ConfigurationImage result = delta.apply();
 
+        // "foo" is valid and in initial configs, should be present
         assertTrue(result.data().containsKey("foo"));
+        // "bar" is valid and was added via replay, should be present
         assertTrue(result.data().containsKey("bar"));
-        assertFalse(result.data().containsKey("baz"));
+        // "qux" is invalid and was filtered out in replay(), should not be present
         assertFalse(result.data().containsKey("qux"));
     }
 
@@ -160,7 +151,7 @@ public class ConfigurationsImageTest {
         Map<String, String> initialConfigs = Map.of("foo", "value1", "bar", "value2");
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
 
-        ConfigurationDelta delta = new ConfigurationDelta(image);
+        ConfigurationDelta delta = new ConfigurationDelta(image, null);
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("baz").setValue("value3"));
 

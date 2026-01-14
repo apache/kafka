@@ -18,14 +18,12 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.metadata.ConfigValidator;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 
 /**
@@ -34,20 +32,15 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class ConfigurationDelta {
     private final ConfigurationImage image;
     private final Map<String, Optional<String>> changes = new HashMap<>();
-    private static final AtomicReference<Set<String>> VALID_CONFIGS_REF = new AtomicReference<>(null);
-
-    public static void initializeValidConfigs(Set<String> validConfigs) {
-        Set<String> immutableValidConfigs = Collections.unmodifiableSet(validConfigs);
-        VALID_CONFIGS_REF.compareAndSet(null, immutableValidConfigs);
-    }
-
-    public static Set<String> getValidConfigs() {
-        Set<String> validConfigs = VALID_CONFIGS_REF.get();
-        return validConfigs == null ? null : Collections.unmodifiableSet(validConfigs);
-    }
+    private final ConfigValidator configValidator;
 
     public ConfigurationDelta(ConfigurationImage image) {
+        this(image, null);
+    }
+
+    public ConfigurationDelta(ConfigurationImage image, ConfigValidator configValidator) {
         this.image = image;
+        this.configValidator = configValidator;
     }
 
     public void finishSnapshot() {
@@ -59,6 +52,9 @@ public final class ConfigurationDelta {
     }
 
     public void replay(ConfigRecord record) {
+        if (configValidator != null && !configValidator.isValidConfig(image.resource().type(), record.name())) {
+            return;
+        }
         changes.put(record.name(), Optional.ofNullable(record.value()));
     }
 
@@ -70,13 +66,9 @@ public final class ConfigurationDelta {
     }
 
     public ConfigurationImage apply() {
-        Set<String> whitelist = VALID_CONFIGS_REF.get();
         Map<String, String> newData = new HashMap<>(image.data().size());
         for (Entry<String, String> entry : image.data().entrySet()) {
             String configName = entry.getKey();
-            if (whitelist != null && !whitelist.contains(configName)) {
-                continue;
-            }
             Optional<String> change = changes.get(configName);
             if (change == null) {
                 newData.put(configName, entry.getValue());
@@ -86,9 +78,6 @@ public final class ConfigurationDelta {
         }
         for (Entry<String, Optional<String>> entry : changes.entrySet()) {
             String configName = entry.getKey();
-            if (whitelist != null && !whitelist.contains(configName)) {
-                continue;
-            }
             if (!newData.containsKey(configName)) {
                 if (entry.getValue().isPresent()) {
                     newData.put(configName, entry.getValue().get());

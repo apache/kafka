@@ -28,6 +28,7 @@ import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.image.writer.ImageReWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.metadata.ConfigValidator;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
@@ -81,6 +82,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private FaultHandler faultHandler = FaultHandlerException::new;
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
+        private ConfigValidator configValidator = null;
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -112,6 +114,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return this;
         }
 
+        public Builder setConfigValidator(ConfigValidator configValidator) {
+            this.configValidator = configValidator;
+            return this;
+        }
+
         public MetadataLoader build() {
             if (logContext == null) {
                 logContext = new LogContext("[MetadataLoader id=" + nodeId + "] ");
@@ -132,7 +139,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 threadNamePrefix,
                 faultHandler,
                 metrics,
-                highWaterMarkAccessor);
+                highWaterMarkAccessor,
+                configValidator);
         }
     }
 
@@ -196,19 +204,26 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      */
     private final KafkaEventQueue eventQueue;
 
+    /**
+     * Config validator for filtering invalid configurations.
+     */
+    private final ConfigValidator configValidator;
+
     private MetadataLoader(
         Time time,
         LogContext logContext,
         String threadNamePrefix,
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
-        Supplier<OptionalLong> highWaterMarkAccessor
+        Supplier<OptionalLong> highWaterMarkAccessor,
+        ConfigValidator configValidator
     ) {
         this.log = logContext.logger(MetadataLoader.class);
         this.time = time;
         this.faultHandler = faultHandler;
         this.metrics = metrics;
         this.highWaterMarkAccessor = highWaterMarkAccessor;
+        this.configValidator = configValidator;
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
@@ -296,6 +311,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         // haven't seen anything previously.
         MetadataDelta delta = new MetadataDelta.Builder().
                 setImage(MetadataImage.EMPTY).
+                setConfigValidator(configValidator).
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).

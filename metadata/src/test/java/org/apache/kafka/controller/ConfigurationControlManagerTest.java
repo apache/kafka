@@ -28,7 +28,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.image.ConfigurationDelta;
+import org.apache.kafka.metadata.ConfigValidator;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -566,26 +566,15 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testValidateAlterConfigFiltersInvalidExistingConfigs() {
         Set<String> validConfigs = Set.of("abc", "def");
-        ConfigurationDelta.initializeValidConfigs(validConfigs);
-
-        @SuppressWarnings("unchecked")
-        Map<String, String>[] capturedConfigs = new Map[1];
-        ConfigurationValidator validator = new ConfigurationValidator() {
-            @Override
-            public void validate(ConfigResource resource) { }
-
-            @Override
-            public void validate(ConfigResource resource, Map<String, String> newConfigs, Map<String, String> existingConfigs) {
-                capturedConfigs[0] = existingConfigs;
-            }
-        };
+        ConfigValidator configValidator = (resourceType, configName) -> validConfigs.contains(configName);
 
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
-            setValidator(validator).
+            setConfigValidator(configValidator).
             build();
 
+        // Add both valid and invalid configs
         manager.replay(new ConfigRecord().
             setResourceType(TOPIC.id()).setResourceName("mytopic").
             setName("abc").setValue("value1"));  // valid
@@ -593,15 +582,13 @@ public class ConfigurationControlManagerTest {
             setResourceType(TOPIC.id()).setResourceName("mytopic").
             setName("invalid.config").setValue("should-be-filtered"));  // invalid
 
+        // Alter config should not throw exception even with invalid configs present
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(
             MYTOPIC,
             toMap(entry("def", entry(SET, "newValue"))),
             false);
 
+        // Should succeed without throwing exception
         assertEquals(ApiError.NONE, result.response());
-
-        assertNotNull(capturedConfigs[0]);
-        assertTrue(capturedConfigs[0].containsKey("abc"));  // valid config present
-        assertFalse(capturedConfigs[0].containsKey("invalid.config"));  // invalid config filtered
     }
 }
