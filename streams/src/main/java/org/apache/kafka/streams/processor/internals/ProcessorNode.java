@@ -178,7 +178,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                 processor.process(record);
             } else if (fixedKeyProcessor != null) {
                 fixedKeyProcessor.process(
-                    InternalFixedKeyRecordFactory.create(record)
+                    new FixedKeyRecordImpl<>(record)
                 );
             } else {
                 throw new IllegalStateException(
