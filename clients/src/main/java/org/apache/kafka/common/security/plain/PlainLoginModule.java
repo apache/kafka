@@ -18,10 +18,12 @@ package org.apache.kafka.common.security.plain;
 
 import org.apache.kafka.common.security.plain.internals.PlainSaslServerProvider;
 
+import java.util.Iterator;
 import java.util.Map;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.login.LoginException;
 import javax.security.auth.spi.LoginModule;
 
 public class PlainLoginModule implements LoginModule {
@@ -29,12 +31,19 @@ public class PlainLoginModule implements LoginModule {
     private static final String USERNAME_CONFIG = "username";
     private static final String PASSWORD_CONFIG = "password";
 
+    private Subject subject;
+    private Map<String, ?> options;
+    private boolean loginSucceeded;
+
     static {
         PlainSaslServerProvider.initialize();
     }
 
     @Override
     public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {
+        this.subject = subject;
+        this.options = options;
+
         String username = (String) options.get(USERNAME_CONFIG);
         if (username != null)
             subject.getPublicCredentials().add(username);
@@ -44,22 +53,72 @@ public class PlainLoginModule implements LoginModule {
     }
 
     @Override
-    public boolean login() {
+    public boolean login() throws LoginException {
+        String username = (String) options.get(USERNAME_CONFIG);
+        String password = (String) options.get(PASSWORD_CONFIG);
+
+        if (username == null || username.isEmpty()) {
+            throw new LoginException("Username must be specified");
+        }
+        if (password == null || password.isEmpty()) {
+            throw new LoginException("Password must be specified");
+        }
+
+        // Ensure that the subject actually contains the configured credentials
+        if (!subject.getPublicCredentials().contains(username)) {
+            throw new LoginException("Configured username not present in subject credentials");
+        }
+        if (!subject.getPrivateCredentials().contains(password)) {
+            throw new LoginException("Configured password not present in subject credentials");
+        }
+
+        loginSucceeded = true;
         return true;
     }
 
     @Override
-    public boolean logout() {
+    public boolean logout() throws LoginException {
+        if (!loginSucceeded) {
+            return false;
+        }
+
+        // Remove stored credentials from the subject on logout
+        removeCredential(subject.getPublicCredentials(), options.get(USERNAME_CONFIG));
+        removeCredential(subject.getPrivateCredentials(), options.get(PASSWORD_CONFIG));
+
+        loginSucceeded = false;
         return true;
     }
 
     @Override
-    public boolean commit() {
-        return true;
+    public boolean commit() throws LoginException {
+        return loginSucceeded;
     }
 
     @Override
-    public boolean abort() {
-        return false;
+    public boolean abort() throws LoginException {
+        if (!loginSucceeded) {
+            return false;
+        }
+
+        // Roll back any state associated with this login attempt
+        removeCredential(subject.getPublicCredentials(), options.get(USERNAME_CONFIG));
+        removeCredential(subject.getPrivateCredentials(), options.get(PASSWORD_CONFIG));
+
+        loginSucceeded = false;
+        return true;
+    }
+
+    private void removeCredential(Iterable<?> credentials, Object value) {
+        if (value == null)
+            return;
+
+        Iterator<?> iterator = credentials.iterator();
+        while (iterator.hasNext()) {
+            Object credential = iterator.next();
+            if (value.equals(credential)) {
+                iterator.remove();
+            }
+        }
     }
 }
