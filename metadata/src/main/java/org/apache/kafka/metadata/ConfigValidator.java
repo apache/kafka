@@ -33,4 +33,3 @@ public interface ConfigValidator {
      */
     boolean isValidConfig(ConfigResource.Type resourceType, String configName);
 }
-
