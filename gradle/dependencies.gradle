@@ -109,7 +109,7 @@ versions += [
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   // https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/record/CompressionType.java#L73-L74
   // https://github.com/yawkat/lz4-java/blob/main/src/java/net/jpountz/lz4/LZ4Constants.java#L23-L24
-  lz4: "1.10.1",
+  lz4: "1.10.2",
   mavenArtifact: "3.9.11",
   metrics: "2.2.0",
   mockito: "5.20.0",
