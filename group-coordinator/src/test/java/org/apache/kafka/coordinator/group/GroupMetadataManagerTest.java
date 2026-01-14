@@ -524,13 +524,6 @@ public class GroupMetadataManagerTest {
 
         assertEquals(MemberState.STABLE, context.consumerGroupMemberState(groupId, memberId));
 
-        // Prepare assignment for rejoin.
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2)
-            )))
-        ));
-
         // Member rejoins with epoch=0 - should succeed per KIP-848.
         // Since the member is STABLE with the same subscription and assignment,
         // the group epoch should not bump and the member gets their current state back.
@@ -578,6 +571,8 @@ public class GroupMetadataManagerTest {
             .build();
 
         // Member is in UNREVOKED_PARTITIONS state with epoch 100.
+        // The group has advanced to epoch 101 with a new target assignment [0, 1].
+        // The member still has partition 2 pending revocation.
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
             .setState(MemberState.UNREVOKED_PARTITIONS)
             .setMemberEpoch(100)
@@ -592,27 +587,19 @@ public class GroupMetadataManagerTest {
             .build();
 
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId, member));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 100, computeGroupHash(Map.of(
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 101, computeGroupHash(Map.of(
             fooTopicName, fooTopicHash
         ))));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord(groupId, memberId, mkAssignment(
             mkTopicAssignment(fooTopicId, 0, 1)
         )));
-        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord(groupId, 101));
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.UNREVOKED_PARTITIONS, context.consumerGroupMemberState(groupId, memberId));
 
-        // Prepare assignment for rejoin.
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2)
-            )))
-        ));
-
         // Member rejoins with epoch=0 - should succeed per KIP-848.
-        // Since the subscription/metadata hasn't changed, group epoch stays at 100.
-        // The member gets their current assigned partitions [0, 1] back.
+        // The member advances to epoch 101 and gets their target assignment [0, 1].
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(groupId)
@@ -625,7 +612,7 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
-                .setMemberEpoch(100)
+                .setMemberEpoch(101)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(List.of(
@@ -680,13 +667,6 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, member));
 
         assertEquals(MemberState.UNRELEASED_PARTITIONS, context.consumerGroupMemberState(groupId, memberId));
-
-        // Prepare assignment for rejoin.
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2)
-            )))
-        ));
 
         // Member rejoins with epoch=0 - should succeed per KIP-848.
         // Since the subscription/metadata hasn't changed, group epoch stays at 100.
