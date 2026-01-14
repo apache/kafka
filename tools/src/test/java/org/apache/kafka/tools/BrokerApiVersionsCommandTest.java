@@ -73,7 +73,7 @@ public class BrokerApiVersionsCommandTest {
             assertEquals(clusterInstance.bootstrapServers() + " (id: 0 rack: null isFenced: false) -> (", lineIter.next());
         }
 
-        EnumSet<ApiKeys> apiKeys = ApiKeys.clientApis();
+        EnumSet<ApiKeys> apiKeys = EnumSet.copyOf(ApiKeys.clientApis());
 
         // Controller will return all apis
         if (listenerType == ApiMessageType.ListenerType.CONTROLLER) {
