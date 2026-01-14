@@ -35,7 +35,7 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.ConfigHelperUtils.createResponseConfig
-import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.config.{DynamicBrokerConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.logger.LoggingController
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -246,7 +246,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
       .filter(perBrokerConfig || _.source == ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG.id)
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source
-    val readOnly = !DynamicBrokerConfig.AllDynamicConfigs.contains(name)
+    val readOnly = !DynamicBrokerConfig.ALL_DYNAMIC_CONFIGS.contains(name)
 
     val dataType = configResponseType(configEntryType)
     val configDocumentation = if (includeDocumentation) brokerDocumentation(name) else null
@@ -274,7 +274,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
   }
 
   private def brokerSynonyms(name: String): List[String] = {
-    DynamicBrokerConfig.brokerConfigSynonyms(name, matchListenerOverride = true)
+    DynamicBrokerConfig.brokerConfigSynonyms(name, true).asScala.toList
   }
 
   private def brokerDocumentation(name: String): String = {
