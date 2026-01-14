@@ -147,6 +147,10 @@ class RemoteLogLeaderEpochState {
         return highestLogOffset;
     }
 
+    boolean isEmpty() {
+        return offsetToId.isEmpty() && unreferencedSegmentIds.isEmpty();
+    }
+
     /**
      * Returns the RemoteLogSegmentId of a segment for the given offset, if there exists a mapping associated with
      * the greatest offset less than or equal to the given offset, or null if there is no such mapping.

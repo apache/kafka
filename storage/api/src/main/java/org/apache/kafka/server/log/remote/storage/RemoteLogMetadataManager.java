@@ -128,9 +128,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
             throws RemoteStorageException;
 
     /**
-     * Returns the highest log offset of topic partition for the given leader epoch in remote storage. This is used by
-     * remote log management subsystem to know up to which offset the segments have been copied to remote storage for
-     * a given leader epoch.
+     * Returns the highest log offset that has been successfully copied to remote storage for the given leader epoch.
+     * This is a monotonic progress marker used by the management subsystem and is retained even after delete
+     * transitions to avoid recopying segments; it may be higher than offsets currently present in remote storage.
      *
      * @param topicIdPartition topic partition
      * @param leaderEpoch      leader epoch
