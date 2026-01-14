@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.InternalDescribeFeaturesResult;
+import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -29,14 +32,38 @@ import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.common.StreamsVersion;
 import org.apache.kafka.server.common.TransactionVersion;
 
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DescribeFeaturesTest {
+
+    @ClusterTest(types = {Type.KRAFT})
+    public void testApiVersions(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        var all = Arrays.stream(ApiKeys.values()).collect(Collectors.toMap(v -> v.id, v -> v));
+        try (Admin admin = clusterInstance.admin()) {
+            var versions = ((InternalDescribeFeaturesResult) admin.describeFeatures()).nodeApiVersions().get();
+            versions.allSupportedApiVersions().forEach((key, version) -> {
+                var apiKey = Objects.requireNonNull(all.get(key.id));
+                assertTrue(apiKey.inScope(ApiMessageType.ListenerType.BROKER));
+            });
+        }
+
+        try (Admin admin = clusterInstance.admin(Map.of(), true)) {
+            var versions = ((InternalDescribeFeaturesResult) admin.describeFeatures()).nodeApiVersions().get();
+            versions.allSupportedApiVersions().forEach((key, versionv) -> {
+                var apiKey = Objects.requireNonNull(all.get(key.id));
+                assertTrue(apiKey.inScope(ApiMessageType.ListenerType.CONTROLLER));
+            });
+        }
+    }
 
     @ClusterTest(
         types = {Type.KRAFT},
