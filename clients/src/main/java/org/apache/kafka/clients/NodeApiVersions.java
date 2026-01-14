@@ -85,10 +85,6 @@ public class NodeApiVersions {
     }
 
 
-    public static NodeApiVersions of(Collection<ApiVersion> apiVersions) {
-        return new NodeApiVersions(apiVersions, Collections.emptyList(), Collections.emptyList(), -1);
-    }
-
     /**
      * Create a NodeApiVersions object with a single ApiKey. It is mainly used in tests.
      *

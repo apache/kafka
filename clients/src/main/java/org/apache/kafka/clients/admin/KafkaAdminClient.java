@@ -4530,7 +4530,7 @@ public class KafkaAdminClient extends AdminClient {
             "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             private NodeApiVersions createNodeApiVersion(final ApiVersionsResponse response) {
-                return NodeApiVersions.of(response.data().apiKeys());
+                return new NodeApiVersions(response.data().apiKeys(), Collections.emptyList());
             }
 
             private FeatureMetadata createFeatureMetadata(final ApiVersionsResponse response) {
