@@ -63,7 +63,7 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 ## Streams API changes in 4.3.0
 
-The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, and `poll-ratio` , along with streams state updater metrics `active-restore-ratio`, `standby-restore-ratio`, `idle-ratio`, and `checkpoint-ratio` have been updated. Each metric now reports, over a rolling measurement window, the ratio of time this thread spends performing the given action (`{action}`) to the total elapsed time in that window. The effective window duration is determined by the metrics configuration: `metrics.sample.window.ms` (per-sample window length)and `metrics.num.samples` (number of rolling windows).
+The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, and `poll-ratio`, along with streams state updater metrics `active-restore-ratio`, `standby-restore-ratio`, `idle-ratio`, and `checkpoint-ratio` have been updated. Each metric now reports, over a rolling measurement window, the ratio of time this thread spends performing the given action (`{action}`) to the total elapsed time in that window. The effective window duration is determined by the metrics configuration: `metrics.sample.window.ms` (per-sample window length)and `metrics.num.samples` (number of rolling windows).
 
 ## Streams API changes in 4.2.0
 
