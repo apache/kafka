@@ -759,6 +759,81 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupMemberCanRejoinWithEpochZero() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Topology topology = new Topology()
+            .setEpoch(1)
+            .setSubtopologies(List.of(
+                new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+            ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 3)
+            .addRacks()
+            .buildCoordinatorMetadataImage();
+
+        long fooTopicHash = computeTopicHash(fooTopicName, metadataImage);
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(metadataImage)
+            .build();
+
+        // Set up a Streams group member with epoch 100.
+        StreamsGroupMember member = streamsGroupMemberBuilderWithDefaults(memberId)
+            .setMemberEpoch(100)
+            .setPreviousMemberEpoch(99)
+            .setTopologyEpoch(1)
+            .setAssignedTasks(mkTasksTupleWithCommonEpoch(TaskRole.ACTIVE, 100, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)))
+            .build();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, member));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMetadataRecord(groupId, 100, computeGroupHash(Map.of(
+            fooTopicName, fooTopicHash
+        )), 1, Map.of("num.standby.replicas", "0")));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId,
+            TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2)
+            )));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 100));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, member));
+
+        // Member rejoins with epoch=0 - should succeed per KIP-848.
+        // Since the topology/metadata hasn't changed, group epoch stays at 100.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(100)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of(
+                    new StreamsGroupHeartbeatResponseData.TaskIds()
+                        .setSubtopologyId(subtopology1)
+                        .setPartitions(List.of(0, 1, 2))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
+            result.response().data()
+        );
+    }
+
+    @Test
     public void testMemberJoinsEmptyConsumerGroup() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.

@@ -1707,6 +1707,9 @@ public class GroupMetadataManager {
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks
     ) {
+        // Epoch 0 is a special value indicating the member wants to (re)join the group.
+        if (receivedMemberEpoch == 0) return;
+
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The streams group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
