@@ -34,10 +34,6 @@ public final class ConfigurationDelta {
     private final Map<String, Optional<String>> changes = new HashMap<>();
     private final ConfigValidator configValidator;
 
-    public ConfigurationDelta(ConfigurationImage image) {
-        this(image, null);
-    }
-
     public ConfigurationDelta(ConfigurationImage image, ConfigValidator configValidator) {
         this.image = image;
         this.configValidator = configValidator;
