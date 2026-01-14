@@ -1147,7 +1147,7 @@ public class ReplicationControlManager {
                 if (record.isPresent()) {
                     records.add(record.get());
                     PartitionChangeRecord change = (PartitionChangeRecord) record.get().message();
-                    PartitionRegistration originalPartition = partition
+                    PartitionRegistration originalPartition = partition;
                     partition = originalPartition.merge(change);
                     if (log.isDebugEnabled()) {
                         log.debug("Node {} has altered ISR for {}-{}. {}",
@@ -1356,7 +1356,7 @@ public class ReplicationControlManager {
 
     private static String logPartitionChangeInfo(
         PartitionRegistration partition,
-        List<BrokerState> requestedIsr,
+        List<BrokerState> requestedIsr
     ) {
         return String.format("Proposed ISR was %s and current ISR is %s. " +
                 "Current replica set is %s. Current partitionEpoch is %d. Current leaderEpoch is %d.",
