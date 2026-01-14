@@ -2518,10 +2518,10 @@ class KafkaApisTest extends Logging {
     // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
     val capturedSession = sessionCaptorFetch.getValue
     assertNotNull(capturedSession)
-    assertNotNull(capturedSession.principal())
-    assertEquals(KafkaPrincipal.USER_TYPE, capturedSession.principal().getPrincipalType)
-    assertEquals("test-user", capturedSession.principal().getName)
-    assertEquals(testClientAddress, capturedSession.clientAddress())
+    assertNotNull(capturedSession.principal)
+    assertEquals(KafkaPrincipal.USER_TYPE, capturedSession.principal.getPrincipalType)
+    assertEquals("test-user", capturedSession.principal.getName)
+    assertEquals(testClientAddress, capturedSession.clientAddress)
     assertEquals("test-user", capturedSession.sanitizedUser)
     
     // Verify client ID passed to fetch quota manager matches what was defined
@@ -2734,11 +2734,11 @@ class KafkaApisTest extends Logging {
     // Verify the Session data passed to fetch quota manager is exactly what was defined in the test
     val capturedSession = sessionCaptorFetch.getValue
     assertNotNull(capturedSession)
-    assertNotNull(capturedSession.principal())
-    assertEquals(KafkaPrincipal.USER_TYPE, capturedSession.principal().getPrincipalType)
-    assertEquals("test-user", capturedSession.principal().getName)
-    assertEquals(testClientAddress, capturedSession.clientAddress())
-    assertEquals("test-user", capturedSession.sanitizedUser())
+    assertNotNull(capturedSession.principal)
+    assertEquals(KafkaPrincipal.USER_TYPE, capturedSession.principal.getPrincipalType)
+    assertEquals("test-user", capturedSession.principal.getName)
+    assertEquals(testClientAddress, capturedSession.clientAddress)
+    assertEquals("test-user", capturedSession.sanitizedUser)
     
     // Verify client ID passed to fetch quota manager matches what was defined
     val capturedClientId = clientIdCaptor.getValue

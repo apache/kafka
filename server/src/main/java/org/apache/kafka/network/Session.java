@@ -21,8 +21,14 @@ import org.apache.kafka.common.utils.Sanitizer;
 
 import java.net.InetAddress;
 
-public record Session(KafkaPrincipal principal, InetAddress clientAddress) {
-    public String sanitizedUser() {
-        return Sanitizer.sanitize(principal.getName());
+public class Session {
+    public final KafkaPrincipal principal;
+    public final InetAddress clientAddress;
+    public final String sanitizedUser;
+
+    public Session(KafkaPrincipal principal, InetAddress clientAddress) {
+        this.principal = principal;
+        this.clientAddress = clientAddress;
+        this.sanitizedUser = Sanitizer.sanitize(principal.getName());
     }
 }

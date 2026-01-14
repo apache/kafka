@@ -68,7 +68,7 @@ public class DynamicTopicClusterQuotaPublisher implements MetadataPublisher {
                     }
                 }
             });
-        } catch (Exception e) {
+        } catch (Throwable e) {
             String deltaName = "MetadataDelta up to " + newImage.highestOffsetAndEpoch().offset();
             faultHandler.handleFault("Uncaught exception while publishing dynamic topic or cluster changes from " + deltaName, e);
         }
