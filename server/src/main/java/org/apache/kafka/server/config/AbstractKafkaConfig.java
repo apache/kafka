@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.server.config;
 
+import kafka.server.dynamicConfig;
+
+import org.apache.kafka.common.Reconfigurable;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -34,6 +38,8 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.config.QuotaConfig;
+import org.apache.kafka.server.util.Csv;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.server.util.Csv;
@@ -53,6 +59,7 @@ import java.util.stream.Collectors;
  * For more details check KAFKA-15853
  */
 public abstract class AbstractKafkaConfig extends AbstractConfig {
+    private volatile AbstractKafkaConfig currentConfig = this
     public static final ConfigDef CONFIG_DEF = Utils.mergeConfigs(List.of(
         RemoteLogManagerConfig.configDef(),
         ServerConfigs.CONFIG_DEF,
@@ -97,6 +104,62 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public int backgroundThreads() {
         return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
+    }
+
+    public Map<String, Integer> maxConnectionsPerIpOverrides() {
+        return getMap(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
+                getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG))
+                .entrySet()
+                .stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> Integer.valueOf(entry.getValue())
+                ));
+    }
+
+    public Integer maxConnections(){
+        return getInt(SocketServerConfigs.MAX_CONNECTIONS_CONFIG);
+    }
+
+    public Integer maxConnectionsPerIp(){
+        return getInt(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG);
+    }
+
+    public ListenerName interBrokerListenerName(){
+        return getInterBrokerListenerNameAndSecurityProtocol._1;
+    }
+
+    public Integer maxConnectionCreationRate(){
+        return getInt(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG);
+    }
+
+    public QuotaConfig quotaConfig(){
+        return _quotaConfig;
+    }
+
+    public void addReconfigurable (Reconfigurable reconfigurable){
+        dynamicConfig.addReconfigurable(reconfigurable);
+    }
+
+    public void removeReconfigurable(Reconfigurable reconfigurable){
+        dynamicConfig.removeReconfigurable(reconfigurable)
+    }
+
+    @Override
+    public Map<String, Object> valuesWithPrefixOverride(String prefix){
+        if (this == currentConfig) {
+            return super.valuesWithPrefixOverride(prefix);
+        } else {
+            return currentConfig.valuesWithPrefixOverride(prefix);
+        }
+    }
+
+    private Map<String, String> getMap(String propName, String propValue){
+        try {
+            Csv.parseCsvMap(propValue);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(String.format("Error parsing configuration property '%s': %s", propName, e.getMessage()));
+        }
     }
 
     public int brokerId() {
