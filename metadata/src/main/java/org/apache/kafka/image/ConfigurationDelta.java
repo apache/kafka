@@ -64,19 +64,17 @@ public final class ConfigurationDelta {
     public ConfigurationImage apply() {
         Map<String, String> newData = new HashMap<>(image.data().size());
         for (Entry<String, String> entry : image.data().entrySet()) {
-            String configName = entry.getKey();
-            Optional<String> change = changes.get(configName);
+            Optional<String> change = changes.get(entry.getKey());
             if (change == null) {
-                newData.put(configName, entry.getValue());
+                newData.put(entry.getKey(), entry.getValue());
             } else if (change.isPresent()) {
-                newData.put(configName, change.get());
+                newData.put(entry.getKey(), change.get());
             }
         }
         for (Entry<String, Optional<String>> entry : changes.entrySet()) {
-            String configName = entry.getKey();
-            if (!newData.containsKey(configName)) {
+            if (!newData.containsKey(entry.getKey())) {
                 if (entry.getValue().isPresent()) {
-                    newData.put(configName, entry.getValue().get());
+                    newData.put(entry.getKey(), entry.getValue().get());
                 }
             }
         }
