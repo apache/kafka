@@ -32,9 +32,10 @@ type: docs
 
 ### Notable changes in 4.3.0
 
+  * Support dynamically changing configs for dynamic quorum controllers. Previously only brokers and static quorum controllers were supported. For further details, please refer to [KAFKA-18928](https://issues.apache.org/jira/browse/KAFKA-18928). 
   * Two new configs have been introduced: `group.coordinator.cached.buffer.max.bytes` and `share.coordinator.cached.buffer.max.bytes`. They allow the respective coordinators to set the maximum buffer size retained for reuse. For further details, please refer to [KIP-1196](https://cwiki.apache.org/confluence/x/hA5JFg). 
-
-
+  * The new config have been introduced: `remote.log.metadata.topic.min.isr` with 2 as default value. You can correct the min.insync.replicas for the existed __remote_log_metadata topic via kafka-configs.sh if needed. For further details, please refer to [KIP-1235](https://cwiki.apache.org/confluence/x/yommFw).
+  * The new config prefix `remote.log.metadata.admin.` has been introduced. It allows independent configuration of the admin client used by `TopicBasedRemoteLogMetadataManager`. For further details, please refer to [KIP-1208](https://cwiki.apache.org/confluence/x/vYqhFg).
 
 ## Upgrading to 4.2.0
 
@@ -79,7 +80,7 @@ type: docs
     * `cleanup.policy` now supports empty values, which means infinite retention. This is equivalent to setting `retention.ms=-1` and `retention.bytes=-1`   
 If `cleanup.policy` is empty and `remote.storage.enable` is set to true, the local log segments will be cleaned based on the values of `log.local.retention.bytes` and `log.local.retention.ms`.   
 If `cleanup.policy` is empty and `remote.storage.enable` is set to false, local log segments will not be deleted automatically. However, records can still be deleted explicitly through `deleteRecords` API calls, which will advance the log start offset and remove the corresponding log segments. 
-  * The `controller.quorum.auto.join.enable` has been added to `QuorumConfig`, enabling KRaft controllers to automatically join the cluster's voter set, and defaults to false. For further details, please refer to [KIP-853](https://cwiki.apache.org/confluence/x/nyH1D). 
+  * The `controller.quorum.auto.join.enable` has been added to `QuorumConfig`, enabling KRaft controllers to automatically join the cluster's voter set, and defaults to false. If the configuration is set to true the controller must be shutdown before removing the controller from the voter set to avoid the removed controller to automatically join again. For further details, please refer to [KIP-853](https://cwiki.apache.org/confluence/x/nyH1D). 
   * The AppInfo metrics will deprecate the following metric names, which will be removed in Kafka 5.0: 
     * `[name=start-time-ms, group=app-info, description=Metric indicating start-time-ms, tags={}]`
     * `[name=commit-id, group=app-info, description=Metric indicating commit-id, tags={}]`
@@ -131,13 +132,13 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
 **For a rolling upgrade:**
 
   1. Upgrade the clients one at a time: shut down the client, update the code, and restart it.
-  2. Clients (including Streams and Connect) must be on version 2.1 or higher before upgrading to 4.0. Many deprecated APIs were removed in Kafka 4.0. For more information about the compatibility, please refer to the [compatibility matrix](/43/documentation/compatibility.html) or [KIP-1124](https://cwiki.apache.org/confluence/x/y4kgF).
+  2. Clients (including Streams and Connect) must be on version 2.1 or higher before upgrading to 4.0. Many deprecated APIs were removed in Kafka 4.0. For more information about the compatibility, please refer to the [compatibility matrix](/43/getting-started/compatibility) or [KIP-1124](https://cwiki.apache.org/confluence/x/y4kgF).
 
 
 
 ### Upgrading Servers to 4.0.1 from any version 3.3.x through 3.9.x
 
-Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.0.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.0.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/documentation.html#kraft_zk_migration) before they can be upgraded to 4.0.x. 
+Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, **broker upgrades to 4.0.0 (and higher) require KRaft mode and the software and metadata versions must be at least 3.3.x** (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.0.x. Clusters in ZooKeeper mode have to be [migrated to KRaft mode](/43/operations/kraft/#zookeeper-to-kraft-migration) before they can be upgraded to 4.0.x. 
 
 **For a rolling upgrade:**
 
@@ -150,14 +151,14 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
 ### Notable changes in 4.0.1
 
   * The filename for rotated `state-change.log` files has been updated from `stage-change.log.[date]` to `state-change.log.[date]` in the log4j2.yaml configuration file. See [KAFKA-19576](https://issues.apache.org/jira/browse/KAFKA-19576) for details. 
-  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (remove with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/43/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors). 
+  * Kafka Streams include a critical fix to upgrade from `KStreams#transformValues()` (remove with 4.0.0 release) to `KStreams#processValues()`. For more details, see the [migration guide](/43/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
 
 
 
 ### Notable changes in 4.0.0
 
   * Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading Java clients (including Connect and Kafka Streams which use the clients internally) to 4.0. Similarly, users should ensure their Java clients (including Connect and Kafka Streams) version is 2.1 or higher before upgrading brokers to 4.0. Finally, care also needs to be taken when it comes to kafka clients that are not part of Apache Kafka, please see [KIP-896](https://cwiki.apache.org/confluence/x/K5sODg) for the details. 
-  * Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. About version upgrade, check [Upgrading to 4.0.1 from any version 3.3.x through 3.9.x](/43/documentation.html#upgrade_4_0_1) for more info. 
+  * Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. About version upgrade, check [Upgrading to 4.0.1 from any version 3.3.x through 3.9.x](/43/getting-started/upgrade/#upgrading-servers-to-401-from-any-version-33x-through-39x) for more info. 
   * Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See [here](https://cwiki.apache.org/confluence/x/HhD1D)). Functionally speaking, it implements all the same APIs. There are reasonable defaults, but the behavior of the new group coordinator can be tuned by setting the configurations with prefix `group.coordinator`. 
   * The Next Generation of the Consumer Rebalance Protocol ([KIP-848](https://cwiki.apache.org/confluence/x/HhD1D)) is now Generally Available (GA) in Apache Kafka 4.0. The protocol is automatically enabled on the server when the upgrade to 4.0 is finalized. Note that once the new protocol is used by consumer groups, the cluster can only be downgraded to version 3.4.1 or newer. For more information check [here](/43/documentation.html#consumer_rebalance_protocol). 
   * Transactions Server-Side Defense ([KIP-890](https://cwiki.apache.org/confluence/x/B40ODg)) brings a strengthened transactional protocol to Apache Kafka 4.0. The new and improved transactional protocol is enabled when the upgrade to 4.0 is finalized. When using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not written as part of the next transaction. Downgrading the protocol is safe. For more information check [here](/43/documentation.html#transaction_protocol). 
@@ -195,14 +196,14 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
       * The `topics.blacklist` was removed from the `org.apache.kafka.connect.mirror.MirrorSourceConfig` Please use `topics.exclude` instead. 
       * The `groups.blacklist` was removed from the `org.apache.kafka.connect.mirror.MirrorSourceConfig` Please use `groups.exclude` instead. 
     * **Tools**
-      * The `kafka.common.MessageReader` class was removed. Please use the [`org.apache.kafka.tools.api.RecordReader`](/43/javadoc/org/apache/kafka/tools/api/RecordReader.html) interface to build custom readers for the `kafka-console-producer` tool. 
+      * The `kafka.common.MessageReader` class was removed. Please use the [`org.apache.kafka.tools.api.RecordReader`](/{version}/javadoc/org/apache/kafka/tools/api/RecordReader.html) interface to build custom readers for the `kafka-console-producer` tool. 
       * The `kafka.tools.DefaultMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.DefaultMessageFormatter` class instead. 
       * The `kafka.tools.LoggingMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.LoggingMessageFormatter` class instead. 
       * The `kafka.tools.NoOpMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.NoOpMessageFormatter` class instead. 
       * The `--whitelist` option was removed from the `kafka-console-consumer` command line tool. Please use `--include` instead. 
       * Redirections from the old tools packages have been removed: `kafka.admin.FeatureCommand`, `kafka.tools.ClusterTool`, `kafka.tools.EndToEndLatency`, `kafka.tools.StateChangeLogMerger`, `kafka.tools.StreamsResetter`, `kafka.tools.JmxTool`. 
       * The `--authorizer`, `--authorizer-properties`, and `--zk-tls-config-file` options were removed from the `kafka-acls` command line tool. Please use `--bootstrap-server` or `--bootstrap-controller` instead. 
-      * The `kafka.serializer.Decoder` trait was removed, please use the [`org.apache.kafka.tools.api.Decoder`](/43/javadoc/org/apache/kafka/tools/api/Decoder.html) interface to build custom decoders for the `kafka-dump-log` tool. 
+      * The `kafka.serializer.Decoder` trait was removed, please use the [`org.apache.kafka.tools.api.Decoder`](/{version}/javadoc/org/apache/kafka/tools/api/Decoder.html) interface to build custom decoders for the `kafka-dump-log` tool. 
       * The `kafka.coordinator.group.OffsetsMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.OffsetsMessageFormatter` class instead. 
       * The `kafka.coordinator.group.GroupMetadataMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.GroupMetadataMessageFormatter` class instead. 
       * The `kafka.coordinator.transaction.TransactionLogMessageFormatter` class was removed. Please use the `org.apache.kafka.tools.consumer.TransactionLogMessageFormatter` class instead. 
@@ -237,9 +238,9 @@ Note: Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been remove
       * The `all()` method was removed from the `org.apache.kafka.clients.admin.DescribeTopicsResult`. Please use `allTopicNames()` instead. 
     * **Kafka Streams**
       * All public APIs, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of `JoinWindows.of()` and `JoinWindows#grace()`. See [KAFKA-17531](https://issues.apache.org/jira/browse/KAFKA-17531) for details. 
-      * The most important changes are highlighted in the [Kafka Streams upgrade guide](/43/documentation/streams/upgrade-guide.html#streams_api_changes_400). 
+      * The most important changes are highlighted in the [Kafka Streams upgrade guide](/43/streams/upgrade-guide/#streams-api-changes-in-400). 
       * For a full list of changes, see [KAFKA-12822](https://issues.apache.org/jira/browse/KAFKA-12822). 
-      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/43/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors). 
+      * If you are using `KStream#transformValues()` which was removed with Apache Kafka 4.0.0 release, and you need to rewrite your program to use `KStreams#processValues()` instead, pay close attention to the [migration guide](/43/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
   * Other changes: 
     * The minimum Java version required by clients and Kafka Streams applications has been increased from Java 8 to Java 11 while brokers, connect and tools now require Java 17. See [KIP-750](https://cwiki.apache.org/confluence/x/P4vOCg) and [KIP-1013](https://cwiki.apache.org/confluence/x/Bov5E) for more details. 
     * Java 23 support has been added in Apache Kafka 4.0. 

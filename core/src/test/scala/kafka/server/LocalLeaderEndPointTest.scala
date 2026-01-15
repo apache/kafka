@@ -20,6 +20,7 @@ package kafka.server
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -34,13 +35,13 @@ import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndE
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito.mock
 
 import java.io.File
-import java.util.{Map => JMap}
+import java.util.{Properties, Map => JMap}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -62,7 +63,16 @@ class LocalLeaderEndPointTest extends Logging {
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(sourceBroker.id, port = sourceBroker.port)
     val config = KafkaConfig.fromProps(props)
-    val mockLogMgr = TestUtils.createLogManager(config.logDirs.asScala.map(new File(_)))
+
+    val logProps = new Properties()
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    // Keep cleanup.policy=delete (default), not compact, so remote storage is allowed
+    val defaultLogConfig = LogConfig.fromProps(Map.empty[String, Object].asJava, logProps)
+    val mockLogMgr = TestUtils.createLogManager(
+      config.logDirs.asScala.map(new File(_)),
+      defaultConfig = defaultLogConfig,
+      remoteStorageSystemEnable = true
+    )
     val alterPartitionManager = mock(classOf[AlterPartitionManager])
     val metrics = new Metrics
     quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
@@ -231,6 +241,46 @@ class LocalLeaderEndPointTest extends Logging {
     )
 
     assertEquals(expected, result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenNoSegmentsUploaded(): Unit = {
+    // Append some records; no remote upload happened yet
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val expected = endPoint.fetchEarliestOffset(topicPartition, 0)
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(expected, result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenLocalStartGreaterThanStart(): Unit = {
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    // Bump epoch and advance local log start offset without changing log start offset
+    bumpLeaderEpoch()
+    replicaManager.logManager.getLog(topicPartition).foreach(_.updateLocalLogStartOffset(3))
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 1)
+    assertEquals(new OffsetAndEpoch(-1L, -1), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenHighestRemoteOffsetKnown(): Unit = {
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    // Highest remote is 1 => earliest pending should be max(1+1, logStart)
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+    log.updateHighestOffsetInRemoteStorage(1)
+
+    val expectedOffset = Math.max(2L, log.logStartOffset())
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
   }
 
   private class CallbackResult[T] {

@@ -51,6 +51,8 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, L
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.util.{Deadline, FutureUtils}
+import org.apache.kafka.server.NodeToControllerChannelManagerImpl
+import org.apache.kafka.server.RaftControllerNodeProvider
 
 import java.util
 import java.util.{Optional, OptionalLong}
@@ -405,7 +407,7 @@ class ControllerServer(
       /**
        * Start the KIP-919 controller registration manager.
        */
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
+      val controllerNodeProvider = RaftControllerNodeProvider.create(raftManager, config)
       registrationChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,

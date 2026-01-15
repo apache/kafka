@@ -78,8 +78,7 @@ public class FetchCollector<K, V> {
      * Return the fetched {@link ConsumerRecord records}, empty the {@link FetchBuffer record buffer}, and
      * update the consumed position.
      *
-     * </p>
-     *
+     * <p>
      * NOTE: returning an {@link Fetch#empty() empty} fetch guarantees the consumed position is not updated.
      *
      * @param fetchBuffer {@link FetchBuffer} from which to retrieve the {@link ConsumerRecord records}

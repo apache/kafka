@@ -144,7 +144,7 @@ public class ActivationRecordsGenerator {
 
     /**
      * Generate the set of activation records.
-     * </p>
+     * <p>
      * If the metadata version is empty, write the bootstrap records. If the metadata version is not empty, do some validation and
      * possibly write some records to put the log into a valid state. For bootstrap records, if KIP-868
      * metadata transactions are supported, use them. Otherwise, write the bootstrap records as an
