@@ -54,6 +54,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image._
+import org.apache.kafka.image.ClusterImageTest
 import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
@@ -4966,6 +4967,39 @@ class ReplicaManagerTest {
         FOO_UUID,
         hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
       )
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testApplyLocalFollowersDeltaWhenLeaderNotInMetadata(): Unit = {
+    val localId = 1
+    val leaderId = 2
+    val topicPartition = new TopicPartition("foo", 0)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      new MockTimer(time), localId, aliveBrokerIds = Seq(localId))
+    
+    try {
+      val followerDelta = topicsCreateDelta(localId, isStartIdLeader = false)
+      val clusterImageWithoutLeader = new ClusterImage(
+        util.Map.of(localId, ClusterImageTest.IMAGE1.broker(localId)),
+        util.Map.of())
+      val metadataImage = new MetadataImage(
+        new MetadataProvenance(100L, 10, 1000L, true),
+        new FeaturesImage(Collections.emptyMap(), MetadataVersion.latestProduction()),
+        clusterImageWithoutLeader,
+        followerDelta.apply(),
+        ConfigurationsImage.EMPTY, ClientQuotasImage.EMPTY, ProducerIdsImage.EMPTY,
+        AclsImage.EMPTY, ScramImage.EMPTY, DelegationTokenImage.EMPTY)
+      
+      replicaManager.applyDelta(followerDelta, metadataImage)
+      
+      assertTrue(replicaManager.replicaFetcherManager.failedPartitions.contains(topicPartition))
+      assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
+      val HostedPartition.Online(partition) = replicaManager.getPartition(topicPartition)
+      assertFalse(partition.isLeader)
+      assertEquals(leaderId, partition.leaderReplicaIdOpt.get)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

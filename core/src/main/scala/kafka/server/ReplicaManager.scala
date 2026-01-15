@@ -2536,13 +2536,16 @@ class ReplicaManager(val config: KafkaConfig,
               initialFetchOffset(log)
             ))
           case None =>
-            stateChangeLogger.trace(s"Unable to start fetching $topicPartition with topic ID ${partition.topicId} " +
+            stateChangeLogger.info(s"Unable to start fetching $topicPartition with topic ID ${partition.topicId} " +
               s"from leader ${partition.leaderReplicaIdOpt} because it is not alive.")
+            replicaFetcherManager.addFailedPartition(topicPartition)
         }
       }
 
       replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
-      stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionsToStartFetching.size} partitions")
+      if (partitionAndOffsets.nonEmpty) {
+        stateChangeLogger.info(s"Started fetchers as part of become-follower for ${partitionAndOffsets.size} partitions")
+      }
 
       partitionsToStartFetching.foreach{ case (topicPartition, partition) =>
         completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)}
