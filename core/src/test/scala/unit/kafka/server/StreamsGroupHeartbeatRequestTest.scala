@@ -1086,7 +1086,6 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         .setWarmupTasks(List.empty.asJava)
 
       assertEquals(expectedRejoinResponse, rejoinResponse)
-
     } finally {
       admin.close()
     }
