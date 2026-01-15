@@ -295,8 +295,6 @@ textfiles.replace(f"{repo_dir}/streams/quickstart/java/src/main/resources/archet
 print("Updating ducktape version.py")
 textfiles.replace(f"{repo_dir}/tests/kafkatest/version.py", "^DEV_VERSION =.*",
     f"DEV_VERSION = KafkaVersion(\"{release_version}-SNAPSHOT\")", regex=True)
-print("Updating docs templateData.js")
-textfiles.replace(f"{repo_dir}/docs/js/templateData.js", "-SNAPSHOT", "", regex=True)
 git.commit(f"Bump version to {release_version}")
 git.create_tag(rc_tag)
 git.switch_branch(starting_branch)

@@ -510,7 +510,8 @@ Kafka Streams API (rows)
 </td>  
 <td>
 
-4.1.x
+4.1.x and
+4.2.x
 </td> </tr>  
 <tr>  
 <td>
@@ -543,7 +544,8 @@ compatible
 3.8.x and  
 3.9.x and  
 4.0.x and  
-4.1.x
+4.1.x and  
+4.2.x
 </td>  
 <td>
 
