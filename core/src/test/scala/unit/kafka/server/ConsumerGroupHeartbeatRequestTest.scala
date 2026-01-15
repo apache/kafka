@@ -676,4 +676,92 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
     assertNotNull(memberId)
     assertFalse(memberId.isEmpty)
   }
+
+  @ClusterTest
+  def testFencedMemberCanRejoinWithEpochZero(): Unit = {
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    createOffsetsTopic()
+
+    val memberId = Uuid.randomUuid().toString
+    val groupId = "test-fenced-rejoin-grp"
+
+    // Heartbeat request to join the group.
+    var consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    // Wait for successful join.
+    var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+    }, msg = s"Could not join the group successfully. Last response $consumerGroupHeartbeatResponse.")
+
+    // Verify initial join success.
+    assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
+    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+
+    // Create the topic to trigger partition assignment.
+    val topicId = createTopic(
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Heartbeat to get partitions assigned.
+    consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
+    ).build()
+
+    // Expected assignment.
+    val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+
+    // Wait until partitions are assigned and member epoch advances.
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupHeartbeatResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+        consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
+    }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
+
+    // Verify member has epoch > 0 (should be 2).
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
+
+    // Simulate a fenced member attempting to rejoin with epoch=0.
+    val rejoinRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    val rejoinResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](rejoinRequest)
+
+    // Verify the full response.
+    // Since the subscription/metadata hasn't changed, the member should get
+    // their current state back with the same epoch (2) and assignment.
+    val expectedRejoinResponse = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId)
+      .setMemberEpoch(2)
+      .setHeartbeatIntervalMs(rejoinResponse.data.heartbeatIntervalMs)
+      .setAssignment(expectedAssignment)
+
+    assertEquals(expectedRejoinResponse, rejoinResponse.data)
+  }
 }
