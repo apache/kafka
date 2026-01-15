@@ -43,7 +43,7 @@ The following features are available in the current release:
 
 * **Interactive Query Support**: IQ operations are compatible with the new streams protocol.
 
-* **New Admin RPC**: The StreamsGroupDescribe RPC provides streams-specific metadata separate from consumer group information, with corresponding access via the [`Admin`](/{version}/javadoc/org/apache/kafka/clients/admin/Admin.html).
+* **New Admin RPC**: The StreamsGroupDescribe RPC provides streams-specific metadata separate from consumer group information, with corresponding access via the [`Admin`](/{version}/javadoc/org/apache/kafka/clients/admin/Admin.html) interface.
 
 * **CLI Integration**: You can list, describe, and delete streams groups via the [bin/kafka-streams-groups.sh](/{version}/streams/developer-guide/kafka-streams-group-sh/) script.
 
@@ -57,7 +57,7 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: Only the sticky assignor is supported.
+* **High Availability Assignor**: Only the sticky assignor is supported. This implies that "warmup tasks" are not supported yet.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
@@ -67,7 +67,7 @@ The following features are not yet available and should be avoided when using th
 
 The Streams Rebalance Protocol offers several key advantages over the classic client-driven protocol:
 
-* **Broker-Driven Coordination**: Centralizes task assignment logic on brokers instead of the client. This provides consistent, authoritative task assignment decisions from a single coordination point and reduces the potential for split-brain scenarios.
+* **Broker-Driven Coordination**: Centralizes task assignment logic on brokers instead of the client. This provides consistent, authoritative task assignment decisions from a single coordination point, and reduces the potential for split-brain scenarios.
 
 * **Faster, More Stable Rebalances**: Reduces rebalance duration and impact by removing the global synchronization point. This minimizes application downtime during membership changes or failures.
 
@@ -83,12 +83,12 @@ The protocol is enabled by default on new Apache Kafka 4.2 clusters. To enable t
 
 Enable the feature:
 ```
-kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1
+bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --feature streams.version=1
 ```
 
 Disable the feature:
 ```
-kafka-features.sh --bootstrap-server localhost:9092 downgrade --feature streams.version=0
+bin/kafka-features.sh --bootstrap-server localhost:9092 downgrade --feature streams.version=0
 ```
 
 ## Client Configuration
@@ -175,7 +175,7 @@ The main differences from consumer group APIs are:
 
 ## kafka-streams-groups.sh
 
-A new tool called `bin/kafka-streams-groups.sh` is added for working with streams groups. It replaces `kafka-streams-application-reset` for streams groups and can be used to list, describe, and delete streams groups. See the [kafka-streams-groups.sh documentation](/{version}/streams/developer-guide/kafka-streams-group-sh/) for detailed usage information.
+A new tool called `bin/kafka-streams-groups.sh` is added for working with streams groups. It replaces `bin/kafka-streams-application-reset.sh` for streams groups and can be used to list, describe, and delete streams groups. See the [kafka-streams-groups.sh documentation](/{version}/streams/developer-guide/kafka-streams-group-sh/) for detailed usage information.
 
 # Architecture and How It Works
 
