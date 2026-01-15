@@ -90,14 +90,11 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
-     * predicate.
+     * predicate, with default serializers, deserializers, and state store.
      * All records that do not satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
      * This is a stateless record-by-record operation.
-     * <p>
-     * The records will be serialized using the <b>current key and value serdes</b>
-     * (from the upstream operator or default configuration).
      * <p>
      * Note that {@code filter} for a <i>changelog stream</i> works differently than {@link KStream#filter(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
@@ -221,14 +218,11 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
-     * given predicate.
+     * given predicate, with default serializers, deserializers, and state store.
      * All records that <em>do</em> satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
      * This is a stateless record-by-record operation.
-     * <p>
-     * The records will be serialized using the <b>current key and value serdes</b>
-     * (from the upstream operator or default configuration).
      * <p>
      * Note that {@code filterNot} for a <i>changelog stream</i> works differently than {@link KStream#filterNot(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
@@ -350,7 +344,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly a new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
      * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -371,10 +365,6 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
      * delete the corresponding record in the result {@code KTable}.
-     * <p>
-     * The <b>key serde</b> is preserved from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
-     * To explicitly specify serdes, use {@link #mapValues(ValueMapper, Materialized)}.
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
      * @param <VR>   the value type of the result {@code KTable}
@@ -416,7 +406,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly a new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -426,7 +416,7 @@ public interface KTable<K, V> {
      * <pre>{@code
      * KTable<String, String> inputTable = builder.table("topic");
      * KTable<String, Integer> outputTable =
-     * inputTable.mapValues((readOnlyKey, value) -> readOnlyKey.split(" ").length + value.split(" ").length);
+     *  inputTable.mapValues((readOnlyKey, value) -> readOnlyKey.split(" ").length + value.split(" ").length);
      * }</pre>
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
@@ -439,10 +429,6 @@ public interface KTable<K, V> {
      * have delete semantics.
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
      * delete the corresponding record in the result {@code KTable}.
-     * <p>
-     * The <b>key serde</b> is preserved from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
-     * To explicitly specify serdes, use {@link #mapValues(ValueMapperWithKey, Materialized)}.
      *
      * @param mapper a {@link ValueMapperWithKey} that computes a new output value
      * @param <VR>   the value type of the result {@code KTable}
@@ -766,7 +752,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possibly a new type).
+     * (with possibly a new type), with default serializers, deserializers, and state store.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -784,9 +770,9 @@ public interface KTable<K, V> {
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
-     * Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
-     * Serdes.String(),
-     * Serdes.String());
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
      * // register store
      * builder.addStateStore(keyValueStoreBuilder);
      *
@@ -799,39 +785,35 @@ public interface KTable<K, V> {
      * a schedule must be registered.
      * <pre>{@code
      * new ValueTransformerWithKeySupplier() {
-     * ValueTransformerWithKey get() {
-     * return new ValueTransformerWithKey() {
-     * private KeyValueStore<String, String> state;
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private KeyValueStore<String, String> state;
      *
-     * void init(ProcessorContext context) {
-     * this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
-     * context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
-     * }
+     *             void init(ProcessorContext context) {
+     *                 this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *             }
      *
-     * NewValueType transform(K readOnlyKey, V value) {
-     * // can access this.state and use read-only key
-     * return new NewValueType(readOnlyKey); // or null
-     * }
+     *             NewValueType transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 return new NewValueType(readOnlyKey); // or null
+     *             }
      *
-     * void close() {
-     * // can access this.state
-     * }
-     * }
-     * }
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
      * }
      * }</pre>
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
-     * <p>
-     * The <b>key serde</b> is preserved from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
-     * To explicitly specify serdes, use {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}.
      *
      * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
-     * {@link ValueTransformerWithKey}.
-     * At least one transformer instance will be created per streaming task.
-     * Transformers do not need to be thread-safe.
+     *                            {@link ValueTransformerWithKey}.
+     *                            At least one transformer instance will be created per streaming task.
+     *                            Transformers do not need to be thread-safe.
      * @param stateStoreNames     the names of the state stores used by the processor
      * @param <VR>                the value type of the result table
      * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
@@ -1077,12 +1059,13 @@ public interface KTable<K, V> {
                                        final String... stateStoreNames);
 
     /**
-     * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}.
+     * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper} and default serializers
+     * and deserializers.
      * Each {@link KeyValue} pair of this {@code KTable} is mapped to a new {@link KeyValue} pair by applying the
      * provided {@link KeyValueMapper}.
      * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedTable}).
-     * The {@link KeyValueMapper} selects a new key and value.
+     * The {@link KeyValueMapper} selects a new key and value (with should both have unmodified type).
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
@@ -1096,12 +1079,9 @@ public interface KTable<K, V> {
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
      * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
-     *
      * <p>
-     * The <b>key serde</b> will be the default key serde from the configuration.
-     * The <b>value serde</b> will be the default value serde from the configuration, unless the value type is unchanged,
-     * in which case the upstream value serde may be reused.
-     * To explicitly specify serdes, use {@link #groupBy(KeyValueMapper, Grouped)}.
+     * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Grouped)}
+     * instead.
      *
      * @param selector a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
      * @param <KR>     the key type of the result {@link KGroupedTable}
@@ -1144,7 +1124,8 @@ public interface KTable<K, V> {
                                            final Grouped<KR, VR> grouped);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
+     * with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
      * of the join.
@@ -1204,10 +1185,6 @@ public interface KTable<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * <p>
-     * The <b>key serde</b> is derived from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
-     * To explicitly specify serdes, use {@link #join(KTable, ValueJoiner, Materialized)}.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -1460,7 +1437,7 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed left equi join.
+     * non-windowed left equi join, with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
      * an output record (cf. below).
@@ -1526,10 +1503,6 @@ public interface KTable<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * <p>
-     * The <b>key serde</b> is derived from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
-     * To explicitly specify serdes, use {@link #leftJoin(KTable, ValueJoiner, Materialized)}.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -1804,7 +1777,7 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join.
+     * non-windowed outer equi join, with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
      * all records from both input {@code KTable}s will produce an output record (cf. below).
@@ -1869,10 +1842,6 @@ public interface KTable<K, V> {
      * </table>
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * <p>
-     * The <b>key serde</b> is derived from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
-     * To explicitly specify serdes, use {@link #outerJoin(KTable, ValueJoiner, Materialized)}.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
