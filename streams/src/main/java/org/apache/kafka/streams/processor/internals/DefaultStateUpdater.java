@@ -728,10 +728,10 @@ public class DefaultStateUpdater implements StateUpdater {
 
             recordWindowedSum(
                 now,
-                (double) totalWaitLatency,
-                (double) totalCheckpointLatency,
-                (double) totalRestoreLatency * (changelogReader.isRestoringActive() ? 1.0d : 0.0d),
-                (double) totalRestoreLatency * (changelogReader.isRestoringActive() ? 0.0d : 1.0d)
+                totalWaitLatency,
+                totalCheckpointLatency,
+                totalRestoreLatency * (changelogReader.isRestoringActive() ? 1.0d : 0.0d),
+                totalRestoreLatency * (changelogReader.isRestoringActive() ? 0.0d : 1.0d)
             );
 
             recordRatios(now, totalLatency);
