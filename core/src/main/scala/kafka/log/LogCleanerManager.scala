@@ -76,7 +76,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
 
   /* the set of logs currently being cleaned */
-  private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
+  private val  inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
 
   /* tracks consecutive cleaning failures per [logDir, partition]. A partition becomes uncleanable
    * when its failure count reaches maxConsecutiveCleaningFailures */
@@ -511,10 +511,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       }
 
       // Transfer failure count when partition moves directories
-      partitionCleaningFailureCounts.get(sourceLogDir.toString).foreach { sourceCounts =>
-        sourceCounts.remove(topicPartition).foreach { count =>
-          val destCounts = partitionCleaningFailureCounts.getOrElseUpdate(destLogDir.toString, mutable.Map[TopicPartition, Int]())
-          destCounts.put(topicPartition, count)
+      partitionCleaningFailureCounts.get(sourceLogDir.toString).foreach { sourcePartitionCounts =>
+        sourcePartitionCounts.remove(topicPartition).foreach { count =>
+          val destPartitionCounts = partitionCleaningFailureCounts.getOrElseUpdate(destLogDir.toString, mutable.Map[TopicPartition, Int]())
+          destPartitionCounts.put(topicPartition, count)
         }
       }
     }
