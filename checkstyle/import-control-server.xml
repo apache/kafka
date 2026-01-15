@@ -93,9 +93,6 @@
       <allow class="org.apache.kafka.controller.QuorumFeatures" />
       <allow pkg="org.apache.kafka.server.telemetry" />
     </subpackage>
-    <subpackage name="quota">
-      <allow class="org.apache.kafka.network.Session" />
-    </subpackage>
     <subpackage name="share">
       <allow pkg="org.apache.kafka.storage.log.metrics" />
     </subpackage>
