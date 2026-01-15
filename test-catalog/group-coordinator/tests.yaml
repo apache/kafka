@@ -509,6 +509,7 @@ org.apache.kafka.coordinator.group.GroupMetadataManagerTest:
 - testShareGroupInitializeSuccess
 - testShareGroupInitializingClearsCommonDeleting
 - testShareGroupLeavingMemberBumpsGroupEpoch
+- testShareGroupMemberCanRejoinWithEpochZero
 - testShareGroupMemberIdGeneration
 - testShareGroupMemberJoinsEmptyGroupWithAssignments
 - testShareGroupNewMemberIsRejectedWithMaximumMembersIsReached
