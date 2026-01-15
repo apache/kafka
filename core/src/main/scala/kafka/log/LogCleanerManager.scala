@@ -78,9 +78,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
 
-  /* the set of uncleanable partitions (partitions that have raised an unexpected error during cleaning)
-   *   for each log directory */
-  private val uncleanablePartitions = mutable.HashMap[String, mutable.Set[TopicPartition]]()
+  /* tracks consecutive cleaning failures per [logDir, partition]. A partition becomes uncleanable
+   * when its failure count reaches maxConsecutiveCleaningFailures */
+  private val partitionCleaningFailureCounts = mutable.HashMap[String, mutable.Map[TopicPartition, Int]]()
+
+  /* the number of consecutive cleaning failures before a partition is marked as uncleanable */
+  private val maxConsecutiveCleaningFailures: Int = 3
 
   /* a global lock used to control all access to the in-progress set and the offset checkpoints */
   private val lock = new ReentrantLock
@@ -94,7 +97,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
   for (dir <- logDirs) {
     newGauge("uncleanable-partitions-count",
-      () => inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) },
+      () => inLock(lock) {
+        partitionCleaningFailureCounts.get(dir.getAbsolutePath)
+          .map(_.count(_._2 >= maxConsecutiveCleaningFailures))
+          .getOrElse(0)
+      },
       Map("logDirectory" -> dir.getAbsolutePath)
     )
   }
@@ -103,11 +110,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   for (dir <- logDirs) {
     newGauge("uncleanable-bytes",
       () => inLock(lock) {
-        uncleanablePartitions.get(dir.getAbsolutePath) match {
-          case Some(partitions) =>
+        partitionCleaningFailureCounts.get(dir.getAbsolutePath) match {
+          case Some(partitionCounts) =>
             val lastClean = allCleanerCheckpoints
             val now = Time.SYSTEM.milliseconds
-            partitions.iterator.map { tp =>
+            partitionCounts.filter(_._2 >= maxConsecutiveCleaningFailures).keys.map { tp =>
               val log = logs.get(tp)
               val lastCleanOffset = lastClean.get(tp)
               val offsetsToClean = cleanableOffsets(log, lastCleanOffset, now)
@@ -503,10 +510,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           error(s"Failed to access checkpoint file in dir ${sourceLogDir.getAbsolutePath}", e)
       }
 
-      val logUncleanablePartitions = uncleanablePartitions.getOrElse(sourceLogDir.toString, mutable.Set[TopicPartition]())
-      if (logUncleanablePartitions.contains(topicPartition)) {
-        logUncleanablePartitions.remove(topicPartition)
-        markPartitionUncleanable(destLogDir.toString, topicPartition)
+      // Transfer failure count when partition moves directories
+      partitionCleaningFailureCounts.get(sourceLogDir.toString).foreach { sourceCounts =>
+        sourceCounts.remove(topicPartition).foreach { count =>
+          val destCounts = partitionCleaningFailureCounts.getOrElseUpdate(destLogDir.toString, mutable.Map[TopicPartition, Int]())
+          destCounts.put(topicPartition, count)
+        }
       }
     }
   }
@@ -583,25 +592,41 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    * Only used for testing
    */
   private[log] def uncleanablePartitions(logDir: String): Set[TopicPartition] = {
-    var partitions: Set[TopicPartition] = Set()
-    inLock(lock) { partitions ++= uncleanablePartitions.getOrElse(logDir, partitions) }
-    partitions
+    inLock(lock) {
+      partitionCleaningFailureCounts.get(logDir)
+        .map(_.filter(_._2 >= maxConsecutiveCleaningFailures).keySet.toSet)
+        .getOrElse(Set.empty)
+    }
   }
 
-  def markPartitionUncleanable(logDir: String, partition: TopicPartition): Unit = {
+  /**
+   * Update the cleaning failure state for a partition.
+   * If succeeded is true, reset the failure count. If false, increment the failure count.
+   * A partition becomes uncleanable when its failure count reaches maxConsecutiveCleaningFailures.
+   */
+  def updatePartitionCleaningFailureState(logDir: String, partition: TopicPartition, succeeded: Boolean): Unit = {
     inLock(lock) {
-      uncleanablePartitions.get(logDir) match {
-        case Some(partitions) =>
-          partitions.add(partition)
-        case None =>
-          uncleanablePartitions.put(logDir, mutable.Set(partition))
+      if (succeeded) {
+        // Reset failure count on success
+        partitionCleaningFailureCounts.get(logDir).foreach(_.remove(partition))
+      } else {
+        // Increment failure count on failure
+        val partitionCounts = partitionCleaningFailureCounts.getOrElseUpdate(logDir, mutable.Map[TopicPartition, Int]())
+        val currentCount = partitionCounts.getOrElse(partition, 0) + 1
+        partitionCounts.put(partition, currentCount)
+
+        if (currentCount >= maxConsecutiveCleaningFailures) {
+          warn(s"Partition $partition in $logDir marked uncleanable after $currentCount consecutive failures")
+        }
       }
     }
   }
 
   private def isUncleanablePartition(log: Log, topicPartition: TopicPartition): Boolean = {
     inLock(lock) {
-      uncleanablePartitions.get(log.parentDir).exists(partitions => partitions.contains(topicPartition))
+      partitionCleaningFailureCounts.get(log.parentDir)
+        .flatMap(_.get(topicPartition))
+        .exists(_ >= maxConsecutiveCleaningFailures)
     }
   }
 }

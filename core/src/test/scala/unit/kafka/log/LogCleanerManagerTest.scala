@@ -173,7 +173,8 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logs)
     partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
-    cleanerManager.markPartitionUncleanable(logs.get(tp2).dir.getParent, tp2)
+    // Mark partition as uncleanable by failing 3 consecutive times
+    (1 to 3).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(logs.get(tp2).dir.getParent, tp2, succeeded = false))
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
     assertEquals(tp1, filthiestLog.topicPartition)
@@ -213,7 +214,8 @@ class LogCleanerManagerTest extends Logging {
     partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
     cleanerManager.setCleaningState(tp2, LogCleaningInProgress)
-    cleanerManager.markPartitionUncleanable(logs.get(tp1).dir.getParent, tp1)
+    // Mark partition as uncleanable by failing 3 consecutive times
+    (1 to 3).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(logs.get(tp1).dir.getParent, tp1, succeeded = false))
 
     val filthiestLog: Option[LogToClean] = cleanerManager.grabFilthiestCompactedLog(time)
     assertEquals(None, filthiestLog)
@@ -522,7 +524,8 @@ class LogCleanerManagerTest extends Logging {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
-    cleanerManager.markPartitionUncleanable(log.dir.getParent, topicPartition)
+    // Mark partition as uncleanable by failing 3 consecutive times
+    (1 to 3).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(log.dir.getParent, topicPartition, succeeded = false))
 
     val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals(0, readyToDelete, "should have 0 logs ready to be deleted")

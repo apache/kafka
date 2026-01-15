@@ -336,8 +336,8 @@ class LogCleaner(initialConfig: CleanerConfig,
         cleanFilthiestLog()
       } catch {
         case e: LogCleaningException =>
-          warn(s"Unexpected exception thrown when cleaning log ${e.log}. Marking its partition (${e.log.topicPartition}) as uncleanable", e)
-          cleanerManager.markPartitionUncleanable(e.log.parentDir, e.log.topicPartition)
+          error(s"Unexpected exception thrown when cleaning log ${e.log}.", e)
+          cleanerManager.updatePartitionCleaningFailureState(e.log.parentDir, e.log.topicPartition, succeeded = false)
 
           false
       }
@@ -354,6 +354,8 @@ class LogCleaner(initialConfig: CleanerConfig,
           this.lastPreCleanStats = preCleanStats
           try {
             cleanLog(cleanable)
+            // Reset failure count on successful cleaning
+            cleanerManager.updatePartitionCleaningFailureState(cleanable.log.parentDir, cleanable.log.topicPartition, succeeded = true)
             true
           } catch {
             case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
@@ -367,7 +369,9 @@ class LogCleaner(initialConfig: CleanerConfig,
             log.deleteOldSegments()
           } catch {
             case e @ (_: ThreadShutdownException | _: ControlThrowable) => throw e
-            case e: Exception => throw new LogCleaningException(log, e.getMessage, e)
+            // log the error and the thread can retry deleting this log in the next call.
+            case e: Exception => error(s"Unexpected error occurred when deleting old segment '${log.name}' for topic '${log.topicPartition.topic()}" +
+              s"partition '${log.topicPartition.partition()}'", e)
           }
         }
       } finally  {
