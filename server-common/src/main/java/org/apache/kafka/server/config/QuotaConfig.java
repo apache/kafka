@@ -226,11 +226,7 @@ public class QuotaConfig {
     }
 
     public static Set<String> brokerQuotaConfigsNames() {
-        return Set.of(
-                LEADER_REPLICATION_THROTTLED_RATE_CONFIG,
-                FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG,
-                REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG
-        );
+        return Set.copyOf(brokerQuotaConfigs().names());
     }
 
     public static ConfigDef userAndClientQuotaConfigs() {
