@@ -55,18 +55,13 @@ public class RaftControllerNodeProvider implements Supplier<ControllerInformatio
         this.saslMechanism = saslMechanism;
     }
 
-    @SuppressWarnings("resource")  // RaftClient lifecycle managed by RaftManager
-    private Optional<Node> idToNode(int id) {
-        return raftManager.client().voterNode(id, listenerName);
-    }
-
     @SuppressWarnings("resource")
     @Override
     public ControllerInformation get() {
         OptionalInt leaderIdOpt = raftManager.client().leaderAndEpoch().leaderId();
 
         Optional<Node> node = leaderIdOpt.isPresent()
-                ? idToNode(leaderIdOpt.getAsInt())
+                ? raftManager.client().voterNode(leaderIdOpt.getAsInt(), listenerName)
                 : Optional.empty();
 
         return new ControllerInformation(node, listenerName, securityProtocol, saslMechanism);
