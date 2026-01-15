@@ -17,7 +17,6 @@
 
 package org.apache.kafka.server.authorizer;
 
-import org.apache.commons.collections4.trie.PatriciaTrie;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
@@ -31,6 +30,8 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.SecurityUtils;
+
+import org.apache.commons.collections4.trie.PatriciaTrie;
 
 import java.io.Closeable;
 import java.util.*;
