@@ -121,7 +121,10 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
   * **Admin**
     * The `listConsumerGroups()` and `listConsumerGroups(ListConsumerGroupsOptions)` methods in `Admin` are deprecated, and will be removed in the next major version. Use `Admin.listGroups(ListGroupsOptions.forConsumerGroups())` instead. 
   * **Kafka Streams**
-    * The `window.size.ms` and `window.inner.serde.class` in `StreamsConfig` are deprecated. Use the corresponding string constants defined in `TimeWindowedSerializer`, `TimeWindowedDeserializer`, `SessionWindowedSerializer` and `SessionWindowedDeserializer` instead. 
+    * Early Access for the Streams rebalance protocol. Following KIP-848, [KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol) adds broker side task assignment for Kafka Streams applications.
+      This feature is in Early Access, disabled by default, and not for production use-cases.
+      We encourage users to try out the new "streams" group feature in lower environments using "throw away" broker cluster,
+      and provide early feedback.
 
 
 
