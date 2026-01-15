@@ -2318,15 +2318,16 @@ public class ShareConsumerTest {
 
         ClientState prodState = new ClientState();
 
-        // Produce messages until we want.
+        // Produce a fixed number of messages for deterministic testing.
+        int targetRecordCount = 2000;
         service.execute(() -> {
             try (Producer<byte[], byte[]> producer = createProducer()) {
-                while (!prodState.done().get()) {
+                do {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
                     producer.send(record);
                     producer.flush();
-                    prodState.count().incrementAndGet();
-                }
+                } while (prodState.count().incrementAndGet() < targetRecordCount);
+                prodState.done().set(true);
             }
         });
 
@@ -2344,9 +2345,6 @@ public class ShareConsumerTest {
             100L,
             TimeUnit.MILLISECONDS
         );
-
-        // Let the complex consumer read the messages.
-        service.schedule(() -> prodState.done().set(true), 5L, TimeUnit.SECONDS);
 
         // All messages which can be read are read, some would be redelivered (roughly 2 times the records produced).
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
