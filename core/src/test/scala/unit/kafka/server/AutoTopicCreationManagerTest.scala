@@ -62,7 +62,7 @@ class TestTopicCreator extends TopicCreator {
     requestContext: RequestContext,
     request: CreateTopicsRequest.Builder
   ): CompletableFuture[CreateTopicsResponse] = {
-    withPrincipalCalls += (requestContext, request)
+    withPrincipalCalls += ((requestContext, request))
     if (withPrincipalResponse != null) withPrincipalResponse else CompletableFuture.completedFuture(null)
   }
 
