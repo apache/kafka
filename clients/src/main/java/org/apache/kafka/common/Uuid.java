@@ -75,7 +75,7 @@ public class Uuid implements Comparable<Uuid> {
      */
     public static Uuid randomUuid() {
         Uuid uuid = unsafeRandomUuid();
-        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
+        while (RESERVED.contains(uuid) || uuid.toString().contains("-")) {
             uuid = unsafeRandomUuid();
         }
         return uuid;
