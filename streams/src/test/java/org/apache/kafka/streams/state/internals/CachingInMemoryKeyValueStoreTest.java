@@ -96,11 +96,10 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context) {
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
-                        Stores.persistentKeyValueStore("cache-store"),
-                        (Serde<K>) context.keySerde(),
-                        (Serde<V>) context.valueSerde())
+                Stores.persistentKeyValueStore("cache-store"),
+                (Serde<K>) context.keySerde(),
+                (Serde<V>) context.valueSerde())
                 .withCachingEnabled();
-
         final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
         return store;
@@ -216,24 +215,24 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         // Position should correspond to the last record's context, not the current context.
         context.setRecordContext(
-                new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders())
+            new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders())
         );
 
         assertEquals(
-                Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
-                store.getPosition()
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            store.getPosition()
         );
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
         store.flush();
 
         assertEquals(
-                Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
-                store.getPosition()
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            store.getPosition()
         );
         assertEquals(
-                Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
-                underlyingStore.getPosition()
+            Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
+            underlyingStore.getPosition()
         );
     }
 
@@ -329,9 +328,9 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
-                Bytes.wrap("0".getBytes()),
-                Bytes.wrap("1".getBytes()),
-                Bytes.wrap("2".getBytes())
+            Bytes.wrap("0".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("2".getBytes())
         ), results);
 
     }
@@ -349,9 +348,9 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
-                Bytes.wrap("2".getBytes()),
-                Bytes.wrap("1".getBytes()),
-                Bytes.wrap("0".getBytes())
+            Bytes.wrap("2".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("0".getBytes())
         ), results);
 
     }
@@ -362,7 +361,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final List<Bytes> results = new ArrayList<>();
 
         try (final KeyValueIterator<Bytes, byte[]> range =
-                     store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)))) {
+                store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)))) {
             while (range.hasNext()) {
                 results.add(range.next().key);
             }
@@ -370,9 +369,9 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
-                Bytes.wrap("0".getBytes()),
-                Bytes.wrap("1".getBytes()),
-                Bytes.wrap("2".getBytes())
+            Bytes.wrap("0".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("2".getBytes())
         ), results);
     }
 
@@ -382,7 +381,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final List<Bytes> results = new ArrayList<>();
 
         try (final KeyValueIterator<Bytes, byte[]> range =
-                     store.reverseRange(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)))) {
+                store.reverseRange(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)))) {
             while (range.hasNext()) {
                 results.add(range.next().key);
             }
@@ -390,9 +389,9 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertEquals(items, results.size());
         assertEquals(Arrays.asList(
-                Bytes.wrap("2".getBytes()),
-                Bytes.wrap("1".getBytes()),
-                Bytes.wrap("0".getBytes())
+            Bytes.wrap("2".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("0".getBytes())
         ), results);
     }
 
@@ -592,7 +591,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldThrowNullPointerExceptionOnPutAllWithNullKey() {
         final List<KeyValue<Bytes, byte[]>> entries = List.of(
-                new KeyValue<>(null, bytesValue("a"))
+            new KeyValue<>(null, bytesValue("a"))
         );
 
         assertThrows(NullPointerException.class, () -> store.putAll(entries));
@@ -610,8 +609,8 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldRetainAllEntriesFromPutAll() {
         final List<KeyValue<Bytes, byte[]>> entries = List.of(
-                new KeyValue<>(bytesKey("a"), bytesValue("1")),
-                new KeyValue<>(bytesKey("b"), bytesValue("2"))
+            new KeyValue<>(bytesKey("a"), bytesValue("1")),
+            new KeyValue<>(bytesKey("b"), bytesValue("2"))
         );
 
         store.putAll(entries);
