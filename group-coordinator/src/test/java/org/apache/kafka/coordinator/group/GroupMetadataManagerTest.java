@@ -735,13 +735,6 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, 100));
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, member));
 
-        // Prepare assignment for rejoin.
-        assignor.prepareGroupAssignment(new GroupAssignment(
-            Map.of(memberId, new MemberAssignmentImpl(mkAssignment(
-                mkTopicAssignment(fooTopicId, 0, 1, 2)
-            )))
-        ));
-
         // Member rejoins with epoch=0 - should succeed.
         // Since the subscription/metadata hasn't changed, group epoch stays at 100.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
