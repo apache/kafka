@@ -2721,6 +2721,7 @@ kafka.server.StreamsGroupDescribeRequestTest:
 kafka.server.StreamsGroupHeartbeatRequestTest:
 - testDynamicGroupConfig
 - testEmptyStreamsGroupId
+- testFencedMemberCanRejoinWithEpochZero
 - testGroupCoordinatorChange
 - testInternalTopicsCreation
 - testInvalidMemberEpoch
