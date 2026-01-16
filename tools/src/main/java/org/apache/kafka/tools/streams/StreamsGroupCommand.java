@@ -749,9 +749,8 @@ public class StreamsGroupCommand {
             if (!internalTopicsToBeDeleted.keySet().isEmpty()) {
                 printInternalTopicErrors(internalTopicsDeletionFailures, success.keySet(), internalTopicsToBeDeleted.keySet());
             }
-            // for testing purpose: return all failures, including internal topics deletion failures
+            // for testing purpose: return all failures, however we don’t want the operation to fail just because deleting internal topics failed.
             failed.putAll(success);
-            failed.putAll(internalTopicsDeletionFailures);
             return failed;
         }
 
