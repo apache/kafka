@@ -68,12 +68,12 @@ public class LoginTest {
         + "user_" + EXTERNAL_USERNAME + "=\"" + EXTERNAL_PASSWORD + "\";";
 
     @ClusterTest(
-        types = {Type.CO_KRAFT},
+        types = {Type.CO_KRAFT, Type.KRAFT},
         controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
         brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
         serverProperties = {
-            @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_LOGIN_CLASS, value = "org.apache.kafka.clients.security.LoginTest$InterBrokerCustomerLogin"),
-            @ClusterConfigProperty(key = EXTERNAL_PREFIX + MECHANISMS_PREFIX + SASL_LOGIN_CLASS, value = "org.apache.kafka.clients.security.LoginTest$ExternalCustomerLogin"),
+            @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_LOGIN_CLASS, value = "org.apache.kafka.clients.security.LoginTest$InterBrokerCustomLogin"),
+            @ClusterConfigProperty(key = EXTERNAL_PREFIX + MECHANISMS_PREFIX + SASL_LOGIN_CLASS, value = "org.apache.kafka.clients.security.LoginTest$ExternalCustomLogin"),
             @ClusterConfigProperty(key = SASL_ENABLED_MECHANISMS_CONFIG, value = MECHANISMS),
             @ClusterConfigProperty(key = SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, value = MECHANISMS),
             @ClusterConfigProperty(key = LISTENER_PREFIX + MECHANISMS_PREFIX + SASL_JAAS_CONFIG, value = INTER_BROKER_SASL_JAAS),
@@ -86,39 +86,40 @@ public class LoginTest {
                 SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
                 CLIENT_ID_CONFIG, CLIENT_ID,
                 SASL_MECHANISM, MECHANISMS,
-                SASL_LOGIN_CLASS, LoginTest.ExternalCustomerLogin.class.getName(),
+                SASL_LOGIN_CLASS, ExternalCustomLogin.class.getName(),
                 SASL_JAAS_CONFIG, INTER_BROKER_SASL_JAAS))
         ) {
             assertMetrics(
                 admin.metrics(),
-                ExternalCustomerLogin.METRIC_NAME,
-                ExternalCustomerLogin.METRIC_DESCRIPTION,
+                ExternalCustomLogin.METRIC_NAME,
+                ExternalCustomLogin.METRIC_DESCRIPTION,
                 expectedTags(Map.of(
-                    "class", ExternalCustomerLogin.class.getSimpleName(),
+                    "class", ExternalCustomLogin.class.getSimpleName(),
                     "client-id", CLIENT_ID
                 ))
             );
-
+            
+            int controllerId = cluster.type() == Type.CO_KRAFT ? 0 : 3000;
             Map<MetricName, Metric> allMetrics = Stream.of(
-                cluster.controllers().get(0).metrics().metrics(),
+                cluster.controllers().get(controllerId).metrics().metrics(),
                 cluster.brokers().get(0).metrics().metrics()
             ).collect(HashMap::new, Map::putAll, Map::putAll);
             assertMetrics(
                 allMetrics,
-                ExternalCustomerLogin.METRIC_NAME,
-                ExternalCustomerLogin.METRIC_DESCRIPTION,
+                ExternalCustomLogin.METRIC_NAME,
+                ExternalCustomLogin.METRIC_DESCRIPTION,
                 expectedTags(Map.of(
                     "mechanism", MECHANISMS,
                     "listener", "EXTERNAL",
-                    "class", ExternalCustomerLogin.class.getSimpleName()
+                    "class", ExternalCustomLogin.class.getSimpleName()
                 ))
             );
             assertMetrics(
                 allMetrics,
-                InterBrokerCustomerLogin.METRIC_NAME,
-                InterBrokerCustomerLogin.METRIC_DESCRIPTION,
+                InterBrokerCustomLogin.METRIC_NAME,
+                InterBrokerCustomLogin.METRIC_DESCRIPTION,
                 expectedTags(Map.of(
-                    "class", InterBrokerCustomerLogin.class.getSimpleName()
+                    "class", InterBrokerCustomLogin.class.getSimpleName()
                 ))
             );
         }
@@ -159,7 +160,7 @@ public class LoginTest {
         return tags;
     }
 
-    public static class InterBrokerCustomerLogin implements Login, Monitorable {
+    public static class InterBrokerCustomLogin implements Login, Monitorable {
 
         private static final String METRIC_NAME = "monitorable-inter-broker-custom-login-name";
         private static final String METRIC_DESCRIPTION = "monitorable-inter-broker-custom-login-description";
@@ -204,7 +205,7 @@ public class LoginTest {
 
         @Override
         public String serviceName() {
-            return "inter broker customer login";
+            return "inter broker custom login";
         }
 
         @Override
@@ -213,7 +214,7 @@ public class LoginTest {
         }
     }
 
-    public static class ExternalCustomerLogin implements Login, Monitorable {
+    public static class ExternalCustomLogin implements Login, Monitorable {
 
         private static final String METRIC_NAME = "monitorable-external-custom-login-name";
         private static final String METRIC_DESCRIPTION = "monitorable-external-custom-login-description";
@@ -258,7 +259,7 @@ public class LoginTest {
 
         @Override
         public String serviceName() {
-            return "external customer login";
+            return "external custom login";
         }
 
         @Override

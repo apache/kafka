@@ -97,7 +97,8 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 controllerInfo.listenerName(),
                 controllerInfo.saslMechanism(),
                 time,
-                logContext
+                logContext,
+                metrics
         );
         if (channelBuilder instanceof Reconfigurable reconfigurable) {
             config.addReconfigurable(reconfigurable);
