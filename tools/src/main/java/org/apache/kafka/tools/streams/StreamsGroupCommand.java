@@ -752,7 +752,7 @@ public class StreamsGroupCommand {
             // for testing purpose: return all failures,
             // however we don’t want the operation to fail just because internal topics were not found to be deleted.
             internalTopicsDeletionFailures.forEach((group, error) -> {
-                if (error instanceof UnknownTopicOrPartitionException) {
+                if (!(error instanceof UnknownTopicOrPartitionException)) {
                     failed.put(group, error);
                 }
             });
