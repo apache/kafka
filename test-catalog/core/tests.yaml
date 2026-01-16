@@ -1558,23 +1558,15 @@ kafka.server.AutoTopicCreationManagerTest:
 - testCreateOffsetTopic
 - testCreateShareStateTopic
 - testCreateStreamsInternalTopics
-- testCreateStreamsInternalTopicsPassesPrincipal
+- testCreateStreamsInternalTopicsPassesRequestContext
 - testCreateStreamsInternalTopicsWithEmptyTopics
 - testCreateTxnTopic
-- testEnvelopeResponseCorrelationIdMismatch
-- testEnvelopeResponseParsingException
-- testEnvelopeResponseSuccessfulParsing
-- testEnvelopeResponseWithEnvelopeError
-- testEnvelopeResponseWithTopicErrors
 - testErrorCacheExpirationBasedEviction
 - testErrorCacheTTL
 - testGetTopicCreationErrorsWithMultipleTopics
 - testInflightTopicsAreNotRetriedConcurrently
-- testSendCreateTopicRequestEnvelopeHandling
 - testTopicCreationErrorCaching
-- testTopicCreationWithMetadataContextNoRetryUponUnsupportedVersion
-- testTopicCreationWithMetadataContextPassPrincipal
-- testTopicCreationWithMetadataContextWhenPrincipalSerdeNotDefined
+- testTopicCreationWithMetadataContext
 - testTopicsInBackoffAreNotRetried
 - testTopicsOutOfBackoffCanBeRetried
 kafka.server.BrokerLifecycleManagerTest:
@@ -1977,6 +1969,19 @@ kafka.server.IsrExpirationTest:
 - testIsrExpirationIfNoFetchRequestMade
 kafka.server.JoinGroupRequestTest:
 - testJoinGroupWithOldConsumerGroupProtocol
+kafka.server.KRaftTopicCreatorTest:
+- testAuthenticationException
+- testCreateTopicWithMetadataContextPassPrincipal
+- testCreateTopicWithMetadataContextWhenPrincipalSerdeNotDefined
+- testCreateTopicWithoutRequestContext
+- testDirectCreateTopicsResponse
+- testEnvelopeResponseParsingException
+- testEnvelopeResponseSuccessfulParsing
+- testEnvelopeResponseWithEnvelopeError
+- testEnvelopeResponseWithTopicErrors
+- testTimeoutException
+- testUnexpectedResponseType
+- testVersionMismatchException
 kafka.server.KafkaApisTest:
 - requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException
 - shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion
