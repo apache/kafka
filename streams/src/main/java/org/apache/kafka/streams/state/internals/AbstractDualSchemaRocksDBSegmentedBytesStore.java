@@ -246,20 +246,15 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
         final StreamsMetricsImpl metrics = ProcessorContextUtils.metricsImpl(stateStoreContext);
         final String threadId = Thread.currentThread().getName();
         final String taskName = stateStoreContext.taskId().toString();
-
+        if (!isOpen()) {
+            preInit(stateStoreContext);
+        }
         expiredRecordSensor = TaskMetrics.droppedRecordsSensor(
             threadId,
             taskName,
             metrics
         );
-
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        segments.setPosition(this.position);
-
         segments.openExisting(internalProcessorContext, observedStreamTime);
-
         // register and possibly restore the state from the logs
         stateStoreContext.register(
             root,
@@ -267,12 +262,25 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
 
-        open = true;
+    }
 
+    @Override
+    public void preInit(final StateStoreContext stateStoreContext) {
+        openSegments(stateStoreContext);
+    }
+
+    private void openSegments(final StateStoreContext stateStoreContext) {
+        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
+        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        segments.setPosition(this.position);
+        segments.segments.forEach((l, s) -> s.preInit(stateStoreContext));
+
+        open = true;
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            stateStoreContext.appConfigs(),
-            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-            false
+                stateStoreContext.appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false
         );
     }
 

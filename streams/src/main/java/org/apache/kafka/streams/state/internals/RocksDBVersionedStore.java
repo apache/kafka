@@ -364,10 +364,10 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(stateStoreContext), stateStoreContext.taskId());
 
-        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
-        positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        segmentStores.setPosition(position);
+        if (!isOpen()) {
+            preInit(stateStoreContext);
+        }
+
         segmentStores.openExisting(internalProcessorContext, observedStreamTime);
 
         // register and possibly restore the state from the logs
@@ -377,6 +377,18 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
 
+
+    }
+
+    @Override
+    public void preInit(final StateStoreContext stateStoreContext) {
+        final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
+        positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        segmentStores.setPosition(position);
+        segmentStores.segments.forEach((l, segment) -> {
+            segment.preInit(stateStoreContext);
+        });
         open = true;
 
         consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
