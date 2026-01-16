@@ -25,7 +25,6 @@ import java.util.Optional
 import java.util.Properties
 import java.util.stream.IntStream
 import kafka.log.LogTestUtils
-import kafka.raft.KafkaMetadataLog
 import kafka.server.KafkaRaftServer
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, ShareGroupStateMessageParser, TimeIndexDumpErrors, TransactionLogMessageParser}
 import kafka.utils.TestUtils
@@ -44,6 +43,7 @@ import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnap
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.raft.internals.KafkaRaftLog
 import org.apache.kafka.raft.{MetadataLogConfig, VoterSetTest}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, OffsetAndEpoch, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
@@ -577,7 +577,7 @@ class DumpLogSegmentsTest {
           setPartitionId(0).setIsr(util.List.of(0, 1, 2)), 0.toShort)
     )
 
-    val metadataLog = KafkaMetadataLog(
+    val metadataLog = KafkaRaftLog.createLog(
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,

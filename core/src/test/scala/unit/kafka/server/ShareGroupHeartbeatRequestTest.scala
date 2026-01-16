@@ -932,6 +932,100 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     }
   }
 
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+    ))
+  def testFencedMemberCanRejoinWithEpochZero(): Unit = {
+    val admin = cluster.admin()
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      val memberId = Uuid.randomUuid().toString
+      val groupId = "test-fenced-rejoin-grp"
+
+      // Heartbeat request to join the group.
+      var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      // Wait for successful join.
+      var shareGroupHeartbeatResponse: ShareGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
+
+      // Verify initial join success.
+      assertNotNull(shareGroupHeartbeatResponse.data.memberId)
+      assertEquals(1, shareGroupHeartbeatResponse.data.memberEpoch)
+
+      // Create the topic to trigger partition assignment.
+      val topicId = TestUtils.createTopicWithAdminRaw(
+        admin = admin,
+        topic = "foo",
+        numPartitions = 3
+      )
+
+      // Heartbeat to get partitions assigned.
+      shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId)
+          .setMemberEpoch(shareGroupHeartbeatResponse.data.memberEpoch)
+      ).build()
+
+      // Expected assignment.
+      val expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
+        .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
+          .setTopicId(topicId)
+          .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+
+      // Wait until partitions are assigned.
+      TestUtils.waitUntilTrue(() => {
+        shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+          shareGroupHeartbeatResponse.data.assignment == expectedAssignment
+      }, msg = s"Could not get partitions assigned. Last response $shareGroupHeartbeatResponse.")
+
+      val epochBeforeRejoin = shareGroupHeartbeatResponse.data.memberEpoch
+      assertTrue(epochBeforeRejoin > 0, s"Expected epoch > 0 but got $epochBeforeRejoin")
+
+      // Simulate a fenced member attempting to rejoin with epoch=0.
+      val rejoinRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      val rejoinResponse = connectAndReceive(rejoinRequest)
+
+      // Verify the rejoin succeeds.
+      val expectedRejoinResponse = new ShareGroupHeartbeatResponseData()
+        .setErrorCode(Errors.NONE.code)
+        .setMemberId(memberId)
+        .setMemberEpoch(epochBeforeRejoin)
+        .setHeartbeatIntervalMs(rejoinResponse.data.heartbeatIntervalMs)
+        .setAssignment(expectedAssignment)
+
+      assertEquals(expectedRejoinResponse, rejoinResponse.data)
+    } finally {
+      admin.close()
+    }
+  }
+
   private def connectAndReceive(request: ShareGroupHeartbeatRequest): ShareGroupHeartbeatResponse = {
     IntegrationTestUtils.connectAndReceive[ShareGroupHeartbeatResponse](request, cluster.brokerBoundPorts().get(0))
   }

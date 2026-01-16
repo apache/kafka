@@ -67,7 +67,7 @@ class CheckerUtils {
     }
 
     /**
-     * Validate the a field doesn't have tagged versions that are outside of the top-level flexible
+     * Validate that a field doesn't have tagged versions that are outside of the top-level flexible
      * versions.
      *
      * @param what                      A description of the field.
@@ -130,7 +130,7 @@ class CheckerUtils {
     static String readFileFromGitRef(String filePath, String gitRef) throws IOException {
         Path fileAbsolutePath = Paths.get(filePath).toAbsolutePath();
 
-        // traverse up parent directories until .git directory is found
+        // traverse up parent directories until the .git directory is found
         Path projectRoot = fileAbsolutePath.getParent();
         if (projectRoot == null) {
             throw new RuntimeException("The file path provided does not have a parent directory");

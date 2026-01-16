@@ -342,7 +342,7 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
-            .setProcessId("process")
+            .setProcessId("process1")
             .setAssignedTasks(
                 new TasksTupleWithEpochs(
                     mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
@@ -355,19 +355,20 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(m1);
 
         StreamsGroupMember m2 = new StreamsGroupMember.Builder("m2")
-            .setProcessId("process")
+            .setProcessId("process2")
             .setAssignedTasks(
                 new TasksTupleWithEpochs(
-                    mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
+                    mkTasksPerSubtopologyWithCommonEpoch(9, mkTasks(fooSubtopologyId, 1)),
                     Map.of(),
                     Map.of()
                 )
             )
             .build();
 
-        // m2 should not be able to acquire foo-1 because the partition is
-        // still owned by another member.
-        assertThrows(IllegalStateException.class, () -> streamsGroup.updateMember(m2));
+        // We allow m2 to acquire foo-1 despite the fact that m1 has ownership because the processId is different.
+        streamsGroup.updateMember(m2);
+
+        assertEquals("process2", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
     }
 
 
@@ -377,11 +378,11 @@ public class StreamsGroupTest {
         String fooSubtopologyId = "foo-sub";
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
-        // Removing should fail because there is no epoch set.
-        assertThrows(IllegalStateException.class, () -> streamsGroup.removeTaskProcessIds(
+        // Removing should be a no-op when there is no process id set.
+        streamsGroup.removeTaskProcessIds(
             TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 10, mkTasks(fooSubtopologyId, 1)),
             "process"
-        ));
+        );
 
         StreamsGroupMember m1 = new StreamsGroupMember.Builder("m1")
             .setProcessId("process")
@@ -390,11 +391,15 @@ public class StreamsGroupTest {
 
         streamsGroup.updateMember(m1);
 
-        // Removing should fail because the expected epoch is incorrect.
-        assertThrows(IllegalStateException.class, () -> streamsGroup.removeTaskProcessIds(
-            TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 10, mkTasks(fooSubtopologyId, 1)),
+        // Removing with incorrect process id should do nothing. 
+        // A debug message is logged, no exception is thrown.
+        streamsGroup.removeTaskProcessIds(
+            TaskAssignmentTestUtil.mkTasksTupleWithCommonEpoch(taskRole, 9, mkTasks(fooSubtopologyId, 1)),
             "process1"
-        ));
+        );
+        if (taskRole == TaskRole.ACTIVE) {
+            assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
+        }
     }
 
     @Test
@@ -411,16 +416,17 @@ public class StreamsGroupTest {
             "process"
         );
 
-        // Changing the epoch should fail because the owner of the partition
-        // should remove it first.
-        assertThrows(IllegalStateException.class, () -> streamsGroup.addTaskProcessId(
+        // We allow replacing with a different process id.
+        streamsGroup.addTaskProcessId(
             new TasksTupleWithEpochs(
                 mkTasksPerSubtopologyWithCommonEpoch(10, mkTasks(fooSubtopologyId, 1)),
                 mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 2)),
                 mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 3))
             ),
-            "process"
-        ));
+            "process2"
+        );
+
+        assertEquals("process2", streamsGroup.currentActiveTaskProcessId(fooSubtopologyId, 1));
     }
 
     @Test
