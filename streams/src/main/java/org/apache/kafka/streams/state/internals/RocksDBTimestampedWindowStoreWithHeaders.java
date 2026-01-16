@@ -225,13 +225,13 @@ class RocksDBTimestampedWindowStoreWithHeaders
     }
 
     /**
-     * Decodes byte array back into ValueAndTimestampWithHeaders.
+     * Decodes byte array back into ValueTimestampHeaders.
      * Reverses the encoding format.
      *
      * Format: [HeaderSize(2)][Headers(variable)][Timestamp(8)][Payload(variable)]
      *
      * @param encodedValue the encoded byte array
-     * @return ValueAndTimestampWithHeaders instance
+     * @return ValueTimestampHeaders instance
      */
     private ValueTimestampHeaders<byte[]> decodeValueWithTimestampAndHeaders(final byte[] encodedValue) {
         if (encodedValue == null) {
