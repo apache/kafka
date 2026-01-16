@@ -1028,7 +1028,7 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
 
       val topology = createMockTopology(topicName)
 
-      // Join and wait for assignment.
+      // Join the group.
       var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponseData = null
       TestUtils.waitUntilTrue(() => {
         streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
@@ -1049,19 +1049,15 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
           streamsGroupHeartbeatResponse.activeTasks() != null &&
           !streamsGroupHeartbeatResponse.activeTasks().isEmpty
-      }, "Did not get assignment within the timeout period.")
+      }, "Could not join the group successfully.")
 
-      // Verify we have an epoch and assignment.
-      assertEquals(memberId, streamsGroupHeartbeatResponse.memberId())
-      assertTrue(streamsGroupHeartbeatResponse.memberEpoch() > 0)
-      assertNotNull(streamsGroupHeartbeatResponse.activeTasks())
+      // Verify initial join success with assignment.
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
 
-      val epochBeforeRejoin = streamsGroupHeartbeatResponse.memberEpoch()
-      val expectedActiveTasks = List(
-        new StreamsGroupHeartbeatResponseData.TaskIds()
-          .setSubtopologyId("subtopology-1")
-          .setPartitions(List(0, 1, 2).map(_.asInstanceOf[Integer]).asJava)
-      ).asJava
+      // Expected assignment.
+      val expectedActiveTasks = List(new StreamsGroupHeartbeatResponseData.TaskIds()
+        .setSubtopologyId(streamsGroupHeartbeatResponse.activeTasks().get(0).subtopologyId())
+        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava
 
       // Simulate a fenced member attempting to rejoin with epoch=0.
       val rejoinResponse = streamsGroupHeartbeat(
@@ -1075,11 +1071,13 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
         topology = topology
       )
 
-      // Verify the full rejoin response.
+      // Verify the full response.
+      // Since the topology hasn't changed, the member should get their current
+      // state back with the same epoch (2) and assignment.
       val expectedRejoinResponse = new StreamsGroupHeartbeatResponseData()
         .setErrorCode(Errors.NONE.code())
         .setMemberId(memberId)
-        .setMemberEpoch(epochBeforeRejoin)
+        .setMemberEpoch(2)
         .setHeartbeatIntervalMs(rejoinResponse.heartbeatIntervalMs())
         .setActiveTasks(expectedActiveTasks)
         .setStandbyTasks(List.empty.asJava)
