@@ -135,6 +135,9 @@
     <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
 
+    <suppress checks="ImportControl" files="LoginTest.java"/>
+
+
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
               files="(AbstractHerder|DistributedHerder|Worker).java"/>
