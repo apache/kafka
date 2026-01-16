@@ -106,6 +106,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -4858,6 +4859,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry);
         final StateDirectory.StartupState startupState = mock(StateDirectory.StartupState.class);
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions).build();
         when(activeTaskCreator.createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any()))
@@ -4866,6 +4868,7 @@ public class TaskManagerTest {
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
         when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupState, (StateDirectory.StartupState) null);
+        when(startupState.getStateMngr()).thenReturn(stateManager);
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
 
@@ -4884,6 +4887,8 @@ public class TaskManagerTest {
         // ensure we didn't construct any new Tasks
         verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        verify(stateManager).assignToStreamThread(any(), anyCollection());
+
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
@@ -4898,11 +4903,13 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry);
         final StateDirectory.StartupState startupState = mock(StateDirectory.StartupState.class);
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
+        final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
         when(standbyTaskCreator.createStandbyTaskFromStartupLocalStore(eq(taskId00), eq(taskId00Partitions), any(), any())).thenReturn(startupTask);
 
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
         when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupState, (StateDirectory.StartupState) null);
+        when(startupState.getStateMngr()).thenReturn(stateManager);
 
         assertFalse(taskRegistry.hasPendingTasksToInit());
 
@@ -4920,6 +4927,7 @@ public class TaskManagerTest {
         // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
         verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        verify(stateManager).assignToStreamThread(any(), anyCollection());
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
