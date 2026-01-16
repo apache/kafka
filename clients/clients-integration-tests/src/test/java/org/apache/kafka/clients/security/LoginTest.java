@@ -31,6 +31,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
+
 import org.opentest4j.AssertionFailedError;
 
 import java.util.HashMap;
