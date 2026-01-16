@@ -4470,7 +4470,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       inputTopics = Set(testTopicName),
       changelogTopics = Set(testTopicName + "-changelog"),
       streamsGroupId = streamsGroupId,
-      replicationFactor = Optional.of(unavailableReplicationFactorInThisCluster),
+      replicationFactor = Optional.of(unavailableReplicationFactorInThisCluster)
     )
     streams.poll(JDuration.ofMillis(500L))
 

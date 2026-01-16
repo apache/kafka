@@ -254,7 +254,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
     val boxed: Optional[java.lang.Short] =
       replicationFactor.map[java.lang.Short](s => java.lang.Short.valueOf(s))
-      
     val streamsRebalanceData = new StreamsRebalanceData(
       UUID.randomUUID(),
       Optional.empty(),
