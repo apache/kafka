@@ -1053,22 +1053,9 @@ public class GroupMetadataManagerTest {
 
         assertEquals(MemberState.STABLE, context.consumerGroupMemberState(groupId, memberId));
 
-        // Duplicate heartbeat with same request but epoch is now stale.
-        // The duplicate should still work because the member is now STABLE.
-        ConsumerGroupHeartbeatRequestData duplicateRequest = new ConsumerGroupHeartbeatRequestData()
-            .setGroupId(groupId)
-            .setMemberId(memberId)
-            .setMemberEpoch(101)
-            .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicNames(List.of("foo"))
-            .setServerAssignor("range")
-            .setTopicPartitions(List.of(
-                new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                    .setTopicId(fooTopicId)
-                    .setPartitions(List.of(0, 1))));
-
+        // Duplicate heartbeat.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result2 =
-            context.consumerGroupHeartbeat(duplicateRequest);
+            context.consumerGroupHeartbeat(fullRequest);
 
         // Verify duplicate produces same response with no records.
         assertResponseEquals(result1.response(), result2.response());
