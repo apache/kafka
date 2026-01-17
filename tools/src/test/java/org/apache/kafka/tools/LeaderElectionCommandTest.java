@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionDesignated;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -249,6 +250,48 @@ public class LeaderElectionCommandTest {
 
             TestUtils.assertLeader(client, topicPartition, broker3);
         }
+    }
+
+    @ClusterTest
+    public void testDesignatedReplicaElection() throws Exception {
+        if (cluster.type().toString() == "ZK") {
+            return;
+        }
+        String topic = "designated-topic";
+        int partition = 0;
+        List<Integer> assignment = Arrays.asList(broker2, broker3);
+
+        cluster.waitForReadyBrokers();
+        Admin client = cluster.createAdminClient();
+        Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
+        partitionAssignment.put(partition, assignment);
+
+        createTopic(client, topic, partitionAssignment);
+
+        TopicPartitionDesignated topicPartition = new TopicPartitionDesignated(topic, partition);
+        topicPartition.setDesignatedLeader(1);
+        Path topicPartitionPath = tempTopicPartitionFile(Collections.singletonList(topicPartition), true);
+
+        TestUtils.assertLeader(client, topicPartition, broker2);
+
+        cluster.shutdownBroker(broker2);
+        TestUtils.waitForBrokersOutOfIsr(client,
+                JavaConverters.asScalaBuffer(Collections.singletonList(topicPartition)).toSet(),
+                JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
+        );
+        TestUtils.assertLeader(client, topicPartition, broker3);
+        cluster.startBroker(broker2);
+        TestUtils.waitForBrokersInIsr(client, topicPartition,
+            JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
+        );
+
+        LeaderElectionCommand.mainNoExit(
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--election-type", "designated",
+            "--path-to-json-file", topicPartitionPath.toString()
+        );
+
+        TestUtils.assertLeader(client, topicPartition, broker2);
     }
 
     @ClusterTest

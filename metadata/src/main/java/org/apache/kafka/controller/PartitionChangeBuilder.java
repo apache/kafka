@@ -77,7 +77,11 @@ public class PartitionChangeBuilder {
         /**
          * Prefer replicas in the ISR but keep the partition online even if it requires picking a leader that is not in the ISR.
          */
-        UNCLEAN
+        UNCLEAN,
+        /**
+         * Perform leader election for designated leader
+         */
+        DESIGNATED
     }
 
     private final PartitionRegistration partition;
@@ -98,6 +102,7 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean eligibleLeaderReplicasEnabled;
     private DefaultDirProvider defaultDirProvider;
+    private int designatedLeader;
 
     // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
     // lastKnownElr field if enabled.
@@ -196,6 +201,11 @@ public class PartitionChangeBuilder {
         return this;
     }
 
+    public PartitionChangeBuilder setDesignatedLeader(int designatedLeader) {
+        this.designatedLeader = designatedLeader;
+        return this;
+    }
+
     // VisibleForTesting
     static class ElectionResult {
         final int node;
@@ -220,9 +230,27 @@ public class PartitionChangeBuilder {
     ElectionResult electLeader() {
         if (election == Election.PREFERRED) {
             return electPreferredLeader();
+        } else if (election == Election.DESIGNATED) {
+            return electDesignatedLeader();
+        }
+        return electAnyLeader();
+    }
+
+    /**
+     * Assumes that the election type is Election.DESIGNATED
+     */
+    private ElectionResult electDesignatedLeader() {
+        if (isValidNewLeader(designatedLeader)) {
+            return new ElectionResult(designatedLeader, false);
         }
 
-        return electAnyLeader();
+        // In this case, designatedLeader is outside ELR / ISR
+        // As such we designate the election as "unclean"
+        if (isAcceptableLeader.test(designatedLeader)) {
+            return new ElectionResult(designatedLeader, true);
+        }
+
+        return new ElectionResult(NO_LEADER, false);
     }
 
     /**
