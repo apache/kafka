@@ -15,25 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.common;
+package org.apache.kafka.server;
 
-import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 
-import java.util.Optional;
-
-public interface NodeToControllerChannelManager {
-
-    void start();
-
-    void shutdown() throws InterruptedException;
-
-    Optional<NodeApiVersions> controllerApiVersions();
-
-    void sendRequest(
-        AbstractRequest.Builder<? extends AbstractRequest> request,
-        ControllerRequestCompletionHandler callback
-    );
-
-    long getTimeoutMs();
+/**
+ * Represents a queued request to be sent to the controller.
+ * Used for timeout tracking and asynchronous completion handling.
+ *
+ * @param createdTimeMs timestamp when this request was created, used for timeout detection
+ * @param request the request to send to the controller
+ * @param callback handler invoked when the request completes, fails, or times out
+ */
+public record NodeToControllerQueueItem(Long createdTimeMs,
+                                        AbstractRequest.Builder<? extends AbstractRequest> request,
+                                        ControllerRequestCompletionHandler callback) {
 }

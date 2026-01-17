@@ -166,6 +166,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     this.currentConfig = newConfig
   }
 
+  // for testing
+  private[server] def updateCurrentConfig(props: util.Map[_, _]): Unit = {
+    this.currentConfig = new KafkaConfig(props)
+  }
+
   override def originals: util.Map[String, AnyRef] =
     if (this eq currentConfig) super.originals else currentConfig.originals
   override def values: util.Map[String, _] =
@@ -417,11 +422,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
   val unstableFeatureVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG)
 
-  def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
+  override def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
   }
 
-  def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
+  override def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.removeReconfigurable(reconfigurable)
   }
 

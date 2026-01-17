@@ -95,6 +95,7 @@ import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataDelta
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
@@ -2265,62 +2266,60 @@ public class GroupCoordinatorService implements GroupCoordinator {
         metadataImage = wrappedImage;
         runtime.onMetadataUpdate(wrappedDelta, wrappedImage);
 
-        // Handle partition deletions from the delta.
+        // Handle topic deletions from the delta.
         if (delta.topicsDelta() != null && !delta.topicsDelta().deletedTopicIds().isEmpty()) {
-            handlePartitionsDeletion(delta.topicsDelta());
+            handleTopicsDeletion(delta.topicsDelta());
         }
     }
 
     /**
-     * Handles the deletion of topic partitions by scheduling write operations
+     * Handles the deletion of topics by scheduling write operations
      * to delete committed offsets and clean up share group state.
      *
      * @param topicsDelta The topics delta containing deleted topic IDs.
      */
-    private void handlePartitionsDeletion(TopicsDelta topicsDelta) {
-        var topicPartitions = new ArrayList<TopicPartition>();
-        var topicIds = topicsDelta.deletedTopicIds();
+    private void handleTopicsDeletion(TopicsDelta topicsDelta) {
+        var deletedTopicIds = topicsDelta.deletedTopicIds();
+        var deletedTopics = new ArrayList<DeletedTopic>();
 
-        topicIds.forEach(topicId -> {
+        deletedTopicIds.forEach(topicId -> {
             var topicImage = topicsDelta.image().getTopic(topicId);
             if (topicImage != null) {
-                topicImage.partitions().keySet().forEach(partitionId ->
-                    topicPartitions.add(new TopicPartition(topicImage.name(), partitionId))
-                );
+                deletedTopics.add(new DeletedTopic(topicId, topicImage.name()));
             }
         });
 
         var futures = new ArrayList<CompletableFuture<Void>>();
 
-        if (!topicPartitions.isEmpty()) {
+        if (!deletedTopics.isEmpty()) {
             // Schedule offset deletion.
             futures.addAll(
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
-                        "on-partition-deleted",
+                        "on-topics-deleted",
                         Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                        coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
+                        coordinator -> coordinator.onTopicsDeleted(deletedTopics)
                     ),
                     exception -> {
-                        log.error("Could not delete offsets for deleted partitions {} due to: {}.",
-                            topicPartitions, exception.getMessage(), exception);
+                        log.error("Could not delete offsets for deleted topics {} due to: {}.",
+                            deletedTopics, exception.getMessage(), exception);
                         return null;
                     }
                 )
             );
         }
 
-        if (!topicIds.isEmpty()) {
+        if (!deletedTopicIds.isEmpty()) {
             // Schedule share group state cleanup.
             futures.addAll(
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
                         "maybe-cleanup-share-group-state",
                         Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                        coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+                        coordinator -> coordinator.maybeCleanupShareGroupState(deletedTopicIds)
                     ),
                     exception -> {
-                        log.error("Unable to cleanup state for the deleted topics {}", topicIds, exception);
+                        log.error("Unable to cleanup state for the deleted topics {}", deletedTopicIds, exception);
                         return null;
                     }
                 )

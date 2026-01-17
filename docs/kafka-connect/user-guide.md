@@ -186,7 +186,7 @@ Several widely-applicable data and routing transformations are included with Kaf
 
 Details on how to configure each transformation are listed below:
 
-{{< include-html file="/static/43/generated/connect_transforms.html" >}} 
+{{< include-html file="/static/{version}/generated/connect_transforms.html" >}} 
 
 ### Predicates
 
@@ -249,7 +249,7 @@ Kafka Connect includes the following predicates:
 
 Details on how to configure each predicate are listed below:
 
-{{< include-html file="/static/43/generated/connect_predicates.html" >}} 
+{{< include-html file="/static/{version}/generated/connect_predicates.html" >}} 
 
 ## REST API
 
