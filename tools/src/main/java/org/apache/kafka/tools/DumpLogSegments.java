@@ -22,10 +22,15 @@ import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.ConsumerProtocolSubscriptionJsonConverter;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.KRaftVersionRecordJsonConverter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessageJsonConverter;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecordJsonConverter;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.message.VotersRecordJsonConverter;
 import org.apache.kafka.common.metadata.MetadataJsonConverters;
 import org.apache.kafka.common.metadata.MetadataRecordType;
@@ -40,6 +45,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
@@ -47,11 +53,14 @@ import org.apache.kafka.coordinator.share.ShareCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.TransactionCoordinatorRecordSerde;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.snapshot.SnapshotPath;
 import org.apache.kafka.snapshot.Snapshots;
+import org.apache.kafka.storage.internals.log.AbortedTxn;
+import org.apache.kafka.storage.internals.log.BatchMetadata;
 import org.apache.kafka.storage.internals.log.CorruptSnapshotException;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
@@ -137,7 +146,7 @@ public class DumpLogSegments {
 
     private static void dumpTxnIndex(File file) {
         try (TransactionIndex index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)) {
-            for (var abortedTxn : index.allAbortedTxns()) {
+            for (AbortedTxn abortedTxn : index.allAbortedTxns()) {
                 System.out.println("version: " + abortedTxn.version() +
                     " producerId: " + abortedTxn.producerId() +
                     " firstOffset: " + abortedTxn.firstOffset() +
@@ -160,7 +169,7 @@ public class DumpLogSegments {
                     " lastTimestamp: " + entry.lastTimestamp() + " ");
 
                 if (!entry.batchMetadata().isEmpty()) {
-                    var metadata = entry.batchMetadata().iterator().next();
+                    BatchMetadata metadata = entry.batchMetadata().iterator().next();
                     System.out.print("firstSequence: " + metadata.firstSeq() +
                         " lastSequence: " + metadata.lastSeq() +
                         " lastOffset: " + metadata.lastOffset() +
@@ -265,9 +274,7 @@ public class DumpLogSegments {
                 OffsetPosition offsetPosition = index.lookup(entry.offset());
                 FileRecords partialFileRecords = fileRecords.slice(offsetPosition.position(), Integer.MAX_VALUE);
                 List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>();
-                for (var batch : partialFileRecords.batches()) {
-                    batches.add(batch);
-                }
+                partialFileRecords.batches().forEach(batches::add);
 
                 long maxTimestamp = RecordBatch.NO_TIMESTAMP;
                 // We first find the message by offset then check if the timestamp is correct.
@@ -323,23 +330,7 @@ public class DumpLogSegments {
         ParseResult<K, V> parse(Record record);
     }
 
-    static class ParseResult<K, V> {
-        private final Optional<K> key;
-        private final Optional<V> value;
-
-        public ParseResult(Optional<K> key, Optional<V> value) {
-            this.key = key;
-            this.value = value;
-        }
-
-        public Optional<K> key() {
-            return key;
-        }
-
-        public Optional<V> value() {
-            return value;
-        }
-    }
+    record ParseResult<K, V>(Optional<K> key, Optional<V> value) { }
 
     static class DecoderMessageParser<K, V> implements MessageParser<K, V> {
         private final Decoder<K> keyDecoder;
@@ -375,7 +366,25 @@ public class DumpLogSegments {
                                 MessageParser<?, ?> parser,
                                 boolean skipRecordMetadata,
                                 int maxBytes) {
-        printLogHeader(file);
+        if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
+            long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
+            System.out.println("Log starting offset: " + startOffset);
+            return;
+        }
+
+        if (!file.getName().endsWith(Snapshots.SUFFIX)) {
+            return;
+        }
+
+        if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+            System.out.println("KRaft bootstrap snapshot");
+            return;
+        }
+
+        Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
+        System.out.println("Snapshot end offset: " + pathOpt.get().snapshotId().offset() +
+                ", epoch: " + pathOpt.get().snapshotId().epoch());
+
 
         FileRecords fileRecords = null;
         try {
@@ -406,31 +415,6 @@ public class DumpLogSegments {
         }
     }
 
-    private static void printLogHeader(File file) {
-        if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
-            long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
-            System.out.println("Log starting offset: " + startOffset);
-            return;
-        }
-
-        if (!isSnapshotFile(file)) {
-            return;
-        }
-
-        if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
-            System.out.println("KRaft bootstrap snapshot");
-            return;
-        }
-
-        Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
-        System.out.println("Snapshot end offset: " + pathOpt.get().snapshotId().offset() +
-            ", epoch: " + pathOpt.get().snapshotId().epoch());
-    }
-
-    private static boolean isSnapshotFile(File file) {
-        return file.getName().endsWith(Snapshots.SUFFIX);
-    }
-
     private static long dumpBatchRecords(FileLogInputStream.FileChannelRecordBatch batch,
                                          long lastOffset,
                                          File file,
@@ -442,7 +426,6 @@ public class DumpLogSegments {
             if (record.offset() != lastOffset + 1) {
                 List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
                     .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-                // Prepend to match Scala behavior (::= operator)
                 nonConsecutivePairsSeq.add(0, new Pair<>(lastOffset, record.offset()));
             }
             lastOffset = record.offset();
@@ -522,27 +505,27 @@ public class DumpLogSegments {
                     " coordinatorEpoch: " + endTxnMarker.coordinatorEpoch());
                 break;
             case LEADER_CHANGE:
-                var leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(record);
+                LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(record);
                 System.out.print(" LeaderChange: " +
                     LeaderChangeMessageJsonConverter.write(leaderChangeMessage, leaderChangeMessage.version()));
                 break;
             case SNAPSHOT_HEADER:
-                var header = ControlRecordUtils.deserializeSnapshotHeaderRecord(record);
+                SnapshotHeaderRecord header = ControlRecordUtils.deserializeSnapshotHeaderRecord(record);
                 System.out.print(" SnapshotHeader " +
                     SnapshotHeaderRecordJsonConverter.write(header, header.version()));
                 break;
             case SNAPSHOT_FOOTER:
-                var footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record);
+                SnapshotFooterRecord footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record);
                 System.out.print(" SnapshotFooter " +
                     SnapshotFooterRecordJsonConverter.write(footer, footer.version()));
                 break;
             case KRAFT_VERSION:
-                var kraftVersion = ControlRecordUtils.deserializeKRaftVersionRecord(record);
+                KRaftVersionRecord kraftVersion = ControlRecordUtils.deserializeKRaftVersionRecord(record);
                 System.out.print(" KRaftVersion " +
                     KRaftVersionRecordJsonConverter.write(kraftVersion, kraftVersion.version()));
                 break;
             case KRAFT_VOTERS:
-                var voters = ControlRecordUtils.deserializeVotersRecord(record);
+                VotersRecord voters = ControlRecordUtils.deserializeVotersRecord(record);
                 System.out.print(" KRaftVoters " +
                     VotersRecordJsonConverter.write(voters, voters.version()));
                 break;
@@ -649,7 +632,7 @@ public class DumpLogSegments {
             }
 
             try {
-                var r = serde.deserialize(record.key(), record.value());
+                CoordinatorRecord r = serde.deserialize(record.key(), record.value());
                 return new ParseResult<>(
                     Optional.of(prepareKey(r.key())),
                     Optional.ofNullable(r.value())
@@ -725,7 +708,7 @@ public class DumpLogSegments {
                         replaceField(
                             memberNode,
                             "subscription",
-                            (readable, ver) -> new ConsumerProtocolSubscription(readable, ver),
+                            ConsumerProtocolSubscription::new,
                             ConsumerProtocolSubscriptionJsonConverter::write
                         );
 
@@ -733,7 +716,7 @@ public class DumpLogSegments {
                         replaceField(
                             memberNode,
                             "assignment",
-                            (readable, ver) -> new ConsumerProtocolAssignment(readable, ver),
+                            ConsumerProtocolAssignment::new,
                             ConsumerProtocolAssignmentJsonConverter::write
                         );
                     });
@@ -803,7 +786,7 @@ public class DumpLogSegments {
         public ParseResult<String, String> parse(Record record) {
             String output;
             try {
-                var messageAndVersion = metadataRecordSerde.read(
+                ApiMessageAndVersion messageAndVersion = metadataRecordSerde.read(
                     new ByteBufferAccessor(record.value()), record.valueSize());
                 ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
                 json.set("type", new TextNode(
@@ -857,15 +840,7 @@ public class DumpLogSegments {
         }
     }
 
-    static class Pair<F, S> {
-        final F first;
-        final S second;
-
-        Pair(F first, S second) {
-            this.first = first;
-            this.second = second;
-        }
-    }
+    record Pair<F, S>(F first, S second) { }
 
     private static class DumpLogSegmentsOptions extends CommandDefaultOptions {
         private final OptionSpec<Void> printOpt;

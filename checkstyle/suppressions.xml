@@ -43,9 +43,7 @@
     <suppress checks="JavaNCSS"
               files="(SharePartitionManagerTest|SharePartitionTest|ShareConsumerTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
-    <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="DumpLogSegmentsTest"/>
     <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
-    <suppress checks="CyclomaticComplexity|NPathComplexity" files="DumpLogSegments.java"/>
 
     <!-- server tests -->
     <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
@@ -274,6 +272,8 @@
               files="PageViewTypedDemo.java|PipeDemo.java|TemperatureDemo.java|WordCountDemo.java|WordCountProcessorDemo.java|WordCountTransformerDemo.java"/>
 
     <!-- Tools -->
+    <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="DumpLogSegmentsTest"/>
+    <suppress checks="CyclomaticComplexity|NPathComplexity" files="DumpLogSegments.java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files="VerifiableConsumer.java"/>
     <suppress checks="CyclomaticComplexity"
