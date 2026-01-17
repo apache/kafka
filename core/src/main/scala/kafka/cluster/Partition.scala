@@ -773,6 +773,10 @@ class Partition(val topicPartition: TopicPartition,
     leaderEndOffset: Long,
     brokerEpoch: Long
   ): Unit = {
+    if(asyncLogMode) {
+      return
+    }
+
     // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
     val oldLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     val prevFollowerEndOffset = replica.stateSnapshot.logEndOffset
@@ -1020,6 +1024,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   private def maybeIncrementLeaderHW(leaderLog: UnifiedLog, currentTimeMs: Long = time.milliseconds): Boolean = {
     if (asyncLogMode) {
+      leaderLog.maybeIncrementHighWatermark(leaderLog.logEndOffsetMetadata)
       return true
     }
     if (isUnderMinIsr) {

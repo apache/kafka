@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log.bookkeeper;
 
 import io.netty.buffer.ByteBuf;
+import org.apache.bookkeeper.mledger.Position;
 import org.apache.kafka.common.protocol.Errors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,8 @@ public class MessagePublishContext {
     private long baseOffset = -1;
     private final BookkeeperLocalLog localLog;
 
-    public MessagePublishContext(CompletableFuture<Long> offsetFuture, int numberOfMessages, BookkeeperLocalLog localLog) {
+    public MessagePublishContext(CompletableFuture<Long> offsetFuture,
+                                 int numberOfMessages, BookkeeperLocalLog localLog) {
         this.offsetFuture = offsetFuture;
         this.numberOfMessages = numberOfMessages;
         this.localLog = localLog;
@@ -47,11 +49,14 @@ public class MessagePublishContext {
 
 
 
-    public void complete(Exception ex, long ledgerId, long entryId) {
+    public void complete(Exception ex, Position position) {
         if (ex != null) {
             offsetFuture.completeExceptionally(Errors.KAFKA_STORAGE_ERROR.exception(ex.getMessage()));
             return;
         }
+
+        long ledgerId = position.getLedgerId();
+        long entryId = position.getEntryId();
 
         if (baseOffset >= 0 && entryId == 0) {
             localLog.index.asyncAddLedgerBaseOffset(baseOffset, ledgerId)
@@ -61,5 +66,6 @@ public class MessagePublishContext {
                     });
         }
         offsetFuture.complete(baseOffset);
+        localLog.updateTxnMaxPosition(position);
     }
 }

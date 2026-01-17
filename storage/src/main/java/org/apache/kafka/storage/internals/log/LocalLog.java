@@ -81,7 +81,7 @@ public class LocalLog {
     private final LogSegments segments;
     private final Scheduler scheduler;
     private final Time time;
-    private final TopicPartition topicPartition;
+    protected final TopicPartition topicPartition;
     private final LogDirFailureChannel logDirFailureChannel;
     private final Logger logger;
 

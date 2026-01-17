@@ -44,6 +44,7 @@ import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetsListener;
+import org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason;
 import org.apache.kafka.storage.internals.log.LogValidator;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.internals.log.ProducerAppendInfo;
@@ -68,6 +69,7 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     private final AsyncProducerStateManager producerStateManager;
     private final AtomicBoolean recovering = new AtomicBoolean(false);
     private final CompletableFuture<Void> initializeFuture = new CompletableFuture<>();
+
 
     public BookkeeperUnifiedLog(long logStartOffset, BookkeeperLocalLog localLog, BrokerTopicStats brokerTopicStats,
                                 int producerIdExpirationCheckIntervalMs, LeaderEpochFileCache leaderEpochCache,
@@ -102,6 +104,11 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     @Override
     public int deleteOldSegments() throws IOException {
         return 0;
+    }
+
+    @Override
+    public long highWatermark() {
+        return bookkeeperLocalLog.logEndOffset();
     }
 
     public CompletableFuture<Void> initialize() {
@@ -340,8 +347,19 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     }
 
     @Override
+    public long logStartOffset() {
+        return localLogStartOffset();
+    }
+
+    @Override
+    public long localLogStartOffset() {
+        return bookkeeperLocalLog.asyncGetLogStartOffset().join();
+    }
+
+    @Override
     protected void maybeIncrementFirstUnstableOffset() {
         Optional<LogOffsetMetadata> updatedFirstUnstableOffset = producerStateManager.firstUnstableOffset();
+        long logStartOffset = logStartOffset();
         if (updatedFirstUnstableOffset.isPresent() &&
                 (updatedFirstUnstableOffset.get().messageOffsetOnly() || updatedFirstUnstableOffset.get().messageOffset < logStartOffset)) {
             long offset = Math.max(updatedFirstUnstableOffset.get().messageOffset, logStartOffset);
@@ -355,8 +373,17 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     }
 
     @Override
+    public boolean maybeIncrementLogStartOffset(long newLogStartOffset, LogStartOffsetIncrementReason reason) {
+        return true;
+    }
+
+    @Override
     public CompletableFuture<FetchDataInfo> readAsync(long startOffset, int maxLength, FetchIsolation isolation, boolean minOneMessage) {
-        return super.readAsync(startOffset, maxLength, isolation, minOneMessage);
+        LogOffsetMetadata maxOffsetMetadata = switch (isolation) {
+            case LOG_END,HIGH_WATERMARK -> bookkeeperLocalLog.logEndOffsetMetadata();
+            case TXN_COMMITTED -> firstUnstableOffsetMetadata.orElse(bookkeeperLocalLog.logEndOffsetMetadata());
+        };
+        return bookkeeperLocalLog.readAsync(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchIsolation.TXN_COMMITTED);
     }
 
     @Override
@@ -426,6 +453,14 @@ public class BookkeeperUnifiedLog extends UnifiedLog {
     @Override
     public CompletableFuture<Void> truncateFullyAndStartAtAsync(long newOffset, Optional<Long> logStartOffsetOpt) {
         return super.truncateFullyAndStartAtAsync(newOffset, logStartOffsetOpt);
+    }
+
+    @Override
+    public void close() {
+    }
+
+    @Override
+    public void closeHandlers() {
     }
 
     @Override

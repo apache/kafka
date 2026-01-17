@@ -16,22 +16,30 @@
  */
 package org.apache.kafka.storage.internals.log.bookkeeper;
 
+import com.google.common.base.Throwables;
 import io.netty.buffer.ByteBuf;
+import org.apache.bookkeeper.client.api.DigestType;
 import org.apache.bookkeeper.mledger.AsyncCallbacks;
 import org.apache.bookkeeper.mledger.Entry;
 import org.apache.bookkeeper.mledger.ManagedCursor;
 import org.apache.bookkeeper.mledger.ManagedLedger;
 import org.apache.bookkeeper.mledger.ManagedLedgerConfig;
 import org.apache.bookkeeper.mledger.ManagedLedgerException;
+import org.apache.bookkeeper.mledger.ManagedLedgerFactory;
 import org.apache.bookkeeper.mledger.Position;
+import org.apache.bookkeeper.mledger.PositionFactory;
 import org.apache.bookkeeper.mledger.impl.ManagedLedgerImpl;
 import org.apache.bookkeeper.mledger.impl.OpAddEntry;
 import org.apache.commons.lang3.RandomUtils;
+import org.apache.commons.lang3.mutable.MutableObject;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.AsyncTransactionIndex;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LocalLog;
@@ -42,6 +50,7 @@ import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogSegment;
 import org.apache.kafka.storage.internals.log.LogSegments;
 import org.apache.kafka.storage.internals.log.OffsetAndTimestampIndex;
+import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,28 +59,38 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEntryCallback {
+public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEntryCallback, AsyncCallbacks.OpenLedgerCallback {
     private static final Logger log = LoggerFactory.getLogger(BookkeeperLocalLog.class);
 
-    private final ManagedLedgerImpl managedLedger;
+    private volatile ManagedLedgerImpl managedLedger;
+    private volatile Field currentLedgerTimeoutTriggered;
+    private volatile MethodHandle internalAsyncAddEntry;
+    private volatile boolean isFenced = false;
+    // The Transaction max position is the last position that the read-committed read can read.
+    private volatile Position txnMaxPosition = PositionFactory.EARLIEST;
+    protected volatile Executor mlExecutor;
+    protected volatile OffsetAndTimestampIndex index;
+
     private final ManagedLedgerConfig managedLedgerConfig;
     private final Time time = Time.SYSTEM;
-    private final Field currentLedgerTimeoutTriggered;
-    private final MethodHandle internalAsyncAddEntry;
     private final AtomicInteger pendingAddEntries = new AtomicInteger();
-    private volatile boolean isFenced = false;
-    protected final OffsetAndTimestampIndex index;
     protected final AsyncTransactionIndex txnIndex;
-    protected final Executor mlExecutor;
+
+    private final CompletableFuture<Void> initializeFuture = new CompletableFuture<>();
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
 
     /**
      * @param dir                  The directory in which log segments are created.
@@ -87,16 +106,60 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
     public BookkeeperLocalLog(File dir, LogConfig config, LogSegments segments, long recoveryPoint,
                               LogOffsetMetadata nextOffsetMetadata, Scheduler scheduler, Time time,
                               TopicPartition topicPartition, LogDirFailureChannel logDirFailureChannel,
-                              AsyncTransactionIndex txnIndex) throws Exception {
+                              AsyncTransactionIndex txnIndex) {
         super(dir, config, segments, recoveryPoint, nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel);
         this.managedLedgerConfig = buildManagedLedgerConfig(config);
-        this.managedLedger = null;
-        this.internalAsyncAddEntry = MethodHandles.lookup().bind(managedLedger, "internalAsyncAddEntry", MethodType.methodType(Void.class, OpAddEntry.class));
-        this.currentLedgerTimeoutTriggered = ManagedLedgerImpl.class.getDeclaredField("currentLedgerTimeoutTriggered");
-        this.currentLedgerTimeoutTriggered.setAccessible(true);
-        this.index = new OffsetAndTimestampIndex(managedLedger, topicPartition);
-        this.mlExecutor = managedLedger.getExecutor();
         this.txnIndex = txnIndex;
+    }
+
+    @Override
+    public void openLedgerComplete(ManagedLedger ledger, Object ctx) {
+        this.managedLedger = (ManagedLedgerImpl) ledger;
+        try {
+            this.internalAsyncAddEntry = MethodHandles.lookup().bind(managedLedger, "internalAsyncAddEntry", MethodType.methodType(Void.class, OpAddEntry.class));
+            this.currentLedgerTimeoutTriggered = ManagedLedgerImpl.class.getDeclaredField("currentLedgerTimeoutTriggered");
+            this.currentLedgerTimeoutTriggered.setAccessible(true);
+            this.index = new OffsetAndTimestampIndex(managedLedger, topicPartition);
+            this.mlExecutor = managedLedger.getExecutor();
+            initializeFuture.complete(null);
+        } catch (Throwable t) {
+            log.error("Failed to initialize BookkeeperLocalLog", t);
+            initializeFuture.completeExceptionally(t);
+        }
+    }
+
+    @Override
+    public void openLedgerFailed(ManagedLedgerException exception, Object ctx) {
+        log.error("Failed to initialize BookkeeperLocalLog", exception);
+        initializeFuture.completeExceptionally(exception);
+    }
+
+    public CompletableFuture<Void> initializeAsync(BookkeeperStorageSingleton bookkeeperStorageSingleton) {
+        if (!initialized.compareAndSet(false, true)) {
+            return initializeFuture;
+        }
+
+        String ledgerName = topicPartition.toString();
+        ManagedLedgerFactory factory = bookkeeperStorageSingleton.getManagedLedgerFactory();
+        factory.asyncOpen(ledgerName, managedLedgerConfig, this, () -> CompletableFuture.completedFuture(true), null);
+        return this.initializeFuture;
+    }
+
+    public CompletableFuture<Void> closeAsync() {
+        CompletableFuture<Void> closeFuture = new CompletableFuture<>();
+        this.managedLedger.asyncClose(new AsyncCallbacks.CloseCallback() {
+            @Override
+            public void closeComplete(Object ctx) {
+                closeFuture.complete(null);
+            }
+
+            @Override
+            public void closeFailed(ManagedLedgerException exception, Object ctx) {
+                log.error("Failed to close BookkeeperLocalLog", exception);
+                closeFuture.completeExceptionally(exception);
+            }
+        }, null);
+        return closeFuture;
     }
 
 
@@ -109,8 +172,31 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
     }
 
     public static ManagedLedgerConfig buildManagedLedgerConfig(LogConfig config) {
-        // TODO
-        return new ManagedLedgerConfig();
+        ManagedLedgerConfig ledgerConfig = new ManagedLedgerConfig();
+        ledgerConfig.setEnsembleSize(config.ensembleSize);
+        ledgerConfig.setWriteQuorumSize(config.writeQuorumSize);
+        ledgerConfig.setAckQuorumSize(config.ackQuorumSize);
+        ledgerConfig.setDigestType(DigestType.valueOf(config.digestTypeName));
+        ledgerConfig.setPassword(config.password);
+        ledgerConfig.setMaxEntriesPerLedger(config.maxEntriesPerLedger);
+        ledgerConfig.setMaxSizePerLedgerMb(config.maxBytesPerLedgerMB);
+        ledgerConfig.setMinimumRolloverTime(config.minRolloverTimeMinutes, TimeUnit.MINUTES);
+        ledgerConfig.setMaximumRolloverTime(config.maxRolloverTimeMinutes, TimeUnit.MINUTES);
+        ledgerConfig.setMetadataOperationsTimeoutSeconds(config.metadataOperationTimeoutSeconds);
+        ledgerConfig.setReadEntryTimeoutSeconds(config.readEntryTimeoutSeconds);
+        ledgerConfig.setAddEntryTimeoutSeconds(config.addEntryTimeoutSeconds);
+        ledgerConfig.setMetadataEnsembleSize(config.defaultEnsembleSize);
+        ledgerConfig.setMetadataWriteQuorumSize(config.defaultWriteQuorumSize);
+        ledgerConfig.setMetadataAckQuorumSize(config.defaultAckQuorumSize);
+        ledgerConfig.setMetadataMaxEntriesPerLedger(config.defaultMaxEntriesPerLedger);
+        ledgerConfig.setLedgerRolloverTimeout(config.ledgerRolloverTimeoutSeconds);
+        ledgerConfig.setRetentionTime(config.retentionTimeSeconds, TimeUnit.SECONDS);
+        ledgerConfig.setRetentionSizeInMB(config.retentionSizeMb);
+        ledgerConfig.setAutoSkipNonRecoverableData(config.autoSkipNonRecoverableData);
+        ledgerConfig.setLedgerForceRecovery(config.ledgerForceRecovery);
+        ledgerConfig.setInactiveLedgerRollOverTime(config.inactiveLedgerRolloverTimeSeconds, TimeUnit.SECONDS);
+        ledgerConfig.setLazyCursorRecovery(true);
+        return ledgerConfig;
     }
 
 
@@ -144,6 +230,13 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
         // no-op
     }
 
+    /**
+     * Recover from startOffset.
+     *
+     * @param startOffset
+     * @param consumer
+     * @return
+     */
     public CompletableFuture<Void> recoverFrom(long startOffset, Consumer<MemoryRecords> consumer) {
         Position lac = managedLedger.getLastConfirmedEntry();
         if (lac == null) {
@@ -167,19 +260,30 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
                     future.completeExceptionally(t);
                     return null;
                 });
-        future.thenAccept(v ->
-                managedLedger.asyncDeleteCursor(cursorName, new AsyncCallbacks.DeleteCursorCallback() {
-                    @Override
-                    public void deleteCursorComplete(Object ctx) {
-
-                    }
-
-                    @Override
-                    public void deleteCursorFailed(ManagedLedgerException exception, Object ctx) {
-
-                    }
-                }, null));
+        future.thenAccept(v -> {
+            asyncDeleteCursor(cursorName);
+            this.txnMaxPosition = managedLedger.getLastConfirmedEntry();
+        });
         return future;
+    }
+
+    /**
+     * Delete cursor.
+     *
+     * @param cursorName
+     */
+    private void asyncDeleteCursor(String cursorName) {
+        managedLedger.asyncDeleteCursor(cursorName, new AsyncCallbacks.DeleteCursorCallback() {
+            @Override
+            public void deleteCursorComplete(Object ctx) {
+                // no-op
+            }
+
+            @Override
+            public void deleteCursorFailed(ManagedLedgerException exception, Object ctx) {
+                log.warn("Unable to delete cursor {}", cursorName, exception);
+            }
+        }, null);
     }
 
     private void recoverEntries(ManagedCursor cursor, Consumer<MemoryRecords> consumer, CompletableFuture<Void> future) {
@@ -211,12 +315,117 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
         }, null, managedLedger.getLastConfirmedEntry());
     }
 
+    public void updateTxnMaxPosition(Position txnMaxPosition) {
+        if (txnMaxPosition.compareTo(this.txnMaxPosition) > 0) {
+            this.txnMaxPosition = txnMaxPosition;
+        }
+    }
+
     @Override
     public CompletableFuture<FetchDataInfo> readAsync(long startOffset, int maxLength, boolean minOneMessage,
                                                       LogOffsetMetadata maxOffsetMetadata, boolean includeAbortedTxns) {
-        // TODO
-        // CompletableFuture<Position> ignore = index.findOffsetPositionAsync(startOffset, false);
-        return null;
+        CompletableFuture<FetchDataInfo> future = new CompletableFuture<>();
+        Position lac = managedLedger.getLastConfirmedEntry();
+        if (lac == null) {
+            return CompletableFuture.completedFuture(
+                    new FetchDataInfo(new LogOffsetMetadata(startOffset), MemoryRecords.EMPTY));
+        }
+
+        MutableObject<Position> mutablePosition = new MutableObject<>();
+        index.findOffsetPositionAsync(startOffset, false)
+                .thenCompose(position -> {
+                    if (position.compareTo(lac) > 0 || maxLength <= 0) {
+                        return CompletableFuture.completedFuture(Collections.emptyList());
+                    }
+                    mutablePosition.setValue(position);
+                    int maxEntries = (int) (maxLength / managedLedger.getStats().getEntrySizeAverage());
+                    if (maxEntries <= 0 && minOneMessage) {
+                        maxEntries = 1;
+                    }
+                    return maxEntries > 0 ? readEntriesAsync(mutablePosition.get(), maxEntries)
+                            : CompletableFuture.completedFuture(Collections.emptyList());
+                })
+                .thenApply(entries -> {
+                    FetchDataInfo fetchDataInfo = entries.isEmpty() ? FetchDataInfo.empty(startOffset)
+                            : new FetchDataInfo(new LogOffsetMetadata(startOffset), KafkaEntryFormatter.decode(entries));
+
+                    // Resolve aborted transactions
+                    Optional<RecordBatch> lastBatch = fetchDataInfo.records.lastBatch();
+                    if (lastBatch.isEmpty() || !includeAbortedTxns) {
+                        return fetchDataInfo;
+                    }
+                    TxnIndexSearchResult txnIndexSearchResult = txnIndex.collectAbortedTxns(startOffset, lastBatch.get().lastOffset());
+                    List<AbortedTxn> abortedTxns = txnIndexSearchResult.abortedTransactions();
+                    if (!abortedTxns.isEmpty()) {
+                        List<FetchResponseData.AbortedTransaction> abortedTransactions = abortedTxns.stream().map(AbortedTxn::asAbortedTransaction).toList();
+                        return new FetchDataInfo(fetchDataInfo.fetchOffsetMetadata, fetchDataInfo.records,
+                                false, Optional.of(abortedTransactions));
+                    }
+                    return fetchDataInfo;
+                })
+                .thenAccept(future::complete)
+                .exceptionally(t -> {
+                    log.error("Unable to find the Entry Position of {}", startOffset, t);
+                    Throwable root = Throwables.getRootCause(t);
+                    future.completeExceptionally(Errors.KAFKA_STORAGE_ERROR.exception(root.getMessage()));
+                    return null;
+                });
+        return future;
+    }
+
+    private CompletableFuture<List<Entry>> readEntriesAsync(Position position, int maxEntries) {
+        CompletableFuture<List<Entry>> future = new CompletableFuture<>();
+        Position maxPosition = this.txnMaxPosition;
+        List<Position> positions = new ArrayList<>(maxEntries);
+        for (int i = 0; i < maxEntries; i++) {
+            if (position.compareTo(maxPosition) > 0) {
+                break;
+            }
+            positions.add(position);
+            position = managedLedger.getNextValidPosition(position);
+        }
+
+        ReadEntriesCallBack callback = new ReadEntriesCallBack(positions, future);
+        for (Position p : positions) {
+            managedLedger.asyncReadEntry(p, callback, null);
+        }
+        return future;
+    }
+
+
+    private static final class ReadEntriesCallBack implements AsyncCallbacks.ReadEntryCallback, Comparator<Entry> {
+        private final List<Entry> entries;
+        private final List<Position> positions;
+        private final CompletableFuture<List<Entry>> future;
+
+        public ReadEntriesCallBack(List<Position> positions, CompletableFuture<List<Entry>> future) {
+            this.entries = new ArrayList<>(positions.size());
+            this.positions = positions;
+            this.future = future;
+        }
+
+        @Override
+        public void readEntryComplete(Entry entry, Object ctx) {
+            entries.add(entry);
+            if (entries.size() == positions.size()) {
+                entries.sort(this);
+                future.complete(entries);
+            }
+        }
+
+        @Override
+        public void readEntryFailed(ManagedLedgerException exception, Object ctx) {
+            log.error("Failed to read entry", exception);
+            for (Entry entry : entries) {
+                entry.release();
+            }
+            future.completeExceptionally(Errors.KAFKA_STORAGE_ERROR.exception());
+        }
+
+        @Override
+        public int compare(Entry o1, Entry o2) {
+            return o1.getPosition().compareTo(o2.getPosition());
+        }
     }
 
     public CompletableFuture<MemoryRecords> readLatestRecordsAsync() {
@@ -285,13 +494,13 @@ public class BookkeeperLocalLog extends LocalLog implements AsyncCallbacks.AddEn
         MessagePublishContext context = (MessagePublishContext) ctx;
         context.setMetadata(entryData);
         decrementPendingWriteOpsAndCheck();
-        context.complete(null, position.getLedgerId(), position.getEntryId());
+        context.complete(null, position);
     }
 
     @Override
     public void addFailed(ManagedLedgerException exception, Object ctx) {
         decrementPendingWriteOpsAndCheck();
-        ((MessagePublishContext) ctx).complete(exception, -1, -1);
+        ((MessagePublishContext) ctx).complete(exception, PositionFactory.EARLIEST);
     }
 
     private AtomicBoolean getCurrentLedgerTimeoutTriggered() {
