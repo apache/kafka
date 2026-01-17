@@ -1623,6 +1623,10 @@ kafka.server.ConsumerGroupHeartbeatRequestTest:
 - testConsumerGroupHeartbeatWithEmptySubscription
 - testConsumerGroupHeartbeatWithInvalidRegularExpression
 - testConsumerGroupHeartbeatWithRegularExpression
+- testDuplicateFullHeartbeatDuringRevocation
+- testDuplicateFullHeartbeatInStableState
+- testDuplicateFullHeartbeatWhileWaitingForPartitions
+- testDuplicateFullHeartbeatWithRevocationAck
 - testEmptyConsumerGroupId
 - testFencedMemberCanRejoinWithEpochZero
 - testMemberIdGeneratedOnServerWhenApiVersionIs0
