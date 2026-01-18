@@ -1891,7 +1891,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Remove a voter node from the KRaft metadata quorum.
      *
-     * <p> If {@code controller.quorum.auto.join.enable} is set to true the controller
+     * <p> Note: Since 4.2.0, If {@code controller.quorum.auto.join.enable} is set to true the controller
      * must be shutdown before removing the controller from the voter set to prevent the removed
      * controller from automatically joining again.
      *
