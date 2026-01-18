@@ -25,6 +25,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
@@ -35,6 +37,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -1721,6 +1724,34 @@ public final class Utils {
         ConfigDef all = new ConfigDef();
         configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
         return all;
+    }
+
+    /**
+     * Register the given mbean with the platform mbean server,
+     * unregistering any mbean that was there before. Note,
+     * this method will not throw an exception if the registration
+     * fails (since there is nothing you can do, and it isn't fatal),
+     * instead it just returns false indicating the registration failed.
+     *
+     * @param mbean The object to register as a mbean
+     * @param name  The name to register this mbean with
+     * @return true if the registration succeeded
+     */
+    public static boolean registerMBean(Object mbean, String name) {
+        try {
+            MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+            synchronized (mbs) {
+                ObjectName objName = new ObjectName(name);
+                if (mbs.isRegistered(objName)) {
+                    mbs.unregisterMBean(objName);
+                }
+                mbs.registerMBean(mbean, objName);
+                return true;
+            }
+        } catch (Exception e) {
+            log.error("Failed to register Mbean with name {}", name, e);
+            return false;
+        }
     }
 
     /**

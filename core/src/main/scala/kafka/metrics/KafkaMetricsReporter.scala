@@ -67,7 +67,7 @@ object KafkaMetricsReporter {
             reporter.init(verifiableProps)
             reporters += reporter
             reporter match {
-              case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
+              case bean: KafkaMetricsReporterMBean => Utils.registerMBean(reporter, bean.getMBeanName)
               case _ =>
             }
           })

@@ -95,34 +95,6 @@ public class CoreUtils {
         }
     }
 
-    /**
-     * Register the given mbean with the platform mbean server,
-     * unregistering any mbean that was there before. Note,
-     * this method will not throw an exception if the registration
-     * fails (since there is nothing you can do, and it isn't fatal),
-     * instead it just returns false indicating the registration failed.
-     *
-     * @param mbean The object to register as a mbean
-     * @param name  The name to register this mbean with
-     * @return true if the registration succeeded
-     */
-    public static boolean registerMBean(Object mbean, String name) {
-        try {
-            MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-            synchronized (mbs) {
-                ObjectName objName = new ObjectName(name);
-                if (mbs.isRegistered(objName)) {
-                    mbs.unregisterMBean(objName);
-                }
-                mbs.registerMBean(mbean, objName);
-                return true;
-            }
-        } catch (Exception e) {
-            LOGGER.error("Failed to register Mbean with name {}", name, e);
-            return false;
-        }
-    }
-
     public static List<Endpoint> listenerListToEndPoints(List<String> listeners, Map<ListenerName, SecurityProtocol> securityProtocolMap) {
         return listenerListToEndPoints(listeners, securityProtocolMap, true);
     }
