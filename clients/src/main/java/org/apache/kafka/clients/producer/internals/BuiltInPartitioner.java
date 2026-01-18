@@ -28,11 +28,12 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Built-in default partitioner.  Note, that this is just a utility class that is used directly from
  * RecordAccumulator, it does not implement the Partitioner interface.
- *
+ * <p>
  * The class keeps track of various bookkeeping information required for adaptive sticky partitioning
  * (described in detail in KIP-794).  There is one partitioner object per topic.
  */
@@ -40,24 +41,52 @@ public class BuiltInPartitioner {
     private final Logger log;
     private final String topic;
     private final int stickyBatchSize;
+    private final LongAdder adaptivePartitionSwitches;
+    private final LongAdder partitionsExcludedDueToLatency;
 
     private volatile PartitionLoadStats partitionLoadStats = null;
+    private volatile double currentLoadSkew = 0.0;
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
 
 
     /**
      * BuiltInPartitioner constructor.
      *
-     * @param topic The topic
+     * @param topic           The topic
      * @param stickyBatchSize How much to produce to partition before switch
      */
     public BuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
+        this(logContext, topic, stickyBatchSize, new LongAdder());
+    }
+
+    /**
+     * BuiltInPartitioner constructor.
+     *
+     * @param topic                     The topic
+     * @param stickyBatchSize           How much to produce to partition before switch
+     * @param adaptivePartitionSwitches The counter to increment when adaptive partitioning is used
+     */
+    public BuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize, LongAdder adaptivePartitionSwitches) {
         this.log = logContext.logger(BuiltInPartitioner.class);
         this.topic = topic;
         if (stickyBatchSize < 1) {
             throw new IllegalArgumentException("stickyBatchSize must be >= 1 but got " + stickyBatchSize);
         }
         this.stickyBatchSize = stickyBatchSize;
+        this.adaptivePartitionSwitches = adaptivePartitionSwitches;
+        this.partitionsExcludedDueToLatency = new LongAdder();
+    }
+
+    public long adaptivePartitionSwitches() {
+        return adaptivePartitionSwitches.sum();
+    }
+
+    public void recordPartitionExclusion() {
+        this.partitionsExcludedDueToLatency.increment();
+    }
+
+    public long partitionsExcludedDueToLatency() {
+        return this.partitionsExcludedDueToLatency.sum();
     }
 
     /**
@@ -105,6 +134,7 @@ public class BuiltInPartitioner {
             int partitionIndex = Math.abs(searchResult + 1);
             assert partitionIndex < partitionLoadStats.length;
             partition = partitionLoadStats.partitionIds[partitionIndex];
+            adaptivePartitionSwitches.increment();
         }
 
         log.trace("Switching to partition {} in topic {}", partition, topic);
@@ -128,27 +158,25 @@ public class BuiltInPartitioner {
     /**
      * Peek currently chosen sticky partition.  This method works in conjunction with {@link #isPartitionChanged}
      * and {@link #updatePartitionInfo}.  The workflow is the following:
-     *
+     * <p>
      * 1. peekCurrentPartitionInfo is called to know which partition to lock.
      * 2. Lock partition's batch queue.
      * 3. isPartitionChanged under lock to make sure that nobody raced us.
      * 4. Append data to buffer.
      * 5. updatePartitionInfo to update produced bytes and maybe switch partition.
-     *
-     *  It's important that steps 3-5 are under partition's batch queue lock.
+     * <p>
+     * It's important that steps 3-5 are under partition's batch queue lock.
      *
      * @param cluster The cluster information (needed if there is no current partition)
      * @return sticky partition info object
      */
     StickyPartitionInfo peekCurrentPartitionInfo(Cluster cluster) {
         StickyPartitionInfo partitionInfo = stickyPartitionInfo.get();
-        if (partitionInfo != null)
-            return partitionInfo;
+        if (partitionInfo != null) return partitionInfo;
 
         // We're the first to create it.
         partitionInfo = new StickyPartitionInfo(nextPartition(cluster));
-        if (stickyPartitionInfo.compareAndSet(null, partitionInfo))
-            return partitionInfo;
+        if (stickyPartitionInfo.compareAndSet(null, partitionInfo)) return partitionInfo;
 
         // Someone has raced us.
         return stickyPartitionInfo.get();
@@ -172,7 +200,7 @@ public class BuiltInPartitioner {
      *
      * @param partitionInfo The sticky partition info object returned by peekCurrentPartitionInfo
      * @param appendedBytes The number of bytes appended to this partition
-     * @param cluster The cluster information
+     * @param cluster       The cluster information
      */
     void updatePartitionInfo(StickyPartitionInfo partitionInfo, int appendedBytes, Cluster cluster) {
         updatePartitionInfo(partitionInfo, appendedBytes, cluster, true);
@@ -279,13 +307,14 @@ public class BuiltInPartitioner {
 
         // Calculate max queue size + 1 and check if all sizes are the same.
         int maxSizePlus1 = queueSizes[0];
+        int minSize = queueSizes[0];
         boolean allEqual = true;
         for (int i = 1; i < length; i++) {
-            if (queueSizes[i] != maxSizePlus1)
-                allEqual = false;
-            if (queueSizes[i] > maxSizePlus1)
-                maxSizePlus1 = queueSizes[i];
+            if (queueSizes[i] != maxSizePlus1) allEqual = false;
+            if (queueSizes[i] > maxSizePlus1) maxSizePlus1 = queueSizes[i];
+            if (queueSizes[i] < minSize) minSize = queueSizes[i];
         }
+        this.currentLoadSkew = maxSizePlus1 - minSize;
         ++maxSizePlus1;
 
         if (allEqual && length == queueSizes.length) {
@@ -302,9 +331,12 @@ public class BuiltInPartitioner {
         for (int i = 1; i < length; i++) {
             queueSizes[i] = maxSizePlus1 - queueSizes[i] + queueSizes[i - 1];
         }
-        log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}",
-                topic, queueSizes, partitionIds, length);
+        log.trace("Partition load stats for topic {}: CFT={}, IDs={}, length={}", topic, queueSizes, partitionIds, length);
         partitionLoadStats = new PartitionLoadStats(queueSizes, partitionIds, length);
+    }
+
+    public double loadSkew() {
+        return this.currentLoadSkew;
     }
 
     /**

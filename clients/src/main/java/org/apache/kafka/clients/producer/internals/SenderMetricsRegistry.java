@@ -56,6 +56,9 @@ public class SenderMetricsRegistry {
     public final MetricName metadataAge;
     public final MetricName batchSplitRate;
     public final MetricName batchSplitTotal;
+    public final MetricName adaptivePartitionSwitchesTotal;
+    public final MetricName partitionLoadSkew;
+    public final MetricName adaptivePartitionUnavailableTotal;
 
     private final MetricNameTemplate topicRecordSendRate;
     private final MetricNameTemplate topicRecordSendTotal;
@@ -66,6 +69,9 @@ public class SenderMetricsRegistry {
     private final MetricNameTemplate topicRecordRetryTotal;
     private final MetricNameTemplate topicRecordErrorRate;
     private final MetricNameTemplate topicRecordErrorTotal;
+    private final MetricNameTemplate topicAdaptivePartitionSwitchesTotal;
+    private final MetricNameTemplate topicPartitionLoadSkew;
+    private final MetricNameTemplate topicAdaptivePartitionUnavailableTotal;
     
     private final Metrics metrics;
     private final Set<String> tags;
@@ -119,6 +125,12 @@ public class SenderMetricsRegistry {
                 "The average number of batch splits per second");
         this.batchSplitTotal = createMetricName("batch-split-total", 
                 "The total number of batch splits");
+        this.adaptivePartitionSwitchesTotal = createMetricName("adaptive-partition-switches-total",
+                "The total number of times the producer switched partitions due to adaptive partitioning logic.");
+        this.partitionLoadSkew = createMetricName("partition-load-skew",
+                "The difference between the maximum and minimum queue size for a topic, indicating load imbalance.");
+        this.adaptivePartitionUnavailableTotal = createMetricName("adaptive-partition-unavailable-total",
+                "The total number of times a partition was excluded from adaptive partitioning due to high latency.");
 
         this.produceThrottleTimeAvg = createMetricName("produce-throttle-time-avg",
                 "The average time in ms a request was throttled by a broker");
@@ -149,7 +161,25 @@ public class SenderMetricsRegistry {
                 "The average per-second number of record sends that resulted in errors for a topic");
         this.topicRecordErrorTotal = createTopicTemplate("record-error-total",
                 "The total number of record sends that resulted in errors for a topic");
+        this.topicAdaptivePartitionSwitchesTotal = createTopicTemplate("adaptive-partition-switches-total",
+                "The total number of times the producer switched partitions due to adaptive partitioning logic for a topic.");
+        this.topicPartitionLoadSkew = createTopicTemplate("partition-load-skew",
+                "The difference between the maximum and minimum queue size for a topic, indicating load imbalance.");
+        this.topicAdaptivePartitionUnavailableTotal = createTopicTemplate("adaptive-partition-unavailable-total",
+                "The total number of times a partition was excluded from adaptive partitioning due to high latency for a topic.");
 
+    }
+
+    public MetricName topicAdaptivePartitionSwitchesTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicAdaptivePartitionSwitchesTotal, tags);
+    }
+
+    public MetricName topicPartitionLoadSkew(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicPartitionLoadSkew, tags);
+    }
+
+    public MetricName topicAdaptivePartitionUnavailableTotal(Map<String, String> tags) {
+        return this.metrics.metricInstance(this.topicAdaptivePartitionUnavailableTotal, tags);
     }
 
     private MetricName createMetricName(String name, String description) {
