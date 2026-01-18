@@ -169,11 +169,11 @@ public class DumpLogSegments {
                     " producerEpoch: " + entry.producerEpoch() +
                     " coordinatorEpoch: " + entry.coordinatorEpoch() +
                     " currentTxnFirstOffset: " + entry.currentTxnFirstOffset() +
-                    " lastTimestamp: " + entry.lastTimestamp() + " ");
+                    " lastTimestamp: " + entry.lastTimestamp());
 
                 if (!entry.batchMetadata().isEmpty()) {
                     BatchMetadata metadata = entry.batchMetadata().iterator().next();
-                    System.out.print("firstSequence: " + metadata.firstSeq() +
+                    System.out.print(" firstSequence: " + metadata.firstSeq() +
                         " lastSequence: " + metadata.lastSeq() +
                         " lastOffset: " + metadata.lastOffset() +
                         " offsetDelta: " + metadata.offsetDelta() +
