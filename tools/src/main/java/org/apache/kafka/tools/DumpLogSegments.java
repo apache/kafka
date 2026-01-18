@@ -88,6 +88,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import joptsimple.OptionSpec;
@@ -369,33 +371,26 @@ public class DumpLogSegments {
         if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
             long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
             System.out.println("Log starting offset: " + startOffset);
-            return;
+        } else if (file.getName().endsWith(Snapshots.SUFFIX)) {
+            if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+                System.out.println("KRaft bootstrap snapshot");
+            } else {
+                Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
+                System.out.println("Snapshot end offset: " + pathOpt.get().snapshotId().offset() +
+                        ", epoch: " + pathOpt.get().snapshotId().epoch());
+            }
         }
-
-        if (!file.getName().endsWith(Snapshots.SUFFIX)) {
-            return;
-        }
-
-        if (file.getName().equals(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
-            System.out.println("KRaft bootstrap snapshot");
-            return;
-        }
-
-        Optional<SnapshotPath> pathOpt = Snapshots.parse(file.toPath());
-        System.out.println("Snapshot end offset: " + pathOpt.get().snapshotId().offset() +
-                ", epoch: " + pathOpt.get().snapshotId().epoch());
-
 
         FileRecords fileRecords = null;
         try {
             fileRecords = FileRecords.open(file, false).slice(0, maxBytes);
             long validBytes = 0L;
-            long lastOffset = -1L;
+            AtomicLong lastOffset = new AtomicLong(-1L);
 
             for (FileLogInputStream.FileChannelRecordBatch batch : fileRecords.batches()) {
                 printBatchLevel(batch, validBytes);
                 if (isDeepIteration) {
-                    lastOffset = dumpBatchRecords(batch, lastOffset, file, nonConsecutivePairsForLogFilesMap,
+                    dumpBatchRecords(batch, lastOffset, file, nonConsecutivePairsForLogFilesMap,
                         skipRecordMetadata, printContents, parser);
                 }
                 validBytes += batch.sizeInBytes();
@@ -415,41 +410,39 @@ public class DumpLogSegments {
         }
     }
 
-    private static long dumpBatchRecords(FileLogInputStream.FileChannelRecordBatch batch,
-                                         long lastOffset,
+    private static void dumpBatchRecords(FileLogInputStream.FileChannelRecordBatch batch,
+                                         AtomicLong lastOffset,
                                          File file,
                                          Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap,
                                          boolean skipRecordMetadata,
                                          boolean printContents,
                                          MessageParser<?, ?> parser) {
         for (Record record : batch) {
-            if (record.offset() != lastOffset + 1) {
+            long previousOffset = lastOffset.get();
+            if (record.offset() != previousOffset + 1) {
                 List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
                     .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-                nonConsecutivePairsSeq.add(0, new Pair<>(lastOffset, record.offset()));
+                nonConsecutivePairsSeq.add(0, new Pair<>(previousOffset, record.offset()));
             }
-            lastOffset = record.offset();
+            lastOffset.set(record.offset());
 
-            String prefix = RECORD_INDENT + " ";
             if (!skipRecordMetadata) {
-                prefix = printRecordMetadata(batch, record, prefix);
+                printRecordMetadata(batch, record);
             }
 
             if (printContents && !batch.isControlBatch()) {
-                prefix = printRecordContents(parser, record, prefix);
+                String prefix = skipRecordMetadata ? RECORD_INDENT + " " : " ";
+                printRecordContents(parser, record, prefix);
             }
             System.out.println();
         }
-        return lastOffset;
     }
 
-    private static String printRecordMetadata(FileLogInputStream.FileChannelRecordBatch batch,
-                                              Record record,
-                                              String prefix) {
-        System.out.print(prefix + "offset: " + record.offset() +
+    private static void printRecordMetadata(FileLogInputStream.FileChannelRecordBatch batch,
+                                            Record record) {
+        System.out.print(RECORD_INDENT + " " + "offset: " + record.offset() +
             " " + batch.timestampType() + ": " + record.timestamp() +
             " keySize: " + record.keySize() + " valueSize: " + record.valueSize());
-        prefix = " ";
 
         if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
             System.out.print(" sequence: " + record.sequence() +
@@ -465,11 +458,9 @@ public class DumpLogSegments {
         if (batch.isControlBatch()) {
             printControlRecord(record);
         }
-
-        return prefix;
     }
 
-    private static String printRecordContents(MessageParser<?, ?> parser, Record record, String prefix) {
+    private static void printRecordContents(MessageParser<?, ?> parser, Record record, String prefix) {
         ParseResult<?, ?> result = parser.parse(record);
         if (result.key().isPresent()) {
             System.out.print(prefix + "key: " + result.key().get());
@@ -478,7 +469,6 @@ public class DumpLogSegments {
         if (result.value().isPresent()) {
             System.out.print(prefix + "payload: " + result.value().get());
         }
-        return prefix;
     }
 
     private static void printTrailingBytes(FileRecords fileRecords, long validBytes, int maxBytes, File file) {
@@ -596,15 +586,14 @@ public class DumpLogSegments {
             misMatchesForTimeIndexFilesMap.forEach((fileName, listOfMismatches) -> {
                 System.err.println("Found timestamp mismatch in :" + fileName);
                 listOfMismatches.forEach(m ->
-                    System.err.printf("  Index timestamp: %d, log timestamp: %d%n", m.first, m.second)
+                    System.err.println("  Index timestamp: " + m.first + ", log timestamp: " + m.second)
                 );
             });
 
             outOfOrderTimestamp.forEach((fileName, outOfOrderTimestamps) -> {
                 System.err.println("Found out of order timestamp in :" + fileName);
                 outOfOrderTimestamps.forEach(m ->
-                    System.err.printf("  Index timestamp: %d, Previously indexed timestamp: %d%n",
-                        m.first, m.second)
+                    System.err.println("  Index timestamp: " + m.first + ", Previously indexed timestamp: " + m.second)
                 );
             });
 
@@ -729,8 +718,8 @@ public class DumpLogSegments {
         private <T> void replaceField(
             JsonNode node,
             String field,
-            BinaryReader<T> reader,
-            JsonWriter<T> writer
+            BiFunction<org.apache.kafka.common.protocol.Readable, Short, T> reader,
+            BiFunction<T, Short, JsonNode> writer
         ) {
             JsonNode fieldNode = node.get(field);
             if (fieldNode != null) {
@@ -739,24 +728,14 @@ public class DumpLogSegments {
                     ByteBuffer buffer = ByteBuffer.wrap(bytes);
                     ByteBufferAccessor accessor = new ByteBufferAccessor(buffer);
                     short version = accessor.readShort();
-                    T data = reader.read(accessor, version);
-                    ((ObjectNode) node).replace(field, writer.write(data, version));
+                    T data = reader.apply(accessor, version);
+                    ((ObjectNode) node).replace(field, writer.apply(data, version));
                 } catch (RuntimeException e) {
                     // Swallow and keep the original bytes
                 } catch (IOException e) {
                     sneakyThrow(e);
                 }
             }
-        }
-
-        @FunctionalInterface
-        interface BinaryReader<T> {
-            T read(org.apache.kafka.common.protocol.Readable readable, short version);
-        }
-
-        @FunctionalInterface
-        interface JsonWriter<T> {
-            JsonNode write(T data, short version);
         }
     }
 
