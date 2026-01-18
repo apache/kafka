@@ -96,9 +96,7 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -120,6 +118,7 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -748,7 +747,7 @@ public class DumpLogSegmentsTest {
 
         File indexFile = new File(indexFilePath);
         new PrintWriter(indexFile).close();
-        String expectOutput = indexFile + " is empty.\n";
+        String expectOutput = indexFile + " is empty.";
 
         String output = captureStandardOut(() -> DumpLogSegments.dumpIndex(
             indexFile,
@@ -1350,20 +1349,6 @@ public class DumpLogSegmentsTest {
 
     private String runDumpLogSegments(String[] args) {
         return captureStandardOut(() -> DumpLogSegments.main(args));
-    }
-
-    private String captureStandardOut(Runnable action) {
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        PrintStream tempOut = new PrintStream(outContent);
-        System.setOut(tempOut);
-        try {
-            action.run();
-        } finally {
-            tempOut.flush();
-            System.setOut(originalOut);
-        }
-        return outContent.toString();
     }
 
     private Optional<Long> optionalLong(String value) {
