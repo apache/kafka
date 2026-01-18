@@ -50,6 +50,7 @@
     <suppress checks="CyclomaticComplexity" files="ListConsumerGroupTest.java"/>
     <suppress checks="ClassFanOutComplexity|CyclomaticComplexity|MethodLength|ParameterNumber|JavaNCSS|ImportControl" files="RequestConvertToJson.java"/>
     <suppress checks="ImportControl" files="BrokerRegistrationRequestTest.java"/>
+    <suppress checks="ImportControl" files="MetadataRequestTest.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
