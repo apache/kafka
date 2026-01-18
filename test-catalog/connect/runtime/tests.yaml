@@ -1098,7 +1098,9 @@ org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequestTest:
 - testToTargetState
 org.apache.kafka.connect.runtime.rest.entities.PluginInfoTest:
 - testNoVersionFilter
+- testPluginInfoJsonSerialization
 org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResourceTest:
+- testConnectorPluginsEndpointReturnsLowercaseTypeInJson
 - testConnectorPluginsIncludesClassTypeAndVersionInformation
 - testGetConnectorConfigDef
 - testListAllPlugins
