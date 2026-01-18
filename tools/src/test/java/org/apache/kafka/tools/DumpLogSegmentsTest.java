@@ -309,7 +309,7 @@ public class DumpLogSegmentsTest {
         List<BatchInfo> batches = new ArrayList<>();
         addSimpleRecords(log, batches);
 
-        Map<String, List<DumpLogSegments.Pair<Long, Long>>> offsetMismatches = new HashMap<>();
+        Map<String, Map<Long, Long>> offsetMismatches = new HashMap<>();
         DumpLogSegments.dumpIndex(new File(indexFilePath), false, true, offsetMismatches, Integer.MAX_VALUE);
         assertEquals(Collections.emptyMap(), offsetMismatches);
     }

@@ -88,6 +88,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -106,7 +107,7 @@ public class DumpLogSegments {
         );
         opts.checkArgs();
 
-        Map<String, List<Pair<Long, Long>>> misMatchesForIndexFilesMap = new HashMap<>();
+        Map<String, Map<Long, Long>> misMatchesForIndexFilesMap = new HashMap<>();
         TimeIndexDumpErrors timeIndexDumpErrors = new TimeIndexDumpErrors();
         Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap = new HashMap<>();
 
@@ -131,10 +132,10 @@ public class DumpLogSegments {
             }
         }
 
-        misMatchesForIndexFilesMap.forEach((fileName, listOfMismatches) -> {
+        misMatchesForIndexFilesMap.forEach((fileName, mismatchesByOffset) -> {
             System.err.println("Mismatches in :" + fileName);
-            listOfMismatches.forEach(pair ->
-                    System.err.println("  Index offset: " + pair.first + ", log offset: " + pair.second));
+            mismatchesByOffset.forEach((indexOffset, logOffset) ->
+                System.err.println("  Index offset: " + indexOffset + ", log offset: " + logOffset));
         });
 
         timeIndexDumpErrors.printErrors();
@@ -191,7 +192,7 @@ public class DumpLogSegments {
     static void dumpIndex(File file,
                           boolean indexSanityOnly,
                           boolean verifyOnly,
-                          Map<String, List<Pair<Long, Long>>> misMatchesForIndexFilesMap,
+                          Map<String, Map<Long, Long>> misMatchesForIndexFilesMap,
                           int maxMessageSize) {
         long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
         File logFile = new File(file.getAbsoluteFile().getParent(),
@@ -223,11 +224,9 @@ public class DumpLogSegments {
                 FileRecords slice = fileRecords.slice(entry.position(), maxMessageSize);
                 long firstBatchLastOffset = slice.batches().iterator().next().lastOffset();
                 if (firstBatchLastOffset != entry.offset()) {
-                    List<Pair<Long, Long>> misMatchesSeq = misMatchesForIndexFilesMap
-                        .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-                    // Prepend to match Scala behavior (::= operator)
-                    misMatchesSeq.add(0, new Pair<>(entry.offset(), firstBatchLastOffset));
-                    misMatchesForIndexFilesMap.put(file.getAbsolutePath(), misMatchesSeq);
+                    Map<Long, Long> mismatchesByOffset = misMatchesForIndexFilesMap
+                        .computeIfAbsent(file.getAbsolutePath(), k -> new TreeMap<>(java.util.Collections.reverseOrder()));
+                    mismatchesByOffset.put(entry.offset(), firstBatchLastOffset);
                 }
                 if (!verifyOnly) {
                     System.out.println("offset: " + entry.offset() + " position: " + entry.position());
