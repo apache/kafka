@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.EnvelopeResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.server.ForwardingManagerUtil;
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.NodeToControllerChannelManager;
 
@@ -65,7 +66,7 @@ public class KRaftTopicCreator implements TopicCreator {
             requestContext.correlationId()
         );
 
-        AbstractRequest.Builder<? extends AbstractRequest> envelopeRequest = ForwardingManager$.MODULE$.buildEnvelopeRequest(
+        AbstractRequest.Builder<? extends AbstractRequest> envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(
             requestContext,
             createTopicsRequest.build(requestHeader.apiVersion())
                 .serializeWithHeader(requestHeader)
