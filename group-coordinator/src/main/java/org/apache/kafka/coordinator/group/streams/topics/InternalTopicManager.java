@@ -115,7 +115,7 @@ public class InternalTopicManager {
 
         } catch (TopicConfigurationException e) {
             long elapsedMs = time.milliseconds() - startTimeMs;
-            log.warn("Topic configuration failed for topology epoch {} in {} ms: {}",
+            log.warn("Topic configuration failed for topology epoch {} in {}ms: {}",
                 topology.topologyEpoch(), elapsedMs, e.getMessage());
             return new ConfiguredTopology(
                 topology.topologyEpoch(),
@@ -332,13 +332,13 @@ public class InternalTopicManager {
 
     /**
      * Formats a collection of topic names for log and exception messages.
-     * Includes up to 5 topic names, and if more are present, appends a summary.
+     * Includes up to 3 topic names, and if more are present, appends a summary.
      */
     private static String summarizeTopics(Collection<String> topics) {
         if (topics == null || topics.isEmpty()) {
             return "<none>";
         }
-        int maxToShow = 5;
+        int maxToShow = 3;
         int size = topics.size();
         return topics.stream()
             .limit(maxToShow)
