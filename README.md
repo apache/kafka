@@ -20,23 +20,31 @@ for the rest.
 
 Scala 2.13 is the only supported version in Apache Kafka.
 
-### Build a jar and run it ###
-    ./gradlew jar
+### Build a jar and run it
+```bash
+./gradlew jar
+```
 
 Follow instructions in https://kafka.apache.org/quickstart
 
-### Build source jar ###
-    ./gradlew srcJar
+### Build source jar
+```bash
+./gradlew srcJar
+```
 
-### Build aggregated javadoc ###
-    ./gradlew aggregatedJavadoc --no-parallel
+### Build aggregated javadoc
+```bash
+./gradlew aggregatedJavadoc --no-parallel
+```
 
-### Build javadoc and scaladoc ###
-    ./gradlew javadoc
-    ./gradlew javadocJar # builds a javadoc jar for each module
-    ./gradlew scaladoc
-    ./gradlew scaladocJar # builds a scaladoc jar for each module
-    ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
+### Build javadoc and scaladoc
+```bash
+./gradlew javadoc
+./gradlew javadocJar # builds a javadoc jar for each module
+./gradlew scaladoc
+./gradlew scaladocJar # builds a scaladoc jar for each module
+./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
+```
 
 ### Run unit/integration tests ###
     ./gradlew test  # runs both unit and integration tests
