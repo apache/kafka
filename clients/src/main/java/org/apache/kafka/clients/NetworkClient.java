@@ -522,6 +522,19 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Returns true if we can send a {@link ApiKeys#LEAVE_GROUP} request to the given node at {@code now},
+     * ignoring the metadata-update priority gating in isReady().
+     * This method is internal helper for consumers: allow sending {@link ApiKeys#LEAVE_GROUP} even when metadata update is due.
+     *
+     * @param node The node
+     * @param now The current time in ms
+     * @return true if the node is ready
+     */
+    public boolean isReadyForLeaveGroup(Node node, long now) {
+        return canSendRequest(node.idString(), now);
+    }
+
+    /**
      * Are we connected and ready and able to send more requests to the given connection?
      *
      * @param node The node

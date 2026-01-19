@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -512,7 +514,24 @@ public class ConsumerNetworkClient implements Closeable {
 
             while (iterator.hasNext()) {
                 ClientRequest request = iterator.next();
-                if (client.ready(node, now)) {
+
+                AbstractRequest.Builder<?> builder = request.requestBuilder();
+                boolean ready = client.ready(node, now);
+
+                if (!ready 
+                    && builder.apiKey() == ApiKeys.LEAVE_GROUP 
+                    && client instanceof NetworkClient) {
+                    // KAFKA-17397 && KAFKA-18031
+                    // When a consumer is leaving a group, it does not need to 
+                    // wait for a metadata update. Otherwise, the LeaveGroup request can remain in unsent 
+                    // and an InterruptException may be thrown on the final poll(), 
+                    // preventing the LeaveGroup request from being sent to the group coordinator. 
+                    // Even though this is a normal shutdown path, it can delay termination until 'session.timeout.ms' elapses.
+                    NetworkClient networkClient = (NetworkClient) client;
+                    ready = networkClient.isReadyForLeaveGroup(node, now);
+                }
+                    
+                if (ready) {
                     client.send(request, now);
                     iterator.remove();
                 } else {
