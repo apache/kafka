@@ -22,7 +22,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.share.SharePartitionManager
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.consumer.AcknowledgeType
@@ -157,9 +157,9 @@ class KafkaApisTest extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    CoreUtils.swallow(quotas.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => quotas.shutdown())
     if (kafkaApis != null)
-      CoreUtils.swallow(kafkaApis.close(), this)
+      Utils.swallow(this.logger.underlying, () => kafkaApis.close())
     TestUtils.clearYammerMetrics()
     metrics.close()
   }

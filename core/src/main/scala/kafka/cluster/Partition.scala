@@ -34,7 +34,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
@@ -67,11 +67,11 @@ class DelayedOperations(topicId: Option[Uuid],
 
   def checkAndCompleteAll(): Unit = {
     val requestKey = new TopicPartitionOperationKey(topicPartition)
-    CoreUtils.swallow(() -> fetch.checkAndComplete(requestKey), this, Level.ERROR)
-    CoreUtils.swallow(() -> produce.checkAndComplete(requestKey), this, Level.ERROR)
-    CoreUtils.swallow(() -> deleteRecords.checkAndComplete(requestKey), this, Level.ERROR)
-    if (topicId.isDefined) CoreUtils.swallow(() -> shareFetch.checkAndComplete(new DelayedShareFetchPartitionKey(
-      topicId.get, topicPartition.partition())), this, Level.ERROR)
+    Utils.swallow(this.logger.underlying, Level.ERROR, () => fetch.checkAndComplete(requestKey))
+    Utils.swallow(this.logger.underlying, Level.ERROR, () => produce.checkAndComplete(requestKey))
+    Utils.swallow(this.logger.underlying, Level.ERROR, () => deleteRecords.checkAndComplete(requestKey))
+    if (topicId.isDefined) Utils.swallow(this.logger.underlying, Level.ERROR, () => shareFetch.checkAndComplete(
+      new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition())))
   }
 
   def numDelayedDelete: Int = deleteRecords.numDelayed()

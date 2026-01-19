@@ -1038,14 +1038,26 @@ public final class Utils {
         void run() throws Throwable;
     }
 
-    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code) {
-        swallow(log, level, what, code, null);
+    public static void swallow(final SwallowAction code) {
+        swallow(log, Level.WARN, "Exception while execution the action", code, null);
+    }
+
+    public static void swallow(final Logger log, final SwallowAction code) {
+        swallow(log, Level.WARN, "Exception while execution the action", code, null);
+    }
+
+    public static void swallow(final Logger log, final Level level, final SwallowAction code) {
+        swallow(log, level, "Exception while execution the action", code, null);
+    }
+
+    public static void swallow(final Logger log, final Level level, final String errorMessage, final SwallowAction code) {
+        swallow(log, level, errorMessage, code, null);
     }
 
     /**
      * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
      */
-    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code,
+    public static void swallow(final Logger log, final Level level, final String errorMessage, final SwallowAction code,
                                final AtomicReference<Throwable> firstException) {
         if (code != null) {
             try {
@@ -1053,20 +1065,20 @@ public final class Utils {
             } catch (Throwable t) {
                 switch (level) {
                     case INFO:
-                        log.info(what, t);
+                        log.info(errorMessage, t);
                         break;
                     case DEBUG:
-                        log.debug(what, t);
+                        log.debug(errorMessage, t);
                         break;
                     case ERROR:
-                        log.error(what, t);
+                        log.error(errorMessage, t);
                         break;
                     case TRACE:
-                        log.trace(what, t);
+                        log.trace(errorMessage, t);
                         break;
                     case WARN:
                     default:
-                        log.warn(what, t);
+                        log.warn(errorMessage, t);
                 }
                 if (firstException != null)
                     firstException.compareAndSet(null, t);
