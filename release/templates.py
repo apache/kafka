@@ -207,7 +207,7 @@ https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/RELEASE_NOTES.html
 <THE RELEASE POLICY (https://www.apache.org/legal/release-policy.html#release-approval) REQUIRES VOTES TO BE OPEN FOR MINIMUM OF 3 DAYS THEREFORE VOTING DEADLINE SHOULD BE AT LEAST 72 HOURS FROM THE TIME THIS EMAIL IS SENT.>
 
 Kafka's KEYS file containing PGP keys we use to sign the release:
-https://kafka.apache.org/KEYS
+https://downloads.apache.org/kafka/KEYS
 
 * Release artifacts to be voted upon (source and binary):
 https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/
