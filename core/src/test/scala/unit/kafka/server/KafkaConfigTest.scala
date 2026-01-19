@@ -21,7 +21,7 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
