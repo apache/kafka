@@ -194,7 +194,7 @@ Please note for this to work you should create/update user maven settings (typic
     ./gradlew testJar
 
 ### Running code quality checks ###
-There are two code quality analysis tools that we regularly run, spotbugs and checkstyle.
+There are several code quality analysis tools that we regularly run: checkstyle, spotbugs, and forbidden-apis.
 
 #### Checkstyle ####
 Checkstyle enforces a consistent coding style in Kafka.
@@ -219,6 +219,14 @@ You can run spotbugs using:
 
 The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
 directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
+
+#### Forbidden APIs ####
+Forbidden-apis scans bytecode for invocations of unsafe or deprecated API methods (e.g., locale-dependent methods, system exit calls).
+You can run forbidden-apis using:
+
+    ./gradlew forbiddenApisMain forbiddenApisTest -x test
+
+The warnings are printed to the console. Currently configured with `ignoreFailures = true` to report issues without failing the build.
 
 ### JMH microbenchmarks ###
 We use [JMH](https://openjdk.java.net/projects/code-tools/jmh/) to write microbenchmarks that produce reliable results in the JVM.
