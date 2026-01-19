@@ -18,6 +18,7 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
 import java.io.Closeable;
@@ -36,7 +37,7 @@ import java.io.Closeable;
  *
  * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
  */
-public interface Transformation<R extends ConnectRecord<R>> extends Configurable, Closeable {
+public interface Transformation<R extends ConnectRecord<R>> extends Configurable, Closeable, ConnectPlugin {
 
     /**
      * Apply transformation to the {@code record} and return another record object (which may be {@code record} itself)
@@ -55,6 +56,7 @@ public interface Transformation<R extends ConnectRecord<R>> extends Configurable
     R apply(R record);
 
     /** Configuration specification for this transformation. */
+    @Override
     ConfigDef config();
 
     /** Signal that this transformation instance will no longer will be used. */

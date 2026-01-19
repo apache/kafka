@@ -728,6 +728,11 @@ public class PluginsTest {
         public Map<String, ?> configs;
 
         @Override
+        public String version() {
+            return "test";
+        }
+
+        @Override
         public ConfigDef config() {
             return JsonConverterConfig.configDef();
         }
