@@ -76,7 +76,7 @@ public class PartitionLeaderStrategyIntegrationTest {
 
     @Test
     public void testCachingRepeatedRequest() {
-        Map<TopicPartition, Integer> partitionLeaderCache = new HashMap<>();
+        PartitionLeaderCache partitionLeaderCache = new PartitionLeaderCache();
 
         TopicPartition tp0 = new TopicPartition("T", 0);
         TopicPartition tp1 = new TopicPartition("T", 1);
@@ -99,8 +99,9 @@ public class PartitionLeaderStrategyIntegrationTest {
         assertFalse(result.all().get(tp0).isDone());
         assertFalse(result.all().get(tp1).isDone());
 
-        assertEquals(1, partitionLeaderCache.get(tp0));
-        assertEquals(2, partitionLeaderCache.get(tp1));
+        Map<TopicPartition, Integer> cache = partitionLeaderCache.get(Set.of(tp0, tp1));
+        assertEquals(1, cache.get(tp0));
+        assertEquals(2, cache.get(tp1));
 
         // Second, the fulfillment stage makes the actual requests
         requestSpecs = driver.poll();
@@ -139,7 +140,7 @@ public class PartitionLeaderStrategyIntegrationTest {
         // 2) for T-1 and T-2            (leadership data for T-1 should be cached from previous request)
         // 3) for T-0, T-1 and T-2       (all leadership data should be cached already)
         // 4) for T-0, T-1, T-2 and T-3  (just T-3 needs to be looked up)
-        Map<TopicPartition, Integer> partitionLeaderCache = new HashMap<>();
+        PartitionLeaderCache partitionLeaderCache = new PartitionLeaderCache();
 
         TopicPartition tp0 = new TopicPartition("T", 0);
         TopicPartition tp1 = new TopicPartition("T", 1);
@@ -168,8 +169,9 @@ public class PartitionLeaderStrategyIntegrationTest {
         assertFalse(result.all().get(tp0).isDone());
         assertFalse(result.all().get(tp1).isDone());
 
-        assertEquals(1, partitionLeaderCache.get(tp0));
-        assertEquals(2, partitionLeaderCache.get(tp1));
+        Map<TopicPartition, Integer> cache = partitionLeaderCache.get(Set.of(tp0, tp1));
+        assertEquals(1, cache.get(tp0));
+        assertEquals(2, cache.get(tp1));
 
         // Second, the fulfillment stage makes the actual requests
         requestSpecs = driver.poll();
@@ -206,9 +208,10 @@ public class PartitionLeaderStrategyIntegrationTest {
         assertTrue(result.all().get(tp1).isDone());  // Already fulfilled
         assertFalse(result.all().get(tp2).isDone());
 
-        assertEquals(1, partitionLeaderCache.get(tp0));
-        assertEquals(2, partitionLeaderCache.get(tp1));
-        assertEquals(1, partitionLeaderCache.get(tp2));
+        cache = partitionLeaderCache.get(Set.of(tp0, tp1, tp2));
+        assertEquals(1, cache.get(tp0));
+        assertEquals(2, cache.get(tp1));
+        assertEquals(1, cache.get(tp2));
 
         // Finally, the fulfillment stage makes the actual request for the uncached topic-partition
         requestSpecs = driver.poll();
@@ -268,10 +271,11 @@ public class PartitionLeaderStrategyIntegrationTest {
         assertTrue(result.all().get(tp2).isDone());  // Already fulfilled
         assertFalse(result.all().get(tp3).isDone());
 
-        assertEquals(1, partitionLeaderCache.get(tp0));
-        assertEquals(2, partitionLeaderCache.get(tp1));
-        assertEquals(1, partitionLeaderCache.get(tp2));
-        assertEquals(2, partitionLeaderCache.get(tp3));
+        cache = partitionLeaderCache.get(Set.of(tp0, tp1, tp2, tp3));
+        assertEquals(1, cache.get(tp0));
+        assertEquals(2, cache.get(tp1));
+        assertEquals(1, cache.get(tp2));
+        assertEquals(2, cache.get(tp3));
 
         // Finally, the fulfillment stage makes the actual request for the uncached topic-partition
         requestSpecs = driver.poll();
@@ -288,7 +292,7 @@ public class PartitionLeaderStrategyIntegrationTest {
 
     @Test
     public void testNotLeaderFulfillmentError() {
-        Map<TopicPartition, Integer> partitionLeaderCache = new HashMap<>();
+        PartitionLeaderCache partitionLeaderCache = new PartitionLeaderCache();
 
         TopicPartition tp0 = new TopicPartition("T", 0);
         TopicPartition tp1 = new TopicPartition("T", 1);
@@ -311,8 +315,9 @@ public class PartitionLeaderStrategyIntegrationTest {
         assertFalse(result.all().get(tp0).isDone());
         assertFalse(result.all().get(tp1).isDone());
 
-        assertEquals(1, partitionLeaderCache.get(tp0));
-        assertEquals(2, partitionLeaderCache.get(tp1));
+        Map<TopicPartition, Integer> cache = partitionLeaderCache.get(Set.of(tp0, tp1));
+        assertEquals(1, cache.get(tp0));
+        assertEquals(2, cache.get(tp1));
 
         // Second, the fulfillment stage makes the actual requests
         requestSpecs = driver.poll();
@@ -337,8 +342,9 @@ public class PartitionLeaderStrategyIntegrationTest {
         assertTrue(result.all().get(tp0).isDone());
         assertFalse(result.all().get(tp1).isDone());
 
-        assertEquals(1, partitionLeaderCache.get(tp0));
-        assertEquals(1, partitionLeaderCache.get(tp1));
+        cache = partitionLeaderCache.get(Set.of(tp0, tp1));
+        assertEquals(1, cache.get(tp0));
+        assertEquals(1, cache.get(tp1));
 
         // And the fulfillment stage makes the actual request
         requestSpecs = driver.poll();
@@ -354,7 +360,7 @@ public class PartitionLeaderStrategyIntegrationTest {
     @Test
     public void testFatalLookupError() {
         TopicPartition tp0 = new TopicPartition("T", 0);
-        Map<TopicPartition, Integer> partitionLeaderCache = new HashMap<>();
+        PartitionLeaderCache partitionLeaderCache = new PartitionLeaderCache();
         PartitionLeaderStrategy.PartitionLeaderFuture<Void> result =
             new PartitionLeaderStrategy.PartitionLeaderFuture<>(Collections.singleton(tp0), partitionLeaderCache);
         AdminApiDriver<TopicPartition, Void> driver = buildDriver(result);
@@ -374,7 +380,7 @@ public class PartitionLeaderStrategyIntegrationTest {
     @Test
     public void testRetryLookupAfterDisconnect() {
         TopicPartition tp0 = new TopicPartition("T", 0);
-        Map<TopicPartition, Integer> partitionLeaderCache = new HashMap<>();
+        PartitionLeaderCache partitionLeaderCache = new PartitionLeaderCache();
         PartitionLeaderStrategy.PartitionLeaderFuture<Void> result =
             new PartitionLeaderStrategy.PartitionLeaderFuture<>(Collections.singleton(tp0), partitionLeaderCache);
         AdminApiDriver<TopicPartition, Void> driver = buildDriver(result);
