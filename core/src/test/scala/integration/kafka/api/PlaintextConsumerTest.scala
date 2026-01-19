@@ -16,7 +16,6 @@ import java.util
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.errors.InterruptException
-import org.apache.kafka.common.test.api.Flaky
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -27,7 +26,6 @@ import java.util.concurrent.ExecutionException
 @Timeout(60)
 class PlaintextConsumerTest extends AbstractConsumerTest {
 
-  @Flaky("KAFKA-18031")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testCloseLeavesGroupOnInterrupt(groupProtocol: String): Unit = {
