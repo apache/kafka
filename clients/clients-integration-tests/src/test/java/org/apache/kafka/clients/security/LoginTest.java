@@ -30,9 +30,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.test.TestUtils;
-
-import org.opentest4j.AssertionFailedError;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -83,7 +80,7 @@ public class LoginTest {
             @ClusterConfigProperty(key = SUPER_USERS_CONFIG, value = "User:" + INTER_BROKER_USERNAME + ";User:" + EXTERNAL_USERNAME),
         }
     )
-    public void testCustomLoginWithKafkaCluster(ClusterInstance cluster) throws InterruptedException {
+    public void testCustomLoginWithKafkaCluster(ClusterInstance cluster) {
         try (Admin admin = cluster.admin(Map.of(
                 SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name,
                 CLIENT_ID_CONFIG, CLIENT_ID,
@@ -102,35 +99,28 @@ public class LoginTest {
             );
             
             int controllerId = cluster.type() == Type.CO_KRAFT ? 0 : 3000;
-            TestUtils.waitForCondition(() -> {
-                try {
-                    Map<MetricName, Metric> allMetrics = Stream.of(
-                        cluster.controllers().get(controllerId).metrics().metrics(),
-                        cluster.brokers().get(0).metrics().metrics()
-                    ).collect(HashMap::new, Map::putAll, Map::putAll);
-                    assertMetrics(
-                        allMetrics,
-                        ExternalCustomLogin.METRIC_NAME,
-                        ExternalCustomLogin.METRIC_DESCRIPTION,
-                        expectedTags(Map.of(
-                            "mechanism", MECHANISMS,
-                            "listener", "EXTERNAL",
-                            "class", ExternalCustomLogin.class.getSimpleName()
-                        ))
-                    );
-                    assertMetrics(
-                        allMetrics,
-                        InterBrokerCustomLogin.METRIC_NAME,
-                        InterBrokerCustomLogin.METRIC_DESCRIPTION,
-                        expectedTags(Map.of(
-                            "class", InterBrokerCustomLogin.class.getSimpleName()
-                        ))
-                    );
-                    return true;
-                } catch (AssertionFailedError e) {
-                    return false;
-                }
-            }, "Waiting for broker and controller metrics to be available");
+            Map<MetricName, Metric> allMetrics = Stream.of(
+                cluster.controllers().get(controllerId).metrics().metrics(),
+                cluster.brokers().get(0).metrics().metrics()
+            ).collect(HashMap::new, Map::putAll, Map::putAll);
+            assertMetrics(
+                allMetrics,
+                ExternalCustomLogin.METRIC_NAME,
+                ExternalCustomLogin.METRIC_DESCRIPTION,
+                expectedTags(Map.of(
+                    "mechanism", MECHANISMS,
+                    "listener", "EXTERNAL",
+                    "class", ExternalCustomLogin.class.getSimpleName()
+                ))
+            );
+            assertMetrics(
+                allMetrics,
+                InterBrokerCustomLogin.METRIC_NAME,
+                InterBrokerCustomLogin.METRIC_DESCRIPTION,
+                expectedTags(Map.of(
+                    "class", InterBrokerCustomLogin.class.getSimpleName()
+                ))
+            );
         }
     }
 
@@ -141,6 +131,8 @@ public class LoginTest {
         Map<String, String> expectedTags
     ) {
         Map<String, String> tags = metricName.tags();
+        System.out.println("Checking metric: " + metricName + " with tags: " + tags);
+        System.out.println("Expected metric name: " + expectedName + ", description: " + expectedDescription + ", tags: " + expectedTags);
         if (metricName.group().equals("plugins") && expectedTags.equals(tags)) {
             assertEquals(expectedName, metricName.name());
             assertEquals(expectedDescription, metricName.description());
