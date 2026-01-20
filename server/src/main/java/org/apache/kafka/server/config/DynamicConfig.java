@@ -22,9 +22,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
-
-import static org.apache.kafka.common.utils.Utils.require;
 
 /**
  * Class used to hold dynamic configs. These are configs which have no physical manifestation in the server.properties
@@ -63,21 +60,15 @@ public class DynamicConfig {
         }
 
         public static Map<String, Object> validate(Properties props) {
-            return DynamicConfig.validate(BROKER_CONFIGS, props, true);
+            return DynamicConfig.validate(props);
         }
     }
 
-    private static Map<String, Object> validate(ConfigDef configDef, Properties props, boolean customPropsAllowed) {
+    private static Map<String, Object> validate(Properties props) {
         // Validate Names
-        Set<String> names = configDef.names();
-        Set<String> propKeys = props.keySet().stream().map(Object::toString).collect(Collectors.toSet());
-        if (!customPropsAllowed) {
-            Set<String> unknownKeys = propKeys.stream().filter(k -> !names.contains(k)).collect(Collectors.toSet());
-            require(unknownKeys.isEmpty(), "Unknown Dynamic Configuration: " + unknownKeys + ".");
-        }
         Properties propResolved = DynamicBrokerConfig.resolveVariableConfigs(props);
         // ValidateValues
-        return configDef.parse(propResolved);
+        return Broker.BROKER_CONFIGS.parse(propResolved);
     }
 
 }

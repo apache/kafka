@@ -33,6 +33,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.storage.internals.log.LogCleaner;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,7 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class DynamicBrokerConfig {
 
@@ -57,33 +59,29 @@ public class DynamicBrokerConfig {
             SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
             SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
 
-    private static final Set<String> PER_BROKER_CONFIGS;
+    private static final Set<String> PER_BROKER_CONFIGS = Stream.of(
+            DYNAMIC_SECURITY_CONFIGS,
+            DynamicListenerConfig.RECONFIGURABLE_CONFIGS)
+        .flatMap(Collection::stream)
+        .filter(c -> !CLUSTER_LEVEL_LISTENER_CONFIGS.contains(c))
+        .collect(Collectors.toUnmodifiableSet());
 
-    public static final Set<String> ALL_DYNAMIC_CONFIGS;
-
-    static {
-        Set<String> configs = new HashSet<>();
-        configs.addAll(DYNAMIC_SECURITY_CONFIGS);
-        configs.addAll(LogCleaner.RECONFIGURABLE_CONFIGS);
-        configs.addAll(DynamicLogConfig.RECONFIGURABLE_CONFIGS);
-        configs.addAll(DynamicThreadPool.RECONFIGURABLE_CONFIGS);
-        configs.add(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG);
-        configs.addAll(DynamicListenerConfig.RECONFIGURABLE_CONFIGS);
-        configs.addAll(SocketServer.RECONFIGURABLE_CONFIGS);
-        configs.addAll(DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS);
-        configs.addAll(DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS);
-        configs.addAll(DynamicReplicationConfig.RECONFIGURABLE_CONFIGS);
-        configs.add(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
-        configs.addAll(GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS);
-        configs.addAll(ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS);
-        ALL_DYNAMIC_CONFIGS = Set.copyOf(configs);
-
-        Set<String> perBrokerConfigs = new HashSet<>();
-        perBrokerConfigs.addAll(DYNAMIC_SECURITY_CONFIGS);
-        perBrokerConfigs.addAll(DynamicListenerConfig.RECONFIGURABLE_CONFIGS);
-        perBrokerConfigs.removeAll(CLUSTER_LEVEL_LISTENER_CONFIGS);
-        PER_BROKER_CONFIGS = Set.copyOf(perBrokerConfigs);
-    }
+    public static final Set<String> ALL_DYNAMIC_CONFIGS = Stream.of(
+            DYNAMIC_SECURITY_CONFIGS,
+            LogCleaner.RECONFIGURABLE_CONFIGS,
+            DynamicLogConfig.RECONFIGURABLE_CONFIGS,
+            DynamicThreadPool.RECONFIGURABLE_CONFIGS,
+            List.of(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG),
+            DynamicListenerConfig.RECONFIGURABLE_CONFIGS,
+            SocketServer.RECONFIGURABLE_CONFIGS,
+            DYNAMIC_PRODUCER_STATE_MANAGER_CONFIGS,
+            DynamicRemoteLogConfig.RECONFIGURABLE_CONFIGS,
+            DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
+            List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
+            GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
+            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS)
+        .flatMap(Collection::stream)
+        .collect(Collectors.toUnmodifiableSet());
 
     private static final Set<String> LISTENER_MECHANISM_CONFIGS = Set.of(
             SaslConfigs.SASL_JAAS_CONFIG,
