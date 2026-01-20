@@ -563,7 +563,8 @@ public class GroupMetadataManagerTestContext {
                         new LogContext(),
                         0,
                         group.topology().get(),
-                        metadataImage)
+                        metadataImage,
+                        time)
                     );
                 }
             });
