@@ -113,14 +113,30 @@ public class LoginTest {
                     "class", ExternalCustomLogin.class.getSimpleName()
                 ))
             );
-            assertMetrics(
-                allMetrics,
-                InterBrokerCustomLogin.METRIC_NAME,
-                InterBrokerCustomLogin.METRIC_DESCRIPTION,
-                expectedTags(Map.of(
-                    "class", InterBrokerCustomLogin.class.getSimpleName()
-                ))
-            );
+            int found = 0;
+            // We cannot guarantee which component registers this plugin first, we may need to verify both
+            // ConnectionMode tags.
+            for (MetricName metricName : allMetrics.keySet()) {
+                found += assertMetricName(
+                    metricName,
+                    InterBrokerCustomLogin.METRIC_NAME,
+                    InterBrokerCustomLogin.METRIC_DESCRIPTION,
+                    expectedTags(Map.of(
+                        "class", InterBrokerCustomLogin.class.getSimpleName()
+                    ))
+                );
+                found += assertMetricName(
+                    metricName,
+                    InterBrokerCustomLogin.METRIC_NAME,
+                    InterBrokerCustomLogin.METRIC_DESCRIPTION,
+                    expectedTags(Map.of(
+                        "class", InterBrokerCustomLogin.class.getSimpleName(),
+                        "listener", "CONTROLLER",
+                        "mechanism", MECHANISMS
+                    ))
+                );
+            }
+            assertEquals(1, found);
         }
     }
 
@@ -131,22 +147,6 @@ public class LoginTest {
         Map<String, String> expectedTags
     ) {
         Map<String, String> tags = metricName.tags();
-        if (metricName.group().equals("plugins")) {
-            System.out.println(">>> Found plugins metric!");
-            System.out.println(">>> Tags equals result: " + expectedTags.equals(tags));
-            System.out.println(">>> Expected tags class: " + expectedTags.getClass());
-            System.out.println(">>> Actual tags class: " + tags.getClass());
-            System.out.println(">>> Expected tags entries: " + expectedTags.entrySet());
-            System.out.println(">>> Actual tags entries: " + tags.entrySet());
-
-            for (Map.Entry<String, String> entry : expectedTags.entrySet()) {
-                String actualValue = tags.get(entry.getKey());
-                System.out.println(">>> Key: " + entry.getKey() +
-                        ", Expected: '" + entry.getValue() +
-                        "', Actual: '" + actualValue +
-                        "', Equals: " + entry.getValue().equals(actualValue));
-            }
-        }
         if (metricName.group().equals("plugins") && expectedTags.equals(tags)) {
             assertEquals(expectedName, metricName.name());
             assertEquals(expectedDescription, metricName.description());
