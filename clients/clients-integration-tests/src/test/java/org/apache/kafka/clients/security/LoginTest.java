@@ -131,8 +131,22 @@ public class LoginTest {
         Map<String, String> expectedTags
     ) {
         Map<String, String> tags = metricName.tags();
-        System.out.println("Checking metric: " + metricName + " with tags: " + tags);
-        System.out.println("Expected metric name: " + expectedName + ", description: " + expectedDescription + ", tags: " + expectedTags);
+        if (metricName.group().equals("plugins")) {
+            System.out.println(">>> Found plugins metric!");
+            System.out.println(">>> Tags equals result: " + expectedTags.equals(tags));
+            System.out.println(">>> Expected tags class: " + expectedTags.getClass());
+            System.out.println(">>> Actual tags class: " + tags.getClass());
+            System.out.println(">>> Expected tags entries: " + expectedTags.entrySet());
+            System.out.println(">>> Actual tags entries: " + tags.entrySet());
+
+            for (Map.Entry<String, String> entry : expectedTags.entrySet()) {
+                String actualValue = tags.get(entry.getKey());
+                System.out.println(">>> Key: " + entry.getKey() +
+                        ", Expected: '" + entry.getValue() +
+                        "', Actual: '" + actualValue +
+                        "', Equals: " + entry.getValue().equals(actualValue));
+            }
+        }
         if (metricName.group().equals("plugins") && expectedTags.equals(tags)) {
             assertEquals(expectedName, metricName.name());
             assertEquals(expectedDescription, metricName.description());
