@@ -1973,19 +1973,6 @@ kafka.server.IsrExpirationTest:
 - testIsrExpirationIfNoFetchRequestMade
 kafka.server.JoinGroupRequestTest:
 - testJoinGroupWithOldConsumerGroupProtocol
-kafka.server.KRaftTopicCreatorTest:
-- testAuthenticationException
-- testCreateTopicWithMetadataContextPassPrincipal
-- testCreateTopicWithMetadataContextWhenPrincipalSerdeNotDefined
-- testCreateTopicWithoutRequestContext
-- testDirectCreateTopicsResponse
-- testEnvelopeResponseParsingException
-- testEnvelopeResponseSuccessfulParsing
-- testEnvelopeResponseWithEnvelopeError
-- testEnvelopeResponseWithTopicErrors
-- testTimeoutException
-- testUnexpectedResponseType
-- testVersionMismatchException
 kafka.server.KafkaApisTest:
 - requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException
 - shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion
