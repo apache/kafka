@@ -260,7 +260,8 @@ org.apache.kafka.server.quota.ClientSensorsTest:
 - testConstructorThrowsExceptionWhenThrottleTimeSensorIsNull
 - testConstructorWithEmptyMap
 - testConstructorWithValidParameters
-org.apache.kafka.server.quota.ThrottledChannelTest:
+org.apache.kafka.server.quota.ThrottledChannelExpirationTest:
+- testCallbackInvocationAfterExpiration
 - testThrottledChannelDelay
 org.apache.kafka.server.replica.ReplicaTest:
 - testFenceStaleUpdates

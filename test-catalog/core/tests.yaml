@@ -2741,8 +2741,6 @@ kafka.server.StrictControllerMutationQuotaTest:
 - testControllerMutationQuotaViolation
 kafka.server.SyncGroupRequestTest:
 - testSyncGroupWithOldConsumerGroupProtocol
-kafka.server.ThrottledChannelExpirationTest:
-- testCallbackInvocationAfterExpiration
 kafka.server.TierStateMachineTest:
 - testFencedOffsetResetAfterMovedToRemoteTier
 - testFollowerFetchMovedToTieredStore
