@@ -71,7 +71,6 @@ public class LoginTest {
         + "user_" + EXTERNAL_USERNAME + "=\"" + EXTERNAL_PASSWORD + "\";";
 
     @ClusterTest(
-        types = {Type.CO_KRAFT, Type.KRAFT},
         controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
         brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
         serverProperties = {
