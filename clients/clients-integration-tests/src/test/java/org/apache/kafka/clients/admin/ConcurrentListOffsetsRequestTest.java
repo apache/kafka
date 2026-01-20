@@ -96,10 +96,10 @@ public class ConcurrentListOffsetsRequestTest {
 
         final CountDownLatch invalidationLatch = new CountDownLatch(1);
         // Replacing the partition leader cache in order to be able to synchronize the calls so that they happen in the right order to reproduce the issue
-        replacePartitionLeaderCache(invalidationLatch);
+        TestPartitionLeaderCache testPartitionLeaderCache = replacePartitionLeaderCache(invalidationLatch);
 
         // closing the connection to the first node. not using clusterInstance.shutdownBroker to reduce flakiness
-        networkClient.close(clusterInstance.aliveBrokers().keySet().iterator().next().toString());
+        networkClient.close(testPartitionLeaderCache.get(getTopicPartitions()).values().iterator().next().toString());
         // as next call with try to resolve the host for the closed node, it's time to let it fail, which will lead to cache invalidation
         injectHostResolverError.set(true);
 
@@ -120,13 +120,14 @@ public class ConcurrentListOffsetsRequestTest {
         assertInstanceOf(TimeoutException.class, executionException.getCause());
     }
 
-    private void replacePartitionLeaderCache(CountDownLatch latch0) throws Exception {
+    private TestPartitionLeaderCache replacePartitionLeaderCache(CountDownLatch invalidationLatch) throws Exception {
         Field partitionLeaderCacheField = KafkaAdminClient.class.getDeclaredField("partitionLeaderCache");
         partitionLeaderCacheField.setAccessible(true);
         PartitionLeaderCache oldPartitionLeaderCache = (PartitionLeaderCache) partitionLeaderCacheField.get(adminClient);
 
-        TestPartitionLeaderCache partitionLeaderCache = new TestPartitionLeaderCache(oldPartitionLeaderCache.get(getTopicPartitions()), latch0);
+        TestPartitionLeaderCache partitionLeaderCache = new TestPartitionLeaderCache(oldPartitionLeaderCache.get(getTopicPartitions()), invalidationLatch);
         partitionLeaderCacheField.set(adminClient, partitionLeaderCache);
+        return partitionLeaderCache;
     }
 
     private ListOffsetsResult listAllOffsets() {
@@ -159,8 +160,8 @@ public class ConcurrentListOffsetsRequestTest {
         @Override
         public Map<TopicPartition, Integer> get(Collection<TopicPartition> keys) {
             Map<TopicPartition, Integer> result = super.get(keys);
-            // waiting for the second call: first one was from the request that invalidates teh cache
-            if (getCounter.incrementAndGet() == 2) {
+            // waiting for the third call: first one was to close the network connection, second one was from the request that invalidates the cache
+            if (getCounter.incrementAndGet() == 3) {
                 newRequestCheckLatch.countDown();
                 try {
                     // letting the remove method proceed and actually remove the data
@@ -193,6 +194,7 @@ public class ConcurrentListOffsetsRequestTest {
 
         @Override
         public InetAddress[] resolve(String host) throws UnknownHostException {
+            System.out.println("RESOLVE: " + host);
             if (injectHostResolverError.get()) {
                 throw new UnknownHostException();
             }
