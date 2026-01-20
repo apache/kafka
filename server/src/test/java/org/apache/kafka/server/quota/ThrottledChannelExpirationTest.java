@@ -22,40 +22,30 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ThrottledChannelExpirationTest {
-    private MockTime time;
-    private int numCallbacksForStartThrottling;
-    private int numCallbacksForEndThrottling;
-    private Metrics metrics;
-    private ThrottleCallback callback;
+    private final MockTime time = new MockTime();
+    private final Metrics metrics = new Metrics(new MetricConfig(), List.of(), time);
+    private int numCallbacksForStartThrottling = 0;
+    private int numCallbacksForEndThrottling = 0;
+    private final ThrottleCallback callback = new ThrottleCallback() {
+        @Override
+        public void startThrottling() {
+            numCallbacksForStartThrottling++;
+        }
 
-    @BeforeEach
-    public void beforeMethod() {
-        time = new MockTime();
-        numCallbacksForStartThrottling = 0;
-        numCallbacksForEndThrottling = 0;
-        metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time);
-        callback = new ThrottleCallback() {
-            @Override
-            public void startThrottling() {
-                numCallbacksForStartThrottling++;
-            }
-
-            @Override
-            public void endThrottling() {
-                numCallbacksForEndThrottling++;
-            }
-        };
-    }
+        @Override
+        public void endThrottling() {
+            numCallbacksForEndThrottling++;
+        }
+    };
 
     @Test
     public void testCallbackInvocationAfterExpiration() {
