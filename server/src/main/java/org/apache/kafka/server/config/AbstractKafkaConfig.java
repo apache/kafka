@@ -120,6 +120,22 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
     }
 
+    public int initialRegistrationTimeoutMs() {
+        return getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG);
+    }
+
+    public int brokerHeartbeatIntervalMs() {
+        return getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    public Optional<String> rack() {
+        return Optional.ofNullable(getString(ServerConfigs.BROKER_RACK_CONFIG));
+    }
+
+    public int nodeId() {
+        return getInt(KRaftConfigs.NODE_ID_CONFIG);
+    }
+
     public Map<ListenerName, SecurityProtocol> effectiveListenerSecurityProtocolMap() {
         Map<ListenerName, SecurityProtocol> mapValue =
                 getMap(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.{Collections, OptionalLong, Properties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
@@ -27,6 +28,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Brok
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.BrokerLifecycleManager
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 
@@ -59,14 +61,14 @@ class BrokerLifecycleManagerTest {
   @Test
   def testCreateAndClose(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "create-and-close-", Set(Uuid.fromString("oFoTeS9QT0aAyCyH41v45A")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "create-and-close-", util.Set.of(Uuid.fromString("oFoTeS9QT0aAyCyH41v45A")))
     manager.close()
   }
 
   @Test
   def testCreateStartAndClose(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "create-start-and-close-", Set(Uuid.fromString("uiUADXZWTPixVvp6UWFWnw")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "create-start-and-close-", util.Set.of(Uuid.fromString("uiUADXZWTPixVvp6UWFWnw")))
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
@@ -81,7 +83,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testSuccessfulRegistration(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", util.Set.of(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
@@ -103,7 +105,7 @@ class BrokerLifecycleManagerTest {
   def testRegistrationTimeout(): Unit = {
     val context = new RegistrationTestContext(configProperties)
     val controllerNode = new Node(3000, "localhost", 8021)
-    manager = new BrokerLifecycleManager(context.config, context.time, "registration-timeout-", Set(Uuid.fromString("9XBOAtr4T0Wbx2sbiWh6xg")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "registration-timeout-", util.Set.of(Uuid.fromString("9XBOAtr4T0Wbx2sbiWh6xg")))
     context.controllerNodeProvider.node.set(controllerNode)
     def newDuplicateRegistrationResponse(): Unit = {
       context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -143,7 +145,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testControlledShutdown(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(context.config, context.time, "controlled-shutdown-", Set(Uuid.fromString("B4RtUz1ySGip3A7ZFYB2dg")))
+    manager = new BrokerLifecycleManager(context.config, context.time, "controlled-shutdown-", util.Set.of(Uuid.fromString("B4RtUz1ySGip3A7ZFYB2dg")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -224,7 +226,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testAlwaysSendsAccumulatedOfflineDirs(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "offline-dirs-sent-in-heartbeat-", Set(Uuid.fromString("0IbF1sjhSGG6FNvnrPbqQg")))
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "offline-dirs-sent-in-heartbeat-", util.Set.of(Uuid.fromString("0IbF1sjhSGG6FNvnrPbqQg")))
     val controllerNode = new Node(3000, "localhost", 8021)
     ctx.controllerNodeProvider.node.set(controllerNode)
 
@@ -248,7 +250,7 @@ class BrokerLifecycleManagerTest {
 
   @Test
   def testRegistrationIncludesDirs(): Unit = {
-    val logDirs = Set("ad5FLIeCTnaQdai5vOjeng", "ybdzUKmYSLK6oiIpI6CPlw").map(Uuid.fromString)
+    val logDirs = util.Set.of(Uuid.fromString("ad5FLIeCTnaQdai5vOjeng"), Uuid.fromString("ybdzUKmYSLK6oiIpI6CPlw"))
     val ctx = new RegistrationTestContext(configProperties)
     manager = new BrokerLifecycleManager(ctx.config, ctx.time, "registration-includes-dirs-", logDirs)
     val controllerNode = new Node(3000, "localhost", 8021)
@@ -261,13 +263,13 @@ class BrokerLifecycleManagerTest {
       Collections.emptyMap(), OptionalLong.empty())
     val request = poll(ctx, manager, registration).asInstanceOf[BrokerRegistrationRequest]
 
-    assertEquals(logDirs, request.data.logDirs().asScala.toSet)
+    assertEquals(logDirs, new util.HashSet(request.data.logDirs()))
   }
 
   @Test
   def testKraftJBODMetadataVersionUpdateEvent(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
-    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "jbod-metadata-version-update", Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "jbod-metadata-version-update", util.Set.of(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
 
     val controllerNode = new Node(3000, "localhost", 8021)
     ctx.controllerNodeProvider.node.set(controllerNode)
