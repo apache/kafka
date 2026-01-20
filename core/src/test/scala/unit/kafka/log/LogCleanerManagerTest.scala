@@ -173,7 +173,8 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logs)
     partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
-    cleanerManager.markPartitionUncleanable(logs.get(tp2).dir.getParent, tp2)
+    // Mark partition as uncleanable by failing 3 consecutive times
+    (1 to 3).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(logs.get(tp2).dir.getParent, tp2, succeeded = false))
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time).get
     assertEquals(tp1, filthiestLog.topicPartition)
@@ -213,10 +214,183 @@ class LogCleanerManagerTest extends Logging {
     partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
     cleanerManager.setCleaningState(tp2, LogCleaningInProgress)
-    cleanerManager.markPartitionUncleanable(logs.get(tp1).dir.getParent, tp1)
+    // Mark partition as uncleanable by failing 3 consecutive times
+    (1 to 3).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(logs.get(tp1).dir.getParent, tp1, succeeded = false))
 
     val filthiestLog: Option[LogToClean] = cleanerManager.grabFilthiestCompactedLog(time)
     assertEquals(None, filthiestLog)
+  }
+
+  @Test
+  def testPartitionCleaningFailureCountsUpdateAndCleanableState(): Unit = {
+    val tp0 = new TopicPartition("wishing-well", 0)
+    val tp1 = new TopicPartition("wishing-well", 1)
+    val partitions = Seq(tp0, tp1)
+
+    // Setup logs: tp0 has 20 batches, tp1 has 25 batches
+    // With checkpoint at 15: tp0 has 5 dirty batches, tp1 has 10 dirty batches
+    // This ensures tp0 meets the dirty threshold but is less dirty than tp1
+    val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 5)
+    val cleanerManager = createCleanerManagerMock(logs)
+    partitions.foreach(partition => cleanerCheckpoints.put(partition, 15))
+
+    val log1 = logs.get(tp1)
+
+    // Fail once - partition should NOT be uncleanable yet
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = false)
+
+    // Partition should still be cleanable and picked up
+    assertTrue(cleanerManager.uncleanablePartitions(log1).isEmpty,
+      "Partition should not be uncleanable after 1 failure")
+    var filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(tp1, filthiestLog.topicPartition, "Partition with 1 failure should still be picked")
+
+    // Fail twice - partition should NOT be uncleanable yet
+    cleanerManager.doneCleaning(tp1, log1.parentDirFile, 10L) // simulate a successful cleaning to reset in-progress state
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = false)
+    // Partition should still be cleanable and picked up
+    assertTrue(cleanerManager.uncleanablePartitions(log1).isEmpty,
+      "Partition should not be uncleanable after 2 failures")
+    filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(tp1, filthiestLog.topicPartition, "Partition with 2 failures should still be picked")
+
+    // Fail third - partition should be uncleanable
+    cleanerManager.doneCleaning(tp1, log1.parentDirFile, 10L) // simulate a successful cleaning to reset in-progress state
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = false)
+    var uncleanable = cleanerManager.uncleanablePartitions(log1)
+    assertTrue(uncleanable.contains(tp1), "Partition should be uncleanable after 3 failures")
+    assertEquals(1, uncleanable.size)
+    assertEquals(3, uncleanable(tp1), "Failure count should be 3")
+    // tp0 should be picked instead of tp1 (tp0 is less dirty but still meets threshold)
+    filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
+    assertEquals(tp0, filthiestLog.topicPartition, "Uncleanable partition should not be picked")
+    cleanerManager.doneCleaning(tp0, logs.get(tp0).parentDirFile, 10L) // reset tp0's in-progress state
+
+    // Success should reset the count
+    // reset on tp0 does not affect tp1
+    cleanerManager.updatePartitionCleaningFailureState(logs.get(tp0).parentDir, tp0, succeeded = true)
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp0, succeeded = true)
+    uncleanable = cleanerManager.uncleanablePartitions(log1)
+    assertTrue(uncleanable.contains(tp1), "Partition should be uncleanable after 3 failures")
+    assertEquals(3, uncleanable(tp1))
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = true)
+    assertTrue(cleanerManager.uncleanablePartitions(log1).isEmpty,
+      "Partition should not be uncleanable - count was reset by success")
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = true)
+    (1 to 2).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = false))
+    assertTrue(cleanerManager.uncleanablePartitions(log1).isEmpty,
+      "Partition should not be uncleanable - count was reset by success")
+  }
+
+  @Test
+  def testPartitionCleaningFailureCountsMultiplePartitionsTrackedIndependently(): Unit = {
+    val tp0 = new TopicPartition("wishing-well", 0)
+    val tp1 = new TopicPartition("wishing-well", 1)
+    val tp2 = new TopicPartition("wishing-well", 2)
+    val tp3 = new TopicPartition("wishing-well", 3)
+
+    // Create logs in different directories
+    val logs = new Pool[TopicPartition, Log]()
+    val log0 = createLogInDir(logDir, 2048, LogConfig.Compact, tp0)
+    val log1 = createLogInDir(logDir2, 2048, LogConfig.Compact, tp1)
+    val log0_2 = createLogInDir(logDir, 2048, LogConfig.Compact, tp2)
+    assertEquals(log0.parentDir, log0_2.parentDir,
+      "Both logs for tp0 and tp2 should be in the same directory to test independent tracking")
+    val logDir3 = TestUtils.randomPartitionLogDir(tmpDir)
+    val log2 = createLogInDir(logDir3, 2048, LogConfig.Compact, tp3)
+    logs.put(tp0, log0)
+    logs.put(tp1, log1)
+    logs.put(tp2, log0_2)
+    logs.put(tp3, log2)
+
+    val cleanerManager = new LogCleanerManager(Seq(logDir, logDir2, logDir3), logs, null, 0L, true)
+
+    // tp0 in log0: 3 failures (uncleanable)
+    (1 to 3).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(log0.parentDir, tp0, succeeded = false))
+    // tp1 in log1: 2 failures (not uncleanable)
+    (1 to 2).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = false))
+    // tp2 in log0: 1 failure (not uncleanable)
+    cleanerManager.updatePartitionCleaningFailureState(log0_2.parentDir, tp2, succeeded = false)
+
+    // Verify each partition is tracked in its own directory
+    var uncleanable = cleanerManager.uncleanablePartitions(log0)
+    assertEquals(1, uncleanable.size, "tp0 should be uncleanable in logDir")
+    assertTrue(uncleanable.contains(tp0))
+    assertEquals(3, uncleanable(tp0), "tp0 should have 3 failures")
+
+    uncleanable = cleanerManager.uncleanablePartitions(log1)
+    assertEquals(0, uncleanable.size, "tp1 should not be uncleanable in logDir2 (only 2 failures)")
+
+    // Verify failure counts are independent: adding failures in one dir doesn't affect others
+    // Fail tp1 one more time - should now be uncleanable
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = false)
+    uncleanable = cleanerManager.uncleanablePartitions(log1)
+    assertEquals(1, uncleanable.size, "tp1 should now be uncleanable after 3 failures")
+    assertTrue(uncleanable.contains(tp1))
+    assertEquals(3, uncleanable(tp1), "tp1 should have 3 failures")
+
+    // tp0 and tp2 should be unchanged
+    uncleanable = cleanerManager.uncleanablePartitions(log0)
+    assertEquals(1, uncleanable.size)
+    assertTrue(uncleanable.contains(tp0))
+    assertEquals(3, uncleanable(tp0))
+
+    // Reset tp2 and some random tp - no change/no break
+    cleanerManager.updatePartitionCleaningFailureState(log0_2.parentDir, tp2, succeeded = true)
+    cleanerManager.updatePartitionCleaningFailureState(log2.parentDir, tp3, succeeded = true)
+    cleanerManager.updatePartitionCleaningFailureState(log2.parentDir, tp2, succeeded = true)
+    uncleanable = cleanerManager.uncleanablePartitions(log0)
+    assertEquals(1, uncleanable.size)
+    assertTrue(uncleanable.contains(tp0))
+    assertEquals(3, uncleanable(tp0))
+    uncleanable = cleanerManager.uncleanablePartitions(log1)
+    assertEquals(1, uncleanable.size)
+    assertTrue(uncleanable.contains(tp1))
+    assertEquals(3, uncleanable(tp1))
+
+    // Reset tp1
+    cleanerManager.updatePartitionCleaningFailureState(log1.parentDir, tp1, succeeded = true)
+    uncleanable = cleanerManager.uncleanablePartitions(log0)
+    assertEquals(1, uncleanable.size)
+    assertTrue(uncleanable.contains(tp0))
+    assertEquals(3, uncleanable(tp0))
+    uncleanable = cleanerManager.uncleanablePartitions(log1)
+    assertEquals(0, uncleanable.size)
+  }
+
+  @Test
+  def testFailureCountTransfersOnAlterCheckpointDir(): Unit = {
+    val tp = new TopicPartition("test-transfer", 0)
+    val logs = new Pool[TopicPartition, Log]()
+    // Create logs in both directories to enable uncleanablePartitions checks
+    val sourceLog = createLogInDir(logDir, 2048, LogConfig.Compact, tp)
+    val destLog = createLogInDir(logDir2, 2048, LogConfig.Compact, tp)
+    logs.put(tp, sourceLog)
+
+    val cleanerManager = new LogCleanerManager(Seq(logDir, logDir2), logs, null, 0L, true)
+
+    // Fail twice in the source directory
+    (1 to 2).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(sourceLog.parentDir, tp, succeeded = false))
+
+    // Transfer to destination directory
+    cleanerManager.alterCheckpointDir(tp, logDir, logDir2)
+
+    // Verify failure count was transferred - partition should not be uncleanable in source
+    assertTrue(cleanerManager.uncleanablePartitions(sourceLog).isEmpty,
+      "Source dir should have no failure count after transfer")
+
+    // Fail once more in destination - should now be uncleanable (2 + 1 = 3)
+    cleanerManager.updatePartitionCleaningFailureState(destLog.parentDir, tp, succeeded = false)
+    // Fail once more in source - should have no effect on uncleanable state in source
+    cleanerManager.updatePartitionCleaningFailureState(sourceLog.parentDir, tp, succeeded = false)
+
+    var uncleanable = cleanerManager.uncleanablePartitions(destLog)
+    assertEquals(1, uncleanable.size)
+    assertTrue(uncleanable.contains(tp), "Partition should be uncleanable after transfer + 1 more failure")
+    assertEquals(3, uncleanable(tp), "Failure count should be 3 (2 transferred + 1 new)")
+
+    uncleanable = cleanerManager.uncleanablePartitions(sourceLog)
+    assertEquals(0, uncleanable.size, "Partition should be cleanable in source dir after transfer")
   }
 
   @Test
@@ -522,7 +696,8 @@ class LogCleanerManagerTest extends Logging {
     val records = TestUtils.singletonRecords("test".getBytes, key="test".getBytes)
     val log: Log = createLog(records.sizeInBytes * 5, LogConfig.Compact)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
-    cleanerManager.markPartitionUncleanable(log.dir.getParent, topicPartition)
+    // Mark partition as uncleanable by failing 3 consecutive times
+    (1 to 3).foreach(_ => cleanerManager.updatePartitionCleaningFailureState(log.dir.getParent, topicPartition, succeeded = false))
 
     val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals(0, readyToDelete, "should have 0 logs ready to be deleted")
@@ -765,8 +940,15 @@ class LogCleanerManagerTest extends Logging {
   private def createLog(segmentSize: Int,
                         cleanupPolicy: String,
                         topicPartition: TopicPartition = new TopicPartition("log", 0)): Log = {
+    createLogInDir(logDir, segmentSize, cleanupPolicy, topicPartition)
+  }
+
+  private def createLogInDir(dir: File,
+                             segmentSize: Int,
+                             cleanupPolicy: String,
+                             topicPartition: TopicPartition): Log = {
     val config = createLowRetentionLogConfig(segmentSize, cleanupPolicy)
-    val partitionDir = new File(logDir, Log.logDirName(topicPartition))
+    val partitionDir = new File(dir, Log.logDirName(topicPartition))
 
     Log(partitionDir,
       config,
