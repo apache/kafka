@@ -261,7 +261,7 @@ public final class FieldSpec {
 
     @JsonProperty("flexibleVersions")
     public String flexibleVersionsString() {
-        return flexibleVersions.isPresent() ? flexibleVersions.get().toString() : null;
+        return flexibleVersions.map(Versions::toString).orElse(null);
     }
 
     public Optional<Versions> flexibleVersions() {

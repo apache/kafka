@@ -358,6 +358,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     extra_kafka_opts=extra_kafka_opts, tls_version=tls_version,
                     isolated_kafka=self, allow_zk_with_kraft=self.allow_zk_with_kraft,
                     server_prop_overrides=server_prop_overrides, dynamicRaftQuorum=self.dynamicRaftQuorum,
+                    use_transactions_v2=self.use_transactions_v2, use_share_groups=self.use_share_groups,
                     use_streams_groups=self.use_streams_groups
                 )
                 self.controller_quorum = self.isolated_controller_quorum
@@ -2012,3 +2013,29 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def java_class_name(self):
         return "kafka\.Kafka"
+
+    def describe_consumer_group_members(self, group, node=None, command_config=None):
+        """ Describe a consumer group.
+        """
+        if node is None:
+            node = self.nodes[0]
+        consumer_group_script = self.path.script("kafka-consumer-groups.sh", node)
+
+        if command_config is None:
+            command_config = ""
+        else:
+            command_config = "--command-config " + command_config
+
+        cmd = fix_opts_for_new_jvm(node)
+        cmd += "%s --bootstrap-server %s %s --group %s --describe" % \
+               (consumer_group_script,
+                self.bootstrap_servers(self.security_protocol),
+                command_config, group)
+
+        cmd += " --members"
+
+        output_lines = []
+        for line in node.account.ssh_capture(cmd):
+            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.strip() == ""):
+                output_lines.append(line.strip())
+        return output_lines

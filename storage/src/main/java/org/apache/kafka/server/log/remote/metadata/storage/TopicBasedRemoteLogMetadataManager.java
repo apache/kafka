@@ -323,7 +323,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
         boolean isTopicCreated = false;
         long startTimeMs = time.milliseconds();
         boolean initializationFailed = false;
-        try (Admin admin = Admin.create(rlmmConfig.commonProperties())) {
+        try (Admin admin = Admin.create(rlmmConfig.adminProperties())) {
             while (!(initialized.get() || closing.get() || initializationFailed)) {
                 if (time.milliseconds() - startTimeMs > retryMaxTimeoutMs) {
                     log.error("Timed out to initialize the resources within {} ms.", retryMaxTimeoutMs);
@@ -434,6 +434,7 @@ public class TopicBasedRemoteLogMetadataManager implements BrokerReadyCallback, 
         topicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, Long.toString(rlmmConfig.metadataTopicRetentionMs()));
         topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
         topicConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
+        topicConfigs.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, Short.toString(rlmmConfig.metadataTopicMinIsr()));
         return new NewTopic(rlmmConfig.remoteLogMetadataTopicName(),
                             rlmmConfig.metadataTopicPartitionsCount(),
                             rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);

@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.ShareAcquireMode;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementEvent;
@@ -254,23 +253,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             Node target = entry.getKey();
             ShareSessionHandler handler = entry.getValue();
 
-            log.trace("Building ShareFetch request to send to node {}", target.id());
-            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig);
-
             // For record_limit mode, we only send a full ShareFetch to a single node at a time.
             // We prepare to build ShareFetch requests for all nodes with session handlers to permit
             // piggy-backing of acknowledgements, and also to adjust the topic-partitions
-            // in the share session.
-            if (isShareAcquireModeRecordLimit() && target.id() != fetchRecordsNodeId.get()) {
-                ShareFetchRequestData data = requestBuilder.data();
-                // If there's nothing to send, just skip building the record.
-                if (data.topics().isEmpty() && data.forgottenTopicsData().isEmpty()) {
-                    return null;
-                } else {
-                    // There is something to send, but we don't want to fetch any records.
-                    requestBuilder.data().setMaxRecords(0);
-                }
+            // in the share session, but if the request would contain neither of those, it can be skipped.
+            boolean canSkipIfRequestEmpty = isShareAcquireModeRecordLimit() && target.id() != fetchRecordsNodeId.get();
+
+            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, shareFetchConfig, canSkipIfRequestEmpty);
+            if (requestBuilder == null) {
+                log.trace("Skipping ShareFetch request to send to node {}", target.id());
+                return null;
             }
+
+            log.trace("Building ShareFetch request to send to node {}", target.id());
 
             nodesWithPendingRequests.add(target.id());
 
@@ -769,15 +764,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return false;
     }
 
-    @Override
-    public long maximumTimeToWait(long currentTimeMs) {
-        // When fetching records and there is no chosen node for fetching, we do not want to wait for the next poll in record_limit mode.
-        if (isShareAcquireModeRecordLimit() && fetchMoreRecords && subscriptions.numAssignedPartitions() > 0 && fetchRecordsNodeId.get() == -1) {
-            return 0L;
-        }
-        return Long.MAX_VALUE;
-    }
-
     private void handleShareFetchSuccess(Node fetchTarget,
                                          ShareFetchRequestData requestData,
                                          ClientResponse resp) {
@@ -1070,7 +1056,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                       Optional<Integer> acquisitionLockTimeoutMs) {
         if (partitionError.exception() != null) {
             boolean retry = false;
-            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH || partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH ||
+                partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION || partitionError == Errors.UNKNOWN_TOPIC_ID) {
                 // If the leader has changed, there's no point in retrying the operation because the acquisition locks
                 // will have been released.
                 // If the topic or partition has been deleted, we do not retry the failed acknowledgements.
@@ -1332,11 +1319,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Sets the error code in the acknowledgements and sends the response
          * through a background event.
          */
-        void handleAcknowledgeErrorCode(TopicIdPartition tip, Errors acknowledgeErrorCode, boolean isRenewAck, Optional<Integer> acquisitionLockTimeoutMs) {
+        void handleAcknowledgeErrorCode(TopicIdPartition tip, Errors acknowledgeErrorCode, boolean checkForRenewAcknowledgements, Optional<Integer> acquisitionLockTimeoutMs) {
             Acknowledgements acks = inFlightAcknowledgements.remove(tip);
             if (acks != null) {
                 acks.complete(acknowledgeErrorCode.exception());
-                resultHandler.complete(tip, acks, requestType, isRenewAck, acquisitionLockTimeoutMs);
+                resultHandler.complete(tip, acks, requestType, checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
             } else {
                 log.error("Invalid partition {} received in ShareAcknowledge response", tip);
             }
@@ -1468,17 +1455,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Handle the result of a ShareAcknowledge request sent to one or more nodes and
          * signal the completion when all results are known.
          */
-        public void complete(TopicIdPartition partition, Acknowledgements acknowledgements, AcknowledgeRequestType type, boolean isRenewAck, Optional<Integer> acquisitionLockTimeoutMs) {
+        public void complete(TopicIdPartition partition, Acknowledgements acknowledgements, AcknowledgeRequestType type, boolean checkForRenewAcknowledgements, Optional<Integer> acquisitionLockTimeoutMs) {
             if (type.equals(AcknowledgeRequestType.COMMIT_ASYNC)) {
                 if (acknowledgements != null) {
-                    maybeSendShareAcknowledgementEvent(Map.of(partition, acknowledgements), isRenewAck, acquisitionLockTimeoutMs);
+                    maybeSendShareAcknowledgementEvent(Map.of(partition, acknowledgements), checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
                 }
             } else {
                 if (acknowledgements != null) {
                     result.put(partition, acknowledgements);
                 }
                 if (remainingResults != null && remainingResults.decrementAndGet() == 0) {
-                    maybeSendShareAcknowledgementEvent(result, isRenewAck, acquisitionLockTimeoutMs);
+                    maybeSendShareAcknowledgementEvent(result, checkForRenewAcknowledgements, acquisitionLockTimeoutMs);
                     future.ifPresent(future -> future.complete(result));
                 }
             }
