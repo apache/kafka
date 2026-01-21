@@ -482,11 +482,6 @@ public class ConfigCommandIntegrationTest {
                 String describeResult = captureStandardOut(run(describeCommand));
                 last.set(describeResult);
 
-                // We will treat unknown config as sensitive
-                // For 'describeResult.contains("sensitive=true")' 
-                
-                // Sensitive config will not return
-                // For 'describeResult.contains("invalid=null")'
                 return describeResult.contains("sensitive=true") && describeResult.contains("invalid=null");
             }, 5000, "Dynamic broker config was not visible within 5s. Last describe output:\n" + last.get());
         }
