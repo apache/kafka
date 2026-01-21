@@ -482,7 +482,15 @@ public class ConfigCommandIntegrationTest {
                 String describeResult = captureStandardOut(run(describeCommand));
                 last.set(describeResult);
 
-                return describeResult.contains("sensitive=true") && describeResult.contains("invalid=null");
+                boolean hasInvalidNull = describeResult.contains("invalid=null");
+                boolean hasSensitiveTrue = describeResult.contains("sensitive=true");
+
+                if (hasInvalidNull && !hasSensitiveTrue) {
+                    throw new AssertionError("Expected sensitive=true when invalid=null is visible, but it was not present.\n" +
+                            "Describe output:\n" + describeResult);
+                }
+
+                return hasSensitiveTrue && hasInvalidNull;
             }, 5000, "Dynamic broker config was not visible within 5s. Last describe output:\n" + last.get());
         }
     }
