@@ -47,7 +47,11 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DescribeClusterRequestData;
+import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -60,10 +64,13 @@ import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.controller.QuorumController;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerState;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.Action;
@@ -71,12 +78,15 @@ import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.ClientQuotaType;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
@@ -87,30 +97,43 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.server.IntegrationTestUtils.connectAndReceive;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1188,6 +1211,498 @@ public class KRaftClusterTest {
 
                 // List again
                 waitForTopicListing(admin, List.of(), List.of("test-topic"));
+            }
+        }
+    }
+
+    @Test
+    public void testCreateClusterAndRestartControllerNode() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(3)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            var controller = cluster.controllers().values().stream()
+                .filter(c -> c.controller().isActive())
+                .findFirst()
+                .get();
+            var port = controller.socketServer().boundPort(
+                ListenerName.normalised(controller.config().controllerListeners().head().listener()));
+
+            // shutdown active controller
+            controller.shutdown();
+            // Rewrite The `listeners` config to avoid controller socket server init using different port
+            var config = controller.sharedServer().controllerConfig().props();
+            ((Map<String, String>) config).put(SocketServerConfigs.LISTENERS_CONFIG,
+                "CONTROLLER://localhost:" + port);
+            controller.sharedServer().controllerConfig().updateCurrentConfig(config);
+
+            // restart controller
+            controller.startup();
+            TestUtils.waitForCondition(() -> cluster.controllers().values().stream()
+                .anyMatch(c -> c.controller().isActive()),
+                "Timeout waiting for new controller election");
+        }
+    }
+
+    @Test
+    public void testSnapshotCount() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(0)
+                .setNumControllerNodes(1)
+                .build())
+            .setConfigProp("metadata.log.max.snapshot.interval.ms", "500")
+            .setConfigProp("metadata.max.idle.interval.ms", "50") // Set this low to generate metadata
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            var metaLog = FileSystems.getDefault().getPath(
+                cluster.controllers().get(3000).config().metadataLogDir(),
+                "__cluster_metadata-0");
+            TestUtils.waitForCondition(() -> {
+                var files = metaLog.toFile().listFiles((dir, name) ->
+                    name.toLowerCase(Locale.ROOT).endsWith("checkpoint")
+                );
+                return files != null && files.length > 0;
+            }, "Failed to see at least one snapshot");
+            Thread.sleep(500 * 10); // Sleep for 10 snapshot intervals
+            var filesAfterTenIntervals = metaLog.toFile().listFiles((dir, name) ->
+                name.toLowerCase(Locale.ROOT).endsWith("checkpoint")
+            );
+            int countAfterTenIntervals = filesAfterTenIntervals != null ? filesAfterTenIntervals.length : 0;
+            assertTrue(countAfterTenIntervals > 1,
+                "Expected to see at least one more snapshot, saw " + countAfterTenIntervals);
+            assertTrue(countAfterTenIntervals < 20,
+                "Did not expect to see more than twice as many snapshots as snapshot intervals, saw " + countAfterTenIntervals);
+            TestUtils.waitForCondition(() -> {
+                var emitterMetrics = cluster.controllers().values().iterator().next()
+                    .sharedServer().snapshotEmitter().metrics();
+                return emitterMetrics.latestSnapshotGeneratedBytes() > 0;
+            }, "Failed to see latestSnapshotGeneratedBytes > 0");
+        }
+    }
+
+    /**
+     * Test a single broker, single controller cluster at the minimum bootstrap level. This tests
+     * that we can function without having periodic NoOpRecords written.
+     */
+    @Test
+    public void testSingleControllerSingleBrokerCluster() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION)
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+        }
+    }
+
+    @Test
+    public void testOverlyLargeCreateTopics() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build()).build()) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = cluster.admin()) {
+                var newTopics = new ArrayList<NewTopic>();
+                for (int i = 0; i <= 10000; i++) {
+                    newTopics.add(new NewTopic("foo" + i, 100000, (short) 1));
+                }
+                var executionException = assertThrows(ExecutionException.class,
+                    () -> admin.createTopics(newTopics).all().get());
+                assertNotNull(executionException.getCause());
+                assertEquals(PolicyViolationException.class, executionException.getCause().getClass());
+                assertEquals("Excessively large number of partitions per request.",
+                    executionException.getCause().getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void testTimedOutHeartbeats() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(3)
+                .setNumControllerNodes(1)
+                .build())
+            .setConfigProp(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "10")
+            .setConfigProp(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, "1000")
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            var controller = cluster.controllers().values().iterator().next();
+            controller.controller().waitForReadyBrokers(3).get();
+            TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                var latch = pause((QuorumController) controller.controller());
+                Thread.sleep(1001);
+                latch.countDown();
+                assertEquals(0, controller.sharedServer().controllerServerMetrics().fencedBrokerCount());
+                assertTrue(controller.quorumControllerMetrics().timedOutHeartbeats() > 0,
+                    "Expected timedOutHeartbeats to be greater than 0.");
+            });
+        }
+    }
+
+    // Duplicate method to decouple the dependency on the metadata module.
+    private CountDownLatch pause(QuorumController controller) {
+        final CountDownLatch latch = new CountDownLatch(1);
+        controller.appendControlEvent("pause", () -> {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                LOG.info("Interrupted while waiting for unpause.", e);
+            }
+        });
+        return latch;
+    }
+
+    @Test
+    public void testRegisteredControllerEndpoints() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(3)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                var controller = cluster.controllers().values().iterator().next();
+                var registeredControllers = controller.registrationsPublisher().controllers();
+                assertEquals(3, registeredControllers.size(), "Expected 3 controller registrations");
+                registeredControllers.values().forEach(registration -> {
+                    assertNotNull(registration.listeners().get("CONTROLLER"));
+                    assertNotEquals(0, registration.listeners().get("CONTROLLER").port());
+                });
+            });
+        }
+    }
+
+    @Test
+    public void testDirectToControllerCommunicationFailsOnOlderMetadataVersion() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2)
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = cluster.admin(Map.of(), true)) {
+                var exception = assertThrows(ExecutionException.class,
+                    () -> admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES));
+                assertNotNull(exception.getCause());
+                assertEquals(UnsupportedVersionException.class, exception.getCause().getClass());
+            }
+        }
+    }
+
+    @Test
+    public void testStartupWithNonDefaultKControllerDynamicConfiguration() throws Exception {
+        var bootstrapRecords = List.of(
+            new ApiMessageAndVersion(new FeatureLevelRecord()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.BROKER.id())
+                .setResourceName("")
+                .setName("num.io.threads")
+                .setValue("9"), (short) 0));
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords"))
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            var controller = cluster.controllers().values().iterator().next();
+            TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                assertNotNull(controller.controllerApisHandlerPool());
+                assertEquals(9, controller.controllerApisHandlerPool().threadPoolSize().get());
+            });
+        }
+    }
+
+    @Test
+    public void testTopicDeletedAndRecreatedWhileBrokerIsDown() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2)
+                .setNumBrokerNodes(3)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = cluster.admin()) {
+                var broker0 = cluster.brokers().get(0);
+                var broker1 = cluster.brokers().get(1);
+                var foo0 = new TopicPartition("foo", 0);
+
+                admin.createTopics(List.of(
+                    new NewTopic("foo", 3, (short) 3))).all().get();
+
+                // Wait until foo-0 is created on broker0.
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                    assertTrue(broker0.logManager().getLog(foo0, false).isDefined());
+                });
+
+                // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+                broker0.shutdown();
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                    var info = broker1.metadataCache().getLeaderAndIsr("foo", 0);
+                    assertTrue(info.isPresent());
+                    assertEquals(Set.of(1, 2), new HashSet<>(info.get().isr()));
+                });
+
+                // Modify foo-0 so that it has the wrong topic ID.
+                var logDir = broker0.logManager().getLog(foo0, false).get().dir();
+                var partitionMetadataFile = new File(logDir, "partition.metadata");
+                Files.write(partitionMetadataFile.toPath(),
+                    "version: 0\ntopic_id: AAAAAAAAAAAAA7SrBWaJ7g\n".getBytes(StandardCharsets.UTF_8));
+
+                // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+                broker0.startup();
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                    var info = broker1.metadataCache().getLeaderAndIsr("foo", 0);
+                    assertTrue(info.isPresent());
+                    assertEquals(Set.of(0, 1, 2), new HashSet<>(info.get().isr()));
+                });
+            }
+        }
+    }
+
+    @Test
+    public void testAbandonedFutureReplicaRecovered_mainReplicaInOfflineLogDir() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2)
+                .setNumBrokerNodes(3)
+                .setNumDisksPerBroker(2)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = cluster.admin()) {
+                var broker0 = cluster.brokers().get(0);
+                var broker1 = cluster.brokers().get(1);
+                var foo0 = new TopicPartition("foo", 0);
+
+                admin.createTopics(List.of(
+                    new NewTopic("foo", 3, (short) 3))).all().get();
+
+                // Wait until foo-0 is created on broker0.
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> 
+                    assertTrue(broker0.logManager().getLog(foo0, false).isDefined()));
+
+                // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+                broker0.shutdown();
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                    var info = broker1.metadataCache().getLeaderAndIsr("foo", 0);
+                    assertTrue(info.isPresent());
+                    assertEquals(Set.of(1, 2), new HashSet<>(info.get().isr()));
+                });
+
+                // Modify foo-0 so that it refers to a future replica.
+                // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+                // the main replica being offline
+                var log = broker0.logManager().getLog(foo0, false).get();
+                log.renameDir(UnifiedLog.logFutureDirName(foo0), false);
+
+                // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+                broker0.startup();
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                    var info = broker1.metadataCache().getLeaderAndIsr("foo", 0);
+                    assertTrue(info.isPresent());
+                    assertEquals(Set.of(0, 1, 2), new HashSet<>(info.get().isr()));
+                    assertTrue(broker0.logManager().getLog(foo0, true).isEmpty());
+                });
+            }
+        }
+    }
+
+    @Test
+    public void testAbandonedFutureReplicaRecovered_mainReplicaInOnlineLogDir() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2)
+                .setNumBrokerNodes(3)
+                .setNumDisksPerBroker(2)
+                .setNumControllerNodes(1)
+                .build())
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            try (Admin admin = cluster.admin()) {
+                var broker0 = cluster.brokers().get(0);
+                var broker1 = cluster.brokers().get(1);
+                var foo0 = new TopicPartition("foo", 0);
+
+                admin.createTopics(List.of(
+                    new NewTopic("foo", 3, (short) 3))).all().get();
+
+                // Wait until foo-0 is created on broker0.
+                TestUtils.retryOnExceptionWithTimeout(60000, () ->
+                    assertTrue(broker0.logManager().getLog(foo0, false).isDefined()));
+
+                // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+                broker0.shutdown();
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                    var info = broker1.metadataCache().getLeaderAndIsr("foo", 0);
+                    assertTrue(info.isPresent());
+                    assertEquals(Set.of(1, 2), new HashSet<>(info.get().isr()));
+                });
+
+                var log = broker0.logManager().getLog(foo0, false).get();
+
+                // Copy foo-0 to targetParentDir
+                // This is so that we can rename the main replica to a future down below
+                var parentDir = log.parentDir();
+                var targetParentDir = broker0.config().logDirs().stream()
+                    .filter(l -> !l.equals(parentDir))
+                    .findFirst()
+                    .orElseThrow();
+                var targetDirFile = new File(targetParentDir, log.dir().getName());
+                targetDirFile.mkdir();
+                try (Stream<Path> stream = Files.walk(Paths.get(log.dir().toString()))) {
+                    stream.forEach(p -> {
+                        var out = Paths.get(targetDirFile.toString(),
+                            p.toString().substring(log.dir().toString().length()));
+                        if (!p.toString().equals(log.dir().toString())) {
+                            assertDoesNotThrow(() -> Files.copy(p, out));
+                        }
+                    });
+                }
+                assertTrue(targetDirFile.exists());
+
+                // Rename original log to a future
+                // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
+                // the main replica being online
+                var originalLogFile = log.dir();
+                log.renameDir(UnifiedLog.logFutureDirName(foo0), false);
+                assertFalse(originalLogFile.exists());
+
+                // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+                broker0.startup();
+                TestUtils.retryOnExceptionWithTimeout(60000, () -> {
+                    var info = broker1.metadataCache().getLeaderAndIsr("foo", 0);
+                    assertTrue(info.isPresent());
+                    assertEquals(Set.of(0, 1, 2), new HashSet<>(info.get().isr()));
+                    assertTrue(broker0.logManager().getLog(foo0, true).isEmpty());
+                    assertFalse(targetDirFile.exists());
+                    assertTrue(originalLogFile.exists());
+                });
+            }
+        }
+    }
+
+    @Test
+    public void testControllerFailover() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(3).build()).build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+            TestUtils.waitForCondition(() -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                "Broker never made it to RUNNING state.");
+            TestUtils.waitForCondition(() -> cluster.raftManagers().get(0).client().leaderAndEpoch().leaderId().isPresent(),
+                "RaftManager was not initialized.");
+
+            try (Admin admin = cluster.admin()) {
+                // Create a test topic
+                admin.createTopics(List.of(
+                    new NewTopic("test-topic", 1, (short) 1))).all().get();
+                waitForTopicListing(admin, List.of("test-topic"), List.of());
+
+                // Shut down active controller
+                var active = cluster.waitForActiveController();
+                cluster.raftManagers().get(((QuorumController) active).nodeId()).shutdown();
+
+                // Create a test topic on the new active controller
+                admin.createTopics(List.of(
+                    new NewTopic("test-topic2", 1, (short) 1))).all().get();
+                waitForTopicListing(admin, List.of("test-topic2"), List.of());
+            }
+        }
+    }
+
+    /**
+     * Test that once a cluster is formatted, a bootstrap.metadata file that contains an unsupported
+     * MetadataVersion is not a problem. This is a regression test for KAFKA-19192.
+     */
+    @Test
+    public void testOldBootstrapMetadataFile() throws Exception {
+        var baseDirectory = TestUtils.tempDirectory().toPath();
+        try (var cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .setBaseDirectory(baseDirectory)
+                .build())
+            .setDeleteOnClose(false)
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+        }
+        var oldBootstrapMetadata = BootstrapMetadata.fromRecords(
+            List.of(
+                new ApiMessageAndVersion(
+                    new FeatureLevelRecord()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setFeatureLevel((short) 1),
+                    (short) 0)
+            ),
+            "oldBootstrapMetadata");
+        // Re-create the cluster using the same directory structure as above.
+        // Since we do not need to use the bootstrap metadata, the fact that
+        // it specifies an obsolete metadata.version should not be a problem.
+        try (var cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .setBaseDirectory(baseDirectory)
+                .setBootstrapMetadata(oldBootstrapMetadata)
+                .build()).build()) {
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+        }
+    }
+
+    @Test
+    public void testIncreaseNumIoThreads() throws Exception {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1).build())
+            .setConfigProp(ServerConfigs.NUM_IO_THREADS_CONFIG, "4")
+            .build()) {
+            cluster.format();
+            cluster.startup();
+            cluster.waitForReadyBrokers();
+            try (Admin admin = cluster.admin()) {
+                admin.incrementalAlterConfigs(
+                    Map.of(new ConfigResource(Type.BROKER, ""),
+                        List.of(new AlterConfigOp(
+                            new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "8"), OpType.SET)))).all().get();
+                var newTopic = List.of(new NewTopic("test-topic", 1, (short) 1));
+                var createTopicResult = admin.createTopics(newTopic);
+                createTopicResult.all().get();
+                waitForTopicListing(admin, List.of("test-topic"), List.of());
             }
         }
     }

@@ -35,8 +35,8 @@ The first step of deploying one or more brokers with SSL support is to generate 
          $ keytool -keystore {keystorefile} -alias localhost -validity {validity} -genkey -keyalg RSA -storetype pkcs12
 
 You need to specify two parameters in the above command: 
-     1. keystorefile: the keystore file that stores the keys (and later the certificate) for this broker. The keystore file contains the private and public keys of this broker, therefore it needs to be kept safe. Ideally this step is run on the Kafka broker that the key will be used on, as this key should never be transmitted/leave the server that it is intended for.
-     2. validity: the valid time of the key in days. Please note that this differs from the validity period for the certificate, which will be determined in Signing the certificate. You can use the same key to request multiple certificates: if your key has a validity of 10 years, but your CA will only sign certificates that are valid for one year, you can use the same key with 10 certificates over time.
+1. keystorefile: the keystore file that stores the keys (and later the certificate) for this broker. The keystore file contains the private and public keys of this broker, therefore it needs to be kept safe. Ideally this step is run on the Kafka broker that the key will be used on, as this key should never be transmitted/leave the server that it is intended for.
+2. validity: the valid time of the key in days. Please note that this differs from the validity period for the certificate, which will be determined in Signing the certificate. You can use the same key to request multiple certificates: if your key has a validity of 10 years, but your CA will only sign certificates that are valid for one year, you can use the same key with 10 certificates over time.
   
 To obtain a certificate that can be used with the private key that was just created a certificate signing request needs to be created. This signing request, when signed by a trusted CA results in the actual certificate which can then be installed in the keystore and used for authentication purposes.  
 To generate certificate signing requests run the following command for all server keystores created so far. 
@@ -61,8 +61,8 @@ Normally there is no good reason to disable hostname verification apart from bei
 Getting hostname verification right is not that hard when done at the right time, but gets much harder once the cluster is up and running - do yourself a favor and do it now! 
 
 If host name verification is enabled, clients will verify the server's fully qualified domain name (FQDN) or ip address against one of the following two fields: 
-     1. Common Name (CN)
-     2. [Subject Alternative Name (SAN)](https://tools.ietf.org/html/rfc5280#section-4.2.1.6)
+1. Common Name (CN)
+2. [Subject Alternative Name (SAN)](https://tools.ietf.org/html/rfc5280#section-4.2.1.6)
   
 While Kafka checks both fields, usage of the common name field for hostname verification has been [deprecated](https://tools.ietf.org/html/rfc2818#section-3.1) since 2000 and should be avoided if possible. In addition the SAN field is much more flexible, allowing for multiple DNS and IP entries to be declared in a certificate.  
 Another advantage is that if the SAN field is used for hostname verification the common name can be set to a more meaningful value for authorization purposes. Since we need the SAN field to be contained in the signed certificate, it will be specified when generating the signing request. It can also be specified when generating the keypair, but this will not automatically be copied into the signing request.  
@@ -195,10 +195,10 @@ Finally, you need to import both the certificate of the CA and the signed certif
          $ keytool -keystore {keystore} -alias localhost -import -file cert-signed
 
 The definitions of the parameters are the following: 
-     1. keystore: the location of the keystore
-     2. CA certificate: the certificate of the CA
-     3. certificate signing request: the csr created with the server key
-     4. server certificate: the file to write the signed certificate of the server to
+1. keystore: the location of the keystore
+2. CA certificate: the certificate of the CA
+3. certificate signing request: the csr created with the server key
+4. server certificate: the file to write the signed certificate of the server to
 This will leave you with one truststore called _truststore.jks_ \- this can be the same for all clients and brokers and does not contain any sensitive information, so there is no need to secure this.  
 Additionally you will have one _server.keystore.jks_ file per node which contains that nodes keys, certificate and your CAs certificate, please refer to Configuring Kafka Brokers and Configuring Kafka Clients for information on how to use these files. 
 
@@ -213,15 +213,15 @@ Store password configs `ssl.keystore.password` and `ssl.truststore.password` are
 ### Common Pitfalls in Production
 
 The above paragraphs show the process to create your own CA and use it to sign certificates for your cluster. While very useful for sandbox, dev, test, and similar systems, this is usually not the correct process to create certificates for a production cluster in a corporate environment. Enterprises will normally operate their own CA and users can send in CSRs to be signed with this CA, which has the benefit of users not being responsible to keep the CA secure as well as a central authority that everybody can trust. However it also takes away a lot of control over the process of signing certificates from the user. Quite often the persons operating corporate CAs will apply tight restrictions on certificates that can cause issues when trying to use these certificates with Kafka. 
-     1. **[Extended Key Usage](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)**  
+1. **[Extended Key Usage](https://tools.ietf.org/html/rfc5280#section-4.2.1.12)**  
 Certificates may contain an extension field that controls the purpose for which the certificate can be used. If this field is empty, there are no restrictions on the usage, but if any usage is specified in here, valid SSL implementations have to enforce these usages.  
 Relevant usages for Kafka are: 
-        * Client authentication
-        * Server authentication
+* Client authentication
+* Server authentication
 Kafka brokers need both these usages to be allowed, as for intra-cluster communication every broker will behave as both the client and the server towards other brokers. It is not uncommon for corporate CAs to have a signing profile for webservers and use this for Kafka as well, which will only contain the _serverAuth_ usage value and cause the SSL handshake to fail. 
-     2. **Intermediate Certificates**  
+2. **Intermediate Certificates**  
 Corporate Root CAs are often kept offline for security reasons. To enable day-to-day usage, so called intermediate CAs are created, which are then used to sign the final certificates. When importing a certificate into the keystore that was signed by an intermediate CA it is necessary to provide the entire chain of trust up to the root CA. This can be done by simply _cat_ ing the certificate files into one combined certificate file and then importing this with keytool. 
-     3. **Failure to copy extension fields**  
+3. **Failure to copy extension fields**  
 CA operators are often hesitant to copy and requested extension fields from CSRs and prefer to specify these themselves as this makes it harder for a malicious party to obtain certificates with potentially misleading or fraudulent values. It is advisable to double check signed certificates, whether these contain all requested SAN fields to enable proper hostname verification. The following command can be used to print certificate details to the console, which should be compared with what was originally requested: 
             
             $ openssl x509 -in certificate.crt -text -noout
@@ -241,12 +241,12 @@ Following SSL configs are needed on the broker side
          ssl.truststore.password=test1234
 
 Note: ssl.truststore.password is technically optional but highly recommended. If a password is not set access to the truststore is still available, but integrity checking is disabled. Optional settings that are worth considering: 
-     1. ssl.client.auth=none ("required" => client authentication is required, "requested" => client authentication is requested and client without certs can still connect. The usage of "requested" is discouraged as it provides a false sense of security and misconfigured clients will still connect successfully.)
-     2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. (Default is an empty list)
-     3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 (list out the SSL protocols that you are going to accept from clients. Do note that SSL is deprecated in favor of TLS and using SSL in production is not recommended)
-     4. ssl.keystore.type=JKS
-     5. ssl.truststore.type=JKS
-     6. ssl.secure.random.implementation=SHA1PRNG
+1. ssl.client.auth=none ("required" => client authentication is required, "requested" => client authentication is requested and client without certs can still connect. The usage of "requested" is discouraged as it provides a false sense of security and misconfigured clients will still connect successfully.)
+2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. (Default is an empty list)
+3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 (list out the SSL protocols that you are going to accept from clients. Do note that SSL is deprecated in favor of TLS and using SSL in production is not recommended)
+4. ssl.keystore.type=JKS
+5. ssl.truststore.type=JKS
+6. ssl.secure.random.implementation=SHA1PRNG
 If you want to enable SSL for inter-broker communication, add the following to the server.properties file (it defaults to PLAINTEXT) 
     
     security.inter.broker.protocol=SSL
@@ -289,11 +289,11 @@ Note: ssl.truststore.password is technically optional but highly recommended. If
          ssl.key.password=test1234
 
 Other configuration settings that may also be needed depending on our requirements and the broker configuration: 
-     1. ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.
-     2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.
-     3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side
-     4. ssl.truststore.type=JKS
-     5. ssl.keystore.type=JKS
+1. ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.
+2. ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.
+3. ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side
+4. ssl.truststore.type=JKS
+5. ssl.keystore.type=JKS
   
 Examples using console-producer and console-consumer: 
     
