@@ -39,8 +39,8 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.AbstractKafkaConfig;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.AppendCallback;
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation;
@@ -90,7 +90,17 @@ public class AddPartitionsToTxnManagerTest {
                 KRaftConfigs.NODE_ID_CONFIG, "1",
                 KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER"),
             Map.of(),
-            false) { };
+            false) {
+        @Override
+        public void addReconfigurable(org.apache.kafka.common.Reconfigurable reconfigurable) {
+            // No-op for test
+        }
+
+        @Override
+        public void removeReconfigurable(org.apache.kafka.common.Reconfigurable reconfigurable) {
+            // No-op for test
+        }
+    };
     private final AddPartitionsToTxnManager addPartitionsToTxnManager =
             new AddPartitionsToTxnManager(config, networkClient, metadataCache, partitionFor, time);
 

@@ -26,6 +26,8 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
+import com.fasterxml.jackson.annotation.JsonValue;
+
 import java.util.Locale;
 
 public enum PluginType {
@@ -54,6 +56,7 @@ public enum PluginType {
     }
 
     @Override
+    @JsonValue
     public String toString() {
         return super.toString().toLowerCase(Locale.ROOT);
     }
