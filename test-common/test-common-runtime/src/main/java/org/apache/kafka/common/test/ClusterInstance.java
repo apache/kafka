@@ -333,6 +333,14 @@ public interface ClusterInstance {
         }
     }
 
+    default void createTopicWithAssignment(String topicName, Map<Integer, List<Integer>> replicaAssignment) throws InterruptedException {
+        try (Admin admin = admin()) {
+            admin.createTopics(List.of(new NewTopic(topicName, replicaAssignment)));
+            int partitions = replicaAssignment.size();
+            waitTopicCreation(topicName, partitions);
+        }
+    }
+
     /**
      * Deletes a topic and waits for the deletion to complete.
      *
@@ -368,7 +376,7 @@ public interface ClusterInstance {
 
     default void ensureConsistentMetadata(Collection<KafkaBroker> brokers, Collection<ControllerServer> controllers) throws InterruptedException  {
         for (ControllerServer controller : controllers) {
-            long controllerOffset = controller.raftManager().replicatedLog().endOffset().offset() - 1;
+            long controllerOffset = controller.raftManager().raftLog().endOffset().offset() - 1;
             TestUtils.waitForCondition(
                 () -> brokers.stream().allMatch(broker -> ((BrokerServer) broker).sharedServer().loader().lastAppliedOffset() >= controllerOffset),
                 60000L, "Timeout waiting for controller metadata propagating to brokers");

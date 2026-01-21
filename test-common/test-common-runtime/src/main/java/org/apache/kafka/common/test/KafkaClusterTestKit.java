@@ -26,8 +26,10 @@ import kafka.server.KafkaRaftServer;
 import kafka.server.SharedServer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
@@ -43,10 +45,10 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.DynamicVoters;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -68,7 +70,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -78,7 +79,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIRS_CONFIG;
@@ -419,12 +419,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble(), true)));
+                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble())));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 BrokerServer broker = entry.getValue();
-                futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble(),
-                    !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()))));
+                if (!nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id())) {
+                    futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble())));
+                }
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -438,21 +439,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     private void formatNode(
-        MetaPropertiesEnsemble ensemble,
-        boolean writeMetadataDirectory
+        MetaPropertiesEnsemble ensemble
     ) {
         try {
             final var nodeId = ensemble.nodeId().getAsInt();
             Formatter formatter = new Formatter();
             formatter.setNodeId(nodeId);
             formatter.setClusterId(ensemble.clusterId().get());
-            if (writeMetadataDirectory) {
-                formatter.setDirectories(ensemble.logDirProps().keySet());
-            } else {
-                formatter.setDirectories(ensemble.logDirProps().keySet().stream().
-                    filter(d -> !ensemble.metadataLogDir().get().equals(d)).
-                    collect(Collectors.toSet()));
-            }
+            formatter.setDirectories(ensemble.logDirProps().keySet());
             if (formatter.directories().isEmpty()) {
                 return;
             }
@@ -460,11 +454,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
-            if (writeMetadataDirectory) {
-                formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
-            } else {
-                formatter.setMetadataLogDirectory(Optional.empty());
-            }
+            formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
             StringBuilder dynamicVotersBuilder = new StringBuilder();
             String prefix = "";
             if (standalone) {
@@ -551,45 +541,48 @@ public class KafkaClusterTestKit implements AutoCloseable {
             "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
-    public class ClientPropertiesBuilder {
-        private final Properties properties;
-        private boolean usingBootstrapControllers = false;
+    public Admin admin() {
+        return admin(Map.of(), false);
+    }
 
-        public ClientPropertiesBuilder() {
-            this.properties = new Properties();
-        }
+    public Admin admin(Map<String, Object> configs) {
+        return admin(configs, false);
+    }
 
-        public ClientPropertiesBuilder(Properties properties) {
-            this.properties = properties;
-        }
+    public Admin admin(Map<String, Object> configs, boolean usingBootstrapControllers) {
+        Map<String, Object> props = new HashMap<>(configs);
+        setBootstrapConfig(props, usingBootstrapControllers);
+        setClientSaslConfig(props, usingBootstrapControllers);
+        return Admin.create(props);
+    }
 
-        public ClientPropertiesBuilder setUsingBootstrapControllers(boolean usingBootstrapControllers) {
-            this.usingBootstrapControllers = usingBootstrapControllers;
-            return this;
-        }
-
-        public Properties build() {
-            if (usingBootstrapControllers) {
-                properties.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllers());
-                properties.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
-            } else {
-                properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-                properties.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
-            }
-            return properties;
+    private void setBootstrapConfig(Map<String, Object> props, boolean usingBootstrapControllers) {
+        if (usingBootstrapControllers) {
+            props.putIfAbsent(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllers());
+            props.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+        } else {
+            props.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+            props.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
         }
     }
 
-    public ClientPropertiesBuilder newClientPropertiesBuilder(Properties properties) {
-        return new ClientPropertiesBuilder(properties);
-    }
+    private void setClientSaslConfig(Map<String, Object> props, boolean usingBootstrapControllers) {
+        SecurityProtocol protocol = usingBootstrapControllers ?
+            nodes.controllerListenerProtocol() : nodes.brokerListenerProtocol();
 
-    public ClientPropertiesBuilder newClientPropertiesBuilder() {
-        return new ClientPropertiesBuilder();
-    }
+        props.putIfAbsent(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, protocol.name);
 
-    public Properties clientProperties() {
-        return new ClientPropertiesBuilder().build();
+        if (protocol == SecurityProtocol.SASL_PLAINTEXT) {
+            props.putIfAbsent(SaslConfigs.SASL_MECHANISM, "PLAIN");
+            props.putIfAbsent(
+                SaslConfigs.SASL_JAAS_CONFIG,
+                String.format(
+                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";",
+                    JaasUtils.KAFKA_PLAIN_ADMIN,
+                    JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD
+                )
+            );
+        }
     }
 
     public String bootstrapServers() {

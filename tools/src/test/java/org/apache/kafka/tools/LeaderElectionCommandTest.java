@@ -278,7 +278,8 @@ public class LeaderElectionCommandTest {
             assertEquals(0, LeaderElectionCommand.mainNoExit(
                     "--bootstrap-server", cluster.bootstrapServers(),
                     "--election-type", "preferred",
-                    "--all-topic-partitions"
+                    "--topic", topic,
+                    "--partition", Integer.toString(partition)
             ));
 
             TestUtils.assertLeader(client, topicPartition, broker2);
