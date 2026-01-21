@@ -2102,7 +2102,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param coordinatorShardBuilderSupplier   The coordinator builder.
      * @param time                              The system time.
      * @param timer                             The system timer.
-     * @param writeTimeout               The write operation timeout.
+     * @param writeTimeout                      The write operation timeout.
      * @param runtimeMetrics                    The runtime metrics.
      * @param coordinatorMetrics                The coordinator metrics.
      * @param serializer                        The serializer.
