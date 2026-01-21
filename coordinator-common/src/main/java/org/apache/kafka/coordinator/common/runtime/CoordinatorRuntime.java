@@ -575,7 +575,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         /**
          * The coordinator executor.
          */
-        final CoordinatorExecutorImpl<S, U> executor;
+        final CoordinatorExecutorImpl<U> executor;
 
         /**
          * The current state.
@@ -642,8 +642,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.timer = new EventBasedCoordinatorTimer(tp, logContext);
             this.executor = new CoordinatorExecutorImpl<>(
                 logContext,
-                tp,
-                CoordinatorRuntime.this,
+                (operationName, operation) -> scheduleWriteOperation(
+                    operationName,
+                    tp,
+                    coordinator -> operation.generate()
+                ),
                 executorService
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
