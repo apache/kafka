@@ -428,7 +428,7 @@ public class BrokerLifecycleManager {
             state = BrokerState.STARTING;
             BrokerLifecycleManager.this.clusterId = clusterId;
             BrokerLifecycleManager.this.advertisedListeners = advertisedListeners.duplicate();
-            BrokerLifecycleManager.this.supportedFeatures = new HashMap<>(supportedFeatures);
+            BrokerLifecycleManager.this.supportedFeatures = Map.copyOf(supportedFeatures);
             eventQueue.scheduleDeferred("initialRegistrationTimeout",
                     new EventQueue.DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
                     new RegistrationTimeoutEvent());
