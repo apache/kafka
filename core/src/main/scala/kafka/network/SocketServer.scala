@@ -929,7 +929,7 @@ private[kafka] class Processor(
       }
     } finally {
       debug(s"Closing selector - processor $id")
-      CoreUtils.swallow(closeAll(), this, Level.ERROR)
+      Utils.swallow(this.logger.underlying, Level.ERROR, () => closeAll())
     }
   }
 
@@ -1112,7 +1112,8 @@ private[kafka] class Processor(
         // the channel has been closed by the selector but the quotas still need to be updated
         connectionQuotas.dec(listenerName, InetAddress.getByName(remoteHost))
         // Call listeners to notify for closed connection.
-        connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(connectionId), this, Level.ERROR))
+        connectionDisconnectListeners.foreach(listener => Utils.swallow(this.logger.underlying, Level.ERROR, () => {
+          () -> listener.onDisconnect(connectionId)}))
       } catch {
         case e: Throwable => processException(s"Exception while processing disconnection of $connectionId", e)
       }
@@ -1142,7 +1143,8 @@ private[kafka] class Processor(
         connectionQuotas.dec(listenerName, address)
       selector.close(connectionId)
       // Call listeners to notify for closed connection.
-      connectionDisconnectListeners.foreach(listener => CoreUtils.swallow(() -> listener.onDisconnect(connectionId), this, Level.ERROR))
+      connectionDisconnectListeners.foreach(listener => Utils.swallow(this.logger.underlying, Level.ERROR, () => {
+        () -> listener.onDisconnect(connectionId)}))
 
       inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response))
     }
@@ -1273,7 +1275,7 @@ private[kafka] class Processor(
       beginShutdown()
       thread.join()
       if (!started.get) {
-        CoreUtils.swallow(closeAll(), this, Level.ERROR)
+        Utils.swallow(this.logger.underlying, Level.ERROR, () => closeAll())
       }
     } finally {
       metricsGroup.removeMetric("IdlePercent", Map("networkProcessor" -> id.toString).asJava)
