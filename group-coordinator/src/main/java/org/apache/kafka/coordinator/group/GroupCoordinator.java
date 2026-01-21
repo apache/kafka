@@ -53,9 +53,9 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import java.time.Duration;
@@ -64,7 +64,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 /**
@@ -287,21 +286,6 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Fetch all offsets for a given Group.
-     *
-     * @param context           The request context.
-     * @param request           The OffsetFetchRequestGroup request.
-     *
-     * @return  A future yielding the results.
-     *          The error codes of the results are set to indicate the errors occurred during the execution.
-     */
-    CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
-        AuthorizableRequestContext context,
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        boolean requireStable
-    );
-
-    /**
      * Describe the Share Group Offsets for a given group.
      *
      * @param context           The request context
@@ -426,17 +410,6 @@ public interface GroupCoordinator {
     int partitionFor(String groupId);
 
     /**
-     * Remove the provided deleted partitions offsets.
-     *
-     * @param topicPartitions   The deleted partitions.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
-     */
-    void onPartitionsDeleted(
-        List<TopicPartition> topicPartitions,
-        BufferSupplier bufferSupplier
-    ) throws ExecutionException, InterruptedException;
-
-    /**
      * Group coordinator is now the leader for the given partition at the
      * given leader epoch. It should load cached state from the partition
      * and begin handling requests for groups mapped to it.
@@ -467,12 +440,12 @@ public interface GroupCoordinator {
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
      * @param delta     The metadata delta.
+     * @param newImage  The new metadata image.
      */
-    void onNewMetadataImage(
-        CoordinatorMetadataImage newImage,
-        CoordinatorMetadataDelta delta
+    void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage
     );
 
     /**

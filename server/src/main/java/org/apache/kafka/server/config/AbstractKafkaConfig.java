@@ -17,6 +17,7 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -31,6 +32,7 @@ import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
@@ -206,4 +208,24 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         }
         return connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT);
     }
+
+    /**
+     * Registers a component for dynamic reconfiguration notifications.
+     * <p>
+     * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
+     * When migrating code, replace KafkaConfig references with AbstractKafkaConfig.
+     *
+     * @param reconfigurable the component to register for configuration updates
+     */
+    public abstract void addReconfigurable(Reconfigurable reconfigurable);
+
+    /**
+     * Unregisters a component from dynamic reconfiguration notifications.
+     * <p>
+     * This method exists to support migration from kafka.server.KafkaConfig (Scala/core) to AbstractKafkaConfig (Java/server).
+     * When migrating code, replace KafkaConfig references with AbstractKafkaConfig.
+     *
+     * @param reconfigurable the component to unregister
+     */
+    public abstract void removeReconfigurable(Reconfigurable reconfigurable);
 }

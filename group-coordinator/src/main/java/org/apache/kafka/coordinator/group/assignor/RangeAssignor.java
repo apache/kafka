@@ -53,7 +53,7 @@ import java.util.Set;
  *
  * <p>The co-partitioned assignment will be:
  * <ul>
- * <li<code>    M0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
+ * <li><code>   M0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
  * <li><code>   M1: [T1P2, T2P2]                </code></li>
  * </ul>
  *
@@ -64,8 +64,8 @@ import java.util.Set;
  *
  * <p>The assignment could be completely shuffled to:
  * <ul>
- * <li><code>   M3 (was M0): [T1P2, T2P2]               (before it was [T1P0, T1P1, T2P0, T2P1])  </code>
- * <li><code>   M2 (was M1): [T1P0, T1P1, T2P0, T2P1]   (before it was [T1P2, T2P2])  </code>
+ * <li><code>   M3 (was M0): [T1P2, T2P2]               (before it was [T1P0, T1P1, T2P0, T2P1])  </code></li>
+ * <li><code>   M2 (was M1): [T1P0, T1P1, T2P0, T2P1]   (before it was [T1P2, T2P2])  </code></li>
  * </ul>
  *
  * The assignment change was caused by the change of <code>member.id</code> relative order, and
@@ -77,8 +77,8 @@ import java.util.Set;
  *
  * <p>The assignment will always be:
  * <ul>
- * <li><code>   I0: [T1P0, T1P1, T2P0, T2P1]    </code>
- * <li><code>   I1: [T1P2, T2P2]                </code>
+ * <li><code>   I0: [T1P0, T1P1, T2P0, T2P1]    </code></li>
+ * <li><code>   I1: [T1P2, T2P2]                </code></li>
  * </ul>
  * <p>
  */

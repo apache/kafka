@@ -96,7 +96,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         public TxnOffsetCommitRequest build(short version) {
             if (version < 3 && groupMetadataSet()) {
                 throw new UnsupportedVersionException("Broker doesn't support group metadata commit API on version " + version
-                + ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.");
+                    + ", minimum supported request version is 3 which requires brokers to be on version 2.5 or above.");
             }
             if (!isTransactionV2Enabled) {
                 version = (short) Math.min(version, LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2);

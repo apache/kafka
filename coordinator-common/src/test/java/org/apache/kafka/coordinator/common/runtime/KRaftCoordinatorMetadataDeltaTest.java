@@ -32,20 +32,14 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KRaftCoordinatorMetadataDeltaTest {
 
     @Test
     public void testKRaftCoordinatorDeltaWithNulls() {
-        assertTrue(new KRaftCoordinatorMetadataDelta(null).changedTopicIds().isEmpty());
-        assertTrue(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).changedTopicIds().isEmpty());
-
-        assertTrue(new KRaftCoordinatorMetadataDelta(null).deletedTopicIds().isEmpty());
-        assertTrue(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).deletedTopicIds().isEmpty());
-
-        assertTrue(new KRaftCoordinatorMetadataDelta(null).createdTopicIds().isEmpty());
-        assertTrue(new KRaftCoordinatorMetadataDelta(new MetadataDelta(MetadataImage.EMPTY)).createdTopicIds().isEmpty());
+        assertThrows(NullPointerException.class, () -> new KRaftCoordinatorMetadataDelta(null));
     }
 
     @Test

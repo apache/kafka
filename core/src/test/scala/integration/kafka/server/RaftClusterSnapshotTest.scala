@@ -60,12 +60,12 @@ class RaftClusterSnapshotTest {
       TestUtils.waitUntilTrue(
         () => {
           cluster.raftManagers().asScala.forall { case (_, raftManager) =>
-            raftManager.replicatedLog.latestSnapshotId.isPresent
+            raftManager.raftLog.latestSnapshotId.isPresent
           }
         },
         s"Expected for every controller and broker to generate a snapshot: ${
           cluster.raftManagers().asScala.map { case (id, raftManager) =>
-            (id, raftManager.replicatedLog.latestSnapshotId)
+            (id, raftManager.raftLog.latestSnapshotId)
           }
         }"
       )
@@ -76,7 +76,7 @@ class RaftClusterSnapshotTest {
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
         Using.resource(
           RecordsSnapshotReader.of(
-            raftManager.replicatedLog.latestSnapshot.get(),
+            raftManager.raftLog.latestSnapshot.get(),
             new MetadataRecordSerde(),
             BufferSupplier.create(),
             1,
