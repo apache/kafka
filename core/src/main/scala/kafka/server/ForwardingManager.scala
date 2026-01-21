@@ -24,13 +24,13 @@ import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.server.ForwardingManagerUtil
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.metrics.ForwardingManagerMetrics
 
 import java.util.Optional
 import java.util.concurrent.TimeUnit
-import scala.jdk.OptionConverters.RichOptional
 
 trait ForwardingManager {
   def close(): Unit
@@ -90,29 +90,6 @@ trait ForwardingManager {
   def controllerApiVersions: Optional[NodeApiVersions]
 }
 
-object ForwardingManager {
-  def apply(
-    channelManager: NodeToControllerChannelManager,
-    metrics: Metrics
-  ): ForwardingManager = {
-    new ForwardingManagerImpl(channelManager, metrics)
-  }
-
-  private[server] def buildEnvelopeRequest(context: RequestContext,
-                                           forwardRequestBuffer: ByteBuffer): EnvelopeRequest.Builder = {
-    val principalSerde = context.principalSerde.toScala.getOrElse(
-      throw new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
-        "since there is no serde defined")
-    )
-    val serializedPrincipal = principalSerde.serialize(context.principal)
-    new EnvelopeRequest.Builder(
-      forwardRequestBuffer,
-      serializedPrincipal,
-      context.clientAddress.getAddress
-    )
-  }
-}
-
 class ForwardingManagerImpl(
   channelManager: NodeToControllerChannelManager,
   metrics: Metrics
@@ -128,7 +105,7 @@ class ForwardingManagerImpl(
     requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
-    val envelopeRequest = ForwardingManager.buildEnvelopeRequest(requestContext, requestBufferCopy)
+    val envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(requestContext, requestBufferCopy)
     val requestCreationTimeMs = TimeUnit.NANOSECONDS.toMillis(requestCreationNs)
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
