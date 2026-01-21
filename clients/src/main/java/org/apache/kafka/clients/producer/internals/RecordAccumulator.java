@@ -83,6 +83,8 @@ public class RecordAccumulator {
     private final Time time;
     private final ConcurrentMap<String /*topic*/, TopicInfo> topicInfoMap = new CopyOnWriteMap<>();
     private final ConcurrentMap<Integer /*nodeId*/, NodeLatencyStats> nodeStats = new CopyOnWriteMap<>();
+    // Cache for batch size estimations to reduce repeated calculations
+    private final ConcurrentMap<String /*topic*/, Integer> batchSizeEstimationCache = new CopyOnWriteMap<>();
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
@@ -326,11 +328,23 @@ public class RecordAccumulator {
                 }
 
                 if (buffer == null) {
-                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(
-                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers));
-                    log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, topic, effectivePartition, maxTimeToBlock);
+                    // Use cached batch size estimation if available to reduce computation overhead
+                    Integer cachedEstimation = batchSizeEstimationCache.get(topic);
+                    int estimatedSize;
+                    if (cachedEstimation != null) {
+                        estimatedSize = Math.max(this.batchSize, cachedEstimation);
+                    } else {
+                        estimatedSize = AbstractRecords.estimateSizeInBytesUpperBound(
+                                RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, headers);
+                        estimatedSize = Math.max(this.batchSize, estimatedSize);
+                        // Cache the estimation for future use (with some buffer for variability)
+                        batchSizeEstimationCache.put(topic, (int) (estimatedSize * 1.1));
+                    }
+                    
+                    log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", 
+                            estimatedSize, topic, effectivePartition, maxTimeToBlock);
                     // This call may block if we exhausted buffer space.
-                    buffer = free.allocate(size, maxTimeToBlock);
+                    buffer = free.allocate(estimatedSize, maxTimeToBlock);
                     // Update the current time in case the buffer allocation blocked above.
                     // NOTE: getting time may be expensive, so calling it under a lock
                     // should be avoided.
@@ -384,14 +398,17 @@ public class RecordAccumulator {
                                               long nowMs) {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
+        // Check one more time if another thread created a batch while we were allocating buffer
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
         if (appendResult != null) {
             // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
             return appendResult;
         }
 
+        // Create TopicPartition object only once to avoid repeated allocations
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
         MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
-        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
+        ProducerBatch batch = new ProducerBatch(topicPartition, recordsBuilder, nowMs);
         FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
                 callbacks, nowMs));
 
@@ -1203,6 +1220,8 @@ public class RecordAccumulator {
     public void close() {
         this.closed = true;
         this.free.close();
+        // Clear caches to prevent memory leaks
+        this.batchSizeEstimationCache.clear();
     }
 
     /**
