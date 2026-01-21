@@ -3994,10 +3994,28 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
 
 def updateVersionTask = tasks.register('updateVersion') {
   group = "Release"
-  description = "Syncs python, pom, and script versions with gradle.properties. Fails if files or patterns are missing."
+  description = "Syncs python, pom, and script versions with gradle.properties. Fails if files or patterns are missing. Use -PnewVersion=X.Y.Z to set a new version."
 
   doLast {
-    def rawVersion = project.version.toString()
+    def rawVersion
+    if (project.hasProperty('newVersion')) {
+      rawVersion = newVersion
+      if (!rawVersion.matches(/^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$/)) {
+        throw new GradleException("Invalid version format: '${rawVersion}'. Expected format: X.Y.Z or X.Y.Z-SNAPSHOT")
+      }
+      // Update gradle.properties
+      def gradlePropsFile = file("${project.rootDir}/gradle.properties")
+      if (gradlePropsFile.exists()) {
+        def propsContent = gradlePropsFile.text
+        def newPropsContent = propsContent.replaceAll(/(?m)^version\s*=.*/, "version=${rawVersion}")
+        if (propsContent != newPropsContent) {
+          gradlePropsFile.text = newPropsContent
+          println "Updated gradle.properties to version ${rawVersion}"
+        }
+      }
+    } else {
+      rawVersion = project.version.toString()
+    }
 
     // Python Package Version (PEP 440): 4.3.0.dev0
     def pythonVersion = rawVersion.contains("SNAPSHOT") ?
