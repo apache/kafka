@@ -1891,10 +1891,6 @@ public interface Admin extends AutoCloseable {
     /**
      * Remove a voter node from the KRaft metadata quorum.
      *
-     * <p> Note: Since 4.2.0, If {@code controller.quorum.auto.join.enable} is set to true the controller
-     * must be shutdown before removing the controller from the voter set to prevent the removed
-     * controller from automatically joining again.
-     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      */
@@ -1914,6 +1910,10 @@ public interface Admin extends AutoCloseable {
      * of the current cluster. If the cluster id does not match, the operation
      * will fail with {@link InconsistentClusterIdException}.
      * If not provided, the cluster id check is skipped.
+     *
+     * <p> Note: Since 4.2.0, if {@code controller.quorum.auto.join.enable} is set to true the controller
+     * must be shutdown before removing the controller from the voter set to prevent the removed
+     * controller from automatically joining again.
      *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
