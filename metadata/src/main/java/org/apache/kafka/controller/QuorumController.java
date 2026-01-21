@@ -98,7 +98,7 @@ import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.ConfigValidator;
+import org.apache.kafka.metadata.DynamicConfigValidator;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.VersionRange;
@@ -210,7 +210,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
-        private ConfigValidator configValidator = null;
+        private DynamicConfigValidator dynamicConfigValidator = null;
         private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
@@ -347,8 +347,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setConfigValidator(ConfigValidator configValidator) {
-            this.configValidator = configValidator;
+        public Builder setConfigValidator(DynamicConfigValidator dynamicConfigValidator) {
+            this.dynamicConfigValidator = dynamicConfigValidator;
             return this;
         }
 
@@ -443,7 +443,7 @@ public final class QuorumController implements Controller {
                     createTopicPolicy,
                     alterConfigPolicy,
                     configurationValidator,
-                    configValidator,
+                    dynamicConfigValidator,
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
@@ -1494,7 +1494,7 @@ public final class QuorumController implements Controller {
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
         ConfigurationValidator configurationValidator,
-        ConfigValidator configValidator,
+        DynamicConfigValidator dynamicConfigValidator,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
@@ -1557,7 +1557,7 @@ public final class QuorumController implements Controller {
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
             setFeatureControl(featureControl).
-            setConfigValidator(configValidator).
+            setConfigValidator(dynamicConfigValidator).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).

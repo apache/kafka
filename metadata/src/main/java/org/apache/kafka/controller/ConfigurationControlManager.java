@@ -30,7 +30,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.ConfigValidator;
+import org.apache.kafka.metadata.DynamicConfigValidator;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
@@ -77,7 +77,7 @@ public class ConfigurationControlManager {
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
     private final FeatureControlManager featureControl;
-    private final ConfigValidator configValidator;
+    private final DynamicConfigValidator dynamicConfigValidator;
 
     static class Builder {
         private LogContext logContext = null;
@@ -89,7 +89,7 @@ public class ConfigurationControlManager {
         private Map<String, Object> staticConfig = Map.of();
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
-        private ConfigValidator configValidator = null;
+        private DynamicConfigValidator dynamicConfigValidator = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -136,8 +136,8 @@ public class ConfigurationControlManager {
             return this;
         }
 
-        Builder setConfigValidator(ConfigValidator configValidator) {
-            this.configValidator = configValidator;
+        Builder setConfigValidator(DynamicConfigValidator dynamicConfigValidator) {
+            this.dynamicConfigValidator = dynamicConfigValidator;
             return this;
         }
 
@@ -160,7 +160,7 @@ public class ConfigurationControlManager {
                 staticConfig,
                 nodeId,
                 featureControl,
-                configValidator);
+                dynamicConfigValidator);
         }
     }
 
@@ -173,7 +173,7 @@ public class ConfigurationControlManager {
             Map<String, Object> staticConfig,
             int nodeId,
             FeatureControlManager featureControl,
-            ConfigValidator configValidator
+            DynamicConfigValidator dynamicConfigValidator
     ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
@@ -186,7 +186,7 @@ public class ConfigurationControlManager {
         this.staticConfig = Map.copyOf(staticConfig);
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
-        this.configValidator = configValidator;
+        this.dynamicConfigValidator = dynamicConfigValidator;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -338,9 +338,9 @@ public class ConfigurationControlManager {
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
         TimelineHashMap<String, String> existingConfigsSnapshot = configData.get(configResource);
         if (existingConfigsSnapshot != null) {
-            if (configValidator != null) {
+            if (dynamicConfigValidator != null) {
                 for (String name : existingConfigsSnapshot.keySet()) {
-                    if (!configValidator.isValidConfig(configResource.type(), name)) {
+                    if (!dynamicConfigValidator.isValidConfig(configResource.type(), name)) {
                         existingConfigsSnapshot.remove(name);
                     }
                 }
@@ -527,6 +527,12 @@ public class ConfigurationControlManager {
     public void replay(ConfigRecord record) {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
+
+        // Filter out invalid configurations using DynamicConfigValidator
+        if (dynamicConfigValidator != null && !dynamicConfigValidator.isValidConfig(configResource.type(), record.name())) {
+            return;
+        }
+        
         TimelineHashMap<String, String> configs = configData.get(configResource);
         if (configs == null) {
             configs = new TimelineHashMap<>(snapshotRegistry, 0);

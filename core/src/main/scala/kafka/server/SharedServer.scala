@@ -30,7 +30,7 @@ import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
-import org.apache.kafka.metadata.{ConfigValidator, ListenerInfo, MetadataRecordSerde}
+import org.apache.kafka.metadata.{DynamicConfigValidator, ListenerInfo, MetadataRecordSerde}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics}
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
@@ -111,7 +111,7 @@ class SharedServer(
   private var usedByController: Boolean = false
   val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
   val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
-  val configValidator: ConfigValidator = new ConfigValidatorImpl()
+  val dynamicConfigValidator: DynamicConfigValidator = new ControllerConfigurationValidator(brokerConfig)
   
   // Factory for creating request handler pools with shared aggregate thread counter
   val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
@@ -327,7 +327,7 @@ class SharedServer(
           setFaultHandler(metadataLoaderFaultHandler).
           setHighWaterMarkAccessor(() => _raftManager.client.highWatermark()).
           setMetrics(metadataLoaderMetrics).
-          setConfigValidator(configValidator)
+          setConfigValidator(dynamicConfigValidator)
         loader = loaderBuilder.build()
         snapshotEmitter = new SnapshotEmitter.Builder().
           setNodeId(nodeId).

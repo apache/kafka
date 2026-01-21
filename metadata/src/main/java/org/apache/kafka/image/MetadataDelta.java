@@ -40,7 +40,7 @@ import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.metadata.ConfigValidator;
+import org.apache.kafka.metadata.DynamicConfigValidator;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Optional;
@@ -52,26 +52,26 @@ import java.util.Optional;
 public final class MetadataDelta {
     public static class Builder {
         private MetadataImage image = MetadataImage.EMPTY;
-        private ConfigValidator configValidator = null;
+        private DynamicConfigValidator dynamicConfigValidator = null;
 
         public Builder setImage(MetadataImage image) {
             this.image = image;
             return this;
         }
 
-        public Builder setConfigValidator(ConfigValidator configValidator) {
-            this.configValidator = configValidator;
+        public Builder setConfigValidator(DynamicConfigValidator dynamicConfigValidator) {
+            this.dynamicConfigValidator = dynamicConfigValidator;
             return this;
         }
 
         public MetadataDelta build() {
-            return new MetadataDelta(image, configValidator);
+            return new MetadataDelta(image, dynamicConfigValidator);
         }
     }
 
     private final MetadataImage image;
 
-    private final ConfigValidator configValidator;
+    private final DynamicConfigValidator dynamicConfigValidator;
 
     private FeaturesDelta featuresDelta = null;
 
@@ -95,9 +95,9 @@ public final class MetadataDelta {
         this(image, null);
     }
 
-    public MetadataDelta(MetadataImage image, ConfigValidator configValidator) {
+    public MetadataDelta(MetadataImage image, DynamicConfigValidator dynamicConfigValidator) {
         this.image = image;
-        this.configValidator = configValidator;
+        this.dynamicConfigValidator = dynamicConfigValidator;
     }
 
     public MetadataImage image() {
@@ -136,7 +136,7 @@ public final class MetadataDelta {
     }
 
     public ConfigurationsDelta getOrCreateConfigsDelta() {
-        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs(), configValidator);
+        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs(), dynamicConfigValidator);
         return configsDelta;
     }
 

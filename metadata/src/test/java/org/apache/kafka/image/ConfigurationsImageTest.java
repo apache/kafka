@@ -20,7 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
-import org.apache.kafka.metadata.ConfigValidator;
+import org.apache.kafka.metadata.DynamicConfigValidator;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -123,12 +123,12 @@ public class ConfigurationsImageTest {
     @Test
     public void testConfigurationDeltaFiltering() {
         Set<String> validConfigs = Set.of("foo", "bar");
-        ConfigValidator configValidator = (resourceType, configName) -> validConfigs.contains(configName);
+        DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
 
         Map<String, String> initialConfigs = Map.of("foo", "value1");
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
 
-        ConfigurationDelta delta = new ConfigurationDelta(image, configValidator);
+        ConfigurationDelta delta = new ConfigurationDelta(image, dynamicConfigValidator);
         // "bar" is valid, should be added
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("bar").setValue("value2"));
@@ -160,6 +160,32 @@ public class ConfigurationsImageTest {
         assertTrue(result.data().containsKey("foo"));
         assertTrue(result.data().containsKey("bar"));
         assertTrue(result.data().containsKey("baz"));
+    }
+
+    @Test
+    public void testConfigurationDeltaFinishSnapshotFiltersInvalidConfigs() {
+        Set<String> validConfigs = Set.of("foo", "bar");
+        DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
+
+        Map<String, String> initialConfigs = Map.of(
+            "foo", "value1",      // valid
+            "bar", "value2",      // valid
+            "invalid", "value3"   // invalid
+        );
+        ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
+        ConfigurationDelta delta = new ConfigurationDelta(image, dynamicConfigValidator);
+
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("foo").setValue("value1"));
+        delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
+            .setName("bar").setValue("value2"));
+        delta.finishSnapshot();
+        
+        ConfigurationImage result = delta.apply();
+
+        assertTrue(result.data().containsKey("foo"));
+        assertTrue(result.data().containsKey("bar"));
+        assertFalse(result.data().containsKey("invalid"));
     }
 
     private static void testToImage(ConfigurationsImage image) {
