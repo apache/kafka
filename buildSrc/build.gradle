@@ -1,0 +1,192 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+    id 'java-library'
+}
+
+group = 'org.apache.kafka'
+version = project.findProperty('kafkaPluginsVersion') ?: '1.0.0-SNAPSHOT'
+
+repositories {
+    gradlePluginPortal()
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+dependencies {
+    // For Maven plugin functionality
+    implementation 'org.apache.maven:maven-plugin-api:3.9.4'
+    implementation 'org.apache.maven:maven-core:3.9.4'
+    implementation 'org.apache.maven:maven-artifact:3.9.4'
+    implementation 'org.apache.maven.plugin-tools:maven-plugin-annotations:3.9.0'
+
+    // For testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.9.2'
+    testImplementation 'org.junit.platform:junit-platform-launcher:1.9.2'
+    testImplementation 'org.mockito:mockito-core:5.3.1'
+    testImplementation gradleTestKit()
+}
+
+gradlePlugin {
+    plugins {
+        kafkaPublicApiChecker {
+            id = 'org.apache.kafka.public-api-checker'
+            implementationClass = 'org.apache.kafka.gradle.KafkaPublicApiCheckerPlugin'
+            displayName = 'Kafka Public API Checker'
+            description = 'Internal plugin for checking public API consistency in Kafka codebase'
+        }
+
+        kafkaInternalApiChecker {
+            id = 'org.apache.kafka.internal-api-checker'
+            implementationClass = 'org.apache.kafka.gradle.KafkaInternalApiCheckerPlugin'
+            displayName = 'Kafka Internal API Checker'
+            description = 'Plugin for external projects to check they don\'t use internal Kafka APIs'
+        }
+    }
+}
+
+// Configure publishing for both Gradle and Maven plugins
+publishing {
+    publications {
+        // Maven plugin (separate from Gradle plugin publication)
+        mavenPlugin(MavenPublication) {
+            groupt  = 'org.apache.kafka'
+            artifactId = 'kafka-internal-api-checker-maven-plugin'
+            version = project.findProperty('kafkaPluginsVersion') ?: '1.0.0-SNAPSHOT'
+
+            from components.java
+
+            pom {
+                name = 'Apache Kafka Internal API Checker Maven Plugin'
+                description = 'Maven plugin to check that external projects don\'t use internal Kafka APIs'
+                url = 'https://kafka.apache.org'
+                packaging = 'maven-plugin'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'apache-kafka'
+                        name = 'Apache Kafka Team'
+                        email = 'dev@kafka.apache.org'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/apache/kafka.git'
+                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
+                    url = 'https://github.com/apache/kafka'
+                }
+            }
+        }
+    }
+
+    // Configure the automatically generated plugin marker publications
+    afterEvaluate {
+        publications.matching { it.name.endsWith('PluginMarkerMaven') }.configureEach {
+            pom {
+                name = 'Apache Kafka Gradle Plugins'
+                description = 'Gradle plugins for Apache Kafka public API validation'
+                url = 'https://kafka.apache.org'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'apache-kafka'
+                        name = 'Apache Kafka Team'
+                        email = 'dev@kafka.apache.org'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/apache/kafka.git'
+                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
+                    url = 'https://github.com/apache/kafka'
+                }
+            }
+        }
+
+        // Also configure the main plugin publication
+        publications.matching { it.name == 'pluginMaven' }.configureEach {
+            pom {
+                name = 'Apache Kafka Gradle Plugins'
+                description = 'Gradle plugins for Apache Kafka public API validation'
+                url = 'https://kafka.apache.org'
+
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'apache-kafka'
+                        name = 'Apache Kafka Team'
+                        email = 'dev@kafka.apache.org'
+                    }
+                }
+
+                scm {
+                    connection = 'scm:git:https://github.com/apache/kafka.git'
+                    developerConnection = 'scm:git:https://github.com/apache/kafka.git'
+                    url = 'https://github.com/apache/kafka'
+                }
+            }
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// Task to run plugin validation
+tasks.register('validateKafkaPlugins') {
+    group = 'verification'
+    description = 'Validates that all plugins are properly configured'
+
+    doLast {
+        gradlePlugin.plugins.each { plugin ->
+            println "✅ Plugin '${plugin.id}' -> ${plugin.implementationClass}"
+        }
+
+        // Validate that source files exist
+        def pluginSourceFiles = [
+            'src/main/java/org/apache/kafka/gradle/KafkaPublicApiCheckerPlugin.java',
+            'src/main/java/org/apache/kafka/gradle/KafkaInternalApiCheckerPlugin.java',
+            'src/main/java/org/apache/kafka/publicapi/PublicApiChecker.java',
+            'src/main/java/org/apache/kafka/publicapi/PublicApiViolation.java',
+            'src/main/java/org/apache/kafka/publicapi/ViolationReporter.java',
+            'src/main/java/org/apache/kafka/maven/KafkaInternalApiCheckerMojo.java'
+        ]
+
+        pluginSourceFiles.each { sourceFile ->
+            def file = new File(project.projectDir, sourceFile)
+            if (file.exists()) {
+                println "✅ Source file exists: ${sourceFile}"
+            } else {
+                throw new GradleException("❌ Source file not found: ${sourceFile}")
+            }
+        }
+    }
+}
+
+check.dependsOn validateKafkaPlugins

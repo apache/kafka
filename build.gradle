@@ -334,6 +334,8 @@ subprojects {
 
   apply plugin: 'checkstyle'
   apply plugin: "com.github.spotbugs"
+  apply plugin: 'org.apache.kafka.public-api-checker'
+
 
   // We use the shadow plugin for the jmh-benchmarks module and the `-all` jar can get pretty large, so
   // don't publish it
@@ -733,6 +735,20 @@ subprojects {
 
   check.dependsOn('javadoc')
 
+kafkaPublicApiChecker {
+
+    // NEW: Add all project JARs for @PublicApi scanning
+    projectJarFiles.from(
+        jar.archiveFile,                    // Main JAR
+        // Add other relevant JARs if needed
+    )
+
+    // NEW: Enable/disable dual validation
+    enforceJavadocConsistency = true
+
+    enabled = true
+    failOnViolation = true
+}
   task systemTestLibs(dependsOn: jar)
 
   if (!sourceSets.test.allSource.isEmpty()) {
