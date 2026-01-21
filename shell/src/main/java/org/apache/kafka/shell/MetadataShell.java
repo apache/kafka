@@ -17,11 +17,14 @@
 
 package org.apache.kafka.shell;
 
+import kafka.server.ControllerConfigurationValidator;
+import kafka.server.KafkaConfig;
 import kafka.tools.TerseFailure;
 
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
+import org.apache.kafka.metadata.DynamicConfigValidator;
 import org.apache.kafka.metadata.util.SnapshotFileReader;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
@@ -47,6 +50,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -148,10 +152,13 @@ public final class MetadataShell {
 
     private void initializeWithSnapshotFileReader() throws Exception {
         this.fileLock = takeDirectoryLockIfExists(parentParent(new File(snapshotPath)));
+        DynamicConfigValidator dynamicConfigValidator = new ControllerConfigurationValidator(new KafkaConfig(new Properties(), false));
+
         this.loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setNodeId(-1).
                 setHighWaterMarkAccessor(() -> snapshotFileReader.highWaterMark()).
+                setConfigValidator(dynamicConfigValidator).
                 build();
         snapshotFileReader = new SnapshotFileReader(snapshotPath, loader);
         snapshotFileReader.startup();
