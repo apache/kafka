@@ -213,57 +213,52 @@ public class DynamicBrokerConfig {
          * The set of configurations which the DynamicListenerConfig object listens for. Many of
          * these are also monitored by other objects such as ChannelBuilders and SocketServers.
          */
-        public static final Set<String> RECONFIGURABLE_CONFIGS;
+        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
+                // Listener configs
+                SocketServerConfigs.LISTENERS_CONFIG,
+                SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
 
-        static {
-            Set<String> configs = new HashSet<>();
-            // Listener configs
-            configs.add(SocketServerConfigs.LISTENERS_CONFIG);
-            configs.add(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG);
+                // SSL configs
+                BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+                SslConfigs.SSL_PROTOCOL_CONFIG,
+                SslConfigs.SSL_PROVIDER_CONFIG,
+                SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+                SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+                SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+                SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+                SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+                SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+                SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+                SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+                SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+                SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+                SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+                SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+                SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
+                BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+                SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
 
-            // SSL configs
-            configs.add(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
-            configs.add(SslConfigs.SSL_PROTOCOL_CONFIG);
-            configs.add(SslConfigs.SSL_PROVIDER_CONFIG);
-            configs.add(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
-            configs.add(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
-            configs.add(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
-            configs.add(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
-            configs.add(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
-            configs.add(SslConfigs.SSL_KEY_PASSWORD_CONFIG);
-            configs.add(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
-            configs.add(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
-            configs.add(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
-            configs.add(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
-            configs.add(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
-            configs.add(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
-            configs.add(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
-            configs.add(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG);
-            configs.add(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+                // SASL configs
+                BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG,
+                SaslConfigs.SASL_JAAS_CONFIG,
+                BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+                SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
+                SaslConfigs.SASL_KERBEROS_KINIT_CMD,
+                SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,
+                SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,
+                SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
+                BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG,
+                SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR,
+                SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER,
+                SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS,
+                SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS,
 
-            // SASL configs
-            configs.add(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG);
-            configs.add(SaslConfigs.SASL_JAAS_CONFIG);
-            configs.add(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
-            configs.add(SaslConfigs.SASL_KERBEROS_SERVICE_NAME);
-            configs.add(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
-            configs.add(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
-            configs.add(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
-            configs.add(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
-            configs.add(BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG);
-            configs.add(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR);
-            configs.add(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER);
-            configs.add(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS);
-            configs.add(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS);
+                // Connection limit configs
+                SocketServerConfigs.MAX_CONNECTIONS_CONFIG,
+                SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG,
 
-            // Connection limit configs
-            configs.add(SocketServerConfigs.MAX_CONNECTIONS_CONFIG);
-            configs.add(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG);
-
-            // Network threads
-            configs.add(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
-            RECONFIGURABLE_CONFIGS = Set.copyOf(configs);
-        }
+                // Network threads
+                SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
     }
 
     public static class DynamicRemoteLogConfig {
@@ -276,13 +271,11 @@ public class DynamicBrokerConfig {
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
                 RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP,
-                RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP
-        );
+                RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP);
     }
 
     public static class DynamicReplicationConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG
-        );
+                ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
     }
 }
