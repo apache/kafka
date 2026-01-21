@@ -25,8 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 import java.io.Closeable;
 import java.io.DataOutput;
 import java.io.EOFException;
@@ -95,6 +93,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 public final class Utils {
 

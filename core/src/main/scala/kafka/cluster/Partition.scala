@@ -1505,7 +1505,7 @@ class Partition(val topicPartition: TopicPartition,
   })
 
   def logStartOffset: Long = {
-    inReadLock(leaderIsrUpdateLock, () => {
+    inReadLock[Long, Exception](leaderIsrUpdateLock, () => {
       leaderLogIfLocal.map(_.logStartOffset).getOrElse(-1)
     })
   }
