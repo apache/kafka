@@ -3252,9 +3252,6 @@ kafka.tools.StorageToolTest:
 - testVersionMappingWithInvalidReleaseVersion
 - testVersionMappingWithNoReleaseVersion
 - testVersionMappingWithValidReleaseVersion
-kafka.utils.CoreUtilsTest:
-- testInLock
-- testSwallow
 kafka.utils.LoggingTest:
 - testLog4jControllerIsRegistered
 - testLogName
