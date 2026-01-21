@@ -33,4 +33,3 @@ public interface DynamicConfigValidator {
      */
     boolean isValidConfig(ConfigResource.Type resourceType, String configName);
 }
-
