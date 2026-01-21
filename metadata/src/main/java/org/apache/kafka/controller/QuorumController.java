@@ -632,7 +632,7 @@ public final class QuorumController implements Controller {
         }
     }
 
-    void appendControlEvent(String name, Runnable handler) {
+    public void appendControlEvent(String name, Runnable handler) {
         ControllerEvent event = new ControllerEvent(name, handler);
         queue.append(event);
     }

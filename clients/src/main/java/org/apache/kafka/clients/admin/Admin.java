@@ -71,7 +71,7 @@ import java.util.Set;
  *     <li>Typically an {@code all()} method is provided for getting the overall success/failure of the batch and a
  *     {@code values()} method provided access to each item in a request batch.
  *     Other methods may also be provided.
- *     <li>For synchronous behaviour use {@link KafkaFuture#get()}
+ *     <li>For synchronous behavior, use {@link KafkaFuture#get()}.
  * </ul>
  * <p>
  * Here is a simple example of using an Admin client instance to create a new topic:

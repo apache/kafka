@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -50,6 +49,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorTimer;
+import org.apache.kafka.coordinator.group.GroupCoordinatorShard.DeletedTopic;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -1530,7 +1530,7 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testOnPartitionsDeleted() {
+    public void testOnTopicsDeleted() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -1546,19 +1546,18 @@ public class GroupCoordinatorShardTest {
             metricsShard
         );
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        List<DeletedTopic> deletedTopics = List.of(new DeletedTopic(fooTopicId, "foo"));
+
         List<CoordinatorRecord> records = List.of(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
             "group",
             "foo",
             0
         ));
 
-        when(offsetMetadataManager.onPartitionsDeleted(
-            List.of(new TopicPartition("foo", 0))
-        )).thenReturn(records);
+        when(offsetMetadataManager.onTopicsDeleted(deletedTopics)).thenReturn(records);
 
-        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.onPartitionsDeleted(
-            List.of(new TopicPartition("foo", 0))
-        );
+        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.onTopicsDeleted(deletedTopics);
 
         assertEquals(records, result.records());
         assertNull(result.response());

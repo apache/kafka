@@ -1566,6 +1566,10 @@ public class GroupMetadataManager {
         int receivedMemberEpoch,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) {
+        // Epoch 0 is a special value indicating the member wants to (re)join the group.
+        // This is valid per KIP-848 fenced member recovery protocol.
+        if (receivedMemberEpoch == 0) return;
+
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The consumer group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
@@ -1594,6 +1598,9 @@ public class GroupMetadataManager {
         ShareGroupMember member,
         int receivedMemberEpoch
     ) {
+        // Epoch 0 is a special value indicating the member wants to (re)join the group.
+        if (receivedMemberEpoch == 0) return;
+
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The share group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
@@ -1700,6 +1707,9 @@ public class GroupMetadataManager {
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks
     ) {
+        // Epoch 0 is a special value indicating the member wants to (re)join the group.
+        if (receivedMemberEpoch == 0) return;
+
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The streams group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
@@ -1988,8 +1998,9 @@ public class GroupMetadataManager {
             }
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
-                log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology);
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage);
+                log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology.topologyEpoch());
+                LogContext topicManagerLogContext = new LogContext(String.format("%s[GroupId %s][MemberId %s] ", logContext.logPrefix(), groupId, memberId));
+                updatedConfiguredTopology = InternalTopicManager.configureTopics(topicManagerLogContext, metadataHash, updatedTopology, metadataImage, time);
                 group.setConfiguredTopology(updatedConfiguredTopology);
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
@@ -3519,7 +3530,7 @@ public class GroupMetadataManager {
         String memberId = updatedMember.memberId();
         if (!updatedMember.equals(member)) {
             records.add(newStreamsGroupMemberRecord(groupId, updatedMember));
-            log.info("[GroupId {}] Member {} updated its member metdata to {}.",
+            log.info("[GroupId {}][MemberId {}] Member updated its member metdata to {}.",
                 groupId, memberId, updatedMember);
 
             return true;
