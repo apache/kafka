@@ -50,7 +50,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
-import org.apache.kafka.server.purgatory.DelayedProduce.{ProduceMetadata, ProducePartitionStatus}
+import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus
 import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.config.ReplicationConfigs
@@ -928,10 +928,11 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback: util.Map[TopicIdPartition, PartitionResponse] => Unit,
   ): Unit = {
     if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, initialAppendResults)) {
-      // create delayed produce operation
-      val produceMetadata = new ProduceMetadata(requiredAcks, initialProduceStatus.asJava)
-
-      def delegate(tp: TopicPartition, requiredOffset: JLong) : util.Map[JBoolean, Errors] = {
+      // Create delayed produce operation
+      //
+      // This delegate is invoked by DelayedProduce to verify if the produce operation can be completed.
+      // Defined here to provide access to ReplicaManager#getPartitionOrError, which is otherwise inaccessible to the caller.
+      def delegate(tp: TopicPartition, requiredOffset: JLong) : util.Map.Entry[JBoolean, Errors] = {
         val (hasEnough, error) = getPartitionOrError(tp).fold(
             // Please refer to the documentation in `DelayedProduce#tryComplete` for a comprehensive description of these cases.
             // Case A or Case B
@@ -940,10 +941,10 @@ class ReplicaManager(val config: KafkaConfig,
             // Case B or Case C
             partition => partition.checkEnoughReplicasReachOffset(requiredOffset))
 
-        util.Map.of(hasEnough, error)
+        util.Map.entry(hasEnough, error)
       }
 
-      val delayedProduce = new DelayedProduce(timeoutMs, produceMetadata, delegate, responseCallback.asJava)
+      val delayedProduce = new DelayedProduce(timeoutMs, initialProduceStatus.asJava, delegate, responseCallback.asJava)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
       val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toList

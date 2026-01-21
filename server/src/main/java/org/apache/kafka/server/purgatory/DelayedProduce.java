@@ -95,43 +95,6 @@ public class DelayedProduce extends DelayedOperation {
         }
     }
 
-    /**
-     * The produce metadata maintained by the delayed produce operation
-     */
-    public static final class ProduceMetadata {
-        private final short produceRequiredAcks;
-        private final Map<TopicIdPartition, ProducePartitionStatus> produceStatus;
-
-        public ProduceMetadata(short produceRequiredAcks,
-                               Map<TopicIdPartition, ProducePartitionStatus> produceStatus) {
-            this.produceRequiredAcks = produceRequiredAcks;
-            this.produceStatus = produceStatus;
-        }
-
-        @Override
-        public String toString() {
-            return String.format(
-                    "[requiredAcks: %d, partitionStatus: %s]",
-                    produceRequiredAcks,
-                    produceStatus
-            );
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            final ProduceMetadata that = (ProduceMetadata) o;
-            return produceRequiredAcks == that.produceRequiredAcks && Objects.equals(produceStatus, that.produceStatus);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(produceRequiredAcks, produceStatus);
-        }
-    }
-
     private static final class DelayedProduceMetrics {
         // Changing the package or class name may cause incompatibility with existing code and metrics configuration
         private static final String METRICS_PACKAGE = "kafka.server";
@@ -151,22 +114,22 @@ public class DelayedProduce extends DelayedOperation {
         }
     }
 
-    private final ProduceMetadata produceMetadata;
-    private final BiFunction<TopicPartition, Long, Map<Boolean, Errors>> validatePartitionAndReplicaStatus;
+    private final Map<TopicIdPartition, ProducePartitionStatus> produceStatus;
+    private final BiFunction<TopicPartition, Long, Map.Entry<Boolean, Errors>> validatePartitionAndReplicaStatus;
     private final Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback;
 
     public DelayedProduce(long delayMs,
-                          ProduceMetadata produceMetadata,
-                          BiFunction<TopicPartition, Long, Map<Boolean, Errors>> validatePartitionAndReplicaStatus,
+                          Map<TopicIdPartition, ProducePartitionStatus> produceStatus,
+                          BiFunction<TopicPartition, Long, Map.Entry<Boolean, Errors>> validatePartitionAndReplicaStatus,
                           Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback) {
         super(delayMs);
 
-        this.produceMetadata = produceMetadata;
+        this.produceStatus = produceStatus;
         this.validatePartitionAndReplicaStatus = validatePartitionAndReplicaStatus;
         this.responseCallback = responseCallback;
 
         // first update the acks pending variable according to the error code
-        produceMetadata.produceStatus.forEach((topicPartition, status) -> {
+        produceStatus.forEach((topicPartition, status) -> {
             if (status.responseStatus.error == Errors.NONE) {
                 // Timeout error state will be cleared when required acks are received
                 status.acksPending = true;
@@ -197,18 +160,14 @@ public class DelayedProduce extends DelayedOperation {
     @Override
     public boolean tryComplete() {
         // check for each partition if it still has pending acks
-        produceMetadata.produceStatus.forEach((topicIdPartition, status) -> {
+        produceStatus.forEach((topicIdPartition, status) -> {
             LOGGER.trace("Checking produce satisfaction for {}, current status {}", topicIdPartition, status);
             // skip those partitions that have already been satisfied
             if (status.acksPending) {
                 // Delegate to `ReplicaManager#maybeAddDelayedProduce`
                 // Validate Cases A, B, or C
                 Map.Entry<Boolean, Errors> result = validatePartitionAndReplicaStatus
-                        .apply(topicIdPartition.topicPartition(), status.requiredOffset)
-                        .entrySet().stream()
-                        .findFirst()
-                        .get(); // Safe to call get() with isPresent() as the result must exist.
-
+                        .apply(topicIdPartition.topicPartition(), status.requiredOffset);
 
                 // Update the partition status to reflect Case A, B, or C:
                 boolean hasEnough = result.getKey();
@@ -221,10 +180,9 @@ public class DelayedProduce extends DelayedOperation {
         });
 
         // check if every partition has satisfied at least one of case A, B or C
-        boolean anyPending = produceMetadata.produceStatus
-                                            .values()
-                                            .stream()
-                                            .anyMatch(ProducePartitionStatus::acksPending);
+        boolean anyPending = produceStatus.values()
+                                          .stream()
+                                          .anyMatch(ProducePartitionStatus::acksPending);
         if (!anyPending) {
             return forceComplete();
         }
@@ -234,7 +192,7 @@ public class DelayedProduce extends DelayedOperation {
 
     @Override
     public void onExpiration() {
-        produceMetadata.produceStatus.forEach((topicIdPartition, status) -> {
+        produceStatus.forEach((topicIdPartition, status) -> {
             if (status.acksPending) {
                 LOGGER.debug("Expiring produce request for partition {} with status {}", topicIdPartition, status);
                 DelayedProduceMetrics.recordExpiration(topicIdPartition.topicPartition());
@@ -248,10 +206,8 @@ public class DelayedProduce extends DelayedOperation {
     @Override
     public void onComplete() {
         Map<TopicIdPartition, PartitionResponse> responseStatus =
-                produceMetadata.produceStatus.entrySet().stream().
-                        collect(Collectors.toMap(
-                                Map.Entry::getKey,
-                                entry -> entry.getValue().responseStatus()));
+                produceStatus.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().responseStatus()));
 
         responseCallback.accept(responseStatus);
     }

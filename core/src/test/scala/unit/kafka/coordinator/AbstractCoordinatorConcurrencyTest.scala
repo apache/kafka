@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidat
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.MetadataCache
-import org.apache.kafka.server.purgatory.DelayedProduce.{ProduceMetadata, ProducePartitionStatus}
+import org.apache.kafka.server.purgatory.DelayedProduce.ProducePartitionStatus
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, TopicPartitionOperationKey}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
@@ -224,14 +224,14 @@ object AbstractCoordinatorConcurrencyTest {
 
       if (entriesPerPartition.isEmpty)
         return
-      val produceMetadata = new ProduceMetadata(1, entriesPerPartition.map {
+      val produceStatus = entriesPerPartition.map {
         case (tp, _) =>
           (tp, new ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
-      }.asJava)
+      }.asJava
 
       // It is safe to set the third parameter to null because it is only used in tryComplete().
       // In this test, we override the original implementation and do not use that parameter at all.
-      val delayedProduce = new DelayedProduce(5, produceMetadata, null, responseCallback.asJava) {
+      val delayedProduce = new DelayedProduce(5, produceStatus, null, responseCallback.asJava) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
         val completeAttempts = new AtomicInteger
         override def tryComplete(): Boolean = {
