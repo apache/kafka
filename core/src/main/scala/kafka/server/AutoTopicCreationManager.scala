@@ -35,6 +35,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.quota.ControllerMutationQuota
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.TopicCreator
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._

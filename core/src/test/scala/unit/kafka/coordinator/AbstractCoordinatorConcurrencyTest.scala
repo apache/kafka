@@ -69,11 +69,11 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
 
   @AfterEach
   def tearDown(): Unit = {
-    CoreUtils.swallow(replicaManager.shutdown(false), this)
-    CoreUtils.swallow(executor.shutdownNow(), this)
+    Utils.swallow(this.logger.underlying, () => replicaManager.shutdown(false))
+    Utils.swallow(this.logger.underlying, () => executor.shutdownNow())
     Utils.closeQuietly(timer, "mock timer")
-    CoreUtils.swallow(scheduler.shutdown(), this)
-    CoreUtils.swallow(time.scheduler.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => scheduler.shutdown())
+    Utils.swallow(this.logger.underlying, () => time.scheduler.shutdown())
   }
 
   /**

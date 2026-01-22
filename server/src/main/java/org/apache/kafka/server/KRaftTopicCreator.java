@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -65,7 +65,7 @@ public class KRaftTopicCreator implements TopicCreator {
             requestContext.correlationId()
         );
 
-        AbstractRequest.Builder<? extends AbstractRequest> envelopeRequest = ForwardingManager$.MODULE$.buildEnvelopeRequest(
+        AbstractRequest.Builder<? extends AbstractRequest> envelopeRequest = ForwardingManagerUtil.buildEnvelopeRequest(
             requestContext,
             createTopicsRequest.build(requestHeader.apiVersion())
                 .serializeWithHeader(requestHeader)

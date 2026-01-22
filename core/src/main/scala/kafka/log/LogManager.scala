@@ -24,7 +24,7 @@ import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.threadsafe
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
@@ -253,7 +253,7 @@ class LogManager(logDirs: Seq[File],
 
       warn(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
-      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), this))
+      dirLocks.filter(_.file.getParent == dir).foreach(dir => Utils.swallow(this.logger.underlying, () => dir.destroy()))
     }
   }
 
@@ -656,7 +656,7 @@ class LogManager(logDirs: Seq[File],
 
     // stop the cleaner first
     if (cleaner != null) {
-      CoreUtils.swallow(cleaner.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => cleaner.shutdown())
     }
 
     val localLogsByDir = logsByDir
@@ -704,7 +704,7 @@ class LogManager(logDirs: Seq[File],
               loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
             val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
             debug(s"Writing clean shutdown marker at $dir with broker epoch=$brokerEpoch")
-            CoreUtils.swallow(cleanShutdownFileHandler.write(brokerEpoch), this)
+            Utils.swallow(this.logger.underlying, () => cleanShutdownFileHandler.write(brokerEpoch))
           }
         }
       }

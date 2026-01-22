@@ -24,7 +24,6 @@ import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
 import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
-import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -41,7 +40,7 @@ import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, Shar
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
-import org.apache.kafka.metadata.{BrokerState, ListenerInfo, KRaftMetadataCache, MetadataCache, MetadataVersionConfigValidator}
+import org.apache.kafka.metadata.{BrokerState, KRaftMetadataCache, ListenerInfo, MetadataCache, MetadataVersionConfigValidator}
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -55,12 +54,10 @@ import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpState
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
-import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, ProcessRole}
+import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
-import org.apache.kafka.server.NodeToControllerChannelManagerImpl
-import org.apache.kafka.server.RaftControllerNodeProvider
 
 import java.time.Duration
 import java.util
@@ -795,14 +792,14 @@ class BrokerServer(
       // Stop socket server to stop accepting any more connections and requests.
       // Socket server will be shutdown towards the end of the sequence.
       if (socketServer != null) {
-        CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
+        Utils.swallow(this.logger.underlying, () => socketServer.stopProcessingRequests())
       }
       metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
       metadataPublishers.clear()
       if (dataPlaneRequestHandlerPool != null)
-        CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => dataPlaneRequestHandlerPool.shutdown())
       if (dataPlaneRequestProcessor != null)
-        CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
+        Utils.swallow(this.logger.underlying, () => dataPlaneRequestProcessor.close())
       authorizerPlugin.foreach(Utils.closeQuietly(_, "authorizer plugin"))
 
       /**
@@ -816,44 +813,44 @@ class BrokerServer(
        * broker would have to take hours to recover the log during restart.
        */
       if (kafkaScheduler != null)
-        CoreUtils.swallow(kafkaScheduler.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => kafkaScheduler.shutdown())
 
       if (transactionCoordinator != null)
-        CoreUtils.swallow(transactionCoordinator.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => transactionCoordinator.shutdown())
 
       if (groupConfigManager != null)
-        CoreUtils.swallow(groupConfigManager.close(), this)
+        Utils.swallow(this.logger.underlying, () => groupConfigManager.close())
 
       if (groupCoordinator != null)
-        CoreUtils.swallow(groupCoordinator.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => groupCoordinator.shutdown())
 
       if (partitionMetadataClient != null)
-        CoreUtils.swallow(partitionMetadataClient.close(), this)
+        Utils.swallow(this.logger.underlying, () => partitionMetadataClient.close())
 
       if (shareCoordinator != null)
-        CoreUtils.swallow(shareCoordinator.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => shareCoordinator.shutdown())
 
       if (autoTopicCreationManager != null)
-        CoreUtils.swallow(autoTopicCreationManager.close(), this)
+        Utils.swallow(this.logger.underlying, () => autoTopicCreationManager.close())
 
       if (assignmentsManager != null)
-        CoreUtils.swallow(assignmentsManager.close(), this)
+        Utils.swallow(this.logger.underlying, () => assignmentsManager.close())
 
       if (replicaManager != null)
-        CoreUtils.swallow(replicaManager.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => replicaManager.shutdown())
 
       if (alterPartitionManager != null)
-        CoreUtils.swallow(alterPartitionManager.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => alterPartitionManager.shutdown())
 
       if (forwardingManager != null)
-        CoreUtils.swallow(forwardingManager.close(), this)
+        Utils.swallow(this.logger.underlying, () => forwardingManager.close())
 
       if (clientToControllerChannelManager != null)
-        CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => clientToControllerChannelManager.shutdown())
 
       if (logManager != null) {
         val brokerEpoch = if (lifecycleManager != null) lifecycleManager.brokerEpoch else -1
-        CoreUtils.swallow(logManager.shutdown(brokerEpoch), this)
+        Utils.swallow(this.logger.underlying, () => logManager.shutdown(brokerEpoch))
       }
 
       // Close remote log manager to give a chance to any of its underlying clients
@@ -861,21 +858,21 @@ class BrokerServer(
       remoteLogManagerOpt.foreach(Utils.closeQuietly(_, "remote log manager"))
 
       if (quotaManagers != null)
-        CoreUtils.swallow(quotaManagers.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => quotaManagers.shutdown())
 
       if (socketServer != null)
-        CoreUtils.swallow(socketServer.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => socketServer.shutdown())
 
       Utils.closeQuietly(brokerTopicStats, "broker topic stats")
       Utils.closeQuietly(sharePartitionManager, "share partition manager")
 
       if (persister != null)
-        CoreUtils.swallow(persister.stop(), this)
+        Utils.swallow(this.logger.underlying, () => persister.stop())
 
       if (lifecycleManager != null)
-        CoreUtils.swallow(lifecycleManager.close(), this)
+        Utils.swallow(this.logger.underlying, () => lifecycleManager.close())
 
-      CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      Utils.swallow(this.logger.underlying, () => config.dynamicConfig.clear())
       Utils.closeQuietly(clientMetricsManager, "client metrics manager")
       sharedServer.stopForBroker()
       info("shut down completed")
