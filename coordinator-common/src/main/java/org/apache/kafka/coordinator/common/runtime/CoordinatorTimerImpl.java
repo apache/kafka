@@ -38,7 +38,7 @@ import java.util.concurrent.TimeUnit;
  *
  * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
  */
-public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
+public class CoordinatorTimerImpl<U> implements CoordinatorTimer<U> {
     private final Logger log;
     private final Timer timer;
     private final CoordinatorShardScheduler<U> scheduler;
@@ -60,7 +60,7 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
         long delay,
         TimeUnit unit,
         boolean retry,
-        TimeoutOperation<Void, U> operation
+        TimeoutOperation<U> operation
     ) {
         schedule(key, delay, unit, retry, 500, operation);
     }
@@ -72,7 +72,7 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
         TimeUnit unit,
         boolean retry,
         long retryBackoff,
-        TimeoutOperation<Void, U> operation
+        TimeoutOperation<U> operation
     ) {
         // The TimerTask wraps the TimeoutOperation into a write operation. When the TimerTask
         // expires, the operation is scheduled through the scheduler to be executed. This
@@ -141,7 +141,7 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
         long delay,
         TimeUnit unit,
         boolean retry,
-        TimeoutOperation<Void, U> operation
+        TimeoutOperation<U> operation
     ) {
         if (!tasks.containsKey(key)) {
             schedule(key, delay, unit, retry, 500, operation);
