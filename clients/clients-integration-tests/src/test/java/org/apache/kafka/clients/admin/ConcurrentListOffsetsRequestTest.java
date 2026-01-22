@@ -28,11 +28,10 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
-
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
-import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -79,9 +78,7 @@ public class ConcurrentListOffsetsRequestTest {
         adminClient = KafkaAdminClient.createInternal(new AdminClientConfig(clusterInstance.setClientSaslConfig(props), true),
                 null, new TestHostResolver());
 
-        Field clientField = KafkaAdminClient.class.getDeclaredField("client");
-        clientField.setAccessible(true);
-        networkClient = (NetworkClient) clientField.get(adminClient);
+        networkClient = TestUtils.fieldValue(adminClient, KafkaAdminClient.class, "client");
     }
 
     @AfterEach
@@ -121,12 +118,10 @@ public class ConcurrentListOffsetsRequestTest {
     }
 
     private TestPartitionLeaderCache replacePartitionLeaderCache(CountDownLatch invalidationLatch) throws Exception {
-        Field partitionLeaderCacheField = KafkaAdminClient.class.getDeclaredField("partitionLeaderCache");
-        partitionLeaderCacheField.setAccessible(true);
-        PartitionLeaderCache oldPartitionLeaderCache = (PartitionLeaderCache) partitionLeaderCacheField.get(adminClient);
+        PartitionLeaderCache oldPartitionLeaderCache = TestUtils.fieldValue(adminClient, KafkaAdminClient.class, "partitionLeaderCache");
 
         TestPartitionLeaderCache partitionLeaderCache = new TestPartitionLeaderCache(oldPartitionLeaderCache.get(getTopicPartitions()), invalidationLatch);
-        partitionLeaderCacheField.set(adminClient, partitionLeaderCache);
+        TestUtils.setFieldValue(adminClient, "partitionLeaderCache", partitionLeaderCache);
         return partitionLeaderCache;
     }
 
@@ -194,7 +189,6 @@ public class ConcurrentListOffsetsRequestTest {
 
         @Override
         public InetAddress[] resolve(String host) throws UnknownHostException {
-            System.out.println("RESOLVE: " + host);
             if (injectHostResolverError.get()) {
                 throw new UnknownHostException();
             }
