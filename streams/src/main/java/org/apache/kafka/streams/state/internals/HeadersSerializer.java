@@ -18,75 +18,79 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.utils.ByteUtils;
 
-import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
 
 /**
  * Serializer for Kafka Headers.
  *
- * Serialization format:
- * [NumHeaders(4)][Header1][Header2]...
+ * Serialization format (per KIP-1271):
+ * [NumHeaders(varint)][Header1][Header2]...
  *
  * Each header:
- * [KeyLength(4)][KeyBytes][ValueLength(4)][ValueBytes]
+ * [KeyLength(varint)][KeyBytes(UTF-8)][ValueLength(varint)][ValueBytes]
  *
- * Note: ValueLength is -1 for null values.
+ * Note: ValueLength is -1 for null values (encoded as varint).
+ * All integers are encoded as varints (signed varint encoding).
  *
  * This is used by KIP-1271 to serialize headers for storage in state stores.
  */
 public class HeadersSerializer {
 
     /**
-     * Serializes headers into a byte array.
+     * Serializes headers into a byte array using varint encoding per KIP-1271.
      *
      * @param headers the headers to serialize (can be null)
      * @return the serialized byte array
      */
     public byte[] serialize(final Headers headers) {
-        if (headers == null) {
-            // Empty headers: just [NumHeaders(4) = 0]
-            return ByteBuffer.allocate(4).putInt(0).array();
-        }
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream out = new DataOutputStream(baos)) {
 
-        // First pass: calculate total size
-        int totalSize = 4; // For number of headers
-        int headerCount = 0;
-
-        for (final Header header : headers) {
-            headerCount++;
-            final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
-            final byte[] valueBytes = header.value();
-
-            totalSize += 4; // Key length
-            totalSize += keyBytes.length;
-            totalSize += 4; // Value length
-            if (valueBytes != null) {
-                totalSize += valueBytes.length;
+            if (headers == null) {
+                // Empty headers: just [NumHeaders(varint) = 0]
+                ByteUtils.writeVarint(0, out);
+                return baos.toByteArray();
             }
-        }
 
-        // Second pass: write data
-        final ByteBuffer buffer = ByteBuffer.allocate(totalSize);
-        buffer.putInt(headerCount);
-
-        for (final Header header : headers) {
-            final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
-            final byte[] valueBytes = header.value();
-
-            // Write key
-            buffer.putInt(keyBytes.length);
-            buffer.put(keyBytes);
-
-            // Write value (null is represented as -1 length)
-            if (valueBytes == null) {
-                buffer.putInt(-1);
-            } else {
-                buffer.putInt(valueBytes.length);
-                buffer.put(valueBytes);
+            // Count headers
+            int headerCount = 0;
+            final Iterator<Header> iterator = headers.iterator();
+            while (iterator.hasNext()) {
+                iterator.next();
+                headerCount++;
             }
-        }
 
-        return buffer.array();
+            // Write header count as varint
+            ByteUtils.writeVarint(headerCount, out);
+
+            // Write each header
+            for (final Header header : headers) {
+                final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
+                final byte[] valueBytes = header.value();
+
+                // Write key length and key bytes (varint + UTF-8)
+                ByteUtils.writeVarint(keyBytes.length, out);
+                out.write(keyBytes);
+
+                // Write value length and value bytes (varint + raw bytes)
+                // null is represented as -1, encoded as varint
+                if (valueBytes == null) {
+                    ByteUtils.writeVarint(-1, out);
+                } else {
+                    ByteUtils.writeVarint(valueBytes.length, out);
+                    out.write(valueBytes);
+                }
+            }
+
+            return baos.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize headers", e);
+        }
     }
 }

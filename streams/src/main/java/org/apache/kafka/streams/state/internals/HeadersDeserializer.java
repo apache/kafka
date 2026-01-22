@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -25,20 +26,21 @@ import java.nio.charset.StandardCharsets;
 /**
  * Deserializer for Kafka Headers.
  *
- * Deserialization format:
- * [NumHeaders(4)][Header1][Header2]...
+ * Deserialization format (per KIP-1271):
+ * [NumHeaders(varint)][Header1][Header2]...
  *
  * Each header:
- * [KeyLength(4)][KeyBytes][ValueLength(4)][ValueBytes]
+ * [KeyLength(varint)][KeyBytes(UTF-8)][ValueLength(varint)][ValueBytes]
  *
- * Note: ValueLength is -1 for null values.
+ * Note: ValueLength is -1 for null values (encoded as varint).
+ * All integers are decoded from varints (signed varint encoding).
  *
  * This is used by KIP-1271 to deserialize headers from state stores.
  */
 public class HeadersDeserializer {
 
     /**
-     * Deserializes headers from a byte array.
+     * Deserializes headers from a byte array using varint encoding per KIP-1271.
      *
      * @param data the serialized byte array (can be null)
      * @return the deserialized headers
@@ -49,7 +51,9 @@ public class HeadersDeserializer {
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(data);
-        final int headerCount = buffer.getInt();
+
+        // Read header count as varint
+        final int headerCount = ByteUtils.readVarint(buffer);
 
         if (headerCount == 0) {
             return new RecordHeaders();
@@ -58,14 +62,14 @@ public class HeadersDeserializer {
         final RecordHeaders headers = new RecordHeaders();
 
         for (int i = 0; i < headerCount; i++) {
-            // Read key
-            final int keyLength = buffer.getInt();
+            // Read key length and key bytes (varint + UTF-8)
+            final int keyLength = ByteUtils.readVarint(buffer);
             final byte[] keyBytes = new byte[keyLength];
             buffer.get(keyBytes);
             final String key = new String(keyBytes, StandardCharsets.UTF_8);
 
-            // Read value
-            final int valueLength = buffer.getInt();
+            // Read value length and value bytes (varint + raw bytes)
+            final int valueLength = ByteUtils.readVarint(buffer);
             final byte[] value;
             if (valueLength == -1) {
                 value = null;

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -32,8 +33,14 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
 /**
  * Deserializer for ValueTimestampHeaders.
  *
- * Deserialization format:
- * [HeaderSize(2)][Headers][Timestamp(8)][Value]
+ * Deserialization format (per KIP-1271):
+ * [HeaderSize(varint)][Headers][Timestamp(8)][Value]
+ *
+ * Where:
+ * - HeaderSize: Size of the Headers section in bytes, encoded as varint
+ * - Headers: Serialized headers using HeadersDeserializer (with varint encoding)
+ * - Timestamp: 8-byte long timestamp
+ * - Value: Serialized value to be deserialized with the provided value deserializer
  *
  * This is used by KIP-1271 to deserialize values with timestamps and headers from state stores.
  */
@@ -65,20 +72,20 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
 
         final ByteBuffer buffer = ByteBuffer.wrap(valueTimestampHeaders);
 
-        // Read header size
-        final short headerSize = buffer.getShort();
+        // Read header size as varint
+        final int headerSize = ByteUtils.readVarint(buffer);
 
         // Read headers
         final byte[] rawHeaders = new byte[headerSize];
         buffer.get(rawHeaders);
         final Headers headers = headersDeserializer.deserialize(rawHeaders);
 
-        // Read timestamp
+        // Read timestamp (8 bytes)
         final byte[] rawTimestamp = new byte[Long.BYTES];
         buffer.get(rawTimestamp);
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp);
 
-        // Read value
+        // Read value (remaining bytes)
         final byte[] rawValue = new byte[buffer.remaining()];
         buffer.get(rawValue);
         final V value = valueDeserializer.deserialize(topic, rawValue);
@@ -108,16 +115,18 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final short headerSize = buffer.getShort();
 
-        // Skip headers and timestamp to get to value
-        final int valueOffset = 2 + headerSize + Long.BYTES;
-        final int rawValueLength = rawValueTimestampHeaders.length - valueOffset;
+        // Read header size as varint
+        final int headerSize = ByteUtils.readVarint(buffer);
 
-        return ByteBuffer
-            .allocate(rawValueLength)
-            .put(rawValueTimestampHeaders, valueOffset, rawValueLength)
-            .array();
+        // Skip headers and timestamp
+        buffer.position(buffer.position() + headerSize + Long.BYTES);
+
+        // Read remaining bytes (the value)
+        final byte[] rawValue = new byte[buffer.remaining()];
+        buffer.get(rawValue);
+
+        return rawValue;
     }
 
     /**
@@ -129,10 +138,14 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final short headerSize = buffer.getShort();
 
-        // Skip headers to get to timestamp
-        buffer.position(2 + headerSize);
+        // Read header size as varint
+        final int headerSize = ByteUtils.readVarint(buffer);
+
+        // Skip headers
+        buffer.position(buffer.position() + headerSize);
+
+        // Read timestamp
         final byte[] rawTimestamp = new byte[Long.BYTES];
         buffer.get(rawTimestamp);
 
@@ -148,8 +161,11 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final short headerSize = buffer.getShort();
 
+        // Read header size as varint
+        final int headerSize = ByteUtils.readVarint(buffer);
+
+        // Read headers
         final byte[] rawHeaders = new byte[headerSize];
         buffer.get(rawHeaders);
 

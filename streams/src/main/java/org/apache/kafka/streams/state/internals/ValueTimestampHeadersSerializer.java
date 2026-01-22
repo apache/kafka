@@ -19,11 +19,14 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
-import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
@@ -32,8 +35,14 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
 /**
  * Serializer for ValueTimestampHeaders.
  *
- * Serialization format:
- * [HeaderSize(2)][Headers][Timestamp(8)][Value]
+ * Serialization format (per KIP-1271):
+ * [HeaderSize(varint)][Headers][Timestamp(8)][Value]
+ *
+ * Where:
+ * - HeaderSize: Size of the Headers section in bytes, encoded as varint
+ * - Headers: Serialized headers using HeadersSerializer (with varint encoding)
+ * - Timestamp: 8-byte long timestamp
+ * - Value: Serialized value using the provided value serializer
  *
  * This is used by KIP-1271 to serialize values with timestamps and headers for state stores.
  */
@@ -81,15 +90,22 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
         final byte[] rawHeaders = headersSerializer.serialize(headers);
         final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
 
-        // Format: [HeaderSize(2)][Headers][Timestamp(8)][Value]
-        final int headerSize = rawHeaders.length;
-        return ByteBuffer
-            .allocate(2 + headerSize + rawTimestamp.length + rawValue.length)
-            .putShort((short) headerSize)
-            .put(rawHeaders)
-            .put(rawTimestamp)
-            .put(rawValue)
-            .array();
+        // Format: [HeaderSize(varint)][Headers][Timestamp(8)][Value]
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream out = new DataOutputStream(baos)) {
+
+            // Write header size as varint
+            ByteUtils.writeVarint(rawHeaders.length, out);
+
+            // Write headers, timestamp, and value
+            out.write(rawHeaders);
+            out.write(rawTimestamp);
+            out.write(rawValue);
+
+            return baos.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize ValueTimestampHeaders", e);
+        }
     }
 
     @Override
