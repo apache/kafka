@@ -34,6 +34,12 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
     
     private final String directoryPath;
 
+    /**
+     * Create a test-only {@link BootstrapDirectory} that reads bootstrap metadata from the metadata
+     * partition snapshot under the given directory.
+     *
+     * @param directoryPath the base log directory containing the {@code __cluster_metadata-0} partition
+     */
     public TestBootstrapDirectory(String directoryPath) {
         this.directoryPath = Objects.requireNonNull(directoryPath);
     }

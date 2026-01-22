@@ -34,6 +34,11 @@ public class LegacyBootstrapDirectory implements BootstrapDirectory {
 
     private final String directoryPath;
 
+    /**
+     * Create a {@link BootstrapDirectory} that reads bootstrap metadata from the given directory.
+     *
+     * @param directoryPath the metadata log directory containing the legacy {@code bootstrap.checkpoint} file
+     */
     public LegacyBootstrapDirectory(String directoryPath) {
         this.directoryPath = Objects.requireNonNull(directoryPath);
     }
