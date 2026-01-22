@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -44,6 +45,7 @@ import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
@@ -315,12 +317,18 @@ public class MeteredKeyValueStore<K, V>
         }
     }
 
+    //@Deprecated
     @Override
     public void put(final K key,
                     final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
+            if (value instanceof ValueTimestampHeaders) {
+                Headers headers = ((ValueTimestampHeaders<?>) value).headers();
+                maybeMeasureLatency(() -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers)), time, putSensor);
+            } else {
+                maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
+            }
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -420,8 +428,13 @@ public class MeteredKeyValueStore<K, V>
         return value != null ? serdes.valueFrom(value) : null;
     }
 
+    // @Deprecated
     protected Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    protected Bytes keyBytes(final K key, final Headers headers) {
+        return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {

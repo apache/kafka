@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -149,8 +150,19 @@ public final class StateSerdes<K, V> {
      * @param rawKey  the key as raw bytes
      * @return        the key as typed object
      */
+    // @Deprecated
     public K keyFrom(final byte[] rawKey) {
         return keySerde.deserializer().deserialize(topic, rawKey);
+    }
+
+    /**
+     * Deserialize the key from raw bytes.
+     *
+     * @param rawKey  the key as raw bytes
+     * @return        the key as typed object
+     */
+    public K keyFrom(final byte[] rawKey, final Headers headers) {
+        return keySerde.deserializer().deserialize(topic, headers, rawKey);
     }
 
     /**
@@ -159,8 +171,19 @@ public final class StateSerdes<K, V> {
      * @param rawValue  the value as raw bytes
      * @return          the value as typed object
      */
+    // @Deprecated
     public V valueFrom(final byte[] rawValue) {
         return valueSerde.deserializer().deserialize(topic, rawValue);
+    }
+
+    /**
+     * Deserialize the value from raw bytes.
+     *
+     * @param rawValue  the value as raw bytes
+     * @return          the value as typed object
+     */
+    public V valueFrom(final byte[] rawValue, Headers headers) {
+        return valueSerde.deserializer().deserialize(topic, headers, rawValue);
     }
 
     /**
@@ -169,6 +192,7 @@ public final class StateSerdes<K, V> {
      * @param key  the key to be serialized
      * @return     the serialized key
      */
+    // @Deprecated
     public byte[] rawKey(final K key) {
         try {
             return keySerde.serializer().serialize(topic, key);
@@ -185,11 +209,33 @@ public final class StateSerdes<K, V> {
     }
 
     /**
+     * Serialize the given key.
+     *
+     * @param key  the key to be serialized
+     * @return     the serialized key
+     */
+    public byte[] rawKey(final K key, final Headers headers) {
+        try {
+            return keySerde.serializer().serialize(topic, headers, key);
+        } catch (final ClassCastException e) {
+            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+            throw new StreamsException(
+                String.format("A serializer (%s) is not compatible to the actual key type " +
+                        "(key type: %s). Change the default Serdes in StreamConfig or " +
+                        "provide correct Serdes via method parameters.",
+                    keySerializer().getClass().getName(),
+                    keyClass),
+                e);
+        }
+    }
+
+    /**
      * Serialize the given value.
      *
      * @param value  the value to be serialized
      * @return       the serialized value
      */
+    // @Deprecated
     @SuppressWarnings("rawtypes")
     public byte[] rawValue(final V value) {
         try {
@@ -211,6 +257,36 @@ public final class StateSerdes<K, V> {
                             serializerClass.getName(),
                             valueClass),
                     e);
+        }
+    }
+
+    /**
+     * Serialize the given value.
+     *
+     * @param value  the value to be serialized
+     * @return       the serialized value
+     */
+    @SuppressWarnings("rawtypes")
+    public byte[] rawValue(final V value, final Headers headers) {
+        try {
+            return valueSerde.serializer().serialize(topic, headers, value);
+        } catch (final ClassCastException e) {
+            final String valueClass;
+            final Class<? extends Serializer> serializerClass;
+            if (valueSerializer() instanceof ValueAndTimestampSerializer) {
+                serializerClass = ((ValueAndTimestampSerializer<?>) valueSerializer()).valueSerializer.getClass();
+                valueClass = value == null ? "unknown because value is null" : ((ValueAndTimestamp) value).value().getClass().getName();
+            } else {
+                serializerClass = valueSerializer().getClass();
+                valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            }
+            throw new StreamsException(
+                String.format("A serializer (%s) is not compatible to the actual value type " +
+                        "(value type: %s). Change the default Serdes in StreamConfig or " +
+                        "provide correct Serdes via method parameters.",
+                    serializerClass.getName(),
+                    valueClass),
+                e);
         }
     }
 }

@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesSto
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
@@ -114,6 +115,11 @@ public final class Stores {
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
         return new RocksDBKeyValueBytesStoreSupplier(name, true);
+    }
+
+    public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStoreWithHeaders(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
+        return new RocksDBKeyValueBytesStoreSupplier(name, true, true);
     }
 
     /**
@@ -483,6 +489,13 @@ public final class Stores {
                                                                                                       final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new TimestampedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    public static <K, V> StoreBuilder<TimestampedKeyValueStoreWithHeaders<K, V>> timestampedKeyValueStoreBuilderWithHeaders(final KeyValueBytesStoreSupplier supplier,
+                                                                                                      final Serde<K> keySerde,
+                                                                                                      final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
