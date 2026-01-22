@@ -19,6 +19,7 @@ package org.apache.kafka.metadata.bootstrap;
 
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -38,7 +39,7 @@ public class LegacyBootstrapDirectory implements BootstrapDirectory {
     }
 
     @Override
-    public BootstrapMetadata read() throws Exception {
+    public BootstrapMetadata read() throws IOException {
         Path path = Paths.get(directoryPath);
         if (!Files.isDirectory(path)) {
             if (Files.exists(path)) {

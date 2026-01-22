@@ -21,6 +21,7 @@ import org.apache.kafka.metadata.util.BatchFileReader;
 import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -34,18 +35,20 @@ public interface BootstrapDirectory {
      * Read the bootstrap metadata from the configured location.
      *
      * @return the loaded {@link BootstrapMetadata}
-     * @throws Exception if the metadata cannot be read
+     * @throws IOException if the metadata cannot be read from disk
+     * @throws RuntimeException if the metadata is invalid or the location is misconfigured
      */
-    BootstrapMetadata read() throws Exception;
+    BootstrapMetadata read() throws IOException;
 
     /**
      * Read bootstrap metadata from the given binary file path.
      *
      * @param binaryPath the path to the binary bootstrap file
      * @return the loaded {@link BootstrapMetadata}
-     * @throws Exception if the metadata cannot be read
+     * @throws IOException if the metadata cannot be read from disk
+     * @throws RuntimeException if the binary file contents are invalid
      */
-    default BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {
+    default BootstrapMetadata readFromBinaryFile(String binaryPath) throws IOException {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         try (BatchFileReader reader = new BatchFileReader.Builder().
                 setPath(binaryPath).build()) {

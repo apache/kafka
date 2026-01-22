@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -57,7 +58,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
             return this;
         }
 
-        public BatchFileReader build() throws Exception {
+        public BatchFileReader build() throws IOException {
             if (path == null) {
                 throw new RuntimeException("You must specify a path.");
             }
