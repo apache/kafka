@@ -75,7 +75,6 @@ class LogCleanerManagerTest {
     private static final long OFFSET = 999;
     private static final ProducerStateManagerConfig PRODUCER_STATE_MANAGER_CONFIG =
         new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false);
-    private static final Map<TopicPartition, Long> CLEANER_CHECKPOINTS = new HashMap<>();
 
     private File tmpDir;
     private File tmpDir2;
@@ -83,6 +82,7 @@ class LogCleanerManagerTest {
     private File logDir2;
 
     static class LogCleanerManagerMock extends LogCleanerManager {
+        private final Map<TopicPartition, Long> cleanerCheckpoints = new HashMap<>();
 
         LogCleanerManagerMock(
             List<File> logDirs,
@@ -94,7 +94,7 @@ class LogCleanerManagerTest {
 
         @Override
         public Map<TopicPartition, Long> allCleanerCheckpoints() {
-            return CLEANER_CHECKPOINTS;
+            return cleanerCheckpoints;
         }
 
         @Override
@@ -106,9 +106,17 @@ class LogCleanerManagerTest {
             assert partitionToRemove.isEmpty() : "partitionToRemove argument with value not yet handled";
 
             Map.Entry<TopicPartition, Long> entry = partitionToUpdateOrAdd.orElseThrow(() ->
-                new IllegalArgumentException("partitionToUpdateOrAdd==None argument not yet handled"));
+                new IllegalArgumentException("Empty 'partitionToUpdateOrAdd' argument not yet handled"));
 
-            CLEANER_CHECKPOINTS.put(entry.getKey(), entry.getValue());
+            addCheckpoint(entry.getKey(), entry.getValue());
+        }
+
+        void addCheckpoint(TopicPartition partition, long offset) {
+            cleanerCheckpoints.put(partition, offset);
+        }
+
+        long checkpointOffset(TopicPartition partition) {
+            return cleanerCheckpoints.get(partition);
         }
     }
 
@@ -143,8 +151,6 @@ class LogCleanerManagerTest {
         tmpDir2 = TestUtils.tempDirectory();
         logDir = TestUtils.randomPartitionLogDir(tmpDir);
         logDir2 = TestUtils.randomPartitionLogDir(tmpDir2);
-
-        CLEANER_CHECKPOINTS.clear();
     }
 
     @AfterEach
@@ -195,7 +201,7 @@ class LogCleanerManagerTest {
         ConcurrentMap<TopicPartition, UnifiedLog> logsPool = new ConcurrentHashMap<>();
         logsPool.put(tp, log);
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logsPool);
-        CLEANER_CHECKPOINTS.put(tp, 1L);
+        cleanerManager.addCheckpoint(tp, 1L);
 
         LogCleaningException thrownException = assertThrows(LogCleaningException.class,
             () -> cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats()).get());
@@ -214,7 +220,7 @@ class LogCleanerManagerTest {
         // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
         ConcurrentMap<TopicPartition, UnifiedLog> logs = setupIncreasinglyFilthyLogs(partitions);
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        partitions.forEach(partition -> CLEANER_CHECKPOINTS.put(partition, 20L));
+        partitions.forEach(partition -> cleanerManager.addCheckpoint(partition, 20L));
 
         LogToClean filthiestLog = cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats()).get();
         assertEquals(tp2, filthiestLog.topicPartition());
@@ -231,7 +237,7 @@ class LogCleanerManagerTest {
         // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
         ConcurrentMap<TopicPartition, UnifiedLog> logs = setupIncreasinglyFilthyLogs(partitions);
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        partitions.forEach(partition -> CLEANER_CHECKPOINTS.put(partition, 20L));
+        partitions.forEach(partition -> cleanerManager.addCheckpoint(partition, 20L));
 
         cleanerManager.markPartitionUncleanable(logs.get(tp2).dir().getParent(), tp2);
 
@@ -250,7 +256,7 @@ class LogCleanerManagerTest {
         // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
         ConcurrentMap<TopicPartition, UnifiedLog> logs = setupIncreasinglyFilthyLogs(partitions);
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        partitions.forEach(partition -> CLEANER_CHECKPOINTS.put(partition, 20L));
+        partitions.forEach(partition -> cleanerManager.addCheckpoint(partition, 20L));
 
         cleanerManager.setCleaningState(tp2, LOG_CLEANING_IN_PROGRESS);
 
@@ -269,7 +275,7 @@ class LogCleanerManagerTest {
         // setup logs with cleanable range: [20, 20], [20, 25], [20, 30]
         ConcurrentMap<TopicPartition, UnifiedLog> logs = setupIncreasinglyFilthyLogs(partitions);
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        partitions.forEach(partition -> CLEANER_CHECKPOINTS.put(partition, 20L));
+        partitions.forEach(partition -> cleanerManager.addCheckpoint(partition, 20L));
 
         cleanerManager.setCleaningState(tp2, LOG_CLEANING_IN_PROGRESS);
         cleanerManager.markPartitionUncleanable(logs.get(tp1).dir().getParent(), tp1);
@@ -283,7 +289,7 @@ class LogCleanerManagerTest {
         TopicPartition tp = new TopicPartition("foo", 0);
         ConcurrentMap<TopicPartition, UnifiedLog> logs = setupIncreasinglyFilthyLogs(List.of(tp));
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        CLEANER_CHECKPOINTS.put(tp, 200L);
+        cleanerManager.addCheckpoint(tp, 200L);
 
         LogToClean filthiestLog = cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats()).get();
         assertEquals(0L, filthiestLog.firstDirtyOffset());
@@ -297,7 +303,7 @@ class LogCleanerManagerTest {
         logs.get(tp).maybeIncrementLogStartOffset(10L, LogStartOffsetIncrementReason.ClientRecordDeletion);
 
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        CLEANER_CHECKPOINTS.put(tp, 0L);
+        cleanerManager.addCheckpoint(tp, 0L);
 
         LogToClean filthiestLog = cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats()).get();
         assertEquals(10L, filthiestLog.firstDirtyOffset());
@@ -320,7 +326,7 @@ class LogCleanerManagerTest {
         log.maybeIncrementLogStartOffset(2L, LogStartOffsetIncrementReason.ClientRecordDeletion);
 
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        CLEANER_CHECKPOINTS.put(tp, 0L);
+        cleanerManager.addCheckpoint(tp, 0L);
 
         // The active segment is uncleanable and hence not filthy from the POV of the CleanerManager.
         Optional<LogToClean> filthiestLog = cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats());
@@ -346,7 +352,7 @@ class LogCleanerManagerTest {
         assertEquals(0L, log.activeSegment().baseOffset());
 
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        CLEANER_CHECKPOINTS.put(tp, 3L);
+        cleanerManager.addCheckpoint(tp, 3L);
 
         // These segments are uncleanable and hence not filthy
         Optional<LogToClean> filthiestLog = cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats());
@@ -778,7 +784,7 @@ class LogCleanerManagerTest {
 
         assertTrue(cleanerManager.cleaningState(TOPIC_PARTITION).isEmpty());
         assertTrue(cleanerManager.allCleanerCheckpoints().containsKey(TOPIC_PARTITION));
-        assertEquals(Optional.of(endOffset), Optional.of(cleanerManager.allCleanerCheckpoints().get(TOPIC_PARTITION)));
+        assertEquals(endOffset, cleanerManager.allCleanerCheckpoints().get(TOPIC_PARTITION));
 
         cleanerManager.setCleaningState(TOPIC_PARTITION, LOG_CLEANING_ABORTED);
         cleanerManager.doneCleaning(TOPIC_PARTITION, log.dir(), endOffset);
@@ -819,11 +825,11 @@ class LogCleanerManagerTest {
 
         logs.get(tp).maybeIncrementLogStartOffset(20L, LogStartOffsetIncrementReason.ClientRecordDeletion);
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        CLEANER_CHECKPOINTS.put(tp, 15L);
+        cleanerManager.addCheckpoint(tp, 15L);
 
         Optional<LogToClean> filthiestLog = cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats());
         assertEquals(Optional.empty(), filthiestLog, "Log should not be selected for cleaning");
-        assertEquals(20L, CLEANER_CHECKPOINTS.get(tp), "Unselected log should have checkpoint offset updated");
+        assertEquals(20L, cleanerManager.checkpointOffset(tp), "Unselected log should have checkpoint offset updated");
     }
 
     /**
@@ -840,12 +846,12 @@ class LogCleanerManagerTest {
         ConcurrentMap<TopicPartition, UnifiedLog> logs = setupIncreasinglyFilthyLogs(partitions);
         logs.get(tp0).maybeIncrementLogStartOffset(15L, LogStartOffsetIncrementReason.ClientRecordDeletion);
         LogCleanerManagerMock cleanerManager = createCleanerManagerMock(logs);
-        CLEANER_CHECKPOINTS.put(tp0, 10L);
-        CLEANER_CHECKPOINTS.put(tp1, 5L);
+        cleanerManager.addCheckpoint(tp0, 10L);
+        cleanerManager.addCheckpoint(tp1, 5L);
 
         LogToClean filthiestLog = cleanerManager.grabFilthiestCompactedLog(TIME, new PreCleanStats()).get();
         assertEquals(tp1, filthiestLog.topicPartition(), "Dirtier log should be selected");
-        assertEquals(15L, CLEANER_CHECKPOINTS.get(tp0), "Unselected log should have checkpoint offset updated");
+        assertEquals(15L, cleanerManager.checkpointOffset(tp0), "Unselected log should have checkpoint offset updated");
     }
 
     private LogCleanerManager createCleanerManager(UnifiedLog log) {
