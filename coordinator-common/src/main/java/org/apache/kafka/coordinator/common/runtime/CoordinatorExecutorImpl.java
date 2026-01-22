@@ -23,35 +23,21 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 
 public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
-    @FunctionalInterface
-    public interface WriteOperation<U> {
-        CoordinatorResult<Void, U> generate();
-    }
-
-    @FunctionalInterface
-    public interface Scheduler<U> {
-        CompletableFuture<Void> scheduleWriteOperation(
-            String operationName,
-            WriteOperation<U> operation
-        );
-    }
-
     private record TaskResult<R>(R result, Throwable exception) { }
 
     private final Logger log;
-    private final Scheduler<U> scheduler;
+    private final CoordinatorShardScheduler<U> scheduler;
     private final ExecutorService executor;
     private final Map<String, TaskRunnable<?>> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorExecutorImpl(
         LogContext logContext,
-        Scheduler<U> scheduler,
+        CoordinatorShardScheduler<U> scheduler,
         ExecutorService executor
     ) {
         this.log = logContext.logger(CoordinatorExecutorImpl.class);

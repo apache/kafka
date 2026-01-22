@@ -27,7 +27,6 @@ import org.slf4j.Logger;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -40,34 +39,15 @@ import java.util.concurrent.TimeUnit;
  * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
  */
 public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
-    /**
-     * A write operation that produces records.
-     */
-    @FunctionalInterface
-    public interface WriteOperation<U> {
-        CoordinatorResult<Void, U> generate();
-    }
-
-    /**
-     * Schedules write operations to be executed by the runtime.
-     */
-    @FunctionalInterface
-    public interface Scheduler<U> {
-        CompletableFuture<Void> scheduleWriteOperation(
-            String operationName,
-            WriteOperation<U> operation
-        );
-    }
-
     private final Logger log;
     private final Timer timer;
-    private final Scheduler<U> scheduler;
+    private final CoordinatorShardScheduler<U> scheduler;
     private final Map<String, TimerTask> tasks = new HashMap<>();
 
     public CoordinatorTimerImpl(
         LogContext logContext,
         Timer timer,
-        Scheduler<U> scheduler
+        CoordinatorShardScheduler<U> scheduler
     ) {
         this.log = logContext.logger(CoordinatorTimerImpl.class);
         this.timer = timer;

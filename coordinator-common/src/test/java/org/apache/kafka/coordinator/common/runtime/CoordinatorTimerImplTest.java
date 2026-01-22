@@ -46,7 +46,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var operationCalled = new AtomicBoolean(false);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             var result = operation.generate();
             assertEquals(new CoordinatorResult<>(List.of("record"), null), result);
             operationCalled.set(true);
@@ -83,7 +83,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var operationCalled = new AtomicBoolean(false);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operationCalled.set(true);
             return CompletableFuture.completedFuture(null);
         };
@@ -124,7 +124,7 @@ public class CoordinatorTimerImplTest {
         var rejectedExceptionThrown = new AtomicBoolean(false);
         var timerRef = new AtomicReference<CoordinatorTimerImpl<String>>();
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             // Cancel the timer BEFORE executing the write operation.
             // This simulates the case where the timer is cancelled while the write
             // event is waiting to be processed.
@@ -175,7 +175,7 @@ public class CoordinatorTimerImplTest {
         var firstOperationCalled = new AtomicBoolean(false);
         var secondOperationCalled = new AtomicBoolean(false);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             try {
                 operation.generate();
             } catch (RejectedExecutionException e) {
@@ -232,7 +232,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var callCount = new AtomicInteger(0);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             var count = callCount.incrementAndGet();
             if (count == 1) {
@@ -278,7 +278,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var callCount = new AtomicInteger(0);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             callCount.incrementAndGet();
             return FutureUtils.failedFuture(new RuntimeException("Simulated failure"));
@@ -319,7 +319,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var callCount = new AtomicInteger(0);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             callCount.incrementAndGet();
             return FutureUtils.failedFuture(new NotCoordinatorException("Not coordinator"));
@@ -360,7 +360,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var callCount = new AtomicInteger(0);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             callCount.incrementAndGet();
             return FutureUtils.failedFuture(new CoordinatorLoadInProgressException("Loading"));
@@ -401,7 +401,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var operationCalled = new AtomicBoolean(false);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             return CompletableFuture.completedFuture(null);
         };
@@ -440,7 +440,7 @@ public class CoordinatorTimerImplTest {
         var firstOperationCalled = new AtomicBoolean(false);
         var secondOperationCalled = new AtomicBoolean(false);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             return CompletableFuture.completedFuture(null);
         };
@@ -495,7 +495,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var operationCallCount = new AtomicInteger(0);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             operationCallCount.incrementAndGet();
             return CompletableFuture.completedFuture(null);
@@ -539,7 +539,7 @@ public class CoordinatorTimerImplTest {
         var mockTimer = new MockTimer();
         var callCount = new AtomicInteger(0);
 
-        CoordinatorTimerImpl.Scheduler<String> scheduler = (operationName, operation) -> {
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
             operation.generate();
             var count = callCount.incrementAndGet();
             if (count == 1) {
