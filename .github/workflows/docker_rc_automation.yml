@@ -1,0 +1,228 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Automate Docker RC Creation
+
+on:
+  workflow_dispatch:
+    inputs:
+      kafka_url:
+        description: 'Kafka URL to be used to build the docker images (Example: https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz)'
+        required: true
+      rc_version:
+        description: 'RC version tag (Example: 3.8.0-rc0)'
+        required: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  test-jvm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Trigger Docker Build Test for JVM
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Triggering Docker Build Test workflow for JVM..."
+          gh workflow run docker_build_and_test.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            --field image_type=jvm \
+            --field kafka_url="${{ inputs.kafka_url }}"
+
+          if [ $? -ne 0 ]; then
+            echo "Failed to trigger workflow"
+            exit 1
+          fi
+
+          echo "Waiting for workflow to start..."
+          sleep 20
+
+          # Get the run ID of the triggered workflow
+          run_id=$(gh run list \
+            --repo ${{ github.repository }} \
+            --workflow=docker_build_and_test.yml \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+
+          echo "Watching workflow run: $run_id"
+          gh run watch $run_id --repo ${{ github.repository }} --exit-status
+
+  test-native:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Trigger Docker Build Test for Native
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Triggering Docker Build Test workflow for Native..."
+          gh workflow run docker_build_and_test.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            --field image_type=native \
+            --field kafka_url="${{ inputs.kafka_url }}"
+
+          if [ $? -ne 0 ]; then
+            echo "Failed to trigger workflow"
+            exit 1
+          fi
+
+          echo "Waiting for workflow to start..."
+          sleep 20
+
+          # Get the run ID of the triggered workflow
+          run_id=$(gh run list \
+            --repo ${{ github.repository }} \
+            --workflow=docker_build_and_test.yml \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+
+          echo "Watching workflow run: $run_id"
+          gh run watch $run_id --repo ${{ github.repository }} --exit-status
+
+  release-jvm:
+    needs: test-jvm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Trigger RC Release for JVM
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Triggering Build and Push Release Candidate Docker Image workflow for JVM..."
+          gh workflow run docker_rc_release.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            --field image_type=jvm \
+            --field kafka_url="${{ inputs.kafka_url }}" \
+            --field rc_docker_image="apache/kafka:${{ inputs.rc_version }}"
+
+          if [ $? -ne 0 ]; then
+            echo "Failed to trigger workflow"
+            exit 1
+          fi
+
+          echo "Waiting for workflow to start..."
+          sleep 20
+
+          # Get the run ID of the triggered workflow
+          run_id=$(gh run list \
+            --repo ${{ github.repository }} \
+            --workflow=docker_rc_release.yml \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+
+          echo "Watching workflow run: $run_id"
+          gh run watch $run_id --repo ${{ github.repository }} --exit-status
+
+  release-native:
+    needs: test-native
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Trigger RC Release for Native
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Triggering Build and Push Release Candidate Docker Image workflow for Native..."
+          gh workflow run docker_rc_release.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            --field image_type=native \
+            --field kafka_url="${{ inputs.kafka_url }}" \
+            --field rc_docker_image="apache/kafka-native:${{ inputs.rc_version }}"
+
+          if [ $? -ne 0 ]; then
+            echo "Failed to trigger workflow"
+            exit 1
+          fi
+
+          echo "Waiting for workflow to start..."
+          sleep 20
+
+          # Get the run ID of the triggered workflow
+          run_id=$(gh run list \
+            --repo ${{ github.repository }} \
+            --workflow=docker_rc_release.yml \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+
+          echo "Watching workflow run: $run_id"
+          gh run watch $run_id --repo ${{ github.repository }} --exit-status
+
+  verify-dockerhub:
+    needs: [release-jvm, release-native]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify JVM image on DockerHub
+        run: |
+          echo "Verifying apache/kafka:${{ inputs.rc_version }} on DockerHub..."
+
+          # Wait a bit for DockerHub to update
+          sleep 30
+
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/apache/kafka/tags/${{ inputs.rc_version }}")
+
+          if [ "$response" = "200" ]; then
+            echo "✓ apache/kafka:${{ inputs.rc_version }} found on DockerHub"
+          else
+            echo "✗ apache/kafka:${{ inputs.rc_version }} not found on DockerHub (HTTP $response)"
+            exit 1
+          fi
+
+      - name: Verify Native image on DockerHub
+        run: |
+          echo "Verifying apache/kafka-native:${{ inputs.rc_version }} on DockerHub..."
+
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://hub.docker.com/v2/repositories/apache/kafka-native/tags/${{ inputs.rc_version }}")
+
+          if [ "$response" = "200" ]; then
+            echo "✓ apache/kafka-native:${{ inputs.rc_version }} found on DockerHub"
+          else
+            echo "✗ apache/kafka-native:${{ inputs.rc_version }} not found on DockerHub (HTTP $response)"
+            exit 1
+          fi
+
+      - name: Summary
+        run: |
+          echo "================================"
+          echo "Docker RC Automation Complete! ✓"
+          echo "================================"
+          echo ""
+          echo "Images published:"
+          echo "  - apache/kafka:${{ inputs.rc_version }}"
+          echo "  - apache/kafka-native:${{ inputs.rc_version }}"
+          echo ""
+          echo "View on DockerHub:"
+          echo "  - https://hub.docker.com/r/apache/kafka/tags?name=${{ inputs.rc_version }}"
+          echo "  - https://hub.docker.com/r/apache/kafka-native/tags?name=${{ inputs.rc_version }}"
