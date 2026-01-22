@@ -56,7 +56,7 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
         if (!Files.exists(binaryBootstrapPath)) {
             throw new FileNotFoundException(binaryBootstrapPath.toString());
         } else {
-            return readFromBinaryFile(binaryBootstrapPath.toString());
+            return BootstrapDirectory.readFromBinaryFile(binaryBootstrapPath.toString());
         }
     }
 }

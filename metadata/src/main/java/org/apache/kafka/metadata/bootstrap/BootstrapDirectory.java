@@ -33,6 +33,8 @@ public interface BootstrapDirectory {
 
     /**
      * Read the bootstrap metadata from the configured location.
+     * Implementations may read from a binary checkpoint file on disk, or fall back to
+     * configuration defaults if no checkpoint is present.
      *
      * @return the loaded {@link BootstrapMetadata}
      * @throws IOException if the metadata cannot be read from disk
@@ -43,12 +45,15 @@ public interface BootstrapDirectory {
     /**
      * Read bootstrap metadata from the given binary file path.
      *
+     * This is a shared helper used by {@link BootstrapDirectory} implementations; it is not
+     * intended as part of the public instance contract of {@link #read()}.
+     *
      * @param binaryPath the path to the binary bootstrap file
      * @return the loaded {@link BootstrapMetadata}
      * @throws IOException if the metadata cannot be read from disk
      * @throws RuntimeException if the binary file contents are invalid
      */
-    default BootstrapMetadata readFromBinaryFile(String binaryPath) throws IOException {
+    static BootstrapMetadata readFromBinaryFile(String binaryPath) throws IOException {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         try (BatchFileReader reader = new BatchFileReader.Builder().
                 setPath(binaryPath).build()) {
