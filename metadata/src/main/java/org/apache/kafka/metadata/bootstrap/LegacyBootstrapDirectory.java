@@ -57,7 +57,7 @@ public class LegacyBootstrapDirectory implements BootstrapDirectory {
         }
     }
 
-    BootstrapMetadata readFromConfiguration() {
+    private BootstrapMetadata readFromConfiguration() {
         return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
     }
 }
