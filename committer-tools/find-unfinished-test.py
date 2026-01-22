@@ -94,6 +94,10 @@ Examples:
                        help="Minimum duration in seconds to report (default: 0, report all)")
     parser.add_argument("--summary", action="store_true",
                        help="Show summary statistics")
+    parser.add_argument("--output", type=str,
+                       help="Output file to write report (default: stdout)")
+    parser.add_argument("--format", type=str, choices=["text", "json"], default="text",
+                       help="Output format (default: text)")
     args = parser.parse_args()
 
     started: Dict[str, Tuple[str, str]] = {}  # test_name -> (line, timestamp)
@@ -160,25 +164,64 @@ Examples:
             print("No unfinished tests found.")
         sys.exit(0)
 
+    # Prepare output
+    output_lines = []
+    
     for test_name, line, start_timestamp, duration_seconds in unfinished_tests:
-        print("-" * 80)
-        print(f"Test: {test_name}")
-        print(f"Duration: {pretty_time_duration(duration_seconds)} ({int(duration_seconds)}s)")
-        print(f"Started at: {start_timestamp}")
-        print(f"Raw line: {line.strip()}")
+        output_lines.append("-" * 80)
+        output_lines.append(f"Test: {test_name}")
+        output_lines.append(f"Duration: {pretty_time_duration(duration_seconds)} ({int(duration_seconds)}s)")
+        output_lines.append(f"Started at: {start_timestamp}")
+        output_lines.append(f"Raw line: {line.strip()}")
 
     if args.summary:
-        print()
-        print("=" * 80)
-        print("Summary:")
-        print(f"  Total tests processed: {total_tests_processed}")
-        print(f"  Unfinished tests: {len(unfinished_tests)}")
+        output_lines.append("")
+        output_lines.append("=" * 80)
+        output_lines.append("Summary:")
+        output_lines.append(f"  Total tests processed: {total_tests_processed}")
+        output_lines.append(f"  Unfinished tests: {len(unfinished_tests)}")
         if len(unfinished_tests) > 0:
             avg_duration = sum(d for _, _, _, d in unfinished_tests) / len(unfinished_tests)
             max_duration = unfinished_tests[0][3]
             min_duration = unfinished_tests[-1][3]
-            print(f"  Average duration: {pretty_time_duration(avg_duration)} ({int(avg_duration)}s)")
-            print(f"  Longest duration: {pretty_time_duration(max_duration)} ({int(max_duration)}s)")
-            print(f"  Shortest duration: {pretty_time_duration(min_duration)} ({int(min_duration)}s)")
+            output_lines.append(f"  Average duration: {pretty_time_duration(avg_duration)} ({int(avg_duration)}s)")
+            output_lines.append(f"  Longest duration: {pretty_time_duration(max_duration)} ({int(max_duration)}s)")
+            output_lines.append(f"  Shortest duration: {pretty_time_duration(min_duration)} ({int(min_duration)}s)")
         if malformed_lines > 0:
-            print(f"  Malformed lines skipped: {malformed_lines}")
+            output_lines.append(f"  Malformed lines skipped: {malformed_lines}")
+    
+    # Format and write output
+    if args.format == "json":
+        import json
+        output_data = {
+            "unfinished_tests": [
+                {
+                    "test_name": test_name,
+                    "duration_seconds": duration_seconds,
+                    "started_at": start_timestamp,
+                    "raw_line": line.strip()
+                }
+                for test_name, line, start_timestamp, duration_seconds in unfinished_tests
+            ],
+            "summary": {
+                "total_tests_processed": total_tests_processed,
+                "unfinished_tests_count": len(unfinished_tests),
+                "malformed_lines": malformed_lines
+            }
+        }
+        if args.summary and len(unfinished_tests) > 0:
+            avg_duration = sum(d for _, _, _, d in unfinished_tests) / len(unfinished_tests)
+            output_data["summary"]["average_duration"] = avg_duration
+            output_data["summary"]["max_duration"] = unfinished_tests[0][3]
+            output_data["summary"]["min_duration"] = unfinished_tests[-1][3]
+        output_text = json.dumps(output_data, indent=2)
+    else:
+        output_text = "\n".join(output_lines)
+    
+    # Write to file or stdout
+    if args.output:
+        with open(args.output, "w") as f:
+            f.write(output_text)
+        print(f"Report written to {args.output}")
+    else:
+        print(output_text)
