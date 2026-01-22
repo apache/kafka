@@ -31,18 +31,18 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
     private record TaskResult<R>(R result, Throwable exception) { }
 
     private final Logger log;
-    private final CoordinatorShardScheduler<U> scheduler;
     private final ExecutorService executor;
+    private final CoordinatorShardScheduler<U> scheduler;
     private final Map<String, TaskRunnable<?>> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorExecutorImpl(
         LogContext logContext,
-        CoordinatorShardScheduler<U> scheduler,
-        ExecutorService executor
+        ExecutorService executor,
+        CoordinatorShardScheduler<U> scheduler
     ) {
         this.log = logContext.logger(CoordinatorExecutorImpl.class);
-        this.scheduler = scheduler;
         this.executor = executor;
+        this.scheduler = scheduler;
     }
 
     private <R> TaskResult<R> executeTask(TaskRunnable<R> task) {

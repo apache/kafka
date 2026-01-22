@@ -490,12 +490,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             );
             this.executor = new CoordinatorExecutorImpl<>(
                 logContext,
+                executorService,
                 (operationName, operation) -> scheduleWriteOperation(
                     operationName,
                     tp,
                     coordinator -> operation.generate()
-                ),
-                executorService
+                )
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
             this.cachedBufferSize = new AtomicLong(0);

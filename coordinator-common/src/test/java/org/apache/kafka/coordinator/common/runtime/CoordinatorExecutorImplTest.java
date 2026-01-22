@@ -53,8 +53,8 @@ public class CoordinatorExecutorImplTest {
         ExecutorService executorService = mock(ExecutorService.class);
         CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            scheduler,
-            executorService
+            executorService,
+            scheduler
         );
 
         when(scheduler.scheduleWriteOperation(
@@ -107,8 +107,8 @@ public class CoordinatorExecutorImplTest {
         ExecutorService executorService = mock(ExecutorService.class);
         CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            scheduler,
-            executorService
+            executorService,
+            scheduler
         );
 
         when(scheduler.scheduleWriteOperation(
@@ -160,8 +160,8 @@ public class CoordinatorExecutorImplTest {
         ExecutorService executorService = mock(ExecutorService.class);
         CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            scheduler,
-            executorService
+            executorService,
+            scheduler
         );
 
         when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
@@ -202,8 +202,8 @@ public class CoordinatorExecutorImplTest {
         ExecutorService executorService = mock(ExecutorService.class);
         CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            scheduler,
-            executorService
+            executorService,
+            scheduler
         );
 
         when(scheduler.scheduleWriteOperation(
@@ -252,8 +252,8 @@ public class CoordinatorExecutorImplTest {
         ExecutorService executorService = mock(ExecutorService.class);
         CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            scheduler,
-            executorService
+            executorService,
+            scheduler
         );
 
         when(scheduler.scheduleWriteOperation(
@@ -296,8 +296,8 @@ public class CoordinatorExecutorImplTest {
         ExecutorService executorService = mock(ExecutorService.class);
         CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            scheduler,
-            executorService
+            executorService,
+            scheduler
         );
 
         List<CoordinatorShardScheduler.WriteOperation<String>> writeOperations = new ArrayList<>();
