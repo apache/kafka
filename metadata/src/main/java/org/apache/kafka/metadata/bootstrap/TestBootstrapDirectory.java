@@ -49,10 +49,10 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
         Path path = Paths.get(directoryPath);
         if (!Files.isDirectory(path)) {
             if (Files.exists(path)) {
-                throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
+                throw new IllegalStateException("Path " + directoryPath + " exists, but is not " +
                         "a directory.");
             } else {
-                throw new RuntimeException("No such directory as " + directoryPath);
+                throw new IllegalStateException("No such directory as " + directoryPath);
             }
         }
         Path binaryBootstrapPath = Paths.get(directoryPath, String.format("%s-%d",
