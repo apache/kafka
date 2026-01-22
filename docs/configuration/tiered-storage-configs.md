@@ -43,6 +43,9 @@ Additional configurations can be provided for different types of clients using t
     
     # Configs for admin, producer, and consumer clients
     <rlmm.prefix>.remote.log.metadata.common.client.<kafka.property> = <value>
+
+    # Configs only for admin client
+    <rlmm.prefix>.remote.log.metadata.admin.<kafka.property> = <value>
     
     # Configs only for producer client
     <rlmm.prefix>.remote.log.metadata.producer.<kafka.property> = <value>

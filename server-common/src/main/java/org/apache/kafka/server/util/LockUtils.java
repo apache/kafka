@@ -18,6 +18,7 @@ package org.apache.kafka.server.util;
 
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
 
 /**
  * A utility class providing helper methods for working with {@link Lock} objects.
@@ -60,6 +61,22 @@ public class LockUtils {
     }
 
     /**
+     * Executes the given {@link ThrowingSupplier} within the context of the read lock of the specified {@link ReadWriteLock}.
+     * see {@link LockUtils#inLock(Lock, ThrowingSupplier)}
+     */
+    public static <T, E extends Exception> T inReadLock(ReadWriteLock lock, ThrowingSupplier<T, E> supplier) throws E {
+        return inLock(lock.readLock(), supplier);
+    }
+
+    /**
+     * Executes the given {@link ThrowingSupplier} within the context of the write lock of the specified {@link ReadWriteLock}.
+     * see {@link LockUtils#inLock(Lock, ThrowingSupplier)}
+     */
+    public static <T, E extends Exception> T inWriteLock(ReadWriteLock lock, ThrowingSupplier<T, E> supplier) throws E {
+        return inLock(lock.writeLock(), supplier);
+    }
+
+    /**
      * Executes the given {@link ThrowingRunnable} within the context of the specified {@link Lock}.
      * The lock is acquired before executing the runnable and released after the execution,
      * ensuring that the lock is always released, even if an exception is thrown.
@@ -80,5 +97,21 @@ public class LockUtils {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Executes the given {@link ThrowingRunnable} within the context of the read lock of the specified {@link ReadWriteLock}.
+     * see {@link LockUtils#inLock(Lock, ThrowingRunnable)}
+     */
+    public static <E extends Exception> void inReadLock(ReadWriteLock lock, ThrowingRunnable<E> runnable) throws E {
+        inLock(lock.readLock(), runnable);
+    }
+
+    /**
+     * Executes the given {@link ThrowingRunnable} within the context of the write lock of the specified {@link ReadWriteLock}.
+     * see {@link LockUtils#inLock(Lock, ThrowingRunnable)}
+     */
+    public static <E extends Exception> void inWriteLock(ReadWriteLock lock, ThrowingRunnable<E> runnable) throws E {
+        inLock(lock.writeLock(), runnable);
     }
 }

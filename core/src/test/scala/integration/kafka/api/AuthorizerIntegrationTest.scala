@@ -3851,7 +3851,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
         new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-        .setStatusDetail("Internal topics are missing: [topic]; Unauthorized to CREATE on topics topic.")),
+        .setStatusDetail("Internal topics are missing: topic; Unauthorized to CREATE on topics topic.")),
     response.data().status())
   }
 
@@ -3885,7 +3885,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
         new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-        .setStatusDetail("Internal topics are missing: [topic]")),
+        .setStatusDetail("Internal topics are missing: topic")),
       response.data().status())
   }
 

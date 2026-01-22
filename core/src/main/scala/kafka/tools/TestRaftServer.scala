@@ -24,7 +24,7 @@ import joptsimple.{OptionException, OptionSpec}
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, KafkaRequestHandlerPoolFactory}
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing
@@ -143,13 +143,13 @@ class TestRaftServer(
 
   def shutdown(): Unit = {
     if (raftManager != null)
-      CoreUtils.swallow(raftManager.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => raftManager.shutdown())
     if (workloadGenerator != null)
-      CoreUtils.swallow(workloadGenerator.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => workloadGenerator.shutdown())
     if (dataPlaneRequestHandlerPool != null)
-      CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => dataPlaneRequestHandlerPool.shutdown())
     if (socketServer != null)
-      CoreUtils.swallow(socketServer.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => socketServer.shutdown())
     Utils.closeQuietly(metrics, "metrics")
     shutdownLatch.countDown()
   }
