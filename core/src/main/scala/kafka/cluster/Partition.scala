@@ -23,7 +23,6 @@ import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, CopyOnWriteAr
 import kafka.log._
 import kafka.server._
 import kafka.server.share.DelayedShareFetch
-import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
@@ -35,7 +34,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
@@ -48,6 +47,7 @@ import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperation
 import org.apache.kafka.server.replica.Replica
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, UnexpectedAppendOffsetException}
+import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.slf4j.event.Level
 
@@ -67,11 +67,11 @@ class DelayedOperations(topicId: Option[Uuid],
 
   def checkAndCompleteAll(): Unit = {
     val requestKey = new TopicPartitionOperationKey(topicPartition)
-    CoreUtils.swallow(() -> fetch.checkAndComplete(requestKey), this, Level.ERROR)
-    CoreUtils.swallow(() -> produce.checkAndComplete(requestKey), this, Level.ERROR)
-    CoreUtils.swallow(() -> deleteRecords.checkAndComplete(requestKey), this, Level.ERROR)
-    if (topicId.isDefined) CoreUtils.swallow(() -> shareFetch.checkAndComplete(new DelayedShareFetchPartitionKey(
-      topicId.get, topicPartition.partition())), this, Level.ERROR)
+    Utils.swallow(this.logger.underlying, Level.ERROR, () => fetch.checkAndComplete(requestKey))
+    Utils.swallow(this.logger.underlying, Level.ERROR, () => produce.checkAndComplete(requestKey))
+    Utils.swallow(this.logger.underlying, Level.ERROR, () => deleteRecords.checkAndComplete(requestKey))
+    if (topicId.isDefined) Utils.swallow(this.logger.underlying, Level.ERROR, () => shareFetch.checkAndComplete(
+      new DelayedShareFetchPartitionKey(topicId.get, topicPartition.partition())))
   }
 
   def numDelayedDelete: Int = deleteRecords.numDelayed()
@@ -266,7 +266,7 @@ class Partition(val topicPartition: TopicPartition,
   def inSyncReplicaIds: Set[Int] = partitionState.isr.asScala.map(_.toInt).toSet
 
   def maybeAddListener(listener: PartitionListener): Boolean = {
-    inReadLock(leaderIsrUpdateLock) {
+    inReadLock(leaderIsrUpdateLock, () => {
       // `log` is set to `None` when the partition is failed or deleted.
       log match {
         case Some(_) =>
@@ -276,7 +276,7 @@ class Partition(val topicPartition: TopicPartition,
         case None =>
           false
       }
-    }
+    })
   }
 
   def removeListener(listener: PartitionListener): Unit = {
@@ -295,7 +295,7 @@ class Partition(val topicPartition: TopicPartition,
     // The writeLock is needed to make sure that while the caller checks the log directory of the
     // current replica and the existence of the future replica, no other thread can update the log directory of the
     // current replica or remove the future replica.
-    inWriteLock(leaderIsrUpdateLock) {
+    inWriteLock(leaderIsrUpdateLock, () => {
       val currentLogDir = localLogOrException.parentDir
       if (currentLogDir == logDir) {
         info(s"Current log directory $currentLogDir is same as requested log dir $logDir. " +
@@ -314,7 +314,7 @@ class Partition(val topicPartition: TopicPartition,
             true
         }
       }
-    }
+    })
   }
 
   def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid],
@@ -462,17 +462,17 @@ class Partition(val topicPartition: TopicPartition,
     remoteReplicasMap.values.asScala
 
   def futureReplicaDirChanged(newDestinationDir: String): Boolean = {
-    inReadLock(leaderIsrUpdateLock) {
+    inReadLock(leaderIsrUpdateLock, () => {
       futureLog.exists(_.parentDir != newDestinationDir)
-    }
+    })
   }
 
   def removeFutureLocalReplica(deleteFromLogDir: Boolean = true): Unit = {
-    inWriteLock(leaderIsrUpdateLock) {
+    inWriteLock[Exception](leaderIsrUpdateLock, () => {
       futureLog = None
       if (deleteFromLogDir)
         logManager.asyncDelete(topicPartition, isFuture = true)
-    }
+    })
   }
 
   // Returns a VerificationGuard if we need to verify. This starts or continues the verification process. Otherwise return the
@@ -504,7 +504,7 @@ class Partition(val topicPartition: TopicPartition,
       if (futureReplicaLEO.contains(localReplicaLEO)) {
         // The write lock is needed to make sure that while ReplicaAlterDirThread checks the LEO of the
         // current replica, no other thread can update LEO of the current replica via log truncation or log append operation.
-        inWriteLock(leaderIsrUpdateLock) {
+        inWriteLock(leaderIsrUpdateLock, () => {
           futureLog match {
             case Some(futurePartitionLog) =>
               if (log.exists(_.logEndOffset == futurePartitionLog.logEndOffset)) {
@@ -518,7 +518,7 @@ class Partition(val topicPartition: TopicPartition,
               // state again to avoid race condition
               false
           }
-        }
+        })
       } else false
     }
   }
@@ -531,13 +531,13 @@ class Partition(val topicPartition: TopicPartition,
    */
   def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
-    inWriteLock(leaderIsrUpdateLock) {
+    inWriteLock[Exception](leaderIsrUpdateLock, () => {
       clear()
       listeners.forEach { listener =>
         listener.onDeleted(topicPartition)
       }
       listeners.clear()
-    }
+    })
   }
 
   /**
@@ -545,14 +545,14 @@ class Partition(val topicPartition: TopicPartition,
    * transitions to Offline.
    */
   def markOffline(): Unit = {
-    inWriteLock(leaderIsrUpdateLock) {
+    inWriteLock[Exception](leaderIsrUpdateLock, () => {
       clear()
 
       listeners.forEach { listener =>
         listener.onFailed(topicPartition)
       }
       listeners.clear()
-    }
+    })
   }
 
   /**
@@ -589,7 +589,7 @@ class Partition(val topicPartition: TopicPartition,
                  highWatermarkCheckpoints: OffsetCheckpoints,
                  topicId: Option[Uuid],
                  targetDirectoryId: Option[Uuid] = None): Boolean = {
-    val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
+    val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock, () => {
       // Partition state changes are expected to have a partition epoch larger or equal
       // to the current partition epoch. The latter is allowed because the partition epoch
       // is also updated by the AlterPartition response so the new epoch might be known
@@ -675,7 +675,7 @@ class Partition(val topicPartition: TopicPartition,
 
       // We may need to increment high watermark since ISR could be down to 1.
       (maybeIncrementLeaderHW(leaderLog, currentTimeMs = currentTimeMs), isNewLeader)
-    }
+    })
 
     // Some delayed operations may be unblocked after HW changed.
     if (leaderHWIncremented)
@@ -695,7 +695,7 @@ class Partition(val topicPartition: TopicPartition,
                    highWatermarkCheckpoints: OffsetCheckpoints,
                    topicId: Option[Uuid],
                    targetLogDirectoryId: Option[Uuid] = None): Boolean = {
-    inWriteLock(leaderIsrUpdateLock) {
+    inWriteLock(leaderIsrUpdateLock, () => {
       if (partitionRegistration.partitionEpoch < partitionEpoch) {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId, " +
           s"partition registration $partitionRegistration and isNew=$isNew since the follower is already at a newer partition epoch $partitionEpoch.")
@@ -738,7 +738,7 @@ class Partition(val topicPartition: TopicPartition,
       // We must restart the fetchers when the leader epoch changed regardless of
       // whether the leader changed as well.
       isNewLeaderEpoch
-    }
+    })
   }
 
   private def createLogInAssignedDirectoryId(isNew: Boolean, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
@@ -777,7 +777,7 @@ class Partition(val topicPartition: TopicPartition,
 
     // Apply read lock here to avoid the race between ISR updates and the fetch requests from rebooted follower. It
     // could break the broker epoch checks in the ISR expansion.
-    inReadLock(leaderIsrUpdateLock) {
+    inReadLock[Exception](leaderIsrUpdateLock, () => {
       replica.updateFetchStateOrThrow(
         followerFetchOffsetMetadata,
         followerStartOffset,
@@ -785,7 +785,7 @@ class Partition(val topicPartition: TopicPartition,
         leaderEndOffset,
         brokerEpoch
       )
-    }
+    })
 
     val newLeaderLW = if (delayedOperations.numDelayedDelete > 0) lowWatermarkIfLeader else -1L
     // check if the LW of the partition has incremented
@@ -800,9 +800,9 @@ class Partition(val topicPartition: TopicPartition,
     val leaderHWIncremented = if (prevFollowerEndOffset != replica.stateSnapshot.logEndOffset) {
       // the leader log may be updated by ReplicaAlterLogDirsThread so the following method must be in lock of
       // leaderIsrUpdateLock to prevent adding new hw to invalid log.
-      inReadLock(leaderIsrUpdateLock) {
+      inReadLock(leaderIsrUpdateLock, () => {
         leaderLogIfLocal.exists(leaderLog => maybeIncrementLeaderHW(leaderLog, followerFetchTimeMs))
-      }
+      })
     } else {
       false
     }
@@ -873,11 +873,11 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica): Unit = {
-    val needsIsrUpdate = !partitionState.isInflight && canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
+    val needsIsrUpdate = !partitionState.isInflight && canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock, () => {
       needsExpandIsr(followerReplica)
-    }
+    })
     if (needsIsrUpdate) {
-      val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
+      val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock, () => {
         // check if this replica needs to be added to the ISR
         partitionState match {
           case currentState: CommittedPartitionState if needsExpandIsr(followerReplica) =>
@@ -885,7 +885,7 @@ class Partition(val topicPartition: TopicPartition,
           case _ =>
             None
         }
-      }
+      })
       // Send the AlterPartition request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
       alterIsrUpdateOpt.foreach(submitAlterPartition)
@@ -1087,13 +1087,13 @@ class Partition(val topicPartition: TopicPartition,
 
   def maybeShrinkIsr(): Unit = {
     def needsIsrUpdate: Boolean = {
-      !partitionState.isInflight && inReadLock(leaderIsrUpdateLock) {
+      !partitionState.isInflight && inReadLock(leaderIsrUpdateLock, () => {
         needsShrinkIsr()
-      }
+      })
     }
 
     if (needsIsrUpdate) {
-      val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock) {
+      val alterIsrUpdateOpt = inWriteLock(leaderIsrUpdateLock, () => {
         leaderLogIfLocal.flatMap { leaderLog =>
           val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
           partitionState match {
@@ -1118,7 +1118,7 @@ class Partition(val topicPartition: TopicPartition,
               None
           }
         }
-      }
+      })
       // Send the AlterPartition request outside of the LeaderAndIsr lock since the completion logic
       // may increment the high watermark (and consequently complete delayed operations).
       alterIsrUpdateOpt.foreach(submitAlterPartition)
@@ -1171,11 +1171,11 @@ class Partition(val topicPartition: TopicPartition,
     if (isFuture) {
       // The read lock is needed to handle race condition if request handler thread tries to
       // remove future replica after receiving AlterReplicaLogDirsRequest.
-      inReadLock(leaderIsrUpdateLock) {
+      inReadLock(leaderIsrUpdateLock, () => {
         // Note the replica may be undefined if it is removed by a non-ReplicaAlterLogDirsThread before
         // this method is called
         futureLog.map { _.appendAsFollower(records, partitionLeaderEpoch) }
-      }
+      })
     } else {
       // The lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
       // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
@@ -1223,7 +1223,7 @@ class Partition(val topicPartition: TopicPartition,
     verificationGuard: VerificationGuard = VerificationGuard.SENTINEL,
     transactionVersion: Short = TransactionVersion.TV_UNKNOWN
   ): LogAppendInfo = {
-    val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
+    val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock, () => {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
           val minIsr = effectiveMinIsr(leaderLog)
@@ -1245,7 +1245,7 @@ class Partition(val topicPartition: TopicPartition,
           throw new NotLeaderOrFollowerException("Leader not local for partition %s on broker %d"
             .format(topicPartition, localBrokerId))
       }
-    }
+    })
 
     info.copy(if (leaderHWIncremented) LeaderHwChange.INCREASED else LeaderHwChange.SAME)
   }
@@ -1296,7 +1296,7 @@ class Partition(val topicPartition: TopicPartition,
 
     if (fetchParams.isFromFollower) {
       // Check that the request is from a valid replica before doing the read
-      val (replica, logReadInfo) = inReadLock(leaderIsrUpdateLock) {
+      val (replica, logReadInfo) = inReadLock(leaderIsrUpdateLock, () => {
         val localLog = localLogWithEpochOrThrow(
           fetchPartitionData.currentLeaderEpoch,
           fetchParams.fetchOnlyLeader
@@ -1307,7 +1307,7 @@ class Partition(val topicPartition: TopicPartition,
         )
         val logReadInfo = readFromLocalLog(localLog)
         (replica, logReadInfo)
-      }
+      })
 
       if (updateFetchState && !logReadInfo.divergingEpoch.isPresent) {
         updateFollowerFetchState(
@@ -1322,13 +1322,13 @@ class Partition(val topicPartition: TopicPartition,
 
       logReadInfo
     } else {
-      inReadLock(leaderIsrUpdateLock) {
+      inReadLock(leaderIsrUpdateLock, () => {
         val localLog = localLogWithEpochOrThrow(
           fetchPartitionData.currentLeaderEpoch,
           fetchParams.fetchOnlyLeader
         )
         readFromLocalLog(localLog)
-      }
+      })
     }
   }
 
@@ -1433,7 +1433,7 @@ class Partition(val topicPartition: TopicPartition,
                               isolationLevel: Option[IsolationLevel],
                               currentLeaderEpoch: Optional[Integer],
                               fetchOnlyFromLeader: Boolean,
-                              remoteLogManager: Option[RemoteLogManager] = None): OffsetResultHolder = inReadLock(leaderIsrUpdateLock) {
+                              remoteLogManager: Option[RemoteLogManager] = None): OffsetResultHolder = inReadLock(leaderIsrUpdateLock, () => {
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrThrow(currentLeaderEpoch, fetchOnlyFromLeader)
 
@@ -1478,7 +1478,7 @@ class Partition(val topicPartition: TopicPartition,
         offsetResultHolder.lastFetchableOffset(Optional.of(lastFetchableOffset))
         offsetResultHolder
     }
-  }
+  })
 
   def activeProducerState: DescribeProducersResponseData.PartitionResponse = {
     val producerState = new DescribeProducersResponseData.PartitionResponse()
@@ -1498,16 +1498,16 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def fetchOffsetSnapshot(currentLeaderEpoch: Optional[Integer],
-                          fetchOnlyFromLeader: Boolean): LogOffsetSnapshot = inReadLock(leaderIsrUpdateLock) {
+                          fetchOnlyFromLeader: Boolean): LogOffsetSnapshot = inReadLock(leaderIsrUpdateLock, () => {
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrThrow(currentLeaderEpoch, fetchOnlyFromLeader)
     localLog.fetchOffsetSnapshot
-  }
+  })
 
   def logStartOffset: Long = {
-    inReadLock(leaderIsrUpdateLock) {
+    inReadLock[Long, Exception](leaderIsrUpdateLock, () => {
       leaderLogIfLocal.map(_.logStartOffset).getOrElse(-1)
-    }
+    })
   }
 
   /**
@@ -1516,7 +1516,7 @@ class Partition(val topicPartition: TopicPartition,
    *
    * Return low watermark of the partition.
    */
-  def deleteRecordsOnLeader(offset: Long): LogDeleteRecordsResult = inReadLock(leaderIsrUpdateLock) {
+  def deleteRecordsOnLeader(offset: Long): LogDeleteRecordsResult = inReadLock(leaderIsrUpdateLock, () => {
     leaderLogIfLocal match {
       case Some(leaderLog) =>
         if (!leaderLog.config.delete && leaderLog.config.compact)
@@ -1537,7 +1537,7 @@ class Partition(val topicPartition: TopicPartition,
       case None =>
         throw new NotLeaderOrFollowerException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
     }
-  }
+  })
 
   /**
     * Truncate the local log of this partition to the specified offset and checkpoint the recovery point to this offset
@@ -1548,9 +1548,9 @@ class Partition(val topicPartition: TopicPartition,
   def truncateTo(offset: Long, isFuture: Boolean): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
-    inReadLock(leaderIsrUpdateLock) {
+    inReadLock[Exception](leaderIsrUpdateLock, () => {
       logManager.truncateTo(Map(topicPartition -> offset), isFuture = isFuture)
-    }
+    })
   }
 
   /**
@@ -1565,9 +1565,9 @@ class Partition(val topicPartition: TopicPartition,
                               logStartOffsetOpt: Optional[JLong] = Optional.empty): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
-    inReadLock(leaderIsrUpdateLock) {
+    inReadLock[Exception](leaderIsrUpdateLock, () => {
       logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture = isFuture, logStartOffsetOpt)
-    }
+    })
   }
 
   /**
@@ -1586,7 +1586,7 @@ class Partition(val topicPartition: TopicPartition,
   def lastOffsetForLeaderEpoch(currentLeaderEpoch: Optional[Integer],
                                leaderEpoch: Int,
                                fetchOnlyFromLeader: Boolean): EpochEndOffset = {
-    inReadLock(leaderIsrUpdateLock) {
+    inReadLock(leaderIsrUpdateLock, () => {
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
         case Left(localLog) =>
@@ -1604,7 +1604,7 @@ class Partition(val topicPartition: TopicPartition,
           .setPartition(partitionId)
           .setErrorCode(error.code)
       }
-    }
+    })
   }
 
   private def prepareIsrExpand(
@@ -1695,7 +1695,7 @@ class Partition(val topicPartition: TopicPartition,
       var hwIncremented = false
       var shouldRetry = false
 
-      inWriteLock(leaderIsrUpdateLock) {
+      inWriteLock[Exception](leaderIsrUpdateLock, () => {
         if (partitionState != proposedIsrState) {
           // This means partitionState was updated through leader election or some other mechanism
           // before we got the AlterPartition response. We don't know what happened on the controller
@@ -1707,7 +1707,7 @@ class Partition(val topicPartition: TopicPartition,
         } else {
           shouldRetry = handleAlterPartitionError(proposedIsrState, Errors.forException(e))
         }
-      }
+      })
 
       if (hwIncremented) {
         tryCompleteDelayedRequests()

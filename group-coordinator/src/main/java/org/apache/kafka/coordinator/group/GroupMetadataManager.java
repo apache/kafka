@@ -1998,8 +1998,9 @@ public class GroupMetadataManager {
             }
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
-                log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology);
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage);
+                log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology.topologyEpoch());
+                LogContext topicManagerLogContext = new LogContext(String.format("%s[GroupId %s][MemberId %s] ", logContext.logPrefix(), groupId, memberId));
+                updatedConfiguredTopology = InternalTopicManager.configureTopics(topicManagerLogContext, metadataHash, updatedTopology, metadataImage, time);
                 group.setConfiguredTopology(updatedConfiguredTopology);
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
@@ -3529,7 +3530,7 @@ public class GroupMetadataManager {
         String memberId = updatedMember.memberId();
         if (!updatedMember.equals(member)) {
             records.add(newStreamsGroupMemberRecord(groupId, updatedMember));
-            log.info("[GroupId {}] Member {} updated its member metdata to {}.",
+            log.info("[GroupId {}][MemberId {}] Member updated its member metdata to {}.",
                 groupId, memberId, updatedMember);
 
             return true;
