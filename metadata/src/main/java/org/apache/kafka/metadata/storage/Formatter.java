@@ -504,11 +504,11 @@ public class Formatter {
         short kraftVersion,
         String controllerListenerName
     ) {
+        File parentDir = new File(writeLogDir);
+        File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
+                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
+                CLUSTER_METADATA_TOPIC_PARTITION.partition()));
         try {
-            File parentDir = new File(writeLogDir);
-            File clusterMetadataDirectory = new File(parentDir, String.format("%s-%d",
-                    CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-                    CLUSTER_METADATA_TOPIC_PARTITION.partition()));
             RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder().
                 setLastContainedLogTimestamp(Time.SYSTEM.milliseconds()).
                 setMaxBatchSizeBytes(KafkaRaftClient.MAX_BATCH_SIZE_BYTES).
@@ -525,8 +525,11 @@ public class Formatter {
                 writer.freeze();
             }
         } catch (UncheckedIOException e) {
-            throw new FormatterException("Error while writing 00000000000000000000-0000000000.checkpoint file " +
-                writeLogDir + ": " + e, e);
+            throw new FormatterException("Error while writing bootstrap checkpoint file " +
+                Snapshots.snapshotPath(
+                    clusterMetadataDirectory.toPath(),
+                    Snapshots.BOOTSTRAP_SNAPSHOT_ID
+                ).toAbsolutePath() + ": " + e, e);
         }
     }
 }
