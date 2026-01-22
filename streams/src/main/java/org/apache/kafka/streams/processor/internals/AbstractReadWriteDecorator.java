@@ -26,12 +26,16 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+
+import org.apache.kafka.common.header.Headers;
 
 import java.util.List;
 
@@ -60,6 +64,9 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
             return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
+        } else if (store instanceof TimestampedWindowStoreWithHeaders) {
+            // Check this BEFORE TimestampedWindowStore since it's more specific
+            return new TimestampedWindowStoreWithHeadersReadWriteDecorator<>((TimestampedWindowStoreWithHeaders<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
             return new TimestampedWindowStoreReadWriteDecorator<>((TimestampedWindowStore<?, ?>) store);
         } else if (store instanceof WindowStore) {
@@ -258,6 +265,35 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
 
         TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner) {
             super(inner);
+        }
+    }
+
+    static class TimestampedWindowStoreWithHeadersReadWriteDecorator<K, V>
+        extends WindowStoreReadWriteDecorator<K, ValueTimestampHeaders<V>>
+        implements TimestampedWindowStoreWithHeaders<K, V> {
+
+        TimestampedWindowStoreWithHeadersReadWriteDecorator(final TimestampedWindowStoreWithHeaders<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        public void put(final K key, final V value, final long windowStartTimestamp, final long timestamp, final Headers headers) {
+            ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).put(key, value, windowStartTimestamp, timestamp, headers);
+        }
+
+        @Override
+        public WindowStoreIterator<ValueTimestampHeaders<V>> fetchWithHeaders(final K key, final long timeFrom, final long timeTo) {
+            return ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).fetchWithHeaders(key, timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchWithHeaders(final K keyFrom, final K keyTo, final long timeFrom, final long timeTo) {
+            return ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).fetchWithHeaders(keyFrom, keyTo, timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAllWithHeaders(final long timeFrom, final long timeTo) {
+            return ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).fetchAllWithHeaders(timeFrom, timeTo);
         }
     }
 

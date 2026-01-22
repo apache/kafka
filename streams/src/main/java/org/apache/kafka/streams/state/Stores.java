@@ -31,6 +31,7 @@ import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
@@ -305,6 +306,82 @@ public final class Stores {
         return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true);
     }
 
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier} that supports headers.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #timestampedWindowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
+     * This is the KIP-1271 version that stores record headers along with timestamps and values.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
+     *
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              (note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates. Turning this on will automatically disable
+     *                              caching and means that null values will be ignored.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if {@code retentionPeriod} is smaller than {@code windowSize}
+     */
+    public static WindowBytesStoreSupplier persistentTimestampedWindowStoreWithHeaders(final String name,
+                                                                                        final Duration retentionPeriod,
+                                                                                        final Duration windowSize,
+                                                                                        final boolean retainDuplicates) throws IllegalArgumentException {
+        return persistentWindowStoreWithHeaders(name, retentionPeriod, windowSize, retainDuplicates);
+    }
+
+    private static WindowBytesStoreSupplier persistentWindowStoreWithHeaders(final String name,
+                                                                              final Duration retentionPeriod,
+                                                                              final Duration windowSize,
+                                                                              final boolean retainDuplicates) {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = validateMillisecondDuration(windowSize, wsMsgPrefix);
+
+        final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
+
+        return persistentWindowStoreWithHeaders(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval);
+    }
+
+    private static WindowBytesStoreSupplier persistentWindowStoreWithHeaders(final String name,
+                                                                              final long retentionPeriod,
+                                                                              final long windowSize,
+                                                                              final boolean retainDuplicates,
+                                                                              final long segmentInterval) {
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriod < 0L) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (windowSize < 0L) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
+        if (segmentInterval < 1L) {
+            throw new IllegalArgumentException("segmentInterval cannot be zero or negative");
+        }
+        if (windowSize > retentionPeriod) {
+            throw new IllegalArgumentException("The retention period of the window store "
+                + name + " must be no smaller than its window size. Got size=["
+                + windowSize + "], retention=[" + retentionPeriod + "]");
+        }
+
+        return new RocksDbWindowBytesStoreSupplier(
+            name,
+            retentionPeriod,
+            segmentInterval,
+            windowSize,
+            retainDuplicates,
+            RocksDbWindowBytesStoreSupplier.WindowStoreTypes.TIMESTAMPED_WINDOW_STORE_WITH_HEADERS);
+    }
+
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                   final Duration retentionPeriod,
                                                                   final Duration windowSize,
@@ -544,6 +621,30 @@ public final class Stores {
                                                                                                   final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new TimestampedWindowStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedWindowStoreWithHeaders}.
+     * <p>
+     * This is the KIP-1271 version that supports storing record headers along with timestamps.
+     * The store will preserve headers from input records, enabling schema-aware processing,
+     * data lineage tracking, and conditional logic based on header metadata.
+     *
+     * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null}).
+     *                      Use {@link #persistentTimestampedWindowStoreWithHeaders} to create a headers-aware supplier.
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} that can build a {@link TimestampedWindowStoreWithHeaders}
+     */
+    public static <K, V> StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> timestampedWindowStoreWithHeadersBuilder(
+        final WindowBytesStoreSupplier supplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new TimestampedWindowStoreWithHeadersBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**

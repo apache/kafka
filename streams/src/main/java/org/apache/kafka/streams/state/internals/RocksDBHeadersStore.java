@@ -21,7 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.HeaderBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -43,57 +43,75 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
-
 /**
- * A persistent key-(value-timestamp) store based on RocksDB.
+ * A persistent key-(value-timestamp-headers) store based on RocksDB.
+ * <p>
+ * This store extends RocksDBTimestampedStore to add header support using a dual column family approach.
+ * The old column family contains timestamped values ([timestamp(8)][value]),
+ * and the new column family contains values with headers ([headerSize(2)][headers][timestamp(8)][value]).
+ * <p>
+ * This implementation supports lazy migration from timestamped stores to header-aware stores.
  */
-public class RocksDBTimestampedStore extends RocksDBStore implements TimestampedBytesStore {
-    private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStore.class);
+public class RocksDBHeadersStore extends RocksDBTimestampedStore implements HeaderBytesStore {
+    private static final Logger log = LoggerFactory.getLogger(RocksDBHeadersStore.class);
 
-    protected static final byte[] TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME = "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] HEADERS_COLUMN_FAMILY_NAME = "keyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
 
-    public RocksDBTimestampedStore(final String name,
-                            final String metricsScope) {
+    public RocksDBHeadersStore(final String name,
+                               final String metricsScope) {
         super(name, metricsScope);
     }
 
-    RocksDBTimestampedStore(final String name,
-                            final String parentDir,
-                            final RocksDBMetricsRecorder metricsRecorder) {
+    RocksDBHeadersStore(final String name,
+                        final String parentDir,
+                        final RocksDBMetricsRecorder metricsRecorder) {
         super(name, parentDir, metricsRecorder);
     }
 
     @Override
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {
+        // Note: We open three column families:
+        // 0. DEFAULT_COLUMN_FAMILY - required by RocksDB but not used by this store
+        // 1. TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME (from parent) - contains [timestamp(8)][value]
+        // 2. HEADERS_COLUMN_FAMILY_NAME - contains [headerSize(2)][headers][timestamp(8)][value]
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
+                new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions),
+                new ColumnFamilyDescriptor(HEADERS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
-        final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
-        final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
 
-        final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
-        noTimestampsIter.seekToFirst();
-        if (noTimestampsIter.isValid()) {
-            log.info("Opening store {} in upgrade mode", name);
-            cfAccessor = new DualColumnFamilyAccessor(noTimestampColumnFamily, withTimestampColumnFamily);
+        // DEFAULT_COLUMN_FAMILY - not used, but RocksDB requires it to be present
+        final ColumnFamilyHandle defaultColumnFamily = columnFamilies.get(0);
+
+        // Actual column families for migration
+        final ColumnFamilyHandle timestampedColumnFamily = columnFamilies.get(1); // oldCF
+        final ColumnFamilyHandle headersColumnFamily = columnFamilies.get(2);     // newCF
+
+        final RocksIterator timestampedIter = db.newIterator(timestampedColumnFamily);
+        timestampedIter.seekToFirst();
+        if (timestampedIter.isValid()) {
+            log.info("Opening store {} in upgrade mode (timestamped to headers)", name);
+            cfAccessor = new DualColumnFamilyAccessor(defaultColumnFamily, timestampedColumnFamily, headersColumnFamily);
         } else {
-            log.info("Opening store {} in regular mode", name);
-            cfAccessor = new SingleColumnFamilyAccessor(withTimestampColumnFamily);
-            noTimestampColumnFamily.close();
+            log.info("Opening store {} in regular mode (headers only)", name);
+            cfAccessor = new SingleColumnFamilyAccessor(headersColumnFamily);
+            defaultColumnFamily.close();
+            timestampedColumnFamily.close();
         }
-        noTimestampsIter.close();
+        timestampedIter.close();
     }
 
     private class DualColumnFamilyAccessor implements ColumnFamilyAccessor {
-        private final ColumnFamilyHandle oldColumnFamily;
-        private final ColumnFamilyHandle newColumnFamily;
+        private final ColumnFamilyHandle defaultColumnFamily; // Not used, but needs to be closed
+        private final ColumnFamilyHandle oldColumnFamily;     // Timestamped format
+        private final ColumnFamilyHandle newColumnFamily;     // Headers format
 
-        private DualColumnFamilyAccessor(final ColumnFamilyHandle oldColumnFamily,
+        private DualColumnFamilyAccessor(final ColumnFamilyHandle defaultColumnFamily,
+                                         final ColumnFamilyHandle oldColumnFamily,
                                          final ColumnFamilyHandle newColumnFamily) {
+            this.defaultColumnFamily = defaultColumnFamily;
             this.oldColumnFamily = oldColumnFamily;
             this.newColumnFamily = newColumnFamily;
         }
@@ -101,33 +119,29 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         @Override
         public void put(final DBAccessor accessor,
                         final byte[] key,
-                        final byte[] valueWithTimestamp) {
+                        final byte[] valueWithHeaders) {
             synchronized (position) {
-                if (valueWithTimestamp == null) {
+                if (valueWithHeaders == null) {
                     try {
                         accessor.delete(oldColumnFamily, key);
                     } catch (final RocksDBException e) {
-                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                         throw new ProcessorStateException("Error while removing key from store " + name, e);
                     }
                     try {
                         accessor.delete(newColumnFamily, key);
                     } catch (final RocksDBException e) {
-                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                         throw new ProcessorStateException("Error while removing key from store " + name, e);
                     }
                 } else {
                     try {
                         accessor.delete(oldColumnFamily, key);
                     } catch (final RocksDBException e) {
-                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                         throw new ProcessorStateException("Error while removing key from store " + name, e);
                     }
                     try {
-                        accessor.put(newColumnFamily, key, valueWithTimestamp);
+                        accessor.put(newColumnFamily, key, valueWithHeaders);
                         StoreQueryUtils.updatePosition(position, context);
                     } catch (final RocksDBException e) {
-                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                         throw new ProcessorStateException("Error while putting key/value into store " + name, e);
                     }
                 }
@@ -154,19 +168,24 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         private byte[] get(final DBAccessor accessor, final byte[] key, final Optional<ReadOptions> readOptions) throws RocksDBException {
-            final byte[] valueWithTimestamp = readOptions.isPresent() ? accessor.get(newColumnFamily, readOptions.get(), key) : accessor.get(newColumnFamily, key);
-            if (valueWithTimestamp != null) {
-                return valueWithTimestamp;
+            // First, try the new column family (with headers)
+            final byte[] valueWithHeaders = readOptions.isPresent()
+                ? accessor.get(newColumnFamily, readOptions.get(), key)
+                : accessor.get(newColumnFamily, key);
+            if (valueWithHeaders != null) {
+                return valueWithHeaders;
             }
 
-            final byte[] plainValue = readOptions.isPresent() ? accessor.get(oldColumnFamily, readOptions.get(), key) : accessor.get(oldColumnFamily, key);
-            if (plainValue != null) {
-                final byte[] valueWithUnknownTimestamp = convertToTimestampedFormat(plainValue);
-                // this does only work, because the changelog topic contains correct data already
-                // for other format changes, we cannot take this short cut and can only migrate data
-                // from old to new store on put()
-                put(accessor, key, valueWithUnknownTimestamp);
-                return valueWithUnknownTimestamp;
+            // Fallback to old column family (timestamped only)
+            final byte[] timestampedValue = readOptions.isPresent()
+                ? accessor.get(oldColumnFamily, readOptions.get(), key)
+                : accessor.get(oldColumnFamily, key);
+            if (timestampedValue != null) {
+                // Convert from [timestamp(8)][value] to [headerSize(2)][headers][timestamp(8)][value]
+                final byte[] valueWithEmptyHeaders = HeaderBytesStore.convertToHeaderFormat(key, timestampedValue);
+                // Migrate the data to the new column family
+                put(accessor, key, valueWithEmptyHeaders);
+                return valueWithEmptyHeaders;
             }
 
             return null;
@@ -174,14 +193,14 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public byte[] getOnly(final DBAccessor accessor, final byte[] key) throws RocksDBException {
-            final byte[] valueWithTimestamp = accessor.get(newColumnFamily, key);
-            if (valueWithTimestamp != null) {
-                return valueWithTimestamp;
+            final byte[] valueWithHeaders = accessor.get(newColumnFamily, key);
+            if (valueWithHeaders != null) {
+                return valueWithHeaders;
             }
 
-            final byte[] plainValue = accessor.get(oldColumnFamily, key);
-            if (plainValue != null) {
-                return convertToTimestampedFormat(plainValue);
+            final byte[] timestampedValue = accessor.get(oldColumnFamily, key);
+            if (timestampedValue != null) {
+                return HeaderBytesStore.convertToHeaderFormat(key, timestampedValue);
             }
 
             return null;
@@ -207,29 +226,27 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             try {
                 accessor.deleteRange(oldColumnFamily, from, to);
             } catch (final RocksDBException e) {
-                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                 throw new ProcessorStateException("Error while removing key from store " + name, e);
             }
             try {
                 accessor.deleteRange(newColumnFamily, from, to);
             } catch (final RocksDBException e) {
-                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                 throw new ProcessorStateException("Error while removing key from store " + name, e);
             }
         }
 
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> all(final DBAccessor accessor, final boolean forward) {
-            final RocksIterator innerIterWithTimestamp = accessor.newIterator(newColumnFamily);
-            final RocksIterator innerIterNoTimestamp = accessor.newIterator(oldColumnFamily);
+            final RocksIterator innerIterWithHeaders = accessor.newIterator(newColumnFamily);
+            final RocksIterator innerIterTimestamped = accessor.newIterator(oldColumnFamily);
             if (forward) {
-                innerIterWithTimestamp.seekToFirst();
-                innerIterNoTimestamp.seekToFirst();
+                innerIterWithHeaders.seekToFirst();
+                innerIterTimestamped.seekToFirst();
             } else {
-                innerIterWithTimestamp.seekToLast();
-                innerIterNoTimestamp.seekToLast();
+                innerIterWithHeaders.seekToLast();
+                innerIterTimestamped.seekToLast();
             }
-            return new RocksDBDualCFIterator(name, innerIterWithTimestamp, innerIterNoTimestamp, forward);
+            return new RocksDBDualCFIterator(name, innerIterWithHeaders, innerIterTimestamped, forward);
         }
 
         @Override
@@ -272,6 +289,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public void close() {
+            defaultColumnFamily.close();
             oldColumnFamily.close();
             newColumnFamily.close();
         }
@@ -280,29 +298,26 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     private static class RocksDBDualCFIterator extends AbstractIterator<KeyValue<Bytes, byte[]>>
         implements ManagedKeyValueIterator<Bytes, byte[]> {
 
-        // RocksDB's JNI interface does not expose getters/setters that allow the
-        // comparator to be pluggable, and the default is lexicographic, so it's
-        // safe to just force lexicographic comparator here for now.
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
 
         private final String storeName;
-        private final RocksIterator iterWithTimestamp;
-        private final RocksIterator iterNoTimestamp;
+        private final RocksIterator iterWithHeaders;
+        private final RocksIterator iterTimestamped;
         private final boolean forward;
 
         private volatile boolean open = true;
 
-        private byte[] nextWithTimestamp;
-        private byte[] nextNoTimestamp;
+        private byte[] nextWithHeaders;
+        private byte[] nextTimestamped;
         private KeyValue<Bytes, byte[]> next;
         private Runnable closeCallback = null;
 
         RocksDBDualCFIterator(final String storeName,
-                              final RocksIterator iterWithTimestamp,
-                              final RocksIterator iterNoTimestamp,
+                              final RocksIterator iterWithHeaders,
+                              final RocksIterator iterTimestamped,
                               final boolean forward) {
-            this.iterWithTimestamp = iterWithTimestamp;
-            this.iterNoTimestamp = iterNoTimestamp;
+            this.iterWithHeaders = iterWithHeaders;
+            this.iterTimestamped = iterTimestamped;
             this.storeName = storeName;
             this.forward = forward;
         }
@@ -322,55 +337,58 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         protected KeyValue<Bytes, byte[]> makeNext() {
-            if (nextNoTimestamp == null && iterNoTimestamp.isValid()) {
-                nextNoTimestamp = iterNoTimestamp.key();
+            if (nextTimestamped == null && iterTimestamped.isValid()) {
+                nextTimestamped = iterTimestamped.key();
             }
 
-            if (nextWithTimestamp == null && iterWithTimestamp.isValid()) {
-                nextWithTimestamp = iterWithTimestamp.key();
+            if (nextWithHeaders == null && iterWithHeaders.isValid()) {
+                nextWithHeaders = iterWithHeaders.key();
             }
 
-            if (nextNoTimestamp == null && !iterNoTimestamp.isValid()) {
-                if (nextWithTimestamp == null && !iterWithTimestamp.isValid()) {
+            if (nextTimestamped == null && !iterTimestamped.isValid()) {
+                if (nextWithHeaders == null && !iterWithHeaders.isValid()) {
                     return allDone();
                 } else {
-                    next = KeyValue.pair(new Bytes(nextWithTimestamp), iterWithTimestamp.value());
-                    nextWithTimestamp = null;
+                    next = KeyValue.pair(new Bytes(nextWithHeaders), iterWithHeaders.value());
+                    nextWithHeaders = null;
                     if (forward) {
-                        iterWithTimestamp.next();
+                        iterWithHeaders.next();
                     } else {
-                        iterWithTimestamp.prev();
+                        iterWithHeaders.prev();
                     }
                 }
             } else {
-                if (nextWithTimestamp == null) {
-                    next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
-                    nextNoTimestamp = null;
+                if (nextWithHeaders == null) {
+                    next = KeyValue.pair(new Bytes(nextTimestamped),
+                        HeaderBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
+                    nextTimestamped = null;
                     if (forward) {
-                        iterNoTimestamp.next();
+                        iterTimestamped.next();
                     } else {
-                        iterNoTimestamp.prev();
+                        iterTimestamped.prev();
                     }
                 } else {
                     if (forward) {
-                        if (comparator.compare(nextNoTimestamp, nextWithTimestamp) <= 0) {
-                            next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
-                            nextNoTimestamp = null;
-                            iterNoTimestamp.next();
+                        if (comparator.compare(nextTimestamped, nextWithHeaders) <= 0) {
+                            next = KeyValue.pair(new Bytes(nextTimestamped),
+                                HeaderBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
+                            nextTimestamped = null;
+                            iterTimestamped.next();
                         } else {
-                            next = KeyValue.pair(new Bytes(nextWithTimestamp), iterWithTimestamp.value());
-                            nextWithTimestamp = null;
-                            iterWithTimestamp.next();
+                            next = KeyValue.pair(new Bytes(nextWithHeaders), iterWithHeaders.value());
+                            nextWithHeaders = null;
+                            iterWithHeaders.next();
                         }
                     } else {
-                        if (comparator.compare(nextNoTimestamp, nextWithTimestamp) >= 0) {
-                            next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
-                            nextNoTimestamp = null;
-                            iterNoTimestamp.prev();
+                        if (comparator.compare(nextTimestamped, nextWithHeaders) >= 0) {
+                            next = KeyValue.pair(new Bytes(nextTimestamped),
+                                HeaderBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
+                            nextTimestamped = null;
+                            iterTimestamped.prev();
                         } else {
-                            next = KeyValue.pair(new Bytes(nextWithTimestamp), iterWithTimestamp.value());
-                            nextWithTimestamp = null;
-                            iterWithTimestamp.prev();
+                            next = KeyValue.pair(new Bytes(nextWithHeaders), iterWithHeaders.value());
+                            nextWithHeaders = null;
+                            iterWithHeaders.prev();
                         }
                     }
                 }
@@ -385,8 +403,8 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             }
             closeCallback.run();
 
-            iterNoTimestamp.close();
-            iterWithTimestamp.close();
+            iterTimestamped.close();
+            iterWithHeaders.close();
             open = false;
         }
 
@@ -405,40 +423,37 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     }
 
     private static class RocksDBDualCFRangeIterator extends RocksDBDualCFIterator {
-        // RocksDB's JNI interface does not expose getters/setters that allow the
-        // comparator to be pluggable, and the default is lexicographic, so it's
-        // safe to just force lexicographic comparator here for now.
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         private final byte[] rawLastKey;
         private final boolean forward;
         private final boolean toInclusive;
 
         RocksDBDualCFRangeIterator(final String storeName,
-                                   final RocksIterator iterWithTimestamp,
-                                   final RocksIterator iterNoTimestamp,
+                                   final RocksIterator iterWithHeaders,
+                                   final RocksIterator iterTimestamped,
                                    final Bytes from,
                                    final Bytes to,
                                    final boolean forward,
                                    final boolean toInclusive) {
-            super(storeName, iterWithTimestamp, iterNoTimestamp, forward);
+            super(storeName, iterWithHeaders, iterTimestamped, forward);
             this.forward = forward;
             this.toInclusive = toInclusive;
             if (forward) {
                 if (from == null) {
-                    iterWithTimestamp.seekToFirst();
-                    iterNoTimestamp.seekToFirst();
+                    iterWithHeaders.seekToFirst();
+                    iterTimestamped.seekToFirst();
                 } else {
-                    iterWithTimestamp.seek(from.get());
-                    iterNoTimestamp.seek(from.get());
+                    iterWithHeaders.seek(from.get());
+                    iterTimestamped.seek(from.get());
                 }
                 rawLastKey = to == null ? null : to.get();
             } else {
                 if (to == null) {
-                    iterWithTimestamp.seekToLast();
-                    iterNoTimestamp.seekToLast();
+                    iterWithHeaders.seekToLast();
+                    iterTimestamped.seekToLast();
                 } else {
-                    iterWithTimestamp.seekForPrev(to.get());
-                    iterNoTimestamp.seekForPrev(to.get());
+                    iterWithHeaders.seekForPrev(to.get());
+                    iterTimestamped.seekForPrev(to.get());
                 }
                 rawLastKey = from == null ? null : from.get();
             }
@@ -451,7 +466,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             if (next == null) {
                 return allDone();
             } else if (rawLastKey == null) {
-                //null means range endpoint is open
                 return next;
             } else {
                 if (forward) {
