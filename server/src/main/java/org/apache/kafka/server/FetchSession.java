@@ -34,11 +34,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * The fetch session.
+ * <p>
+ * Each fetch session is protected by its own lock, which must be taken before mutable
+ * fields are read or modified. This includes modification of the session partition map.
+ */
 public class FetchSession {
     public static final String NUM_INCREMENTAL_FETCH_SESSIONS = "NumIncrementalFetchSessions";
     public static final String NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached";
     public static final String INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC = "IncrementalFetchSessionEvictionsPerSec";
-    public static final String EVICTIONS = "evictions";
+    static final String EVICTIONS = "evictions";
 
     /**
      * This is used by the FetchSessionCache to store the last known size of this session.
@@ -56,9 +62,6 @@ public class FetchSession {
 
     /**
      * The fetch session.
-     * <p>
-     * Each fetch session is protected by its own lock, which must be taken before mutable
-     * fields are read or modified.  This includes modification of the session partition map.
      *
      * @param id                 The unique fetch session ID.
      * @param privileged         True if this session is privileged.  Sessions created by followers
@@ -440,7 +443,7 @@ public class FetchSession {
         @Override
         public int compareTo(EvictableKey other) {
             if (this.privileged != other.privileged)
-                return this.privileged ? 1 : -1;
+                return Boolean.compare(this.privileged, other.privileged);
 
             if (this.size != other.size)
                 return Integer.compare(this.size, other.size);

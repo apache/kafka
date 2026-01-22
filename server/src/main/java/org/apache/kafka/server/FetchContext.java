@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -101,17 +102,7 @@ public sealed interface FetchContext {
 
         @Override
         public int getResponseSize(LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> updates, short versionId) {
-            return FetchResponse.sizeOf(versionId, new Iterator<>() {
-                @Override
-                public boolean hasNext() {
-                    return false;
-                }
-
-                @Override
-                public Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> next() {
-                    throw new NoSuchElementException();
-                }
-            });
+            return FetchResponse.sizeOf(versionId, Collections.emptyIterator());
         }
 
         /**
@@ -306,8 +297,7 @@ public sealed interface FetchContext {
                     TopicIdPartition topicPart = element.getKey();
                     FetchResponseData.PartitionData respData = element.getValue();
                     CachedPartition cachedPart = session.partitionMap().find(new CachedPartition(topicPart));
-                    assert cachedPart != null;
-                    boolean mustRespond = cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected);
+                    boolean mustRespond = cachedPart != null && cachedPart.maybeUpdateResponseData(respData, updateFetchContextAndRemoveUnselected);
                     if (mustRespond) {
                         nextElement = element;
                         if (updateFetchContextAndRemoveUnselected && FetchResponse.recordsSize(respData) > 0) {
@@ -344,17 +334,7 @@ public sealed interface FetchContext {
             synchronized (session) {
                 int expectedEpoch = FetchMetadata.nextEpoch(reqMetadata.epoch());
                 if (session.epoch() != expectedEpoch) {
-                    return FetchResponse.sizeOf(versionId, new Iterator<>() {
-                        @Override
-                        public boolean hasNext() {
-                            return false;
-                        }
-
-                        @Override
-                        public Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> next() {
-                            throw new NoSuchElementException();
-                        }
-                    });
+                    return FetchResponse.sizeOf(versionId, Collections.emptyIterator());
                 } else {
                     // Pass the partition iterator which updates neither the fetch context nor the partition map.
                     return FetchResponse.sizeOf(versionId, new PartitionIterator(updates.entrySet().iterator(), false));

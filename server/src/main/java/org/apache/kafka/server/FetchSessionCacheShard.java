@@ -40,7 +40,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 /**
  * Caches fetch sessions.
  * <p>
- * See {@code tryEvict} for an explanation of the cache eviction strategy.
+ * See {@link #tryEvict} for an explanation of the cache eviction strategy.
  * <p>
  * The FetchSessionCache is thread-safe because all of its methods are synchronized.
  * Note that individual fetch sessions have their own locks which are separate from the

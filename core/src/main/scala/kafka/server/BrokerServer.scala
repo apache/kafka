@@ -423,14 +423,16 @@ class BrokerServer(
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
       // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
       val sessionIdRange = Int.MaxValue / NumFetchSessionCacheShards
-      val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
-        .map(shardNum => new FetchSessionCacheShard(
+      val fetchSessionCacheShards: util.List[FetchSessionCacheShard] = new util.ArrayList()
+      for (shardNum <- 0 until NumFetchSessionCacheShards) {
+        fetchSessionCacheShards.add(new FetchSessionCacheShard(
           config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
           KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
           sessionIdRange,
           shardNum
         ))
-      val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards.asJava))
+      }
+      val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
