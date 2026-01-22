@@ -179,12 +179,14 @@ class LogCleanerManagerTest {
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(10);
         LogConfig config = createLowRetentionLogConfig(logSegmentSize, TopicConfig.CLEANUP_POLICY_COMPACT);
         LogSegments segments = new LogSegments(tp);
-        LeaderEpochFileCache leaderEpochCache = UnifiedLog.createLeaderEpochCache(tpDir, TOPIC_PARTITION, logDirFailureChannel, Optional.empty(), TIME.scheduler);
-        ProducerStateManager producerStateManager = new ProducerStateManager(TOPIC_PARTITION, tpDir, 5 * 60 * 1000, PRODUCER_STATE_MANAGER_CONFIG, TIME);
+        LeaderEpochFileCache leaderEpochCache = UnifiedLog.createLeaderEpochCache(tpDir, TOPIC_PARTITION, logDirFailureChannel,
+            Optional.empty(), TIME.scheduler);
+        ProducerStateManager producerStateManager = new ProducerStateManager(TOPIC_PARTITION, tpDir, 5 * 60 * 1000,
+            PRODUCER_STATE_MANAGER_CONFIG, TIME);
         LoadedLogOffsets offsets = new LogLoader(tpDir, tp, config, TIME.scheduler, TIME, logDirFailureChannel, true,
             segments, 0L, 0L, leaderEpochCache, producerStateManager, new ConcurrentHashMap<>(), false).load();
-        LocalLog localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint(),
-            offsets.nextOffsetMetadata(), TIME.scheduler, TIME, tp, logDirFailureChannel);
+        LocalLog localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint(), offsets.nextOffsetMetadata(),
+            TIME.scheduler, TIME, tp, logDirFailureChannel);
         UnifiedLog log = new LogMock(offsets.logStartOffset(), localLog, new BrokerTopicStats(), PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
             leaderEpochCache, producerStateManager, Optional.empty(), false, LogOffsetsListener.NO_OP_OFFSETS_LISTENER);
 
