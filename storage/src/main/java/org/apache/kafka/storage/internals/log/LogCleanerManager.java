@@ -689,6 +689,7 @@ public class LogCleanerManager {
      * @return OffsetsToClean containing offsets for cleanable portion of log and whether the log checkpoint needs updating
      * @throws IOException    if an I/O error occurs
      */
+    // Visible for testing
     static OffsetsToClean cleanableOffsets(UnifiedLog log, Optional<Long> lastCleanOffset, long now) throws IOException {
         // If the log segments are abnormally truncated and hence the checkpointed offset is no longer valid;
         // reset to the log starting offset and log the error
