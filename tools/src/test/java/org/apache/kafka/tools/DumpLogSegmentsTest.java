@@ -122,6 +122,7 @@ import java.util.regex.Pattern;
 import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -558,8 +559,9 @@ public class DumpLogSegmentsTest {
 
         Files.setPosixFilePermissions(Paths.get(logFilePath), PosixFilePermissions.fromString("-w-------"));
 
-        assertThrows(AccessDeniedException.class,
+        RuntimeException thrown = assertThrows(RuntimeException.class,
             () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", logFilePath}));
+        assertInstanceOf(AccessDeniedException.class, thrown.getCause());
     }
 
     @Test
@@ -579,8 +581,9 @@ public class DumpLogSegmentsTest {
     @Test
     public void testDumpRemoteLogMetadataNoSuchFileException() {
         String noSuchFileLogPath = "/tmp/nosuchfile/00000000000000000000.log";
-        assertThrows(NoSuchFileException.class,
+        RuntimeException thrown = assertThrows(RuntimeException.class,
             () -> runDumpLogSegments(new String[] {"--remote-log-metadata-decoder", "--files", noSuchFileLogPath}));
+        assertInstanceOf(NoSuchFileException.class, thrown.getCause());
     }
 
     @Test
