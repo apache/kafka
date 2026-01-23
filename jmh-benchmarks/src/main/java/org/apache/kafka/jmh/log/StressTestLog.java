@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.jmh.log;
 
-import kafka.utils.TestUtils;
-
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
@@ -26,6 +24,7 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.RequestLocal;
@@ -41,6 +40,7 @@ import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -57,7 +57,8 @@ public class StressTestLog {
     private static final AtomicBoolean RUNNING = new AtomicBoolean(true);
 
     public static void main(String[] args) throws Exception {
-        File dir = TestUtils.randomPartitionLogDir(TestUtils.tempDir());
+        File tmp = TestUtils.tempDirectory();
+        File dir = TestUtils.randomPartitionLogDir(tmp);
         MockTime time = new MockTime();
         Properties logProperties = new Properties();
         logProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, 64 * 1024 * 1024);
@@ -157,11 +158,10 @@ public class StressTestLog {
         @Override
         protected void work() throws Exception {
             byte[] value = Long.toString(currentOffset).getBytes(StandardCharsets.UTF_8);
-            MemoryRecords records = TestUtils.singletonRecords(value,
-                    null,
+            MemoryRecords records = MemoryRecords.withRecords(
+                    RecordBatch.CURRENT_MAGIC_VALUE,
                     Compression.NONE,
-                    RecordBatch.NO_TIMESTAMP,
-                    RecordBatch.CURRENT_MAGIC_VALUE);
+                    new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value));
             LogAppendInfo logAppendInfo = log.appendAsLeader(records,
                     0,
                     AppendOrigin.CLIENT,

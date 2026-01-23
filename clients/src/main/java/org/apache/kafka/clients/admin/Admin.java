@@ -1911,6 +1911,10 @@ public interface Admin extends AutoCloseable {
      * will fail with {@link InconsistentClusterIdException}.
      * If not provided, the cluster id check is skipped.
      *
+     * <p> Note: Since 4.2.0, if {@code controller.quorum.auto.join.enable} is set to true the controller
+     * must be shutdown before removing the controller from the voter set to prevent the removed
+     * controller from automatically joining again.
+     *
      * @param voterId           The node ID of the voter.
      * @param voterDirectoryId  The directory ID of the voter.
      * @param options           Additional options for the operation, including optional cluster ID.

@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
@@ -45,6 +46,7 @@ import java.util.stream.Stream;
  */
 public class InternalTopicManager {
 
+
     /**
      * Configures the internal topics for the given topology. Given a topology and the metadata image, this method determines the number of
      * partitions for all internal topics and returns a {@link ConfiguredTopology} object.
@@ -58,8 +60,10 @@ public class InternalTopicManager {
     public static ConfiguredTopology configureTopics(LogContext logContext,
                                                      long metadataHash,
                                                      StreamsTopology topology,
-                                                     CoordinatorMetadataImage metadataImage) {
+                                                     CoordinatorMetadataImage metadataImage,
+                                                     Time time) {
         final Logger log = logContext.logger(InternalTopicManager.class);
+        final long startTimeMs = time.milliseconds();
         final Collection<StreamsGroupTopologyValue.Subtopology> subtopologies = topology.subtopologies().values();
 
         final Map<String, Collection<Set<String>>> copartitionGroupsBySubtopology =
@@ -89,14 +93,16 @@ public class InternalTopicManager {
                     ));
 
             Map<String, CreatableTopic> internalTopicsToCreate = missingInternalTopics(configuredSubtopologies, topology, metadataImage);
+            long elapsedMs = time.milliseconds() - startTimeMs;
             if (!internalTopicsToCreate.isEmpty()) {
                 topicConfigurationException = Optional.of(TopicConfigurationException.missingInternalTopics(
-                    "Internal topics are missing: " + internalTopicsToCreate.keySet()
+                    "Internal topics are missing: " + summarizeTopics(internalTopicsToCreate.keySet())
                 ));
-                log.info("Valid topic configuration found, but internal topics are missing for topology epoch {}: {}",
-                    topology.topologyEpoch(), topicConfigurationException.get().toString());
+                log.info("Valid topic configuration found in {}ms, but internal topics are missing for topology epoch {}: {}",
+                    elapsedMs, topology.topologyEpoch(), summarizeTopics(internalTopicsToCreate.keySet()));
             } else {
-                log.info("Valid topic configuration found, topology epoch {} is now initialized.", topology.topologyEpoch());
+                log.info("Valid topic configuration found in {}ms, topology epoch {} is now initialized.",
+                    elapsedMs, topology.topologyEpoch());
             }
 
             return new ConfiguredTopology(
@@ -108,8 +114,9 @@ public class InternalTopicManager {
             );
 
         } catch (TopicConfigurationException e) {
-            log.warn("Topic configuration failed for topology epoch {}: {} ",
-                topology.topologyEpoch(), e.toString());
+            long elapsedMs = time.milliseconds() - startTimeMs;
+            log.warn("Topic configuration failed for topology epoch {} in {}ms: {}",
+                topology.topologyEpoch(), elapsedMs, e.getMessage());
             return new ConfiguredTopology(
                 topology.topologyEpoch(),
                 metadataHash,
@@ -132,7 +139,7 @@ public class InternalTopicManager {
         }
         if (!sortedMissingTopics.isEmpty()) {
             throw TopicConfigurationException.missingSourceTopics(
-                "Source topics " + String.join(", ", sortedMissingTopics) + " are missing.");
+                "Source topics " + summarizeTopics(sortedMissingTopics) + " are missing.");
         }
     }
 
@@ -321,5 +328,21 @@ public class InternalTopicManager {
                     .map(i -> subtopology.repartitionSourceTopics().get(i).name())
             ).collect(Collectors.toSet())
         ).toList();
+    }
+
+    /**
+     * Formats a collection of topic names for log and exception messages.
+     * Includes up to 3 topic names, and if more are present, appends a summary.
+     */
+    private static String summarizeTopics(Collection<String> topics) {
+        if (topics == null || topics.isEmpty()) {
+            return "<none>";
+        }
+        int maxToShow = 3;
+        int size = topics.size();
+        return topics.stream()
+            .limit(maxToShow)
+            .collect(Collectors.joining(", ")) +
+            (size > maxToShow ? " and " + (size - maxToShow) + " additional topics" : "");
     }
 }
