@@ -55,7 +55,7 @@ publishing {
     publications {
         // Maven plugin (separate from Gradle plugin publication)
         mavenPlugin(MavenPublication) {
-            groupt  = 'org.apache.kafka'
+            group  = 'org.apache.kafka'
             artifactId = 'kafka-internal-api-checker-maven-plugin'
             version = project.findProperty('kafkaPluginsVersion') ?: '1.0.0-SNAPSHOT'
 
