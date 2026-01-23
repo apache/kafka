@@ -93,11 +93,6 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
-    public void preInit(final StateStoreContext stateStoreContext) {
-        inner.preInit(stateStoreContext);
-    }
-
-    @Override
     public void flush() {
         inner.flush();
     }

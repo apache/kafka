@@ -100,11 +100,6 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
     }
 
     @Override
-    public void preInit(final StateStoreContext stateStoreContext) {
-        store.preInit(stateStoreContext);
-    }
-
-    @Override
     public void flush() {
         store.flush();
     }

@@ -94,15 +94,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             );
         }
 
-        if (!isOpen()) {
-            preInit(stateStoreContext);
-        }
-        this.context = stateStoreContext;
-    }
-
-    @Override
-    public void preInit(final StateStoreContext stateStoreContext) {
         open = true;
+        this.context = stateStoreContext;
     }
 
     @Override

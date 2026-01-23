@@ -217,12 +217,8 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
         this.context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         updateBufferMetrics();
-        partition = context.taskId().partition();
-    }
-
-    @Override
-    public void preInit(final StateStoreContext stateStoreContext) {
         open = true;
+        partition = context.taskId().partition();
     }
 
     @Override
