@@ -24,7 +24,7 @@ import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -42,9 +42,12 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.LeaderConstants
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.logging.log4j.core.config.Configurator
+
+import java.io.File
 
 class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
@@ -89,7 +92,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     brokers.foreach(broker => shutdownBroker(broker))
-    brokers.foreach(broker => CoreUtils.delete(broker.config.logDirs))
+    brokers.foreach(broker => broker.config.logDirs.forEach(f => Utils.delete(new File(f))))
 
     // restore log levels
     Configurator.setLevel(kafkaApisLogger.getName, Level.ERROR)

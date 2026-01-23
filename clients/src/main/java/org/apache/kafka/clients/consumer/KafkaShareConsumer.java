@@ -172,60 +172,63 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * were delivered in the previous poll. All the records delivered are implicitly marked as successfully consumed and
  * acknowledged synchronously with Kafka as the consumer fetches more records.
  * <pre>
+ * {@code
  *     Properties props = new Properties();
- *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
- *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty("bootstrap.servers", "localhost:9092");
+ *     props.setProperty("group.id", "test");
+ *     props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
  *
- *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
- *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(props);
+ *     consumer.subscribe(Arrays.asList("foo"));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
- *         for (ConsumerRecord&lt;String, String&gt; record : records) {
- *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
+ *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
+ *         for (ConsumerRecord<String, String> record : records) {
+ *             System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
  *             doProcessing(record);
  *         }
  *     }
- * </pre>
+ * }</pre>
  *
  * Alternatively, you can use {@link #commitSync()} or {@link #commitAsync()} to commit the acknowledgements, but this is
  * slightly less efficient because there is an additional request sent to Kafka.
  * <pre>
+ * {@code
  *     Properties props = new Properties();
- *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
- *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty("bootstrap.servers", "localhost:9092");
+ *     props.setProperty("group.id", "test");
+ *     props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
  *
- *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
- *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(props);
+ *     consumer.subscribe(Arrays.asList("foo"));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
- *         for (ConsumerRecord&lt;String, String&gt; record : records) {
- *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
+ *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
+ *         for (ConsumerRecord<String, String> record : records) {
+ *             System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
  *             doProcessing(record);
  *         }
  *         consumer.commitSync();
  *     }
- * </pre>
+ * }</pre>
  *
  * <h4>Per-record acknowledgement (explicit acknowledgement)</h4>
  * This example demonstrates using different acknowledge types depending on the outcome of processing the records.
  * Here the {@code share.acknowledgement.mode} property is set to "explicit" so the consumer must explicitly acknowledge each record.
  * <pre>
+ * {@code
  *     Properties props = new Properties();
- *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
- *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;share.acknowledgement.mode&quot;, &quot;explicit&quot;);
+ *     props.setProperty("bootstrap.servers", "localhost:9092");
+ *     props.setProperty("group.id", "test");
+ *     props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("share.acknowledgement.mode", "explicit");
  *
- *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
- *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(props);
+ *     consumer.subscribe(Arrays.asList("foo"));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
- *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
+ *         for (ConsumerRecord<String, String> record : records) {
  *             try {
  *                 doProcessing(record);
  *                 consumer.acknowledge(record, AcknowledgeType.ACCEPT);
@@ -235,7 +238,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *         }
  *         consumer.commitSync();
  *     }
- * </pre>
+ * }</pre>
  *
  * Each record processed is separately acknowledged using a call to {@link #acknowledge(ConsumerRecord, AcknowledgeType)}.
  * The {@link AcknowledgeType} argument indicates whether the record was processed successfully or not. In this case,
@@ -273,18 +276,19 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <p>This example illustrates how an application could use renewal acknowledgement.
  *
  * <pre>
+ * {@code
  *     Properties props = new Properties();
- *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
- *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;share.acknowledgement.mode&quot;, &quot;explicit&quot;);
- *     props.setProperty(&quot;share.acquire.mode&quot;, &quot;record_limit&quot;);
- *     props.setProperty(&quot;max.poll.records&quot;, &quot;1&quot;);
+ *     props.setProperty("bootstrap.servers", "localhost:9092");
+ *     props.setProperty("group.id", "test");
+ *     props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+ *     props.setProperty("share.acknowledgement.mode", "explicit");
+ *     props.setProperty("share.acquire.mode", "record_limit");
+ *     props.setProperty("max.poll.records", "1");
  *
- *     HashMap&lt;Long, ConsumerRecord&lt;String, String&gt;&gt; processing = new HashMap&lt;&gt;();
+ *     HashMap<Long, ConsumerRecord<String, String>> processing = new HashMap<>();
  *
- *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
+ *     KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(props);
  *     consumer.setAcknowledgementCommitCallback((offsets, exception) -> {
  *        if (exception != null) {
  *            for (long offset: offsets) {
@@ -295,14 +299,14 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *        }
  *     });
  *
- *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
+ *     consumer.subscribe(Arrays.asList("foo"));
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(1000));
+ *         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
  *
  *         // Get the acquisition lock timeout and prepare to wait half that time before renewing again
  *         int timeToWaitMs = consumer.acquisitionLockTimeoutMs().getOrElse(10000) / 2;
  *
- *         for (ConsumerRecord&lt;String, String&gt; record : records) {
+ *         for (ConsumerRecord<String, String> record : records) {
  *             if (processing.put(rec.offset(), rec) == null) {
  *                 // Start the processing on another thread
  *             }
@@ -320,7 +324,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *             }
  *         }
  *     }
- * </pre>
+ * }</pre>
  * <p>
  * Note that using renewal acknowledgements is intended only for situations where the processing times of the records
  * exceeds the acquisition lock duration. Consumers which use renewal acknowledgements can impact the delivery
@@ -337,6 +341,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * The following snippet shows the typical pattern:
  *
  * <pre>
+ * {@code
  * public class KafkaShareConsumerRunner implements Runnable {
  *     private final AtomicBoolean closed = new AtomicBoolean(false);
  *     private final KafkaShareConsumer consumer;
@@ -345,7 +350,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *       this.consumer = consumer;
  *     }
  *
- *     {@literal @Override}
+ *     @Override
  *     public void run() {
  *         try {
  *             consumer.subscribe(Arrays.asList("topic"));
@@ -367,13 +372,14 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *         consumer.wakeup();
  *     }
  * }
- * </pre>
+ * }</pre>
  *
  * Then in a separate thread, the consumer can be shutdown by setting the closed flag and waking up the consumer.
  * <pre>
+ * {@code
  *     closed.set(true);
  *     consumer.wakeup();
- * </pre>
+ * }</pre>
  *
  * <p>
  * Note that while it is possible to use thread interrupts instead of {@link #wakeup()} to abort a blocking operation

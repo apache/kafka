@@ -18,6 +18,7 @@
 package kafka.utils
 
 import com.typesafe.scalalogging.Logger
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.logger.LoggingController
 import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
 
@@ -29,7 +30,7 @@ object Log4jControllerRegistration {
 
   private def registerMBean(mbean: LoggingController, typeAttr: String): Unit = {
     try {
-      CoreUtils.registerMBean(mbean, s"kafka:type=$typeAttr")
+      Utils.registerMBean(mbean, s"kafka:type=$typeAttr")
       logger.info("Registered `kafka:type={}` MBean", typeAttr)
     } catch {
       case e: Exception => logger.warn("Couldn't register `kafka:type={}` MBean", typeAttr, e)
