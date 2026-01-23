@@ -67,7 +67,7 @@ class ValueTimestampHeadersDeserializer<V>
         timestampDeserializer.deserialize(topic, rawTimestamp(valueTimestampHeadersBytes));
 
     final V value =
-        valueDeserializer.deserialize(topic, rawValue(valueTimestampHeadersBytes));
+        valueDeserializer.deserialize(topic, headers, rawValue(valueTimestampHeadersBytes));
 
     return ValueTimestampHeaders.makeAllowNullable(value, timestamp, headers);
   }
@@ -168,7 +168,7 @@ class ValueTimestampHeadersDeserializer<V>
   /**
    * Extract the raw headers_bytes segment (between timestamp and value).
    */
-  private static byte[] rawHeaders(final byte[] rawBytes) {
+  public static byte[] rawHeaders(final byte[] rawBytes) {
 
     if (rawBytes == null) {
       return null;

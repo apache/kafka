@@ -27,6 +27,8 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 
+import java.util.Objects;
+
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -60,6 +62,23 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     } else {
       return super.prepareValueSerdeForStore(valueSerde, getter);
     }
+  }
+
+  @Override
+  public ValueTimestampHeaders<V> get(final K key) {
+    Objects.requireNonNull(key, "key cannot be null");
+    try {
+      return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key))), time, getSensor);
+    } catch (final ProcessorStateException e) {
+      final String message = String.format(e.getMessage(), key);
+      throw new ProcessorStateException(message, e);
+    }
+  }
+
+  protected ValueTimestampHeaders<V> outerValue(final byte[] value) {
+    Headers headers =
+        HeadersDeserializer.deserialize(ValueTimestampHeadersDeserializer.rawHeaders(value));
+    return value != null ? serdes.valueFrom(value, headers) : null;
   }
 
   /**

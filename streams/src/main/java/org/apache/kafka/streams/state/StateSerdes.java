@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.internals.ValueAndTimestampSerializer;
 
@@ -183,7 +185,7 @@ public final class StateSerdes<K, V> {
      * @return          the value as typed object
      */
     public V valueFrom(final byte[] rawValue, Headers headers) {
-        return valueSerde.deserializer().deserialize(topic, headers, rawValue);
+        return valueSerde.deserializer().deserialize(topic, headers, Utils.wrapNullable(rawValue));
     }
 
     /**
