@@ -99,7 +99,7 @@ public class DumpLogSegments {
     // Visible for testing
     static final String RECORD_INDENT = "|";
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         DumpLogSegmentsOptions opts = new DumpLogSegmentsOptions(args);
         CommandLineUtils.maybePrintHelpOrVersion(
             opts,
@@ -147,7 +147,7 @@ public class DumpLogSegments {
         });
     }
 
-    private static void dumpTxnIndex(File file) {
+    private static void dumpTxnIndex(File file) throws IOException {
         try (TransactionIndex index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)) {
             for (AbortedTxn abortedTxn : index.allAbortedTxns()) {
                 System.out.println("version: " + abortedTxn.version() +
@@ -156,12 +156,10 @@ public class DumpLogSegments {
                     " lastOffset: " + abortedTxn.lastOffset() +
                     " lastStableOffset: " + abortedTxn.lastStableOffset());
             }
-        } catch (IOException e) {
-            sneakyThrow(e);
         }
     }
 
-    private static void dumpProducerIdSnapshot(File file) {
+    private static void dumpProducerIdSnapshot(File file) throws IOException {
         try {
             List<ProducerStateEntry> entries = ProducerStateManager.readSnapshot(file);
             for (ProducerStateEntry entry : entries) {
@@ -183,8 +181,6 @@ public class DumpLogSegments {
             }
         } catch (CorruptSnapshotException e) {
             System.err.println(e.getMessage());
-        } catch (IOException e) {
-            sneakyThrow(e);
         }
     }
 
@@ -193,7 +189,7 @@ public class DumpLogSegments {
                           boolean indexSanityOnly,
                           boolean verifyOnly,
                           Map<String, Map<Long, Long>> misMatchesForIndexFilesMap,
-                          int maxMessageSize) {
+                          int maxMessageSize) throws IOException {
         long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
         File logFile = new File(file.getAbsoluteFile().getParent(),
             file.getName().split("\\.")[0] + UnifiedLog.LOG_FILE_SUFFIX);
@@ -232,8 +228,6 @@ public class DumpLogSegments {
                     System.out.println("offset: " + entry.offset() + " position: " + entry.position());
                 }
             }
-        } catch (IOException e) {
-            sneakyThrow(e);
         }
     }
 
@@ -241,7 +235,7 @@ public class DumpLogSegments {
     static void dumpTimeIndex(File file,
                               boolean indexSanityOnly,
                               boolean verifyOnly,
-                              TimeIndexDumpErrors timeIndexDumpErrors) {
+                              TimeIndexDumpErrors timeIndexDumpErrors) throws IOException {
         long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
         File logFile = new File(file.getAbsoluteFile().getParent(),
             file.getName().split("\\.")[0] + UnifiedLog.LOG_FILE_SUFFIX);
@@ -308,21 +302,15 @@ public class DumpLogSegments {
                 }
                 prevTimestamp = entry.timestamp();
             }
-        } catch (IOException e) {
-            sneakyThrow(e);
         } finally {
-            try {
-                if (fileRecords != null) {
-                    fileRecords.closeHandlers();
-                }
-                if (index != null) {
-                    index.closeHandler();
-                }
-                if (timeIndex != null) {
-                    timeIndex.closeHandler();
-                }
-            } catch (IOException e) {
-                sneakyThrow(e);
+            if (fileRecords != null) {
+                fileRecords.closeHandlers();
+            }
+            if (index != null) {
+                index.closeHandler();
+            }
+            if (timeIndex != null) {
+                timeIndex.closeHandler();
             }
         }
     }
@@ -366,7 +354,7 @@ public class DumpLogSegments {
                                 boolean isDeepIteration,
                                 MessageParser<?, ?> parser,
                                 boolean skipRecordMetadata,
-                                int maxBytes) {
+                                int maxBytes) throws IOException {
         if (file.getName().endsWith(UnifiedLog.LOG_FILE_SUFFIX)) {
             long startOffset = Long.parseLong(file.getName().split("\\.")[0]);
             System.out.println("Log starting offset: " + startOffset);
@@ -396,15 +384,9 @@ public class DumpLogSegments {
             }
 
             printTrailingBytes(fileRecords, validBytes, maxBytes, file);
-        } catch (IOException e) {
-            sneakyThrow(e);
         } finally {
             if (fileRecords != null) {
-                try {
-                    fileRecords.closeHandlers();
-                } catch (IOException e) {
-                    sneakyThrow(e);
-                }
+                fileRecords.closeHandlers();
             }
         }
     }
@@ -475,11 +457,6 @@ public class DumpLogSegments {
         if (trailingBytes > 0 && maxBytes == Integer.MAX_VALUE) {
             System.out.println("Found " + trailingBytes + " invalid bytes at the end of " + file.getName());
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T extends Throwable> void sneakyThrow(Throwable throwable) throws T {
-        throw (T) throwable;
     }
 
     private static void printControlRecord(Record record) {
@@ -729,10 +706,8 @@ public class DumpLogSegments {
                     short version = accessor.readShort();
                     T data = reader.apply(accessor, version);
                     ((ObjectNode) node).replace(field, writer.apply(data, version));
-                } catch (RuntimeException e) {
+                } catch (RuntimeException | IOException e) {
                     // Swallow and keep the original bytes
-                } catch (IOException e) {
-                    sneakyThrow(e);
                 }
             }
         }

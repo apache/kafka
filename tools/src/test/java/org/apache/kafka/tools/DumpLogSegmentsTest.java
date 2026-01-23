@@ -97,6 +97,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -749,13 +750,19 @@ public class DumpLogSegmentsTest {
         new PrintWriter(indexFile).close();
         String expectOutput = indexFile + " is empty.";
 
-        String output = captureStandardOut(() -> DumpLogSegments.dumpIndex(
-            indexFile,
-            false,
-            true,
-            new HashMap<>(),
-            Integer.MAX_VALUE
-        ));
+        String output = captureStandardOut(() -> {
+            try {
+                DumpLogSegments.dumpIndex(
+                    indexFile,
+                    false,
+                    true,
+                    new HashMap<>(),
+                    Integer.MAX_VALUE
+                );
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
         assertEquals(expectOutput, output);
     }
 
@@ -1348,7 +1355,13 @@ public class DumpLogSegmentsTest {
     }
 
     private String runDumpLogSegments(String[] args) {
-        return captureStandardOut(() -> DumpLogSegments.main(args));
+        return captureStandardOut(() -> {
+            try {
+                DumpLogSegments.main(args);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     private Optional<Long> optionalLong(String value) {
