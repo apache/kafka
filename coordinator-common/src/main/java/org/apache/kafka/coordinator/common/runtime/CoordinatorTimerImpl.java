@@ -97,6 +97,9 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
                         return operation.generateRecords();
                     }
                 ).exceptionally(ex -> {
+                    // Remove the task after a failure.
+                    tasks.remove(key, this);
+
                     if (ex instanceof RejectedExecutionException) {
                         log.debug("The write event {} for the timer {} was not executed because it was " +
                             "cancelled or overridden.", operationName, key);

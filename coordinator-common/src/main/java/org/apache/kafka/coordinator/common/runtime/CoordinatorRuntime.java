@@ -482,20 +482,32 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.timer = new CoordinatorTimerImpl<>(
                 logContext,
                 CoordinatorRuntime.this.timer,
-                (operationName, operation) -> scheduleWriteOperation(
-                    operationName,
-                    tp,
-                    coordinator -> operation.generate()
-                )
+                (operationName, operation) -> {
+                    try {
+                        return scheduleWriteOperation(
+                            operationName,
+                            tp,
+                            coordinator -> operation.generate()
+                        );
+                    } catch (Throwable t) {
+                        return CompletableFuture.failedFuture(t);
+                    }
+                }
             );
             this.executor = new CoordinatorExecutorImpl<>(
                 logContext,
                 executorService,
-                (operationName, operation) -> scheduleWriteOperation(
-                    operationName,
-                    tp,
-                    coordinator -> operation.generate()
-                )
+                (operationName, operation) -> {
+                    try {
+                        return scheduleWriteOperation(
+                            operationName,
+                            tp,
+                            coordinator -> operation.generate()
+                        );
+                    } catch (Throwable t) {
+                        return CompletableFuture.failedFuture(t);
+                    }
+                }
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
             this.cachedBufferSize = new AtomicLong(0);

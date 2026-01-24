@@ -578,4 +578,47 @@ public class CoordinatorTimerImplTest {
         assertFalse(timer.isScheduled(TIMER_KEY));
         assertEquals(0, timer.size());
     }
+
+    @Test
+    public void testTaskCleanupOnFailedFutureWithoutOperationExecution() throws InterruptedException {
+        var mockTimer = new MockTimer();
+        var operationCalled = new AtomicBoolean(false);
+
+        // Scheduler returns failed future WITHOUT calling operation.generate().
+        // This simulates: (1) wrapped synchronous exceptions, or
+        // (2) events failing before being executed.
+        CoordinatorShardScheduler<String> scheduler = (operationName, operation) -> {
+            // Don't call operation.generate() - simulates event never being executed
+            return FutureUtils.failedFuture(new NotCoordinatorException("Not coordinator"));
+        };
+
+        var timer = new CoordinatorTimerImpl<>(
+            LOG_CONTEXT,
+            mockTimer,
+            scheduler
+        );
+
+        timer.schedule(
+            TIMER_KEY,
+            100,
+            TimeUnit.MILLISECONDS,
+            false,
+            () -> {
+                operationCalled.set(true);
+                return new CoordinatorResult<>(List.of("record"), null);
+            }
+        );
+
+        assertTrue(timer.isScheduled(TIMER_KEY));
+        assertEquals(1, timer.size());
+
+        // Advance time to trigger the timer.
+        mockTimer.advanceClock(100 + 1);
+
+        // Operation was never called.
+        assertFalse(operationCalled.get());
+        // But task should still be removed by exceptionally handler.
+        assertFalse(timer.isScheduled(TIMER_KEY));
+        assertEquals(0, timer.size());
+    }
 }
