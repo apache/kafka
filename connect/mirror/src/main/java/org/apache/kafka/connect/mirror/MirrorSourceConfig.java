@@ -85,7 +85,17 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final Class<?> CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
     public static final String OFFSET_LAG_MAX = "offset.lag.max";
-    private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
+    private static final String OFFSET_LAG_MAX_DOC = "Defines the maximum lag (downstream offset - last synced downstream offset) threshold before " +
+            "MirrorSourceTask generates an offset-sync (upstream-downstream offset mapping) record during partition replication. " +
+            "In practice: Setting this value to 100 will produce an offset-sync at least after every 100 records. " +
+            "Lowering this value increases the precision of the consumer offset checkpoints created by the MirrorCheckpointTask based on the offset-syncs. " +
+            "This is particularly beneficial for low-lag consumers reading from the end of a topic. Conversely, when a consumer operates with high lag, " +
+            "checkpoint precision may degrade due to internal optimizations. " +
+            "Setting this value to 0 forces an offset-sync for every replicated record. While this maximizes precision, " +
+            "it may incur performance and storage overhead for high-throughput topics. " +
+            "A higher value can reduce the footprint of the offset-sync topic, " +
+            "but may result in excessive record duplication (consumer reprocessing) during a failover. " +
+            "Partition Count * offset.lag.max = Approximate duplicated record count (Actual value can be lower or even higher depending on timing and consumer lag)";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
     public static final String HEARTBEATS_REPLICATION_ENABLED = "heartbeats.replication" + ENABLED_SUFFIX;
