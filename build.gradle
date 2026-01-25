@@ -4126,7 +4126,7 @@ def verifyVersionConsistencyTask = tasks.register('verifyVersionConsistency') {
     if (!inconsistentFiles.isEmpty()) {
        throw new GradleException("Found inconsistent versions in the following files:\n" + 
            inconsistentFiles.join("\n") + 
-           "\n\nPlease run './gradlew updateVersion' to fix them.")
+           "\n\nPlease run './gradlew updateVersion -Pversion=...' to fix them.")
     }
     println "All versions are consistent."
   }
