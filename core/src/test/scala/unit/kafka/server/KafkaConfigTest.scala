@@ -211,6 +211,10 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
     assertBadConfigContainingMessage(props, "Each listener must have a different port")
 
+    // listeners with duplicate port but different hostnames
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://host1:9092,SSL://host2:9092")
+    assertBadConfigContainingMessage(props, "Each listener must have a different port")
+
     // listeners with duplicate name
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
     assertBadConfigContainingMessage(props, "Each listener must have a different name")
