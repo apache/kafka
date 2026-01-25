@@ -37,7 +37,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -49,17 +48,12 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
-
-import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
-import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_JITTER;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
@@ -77,9 +71,6 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
-    private final long retryBackoffMaxMs;
-    private final ExponentialBackoff exponentialBackoff;
-    private final Map<Node, BackoffState> nodeBackoffStates;
     private Optional<Exception> metadataError;
     private final boolean notifyMetadataErrorsViaErrorQueue;
     private final AsyncConsumerMetrics asyncConsumerMetrics;
@@ -101,14 +92,6 @@ public class NetworkClientDelegate implements AutoCloseable {
         this.unsentRequests = new ArrayDeque<>();
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.exponentialBackoff = new ExponentialBackoff(
-            retryBackoffMs,
-            RETRY_BACKOFF_EXP_BASE,
-            retryBackoffMaxMs,
-            RETRY_BACKOFF_JITTER
-        );
-        this.nodeBackoffStates = new ConcurrentHashMap<>();
         this.metadataError = Optional.empty();
         this.notifyMetadataErrorsViaErrorQueue = notifyMetadataErrorsViaErrorQueue;
         this.asyncConsumerMetrics = asyncConsumerMetrics;
@@ -239,23 +222,12 @@ public class NetworkClientDelegate implements AutoCloseable {
             return false;
         }
 
-        // Check if we're still in backoff period for this node
-        long backoffDelay = getBackoffDelay(node, currentTimeMs);
-        if (backoffDelay > 0) {
-            // Still in backoff period, skip retry
-            return false;
-        }
-
         ClientRequest request = makeClientRequest(r, node, currentTimeMs);
         if (!client.ready(node, currentTimeMs)) {
-            // Node is not ready - record failure and apply exponential backoff
-            recordNodeNotReady(node, currentTimeMs);
-            log.debug("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
+            log.trace("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
             return false;
         }
 
-        // Successfully sent - reset backoff for this node
-        resetBackoff(node);
         client.send(request, currentTimeMs);
         return true;
     }
@@ -314,54 +286,6 @@ public class NetworkClientDelegate implements AutoCloseable {
      */
     public boolean nodeUnavailable(final Node node) {
         return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
-    }
-
-    /**
-     * Get the remaining backoff delay for a node. Returns 0 if the node is not in backoff or
-     * the backoff period has elapsed.
-     *
-     * @param node The node to check
-     * @param currentTimeMs Current time in milliseconds
-     * @return Remaining backoff delay in milliseconds, or 0 if no backoff is needed
-     */
-    private long getBackoffDelay(Node node, long currentTimeMs) {
-        BackoffState backoffState = nodeBackoffStates.get(node);
-        if (backoffState == null) {
-            return 0;
-        }
-        long remainingDelay = backoffState.nextRetryTimeMs - currentTimeMs;
-        return Math.max(0, remainingDelay);
-    }
-
-    /**
-     * Record that a node is not ready and calculate the next retry time using exponential backoff.
-     *
-     * @param node The node that is not ready
-     * @param currentTimeMs Current time in milliseconds
-     */
-    private void recordNodeNotReady(Node node, long currentTimeMs) {
-        BackoffState backoffState = nodeBackoffStates.computeIfAbsent(node, k -> new BackoffState());
-        // Use current attemptCount (starts at 0) before incrementing, so first backoff is initialInterval
-        long backoffMs = exponentialBackoff.backoff(backoffState.attemptCount);
-        backoffState.attemptCount++;
-        backoffState.nextRetryTimeMs = currentTimeMs + backoffMs;
-    }
-
-    /**
-     * Reset the backoff state for a node after a successful send.
-     *
-     * @param node The node that successfully sent a request
-     */
-    private void resetBackoff(Node node) {
-        nodeBackoffStates.remove(node);
-    }
-
-    /**
-     * Inner class to track backoff state for each node.
-     */
-    private static class BackoffState {
-        long attemptCount = 0;
-        long nextRetryTimeMs = 0;
     }
 
     public void close() throws IOException {
