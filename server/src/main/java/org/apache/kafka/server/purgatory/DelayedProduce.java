@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -53,16 +52,8 @@ public class DelayedProduce extends DelayedOperation {
             this.responseStatus = responseStatus;
         }
 
-        public long requiredOffset() {
-            return requiredOffset;
-        }
-
         public PartitionResponse responseStatus() {
             return responseStatus;
-        }
-
-        public boolean acksPending() {
-            return acksPending;
         }
 
         public void setAcksPending(boolean acksPending) {
@@ -95,6 +86,20 @@ public class DelayedProduce extends DelayedOperation {
         }
     }
 
+    @FunctionalInterface
+    public interface PartitionStatusValidator {
+        /**
+         * Validates the status of a partition and its replicas to determine
+         * if a delayed produce operation can be completed.
+         *
+         * @param topicPartition The partition to check.
+         * @param requiredOffset The offset that replicas must reach.
+         * @return An entry where the key is a Boolean (hasEnoughReplicas)
+         * and the value is the Error code.
+         */
+        Map.Entry<Boolean, Errors> validate(TopicPartition topicPartition, long requiredOffset);
+    }
+
     private static final class DelayedProduceMetrics {
         // Changing the package or class name may cause incompatibility with existing code and metrics configuration
         private static final String METRICS_PACKAGE = "kafka.server";
@@ -115,17 +120,17 @@ public class DelayedProduce extends DelayedOperation {
     }
 
     private final Map<TopicIdPartition, ProducePartitionStatus> produceStatus;
-    private final BiFunction<TopicPartition, Long, Map.Entry<Boolean, Errors>> validatePartitionAndReplicaStatus;
+    private final PartitionStatusValidator statusValidator;
     private final Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback;
 
     public DelayedProduce(long delayMs,
                           Map<TopicIdPartition, ProducePartitionStatus> produceStatus,
-                          BiFunction<TopicPartition, Long, Map.Entry<Boolean, Errors>> validatePartitionAndReplicaStatus,
+                          PartitionStatusValidator statusValidator,
                           Consumer<Map<TopicIdPartition, PartitionResponse>> responseCallback) {
         super(delayMs);
 
         this.produceStatus = produceStatus;
-        this.validatePartitionAndReplicaStatus = validatePartitionAndReplicaStatus;
+        this.statusValidator = statusValidator;
         this.responseCallback = responseCallback;
 
         // first update the acks pending variable according to the error code
@@ -166,8 +171,7 @@ public class DelayedProduce extends DelayedOperation {
             if (status.acksPending) {
                 // Delegate to `ReplicaManager#maybeAddDelayedProduce`
                 // Validate Cases A, B, or C
-                Map.Entry<Boolean, Errors> result = validatePartitionAndReplicaStatus
-                        .apply(topicIdPartition.topicPartition(), status.requiredOffset);
+                Map.Entry<Boolean, Errors> result = statusValidator.validate(topicIdPartition.topicPartition(), status.requiredOffset);
 
                 // Update the partition status to reflect Case A, B, or C:
                 boolean hasEnough = result.getKey();
@@ -180,9 +184,13 @@ public class DelayedProduce extends DelayedOperation {
         });
 
         // check if every partition has satisfied at least one of case A, B or C
-        boolean anyPending = produceStatus.values()
-                                          .stream()
-                                          .anyMatch(ProducePartitionStatus::acksPending);
+        boolean anyPending = false;
+        for (ProducePartitionStatus status : produceStatus.values()) {
+            if (status.acksPending) {
+                anyPending = true;
+                break;
+            }
+        }
         if (!anyPending) {
             return forceComplete();
         }
