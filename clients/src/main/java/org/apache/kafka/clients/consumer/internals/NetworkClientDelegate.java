@@ -221,13 +221,13 @@ public class NetworkClientDelegate implements AutoCloseable {
             log.debug("No broker available to send the request: {}. Retrying.", r);
             return false;
         }
-
         ClientRequest request = makeClientRequest(r, node, currentTimeMs);
         if (!client.ready(node, currentTimeMs)) {
+            // enqueue the request again if the node isn't ready yet. The request will be handled in the next iteration
+            // of the event loop
             log.trace("Node is not ready, handle the request in the next event loop: node={}, request={}", node, r);
             return false;
         }
-
         client.send(request, currentTimeMs);
         return true;
     }
