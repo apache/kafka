@@ -126,7 +126,7 @@ public class MeteredSessionStoreTest {
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.metrics())
-                .thenReturn(new StreamsMetricsImpl(metrics, "test", "processId", "applicationId", mockTime));
+                .thenReturn(new StreamsMetricsImpl(metrics, "test", mockTime));
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
         when(innerStore.name()).thenReturn(STORE_NAME);
@@ -715,7 +715,7 @@ public class MeteredSessionStoreTest {
         final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
         assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
-        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
 
         KeyValueIterator<Windowed<String>, String> second = null;
         final long secondTimestamp;
@@ -733,14 +733,14 @@ public class MeteredSessionStoreTest {
             }
 
             // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
-            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+            assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
         } finally {
             if (second != null) {
                 second.close();
             }
         }
 
-        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 
     private KafkaMetric metric(final String name) {

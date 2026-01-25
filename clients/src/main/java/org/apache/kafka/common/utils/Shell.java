@@ -48,7 +48,7 @@ public abstract class Shell {
     private int exitCode;
     private Process process; // sub process used to execute the command
 
-    /* If or not script finished executing */
+    /* Whether the script finished executing */
     private volatile AtomicBoolean completed;
 
     /**

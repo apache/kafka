@@ -212,7 +212,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     @Override
-    public void onNewMetadataImage(CoordinatorMetadataImage newImage, CoordinatorMetadataDelta delta) {
+    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
         this.metadataImage = newImage;
     }
 
@@ -445,6 +445,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 topicId,
                 partitionId,
                 PartitionFactory.UNINITIALIZED_START_OFFSET,
+                PartitionFactory.UNINITIALIZED_DELIVERY_COMPLETE_COUNT,
                 PartitionFactory.DEFAULT_LEADER_EPOCH,
                 PartitionFactory.DEFAULT_STATE_EPOCH
             );
@@ -463,6 +464,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     topicId,
                     partitionId,
                     offsetValue.startOffset(),
+                    offsetValue.deliveryCompleteCount(),
                     offsetValue.leaderEpoch(),
                     offsetValue.stateEpoch()
                 );

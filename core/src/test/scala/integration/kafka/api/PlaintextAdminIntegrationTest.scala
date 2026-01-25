@@ -2925,7 +2925,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       val tp1 = new TopicPartition(testTopicName, 0)
       val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
-        .partitionsToOffsetAndMetadata(testGroupId)
+        .partitionsToOffsetInfo(testGroupId)
         .get()
       assertTrue(parts.containsKey(tp1))
       assertNull(parts.get(tp1))
@@ -2991,10 +2991,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetAlterResult.partitionResult(tp2))
 
       val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1))))
-        .partitionsToOffsetAndMetadata(testGroupId)
+        .partitionsToOffsetInfo(testGroupId)
         .get()
       assertTrue(parts.containsKey(tp1))
-      assertEquals(0, parts.get(tp1).offset())
+      assertEquals(0, parts.get(tp1).startOffset())
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
@@ -3031,14 +3031,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         // Test listShareGroupOffsets
         TestUtils.waitUntilTrue(() => {
           val parts = client.listShareGroupOffsets(util.Map.of(testGroupId, new ListShareGroupOffsetsSpec()))
-            .partitionsToOffsetAndMetadata(testGroupId)
+            .partitionsToOffsetInfo(testGroupId)
             .get()
           parts.containsKey(tp1) && parts.containsKey(tp2)
         }, "Expected the result contains all partitions.")
 
         // Test listShareGroupOffsets with listShareGroupOffsetsSpec
         val groupSpecs = util.Map.of(testGroupId, new ListShareGroupOffsetsSpec().topicPartitions(util.List.of(tp1)))
-        val parts = client.listShareGroupOffsets(groupSpecs).partitionsToOffsetAndMetadata(testGroupId).get()
+        val parts = client.listShareGroupOffsets(groupSpecs).partitionsToOffsetInfo(testGroupId).get()
         assertTrue(parts.containsKey(tp1))
         assertFalse(parts.containsKey(tp2))
       } finally {
@@ -4429,7 +4429,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
       }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
@@ -4465,10 +4465,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val config = createConfig
     client = Admin.create(config)
 
+    val unavailableReplicationFactorInThisCluster = 9999.toShort
     val streams = createStreamsGroup(
       inputTopics = Set(testTopicName),
       changelogTopics = Set(testTopicName + "-changelog"),
-      streamsGroupId = streamsGroupId
+      streamsGroupId = streamsGroupId,
+      replicationFactor = Optional.of(unavailableReplicationFactorInThisCluster)
     )
     streams.poll(JDuration.ofMillis(500L))
 
@@ -4476,7 +4478,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TestUtils.waitUntilTrue(() => {
         val firstGroup = client.listGroups().all().get().stream()
           .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.NOT_READY && firstGroup.groupId() == streamsGroupId
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.NOT_READY
       }, "Streams group did not transition to NOT_READY before timeout")
 
       // Verify the describe call works correctly
@@ -4519,8 +4521,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     try {
       TestUtils.waitUntilTrue(() => {
-        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
       }, "Streams group did not transition to STABLE before timeout")
 
       // Verify the describe call works correctly
@@ -4681,8 +4684,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       streams.commitSync()
 
       TestUtils.waitUntilTrue(() => {
-        val firstGroup = client.listGroups().all().get().stream().findFirst().orElse(null)
-        firstGroup.groupState().orElse(null) == GroupState.STABLE && firstGroup.groupId() == streamsGroupId
+        val firstGroup = client.listGroups().all().get().stream()
+          .filter(g => g.groupId() == streamsGroupId).findFirst().orElse(null)
+        firstGroup != null && firstGroup.groupState().orElse(null) == GroupState.STABLE
       }, "Streams group did not transition to STABLE before timeout")
 
       val allTopicPartitions = client.listStreamsGroupOffsets(

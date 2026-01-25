@@ -490,6 +490,7 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.partition(),
                                     partitionResult.stateEpoch(),
                                     partitionResult.startOffset(),
+                                    partitionResult.deliveryCompleteCount(),
                                     partitionResult.leaderEpoch(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage()))
@@ -498,6 +499,7 @@ public class DefaultStatePersister implements Persister {
                             log.error("Unexpected exception while getting data from share coordinator", e);
                             return List.of(PartitionFactory.newPartitionStateSummaryData(
                                 partition,
+                                -1,
                                 -1,
                                 -1,
                                 -1,
@@ -575,7 +577,7 @@ public class DefaultStatePersister implements Persister {
 
         validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
     }
-    
+
     private static void validate(WriteShareGroupStateParameters params) {
         String prefix = "Write share group parameters";
         if (params == null) {

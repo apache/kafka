@@ -197,7 +197,10 @@ public class CurrentAssignmentBuilder {
                         member.assignedPartitions()
                     );
                 } else if (hasSubscriptionChanged) {
-                    return updateCurrentAssignment(member.assignedPartitions());
+                    return updateCurrentAssignment(
+                        member.memberEpoch(),
+                        member.assignedPartitions()
+                    );
                 } else {
                     return member;
                 }
@@ -214,20 +217,19 @@ public class CurrentAssignmentBuilder {
                 // owns any of the revoked partitions. If it does, we cannot progress.
                 if (ownsRevokedPartitions(member.partitionsPendingRevocation())) {
                     if (hasSubscriptionChanged) {
-                        return updateCurrentAssignment(member.assignedPartitions());
+                        return updateCurrentAssignment(
+                            member.memberEpoch(),
+                            member.assignedPartitions()
+                        );
                     } else {
                         return member;
                     }
                 }
 
-                // When the member has revoked all the pending partitions, it can
-                // transition to the next epoch (current + 1) and we can reconcile
-                // its state towards the latest target assignment.
+                // When the member has revoked all the pending partitions, we can
+                // reconcile its state towards the latest target assignment.
                 return computeNextAssignment(
-                    // When we enter UNREVOKED_PARTITIONS due to a subscription change,
-                    // we must not advance the member epoch when the new target
-                    // assignment is not available yet.
-                    Math.min(member.memberEpoch() + 1, targetAssignmentEpoch),
+                    member.memberEpoch(),
                     member.assignedPartitions()
                 );
 
@@ -288,10 +290,12 @@ public class CurrentAssignmentBuilder {
      * Updates the current assignment, removing any partitions that are not part of the subscribed topics.
      * This method is a lot faster than running the full reconciliation logic in computeNextAssignment.
      *
+     * @param memberEpoch               The epoch of the member to use.
      * @param memberAssignedPartitions  The assigned partitions of the member to use.
      * @return A new ConsumerGroupMember.
      */
     private ConsumerGroupMember updateCurrentAssignment(
+        int memberEpoch,
         Map<Uuid, Set<Integer>> memberAssignedPartitions
     ) {
         Set<Uuid> subscribedTopicIds = subscribedTopicIds();
@@ -333,6 +337,7 @@ public class CurrentAssignmentBuilder {
         if (!newPartitionsPendingRevocation.isEmpty() && ownsRevokedPartitions(newPartitionsPendingRevocation)) {
             return new ConsumerGroupMember.Builder(member)
                 .setState(MemberState.UNREVOKED_PARTITIONS)
+                .updateMemberEpoch(memberEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(newPartitionsPendingRevocation)
                 .build();
@@ -344,6 +349,7 @@ public class CurrentAssignmentBuilder {
             // reconciliation logic should handle the case where the member has revoked all its
             // partitions pending revocation.
             return new ConsumerGroupMember.Builder(member)
+                .updateMemberEpoch(memberEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .build();
         }
@@ -394,7 +400,11 @@ public class CurrentAssignmentBuilder {
             Set<Integer> partitionsPendingAssignment = new HashSet<>(target);
             partitionsPendingAssignment.removeAll(assignedPartitions);
             hasUnreleasedPartitions = partitionsPendingAssignment.removeIf(partitionId ->
-                currentPartitionEpoch.apply(topicId, partitionId) != -1
+                currentPartitionEpoch.apply(topicId, partitionId) != -1 &&
+                // Don't consider a partition unreleased if it is owned by the current member
+                // because it is pending revocation. This is safe to do since only a single member
+                // can own a partition at a time.
+                !member.partitionsPendingRevocation().getOrDefault(topicId, Set.of()).contains(partitionId)
             ) || hasUnreleasedPartitions;
 
             if (!assignedPartitions.isEmpty()) {

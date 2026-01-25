@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
   "apiKey": 19,
   "type": "coordinator-key",

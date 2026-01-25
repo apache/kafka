@@ -22,7 +22,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ListGroupsOptions, NewTopic}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.consumer.internals.{StreamsRebalanceData, StreamsRebalanceListener}
+import org.apache.kafka.clients.consumer.internals.{ShareAcquireMode, StreamsRebalanceData, StreamsRebalanceListener}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -709,6 +709,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   private def shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
     new ShareGroupHeartbeatRequestData()
       .setGroupId(shareGroup)
+      .setMemberId(Uuid.randomUuid().toString)
       .setMemberEpoch(0)
       .setSubscribedTopicNames(List(topic).asJava)).build(ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion)
 
@@ -724,7 +725,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val send: Seq[TopicIdPartition] = Seq(
       new TopicIdPartition(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), new TopicPartition(topic, part)))
     val ackMap = new util.HashMap[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]]
-    requests.ShareFetchRequest.Builder.forConsumer(shareGroup, metadata, 100, 0, Int.MaxValue, 500, 500,
+    requests.ShareFetchRequest.Builder.forConsumer(shareGroup, metadata, 100, 0, Int.MaxValue, 500, 500, ShareAcquireMode.BATCH_OPTIMIZED.id(), false,
       send.asJava, Seq.empty.asJava, ackMap).build()
   }
 
@@ -3122,8 +3123,10 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
     addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
 
-    val response = sendAndReceiveFirstRegexHeartbeat(Uuid.randomUuid.toString, listenerName)
-    sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    var response = sendAndReceiveFirstRegexHeartbeat(Uuid.randomUuid.toString, listenerName)
+    TestUtils.tryUntilNoAssertionError() {
+      response = sendAndReceiveRegexHeartbeat(response, listenerName, Some(1))
+    }
   }
 
   @Test
@@ -3844,8 +3847,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val response = sendRequestAndVerifyResponseError(request, resource, isAuthorized = true).asInstanceOf[StreamsGroupHeartbeatResponse]
     assertEquals(
       util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
+        new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-        .setStatusDetail("Internal topics are missing: [topic]; Unauthorized to CREATE on topics topic.")),
+        .setStatusDetail("Internal topics are missing: topic; Unauthorized to CREATE on topics topic.")),
     response.data().status())
   }
 
@@ -3875,8 +3881,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     // Request successful, and no internal topic creation error.
     assertEquals(
       util.List.of(new StreamsGroupHeartbeatResponseData.Status()
+        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay."),
+        new StreamsGroupHeartbeatResponseData.Status()
         .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-        .setStatusDetail("Internal topics are missing: [topic]")),
+        .setStatusDetail("Internal topics are missing: topic")),
       response.data().status())
   }
 

@@ -23,8 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
-import java.time.Duration;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -37,21 +35,18 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
     private final TopicPartition shard;
     private final CoordinatorRuntime<S, U> runtime;
     private final ExecutorService executor;
-    private final Duration writeTimeout;
     private final Map<String, TaskRunnable<?>> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorExecutorImpl(
         LogContext logContext,
         TopicPartition shard,
         CoordinatorRuntime<S, U> runtime,
-        ExecutorService executor,
-        Duration writeTimeout
+        ExecutorService executor
     ) {
         this.log = logContext.logger(CoordinatorExecutorImpl.class);
         this.shard = shard;
         this.runtime = runtime;
         this.executor = executor;
-        this.writeTimeout = writeTimeout;
     }
 
     private <R> TaskResult<R> executeTask(TaskRunnable<R> task) {
@@ -84,7 +79,6 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
             runtime.scheduleWriteOperation(
                 key,
                 shard,
-                writeTimeout,
                 coordinator -> {
                     // If the task associated with the key is not us, it means
                     // that the task was either replaced or cancelled. We stop.
@@ -107,7 +101,7 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
                         "the coordinator is not active.", key, exception.getMessage());
                 } else {
                     log.error("The write event for the task {} failed due to {}. Ignoring it. ",
-                        key, exception.getMessage());
+                        key, exception.getMessage(), exception);
                 }
 
                 return null;
@@ -128,9 +122,6 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
     }
 
     public void cancelAll() {
-        Iterator<String> iterator = tasks.keySet().iterator();
-        while (iterator.hasNext()) {
-            iterator.remove();
-        }
+        tasks.clear();
     }
 }

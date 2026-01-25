@@ -39,11 +39,7 @@ public class StreamsGroupHeartbeatRequest extends AbstractRequest {
         private final StreamsGroupHeartbeatRequestData data;
 
         public Builder(StreamsGroupHeartbeatRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(StreamsGroupHeartbeatRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.STREAMS_GROUP_HEARTBEAT, enableUnstableLastVersion);
+            super(ApiKeys.STREAMS_GROUP_HEARTBEAT);
             this.data = data;
         }
 

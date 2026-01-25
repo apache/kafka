@@ -23,11 +23,13 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -36,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -57,19 +60,17 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             assertTrue(executor.isScheduled(TASK_KEY));
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+                args.getArgument(2);
             assertEquals(
                 new CoordinatorResult<>(List.of("record"), null),
                 op.generateRecordsAndResult(coordinatorShard)
@@ -117,18 +118,16 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+                args.getArgument(2);
             assertEquals(
                 new CoordinatorResult<>(List.of(), null),
                 op.generateRecordsAndResult(coordinatorShard)
@@ -175,8 +174,7 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
@@ -220,21 +218,19 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             // Cancel the task before running the write operation.
             executor.cancel(TASK_KEY);
 
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+                args.getArgument(2);
             Throwable ex = assertThrows(RejectedExecutionException.class, () -> op.generateRecordsAndResult(coordinatorShard));
             return FutureUtils.failedFuture(ex);
         });
@@ -275,14 +271,12 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenReturn(FutureUtils.failedFuture(new Throwable("Oh no!")));
 
@@ -313,5 +307,69 @@ public class CoordinatorExecutorImplTest {
         assertTrue(taskCalled.get());
         assertFalse(operationCalled.get());
         assertFalse(executor.isScheduled(TASK_KEY));
+    }
+
+    @Test
+    public void testCancelAllTasks() {
+        CoordinatorShard<String> coordinatorShard = mock(CoordinatorShard.class);
+        CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
+        ExecutorService executorService = mock(ExecutorService.class);
+        CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
+            LOG_CONTEXT,
+            SHARD_PARTITION,
+            runtime,
+            executorService
+        );
+
+        List<CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String>> writeOperations = new ArrayList<>();
+        List<CompletableFuture<Void>> writeFutures = new ArrayList<>();
+        when(runtime.scheduleWriteOperation(
+            anyString(),
+            eq(SHARD_PARTITION),
+            any()
+        )).thenAnswer(args -> {
+            writeOperations.add(args.getArgument(2));
+            CompletableFuture<Void> writeFuture = new CompletableFuture<>();
+            writeFutures.add(writeFuture);
+            return writeFuture;
+        });
+
+        when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
+            Runnable op = args.getArgument(0);
+            op.run();
+            return CompletableFuture.completedFuture(null);
+        });
+
+        AtomicInteger taskCallCount = new AtomicInteger(0);
+        CoordinatorExecutor.TaskRunnable<String> taskRunnable = () -> {
+            taskCallCount.incrementAndGet();
+            return "Hello!";
+        };
+
+        AtomicInteger operationCallCount = new AtomicInteger(0);
+        CoordinatorExecutor.TaskOperation<String, String> taskOperation = (result, exception) -> {
+            operationCallCount.incrementAndGet();
+            return null;
+        };
+
+        for (int i = 0; i < 2; i++) {
+            executor.schedule(
+                TASK_KEY + i,
+                taskRunnable,
+                taskOperation
+            );
+        }
+
+        executor.cancelAll();
+
+        for (int i = 0; i < writeOperations.size(); i++) {
+            CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> writeOperation = writeOperations.get(i);
+            CompletableFuture<Void> writeFuture = writeFutures.get(i);
+            Throwable ex = assertThrows(RejectedExecutionException.class, () -> writeOperation.generateRecordsAndResult(coordinatorShard));
+            writeFuture.completeExceptionally(ex);
+        }
+
+        assertEquals(2, taskCallCount.get());
+        assertEquals(0, operationCallCount.get());
     }
 }

@@ -266,10 +266,10 @@ public class StreamsCoordinatorRecordHelpers {
                     .setMemberEpoch(member.memberEpoch())
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
                     .setState(member.state().value())
-                    .setActiveTasks(toTaskIds(member.assignedTasks().activeTasks()))
+                    .setActiveTasks(toTaskIdsWithEpochs(member.assignedTasks().activeTasksWithEpochs()))
                     .setStandbyTasks(toTaskIds(member.assignedTasks().standbyTasks()))
                     .setWarmupTasks(toTaskIds(member.assignedTasks().warmupTasks()))
-                    .setActiveTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().activeTasks()))
+                    .setActiveTasksPendingRevocation(toTaskIdsWithEpochs(member.tasksPendingRevocation().activeTasksWithEpochs()))
                     .setStandbyTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().standbyTasks()))
                     .setWarmupTasksPendingRevocation(toTaskIds(member.tasksPendingRevocation().warmupTasks())),
                 (short) 0
@@ -307,6 +307,33 @@ public class StreamsCoordinatorRecordHelpers {
                 .setSubtopologyId(subtopologyId)
                 .setPartitions(partitions.stream().sorted().toList()))
         );
+        taskIds.sort(Comparator.comparing(StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopologyId));
+        return taskIds;
+    }
+
+    private static List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> toTaskIdsWithEpochs(
+        Map<String, Map<Integer, Integer>> tasksWithEpochs
+    ) {
+        List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> taskIds = new ArrayList<>(tasksWithEpochs.size());
+        tasksWithEpochs.forEach((subtopologyId, partitionEpochMap) -> {
+            // Sort by partition for consistent ordering
+            List<Map.Entry<Integer, Integer>> sortedEntries = partitionEpochMap.entrySet().stream()
+                .sorted(Comparator.comparingInt(Map.Entry::getKey))
+                .toList();
+            
+            List<Integer> partitions = new ArrayList<>(sortedEntries.size());
+            List<Integer> epochs = new ArrayList<>(sortedEntries.size());
+            
+            for (Map.Entry<Integer, Integer> entry : sortedEntries) {
+                partitions.add(entry.getKey());
+                epochs.add(entry.getValue());
+            }
+            
+            taskIds.add(new StreamsGroupCurrentMemberAssignmentValue.TaskIds()
+                .setSubtopologyId(subtopologyId)
+                .setPartitions(partitions)
+                .setAssignmentEpochs(epochs));
+        });
         taskIds.sort(Comparator.comparing(StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopologyId));
         return taskIds;
     }
