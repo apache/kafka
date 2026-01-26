@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -36,21 +35,18 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
     private final TopicPartition shard;
     private final CoordinatorRuntime<S, U> runtime;
     private final ExecutorService executor;
-    private final Duration writeTimeout;
     private final Map<String, TaskRunnable<?>> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorExecutorImpl(
         LogContext logContext,
         TopicPartition shard,
         CoordinatorRuntime<S, U> runtime,
-        ExecutorService executor,
-        Duration writeTimeout
+        ExecutorService executor
     ) {
         this.log = logContext.logger(CoordinatorExecutorImpl.class);
         this.shard = shard;
         this.runtime = runtime;
         this.executor = executor;
-        this.writeTimeout = writeTimeout;
     }
 
     private <R> TaskResult<R> executeTask(TaskRunnable<R> task) {
@@ -83,7 +79,6 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
             runtime.scheduleWriteOperation(
                 key,
                 shard,
-                writeTimeout,
                 coordinator -> {
                     // If the task associated with the key is not us, it means
                     // that the task was either replaced or cancelled. We stop.

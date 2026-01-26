@@ -25,7 +25,7 @@ import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -48,6 +48,7 @@ import org.apache.kafka.server.config.{DynamicProducerStateManagerConfig, Replic
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryExporterProvider}
+import org.apache.kafka.server.util.LockUtils.{inReadLock, inWriteLock}
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.apache.kafka.storage.internals.log.{LogCleaner, LogConfig}
 
@@ -368,23 +369,23 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   // Visibility for testing
-  private[server] def currentKafkaConfig: KafkaConfig = CoreUtils.inReadLock(lock) {
+  private[server] def currentKafkaConfig: KafkaConfig = inReadLock(lock, () => {
     currentConfig
-  }
+  })
 
-  private[server] def currentDynamicBrokerConfigs: Map[String, String] = CoreUtils.inReadLock(lock) {
+  private[server] def currentDynamicBrokerConfigs: Map[String, String] = inReadLock(lock, () => {
     dynamicBrokerConfigs.clone()
-  }
+  })
 
-  private[server] def currentDynamicDefaultConfigs: Map[String, String] = CoreUtils.inReadLock(lock) {
+  private[server] def currentDynamicDefaultConfigs: Map[String, String] = inReadLock(lock, () => {
     dynamicDefaultConfigs.clone()
-  }
+  })
 
-  private[server] def clientTelemetryExporterPlugin: Option[ClientTelemetryExporterPlugin] = CoreUtils.inReadLock(lock) {
+  private[server] def clientTelemetryExporterPlugin: Option[ClientTelemetryExporterPlugin] = inReadLock(lock, () => {
     telemetryExporterPluginOpt
-  }
+  })
 
-  private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties, doLog: Boolean = true): Unit = CoreUtils.inWriteLock(lock) {
+  private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties, doLog: Boolean = true): Unit = inWriteLock[Exception](lock, () => {
     try {
       val props = fromPersistentProps(persistentProps, perBrokerConfig = true)
       dynamicBrokerConfigs.clear()
@@ -393,9 +394,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     } catch {
       case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: ${persistentProps.keySet()}", e)
     }
-  }
+  })
 
-  private[server] def updateDefaultConfig(persistentProps: Properties, doLog: Boolean = true): Unit = CoreUtils.inWriteLock(lock) {
+  private[server] def updateDefaultConfig(persistentProps: Properties, doLog: Boolean = true): Unit = inWriteLock[Exception](lock, () => {
     try {
       val props = fromPersistentProps(persistentProps, perBrokerConfig = false)
       dynamicDefaultConfigs.clear()
@@ -404,7 +405,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     } catch {
       case e: Exception => error(s"Cluster default configs could not be applied: ${persistentProps.keySet()}", e)
     }
-  }
+  })
 
   /**
    * Config updates are triggered through actual changes in stored values.
@@ -414,7 +415,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * the SSL configs have changed, then the update will be handled when configuration changes are processed.
    * At the moment, only listener configs are considered for reloading.
    */
-  private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
+  private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = inWriteLock[Exception](lock, () => {
     reconfigurables.forEach(r => {
       if (ReloadableFileConfigs.exists(r.reconfigurableConfigs.contains)) {
         r match {
@@ -427,7 +428,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         }
       }
     })
-  }
+  })
 
   private[server] def fromPersistentProps(persistentProps: Properties,
                                           perBrokerConfig: Boolean): Properties = {
@@ -471,10 +472,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps
   }
 
-  private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
+  private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = inReadLock(lock, () => {
     val newProps = validatedKafkaProps(props, perBrokerConfig)
     processReconfiguration(newProps, validateOnly = true)
-  }
+  })
 
   private def removeInvalidConfigs(props: Properties, perBrokerConfig: Boolean): Unit = {
     try {

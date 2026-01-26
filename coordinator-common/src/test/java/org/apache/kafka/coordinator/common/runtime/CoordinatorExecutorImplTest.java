@@ -60,19 +60,17 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             assertTrue(executor.isScheduled(TASK_KEY));
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+                args.getArgument(2);
             assertEquals(
                 new CoordinatorResult<>(List.of("record"), null),
                 op.generateRecordsAndResult(coordinatorShard)
@@ -120,18 +118,16 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+                args.getArgument(2);
             assertEquals(
                 new CoordinatorResult<>(List.of(), null),
                 op.generateRecordsAndResult(coordinatorShard)
@@ -178,8 +174,7 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
@@ -223,21 +218,19 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             // Cancel the task before running the write operation.
             executor.cancel(TASK_KEY);
 
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+                args.getArgument(2);
             Throwable ex = assertThrows(RejectedExecutionException.class, () -> op.generateRecordsAndResult(coordinatorShard));
             return FutureUtils.failedFuture(ex);
         });
@@ -278,14 +271,12 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         when(runtime.scheduleWriteOperation(
             eq(TASK_KEY),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenReturn(FutureUtils.failedFuture(new Throwable("Oh no!")));
 
@@ -327,8 +318,7 @@ public class CoordinatorExecutorImplTest {
             LOG_CONTEXT,
             SHARD_PARTITION,
             runtime,
-            executorService,
-            WRITE_TIMEOUT
+            executorService
         );
 
         List<CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String>> writeOperations = new ArrayList<>();
@@ -336,10 +326,9 @@ public class CoordinatorExecutorImplTest {
         when(runtime.scheduleWriteOperation(
             anyString(),
             eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
-            writeOperations.add(args.getArgument(3));
+            writeOperations.add(args.getArgument(2));
             CompletableFuture<Void> writeFuture = new CompletableFuture<>();
             writeFutures.add(writeFuture);
             return writeFuture;
