@@ -1027,9 +1027,8 @@ public final class QuorumController implements Controller {
                         // they should be considered the bootstrap metadata for the cluster.
                         if (!reader.isCommittedSnapshot() && !messages.isEmpty()) {
                             if (bootstrapMetadata.source().contains(LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
-                                log.warn("{} with metadata records exists alongside {}",
-                                    Snapshots.filenameFromSnapshotId(reader.snapshotId()) + ".checkpoint",
-                                    LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME);
+                                log.warn("Legacy metadata bootstrap checkpoint file exists alongside " +
+                                    "the bootstrap metadata records in the bootstrap checkpoint. ");
                             }
                             bootstrapMetadata = BootstrapMetadata.fromRecords(messages, "bootstrap");
                         } else {
