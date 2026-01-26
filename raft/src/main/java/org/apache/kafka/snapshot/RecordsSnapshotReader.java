@@ -33,21 +33,29 @@ import java.util.OptionalLong;
 public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
     private final RecordsIterator<T> iterator;
+    private final boolean isCommittedSnapshot;
 
     private Optional<Batch<T>> nextBatch = Optional.empty();
     private OptionalLong lastContainedLogTimestamp = OptionalLong.empty();
 
     private RecordsSnapshotReader(
         OffsetAndEpoch snapshotId,
-        RecordsIterator<T> iterator
+        RecordsIterator<T> iterator,
+        boolean isCommittedSnapshot
     ) {
         this.snapshotId = snapshotId;
         this.iterator = iterator;
+        this.isCommittedSnapshot = isCommittedSnapshot;
     }
 
     @Override
     public OffsetAndEpoch snapshotId() {
         return snapshotId;
+    }
+
+    @Override
+    public boolean isCommittedSnapshot() {
+        return isCommittedSnapshot;
     }
 
     @Override
@@ -116,9 +124,30 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         boolean doCrcValidation,
         LogContext logContext
     ) {
+        return of(
+            snapshot,
+            serde,
+            bufferSupplier,
+            maxBatchSize,
+            doCrcValidation,
+            logContext,
+            !snapshot.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)
+        );
+    }
+
+    public static <T> RecordsSnapshotReader<T> of(
+        RawSnapshotReader snapshot,
+        RecordSerde<T> serde,
+        BufferSupplier bufferSupplier,
+        int maxBatchSize,
+        boolean doCrcValidation,
+        LogContext logContext,
+        boolean isCommittedSnapshot
+    ) {
         return new RecordsSnapshotReader<>(
             snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext)
+            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation, logContext),
+            isCommittedSnapshot
         );
     }
 

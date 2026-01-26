@@ -1023,8 +1023,9 @@ public final class QuorumController implements Controller {
                         Batch<ApiMessageAndVersion> batch = reader.next();
                         long offset = batch.lastOffset();
                         List<ApiMessageAndVersion> messages = batch.records();
-                        // KIP-1170: The 0-0.checkpoint can contain metadata records. If it does, they should be considered the bootstrap metadata for the cluster.
-                        if (reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID) && !messages.isEmpty()) {
+                        // KIP-1170: The bootstrap checkpoint can contain metadata records. If it does,
+                        // they should be considered the bootstrap metadata for the cluster.
+                        if (!reader.isCommittedSnapshot() && !messages.isEmpty()) {
                             if (bootstrapMetadata.source().contains(LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
                                 log.warn("{} with metadata records exists alongside {}",
                                     Snapshots.filenameFromSnapshotId(reader.snapshotId()) + ".checkpoint",

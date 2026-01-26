@@ -22,7 +22,6 @@ import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
-import org.apache.kafka.snapshot.Snapshots;
 
 import org.slf4j.Logger;
 
@@ -145,7 +144,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
             // Since the state machine is only one value, expect only one data record
             boolean foundDataRecord = false;
             while (reader.hasNext()) {
-                if (!reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
+                if (reader.isCommittedSnapshot()) {
                     Batch<Integer> batch = reader.next();
                     if (!batch.records().isEmpty()) {
                         if (foundDataRecord) {

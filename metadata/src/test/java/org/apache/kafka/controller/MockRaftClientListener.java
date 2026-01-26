@@ -24,7 +24,6 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.apache.kafka.snapshot.Snapshots;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,7 +70,7 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
             while (reader.hasNext()) {
                 Batch<ApiMessageAndVersion> batch = reader.next();
 
-                if (!reader.snapshotId().equals(Snapshots.BOOTSTRAP_SNAPSHOT_ID)) {
+                if (reader.isCommittedSnapshot()) {
                     for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                         ApiMessage message = messageAndVersion.message();
                         serializedEvents.add(SNAPSHOT + " " + message.toString());

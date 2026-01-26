@@ -58,6 +58,12 @@ public interface SnapshotReader<T> extends AutoCloseable, Iterator<Batch<T>> {
     long lastContainedLogTimestamp();
 
     /**
+     * Returns true if the snapshot has been committed.
+     * Uncommitted bootstrap snapshots return false.
+     */
+    boolean isCommittedSnapshot();
+
+    /**
      * Closes the snapshot reader.
      */
     void close();
