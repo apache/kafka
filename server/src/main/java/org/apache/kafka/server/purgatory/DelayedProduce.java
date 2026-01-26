@@ -41,6 +41,13 @@ import java.util.stream.Collectors;
 public class DelayedProduce extends DelayedOperation {
     private static final Logger LOGGER = LoggerFactory.getLogger(DelayedProduce.class);
 
+    // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+    private static final String METRICS_PACKAGE = "kafka.server";
+    private static final String METRICS_CLASS_NAME = "DelayedProduceMetrics";
+    private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup(METRICS_PACKAGE, METRICS_CLASS_NAME);
+    private static final Meter AGGREGATE_EXPIRATION_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
+    private static final ConcurrentHashMap<TopicPartition, Meter> PARTITION_EXPIRATION_METERS = new ConcurrentHashMap<>();
+
     public static final class ProducePartitionStatus {
         private final long requiredOffset;
         private final PartitionResponse responseStatus;
@@ -98,25 +105,6 @@ public class DelayedProduce extends DelayedOperation {
          * and the value is the Error code.
          */
         Map.Entry<Boolean, Errors> validate(TopicPartition topicPartition, long requiredOffset);
-    }
-
-    private static final class DelayedProduceMetrics {
-        // Changing the package or class name may cause incompatibility with existing code and metrics configuration
-        private static final String METRICS_PACKAGE = "kafka.server";
-        private static final String METRICS_CLASS_NAME = "DelayedProduceMetrics";
-        private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup(METRICS_PACKAGE, METRICS_CLASS_NAME);
-        private static final Meter AGGREGATE_EXPIRATION_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
-        private static final ConcurrentHashMap<TopicPartition, Meter> PARTITION_EXPIRATION_METERS = new ConcurrentHashMap<>();
-
-        private static void recordExpiration(TopicPartition partition) {
-            AGGREGATE_EXPIRATION_METER.mark();
-            PARTITION_EXPIRATION_METERS.computeIfAbsent(partition,
-                            key -> METRICS_GROUP.newMeter("ExpiresPerSec",
-                                        "requests",
-                                        TimeUnit.SECONDS,
-                                        Map.of("topic", key.topic(), "partition", String.valueOf(key.partition())))
-                                    ).mark();
-        }
     }
 
     private final Map<TopicIdPartition, ProducePartitionStatus> produceStatus;
@@ -203,7 +191,7 @@ public class DelayedProduce extends DelayedOperation {
         produceStatus.forEach((topicIdPartition, status) -> {
             if (status.acksPending) {
                 LOGGER.debug("Expiring produce request for partition {} with status {}", topicIdPartition, status);
-                DelayedProduceMetrics.recordExpiration(topicIdPartition.topicPartition());
+                recordExpiration(topicIdPartition.topicPartition());
             }
         });
     }
@@ -218,5 +206,15 @@ public class DelayedProduce extends DelayedOperation {
                         .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().responseStatus()));
 
         responseCallback.accept(responseStatus);
+    }
+
+    private static void recordExpiration(TopicPartition partition) {
+        AGGREGATE_EXPIRATION_METER.mark();
+        PARTITION_EXPIRATION_METERS.computeIfAbsent(partition,
+                key -> METRICS_GROUP.newMeter("ExpiresPerSec",
+                        "requests",
+                        TimeUnit.SECONDS,
+                        Map.of("topic", key.topic(), "partition", String.valueOf(key.partition())))
+        ).mark();
     }
 }
