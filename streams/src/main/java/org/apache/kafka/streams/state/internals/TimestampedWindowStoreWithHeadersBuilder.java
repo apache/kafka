@@ -106,7 +106,8 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         if (!enableLogging) {
             return inner;
         }
-        // Use the timestamped changelog wrapper (headers are in the value bytes)
-        return new ChangeLoggingTimestampedWindowBytesStore(inner, storeSupplier.retainDuplicates());
+        // Use the headers-aware changelog wrapper for KIP-1271 stores
+        // This correctly handles the ValueTimestampHeaders format: [HeaderSize][Headers][Timestamp][Value]
+        return new ChangeLoggingTimestampedWindowBytesStoreWithHeaders(inner, storeSupplier.retainDuplicates());
     }
 }
