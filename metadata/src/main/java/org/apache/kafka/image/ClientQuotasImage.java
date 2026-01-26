@@ -144,51 +144,70 @@ public final class ClientQuotasImage {
             }
         }
 
-        Set<ClientQuotaEntity> addedEntities = new HashSet<>();
-        for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
-            String entityType = exactMatchEntry.getKey();
-            String entityName = exactMatchEntry.getValue();
-            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entitiesByType.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Map.of()).entrySet()) {
-                if (request.strict() && !entry.getKey().entries().equals(exactMatch)) {
-                    continue;
-                }
-                addEntryToResponse(response, addedEntities, entry, exactMatch.size(), typeMatch.size(), request.strict());
-            }
-        }
-
-        for (String type : typeMatch) {
-            for (Map<ClientQuotaEntity, ClientQuotaImage> entityToImage : entitiesByType.getOrDefault(type, Map.of()).values()) {
-                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entityToImage.entrySet()) {
-                    addEntryToResponse(response, addedEntities, entry, typeMatch.size(), exactMatch.size(), request.strict());
-                }
-            }
-        }
-
-        if (!request.strict() && exactMatch.isEmpty() && typeMatch.isEmpty()) {
-            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
-                addEntryToResponse(response, addedEntities, entry, 0, 0, false);
-            }
-        }
-
+        matches(response, exactMatch, typeMatch, request.strict());
         return response;
     }
 
-    private void addEntryToResponse(
+    private void matches(
         DescribeClientQuotasResponseData response,
-        Set<ClientQuotaEntity> addedEntities,
-        Entry<ClientQuotaEntity, ClientQuotaImage> entry,
-        int exactMatchSize,
-        int typeMatchSize,
+        Map<String, String> exactMatch,
+        Set<String> typeMatch,
         boolean strict
     ) {
-        ClientQuotaEntity entity = entry.getKey();
-        ClientQuotaImage clientQuotaImage = entry.getValue();
-        if (strict && entity.entries().size() != exactMatchSize + typeMatchSize) {
+        Map<ClientQuotaEntity, ClientQuotaImage> candidates = null;
+        // Case 1: exact match exists. Filter candidates based on exact match first and then type match
+        if (!exactMatch.isEmpty()) {
+            for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
+                String entityType = exactMatchEntry.getKey();
+                String entityName = exactMatchEntry.getValue();
+                Map<ClientQuotaEntity, ClientQuotaImage> matches = entitiesByType.getOrDefault(entityType, Map.of()).getOrDefault(entityName, Map.of());
+                if (candidates == null) {
+                    candidates = matches;
+                } else {
+                    candidates.keySet().retainAll(matches.keySet());
+                }
+            }
+
+            for (String type : typeMatch) {
+                Set<ClientQuotaEntity> typeMatches = new HashSet<>();
+                for (Map<ClientQuotaEntity, ClientQuotaImage> entityToImage : entitiesByType.getOrDefault(type, Map.of()).values()) {
+                    typeMatches.addAll(entityToImage.keySet());
+                }
+                candidates.keySet().retainAll(typeMatches);
+            }
+        } else if (!typeMatch.isEmpty()) {
+            // Case 2: no exact match, only type match exists
+            for (String type : typeMatch) {
+                Map<ClientQuotaEntity, ClientQuotaImage> typeMatchesEntry = new HashMap<>();
+                for (Map<ClientQuotaEntity, ClientQuotaImage> entityToImage : entitiesByType.getOrDefault(type, Map.of()).values()) {
+                    typeMatchesEntry.putAll(entityToImage);
+                }
+                if (candidates == null) {
+                    candidates = typeMatchesEntry;
+                } else {
+                    candidates.keySet().retainAll(typeMatchesEntry.keySet());
+                }
+            }
+        } else if (!strict) {
+            // Case 3: no exact match, no type match, no strict, return all entries
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
+                response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
+            }
             return;
         }
-        if (!addedEntities.contains(entity)) {
-            addedEntities.add(entity);
-            response.entries().add(toDescribeEntry(entity, clientQuotaImage));
+
+        if (candidates != null) {
+            if (strict) {
+                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : candidates.entrySet()) {
+                    if (entry.getKey().entries().size() == exactMatch.size() + typeMatch.size()) {
+                        response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
+                    }
+                }
+            } else {
+                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : candidates.entrySet()) {
+                    response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
+                }
+            }
         }
     }
 
