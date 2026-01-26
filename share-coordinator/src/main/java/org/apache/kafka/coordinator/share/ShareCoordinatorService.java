@@ -201,7 +201,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
-                    .withDefaultWriteTimeOut(Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()))
+                    .withWriteTimeout(Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(coordinatorMetrics)
                     .withSerializer(new ShareCoordinatorRecordSerde())
@@ -324,7 +324,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
         runtime.scheduleWriteOperation(
             "write-state-record-prune",
             tp,
-            Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
             ShareCoordinatorShard::lastRedundantOffset
         ).whenComplete((result, exception) -> {
             if (exception != null) {
@@ -384,7 +383,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 }
                 List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
                     "snapshot-cold-partitions",
-                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     ShareCoordinatorShard::snapshotColdPartitions
                 );
 
@@ -467,7 +465,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     CompletableFuture<WriteShareGroupStateResponseData> future = runtime.scheduleWriteOperation(
                             "write-share-group-state",
                             topicPartitionFor(SharePartitionKey.getInstance(groupId, topicData.topicId(), partitionData.partition())),
-                            Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                             coordinator -> coordinator.writeState(new WriteShareGroupStateRequestData()
                                 .setGroupId(groupId)
                                 .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
@@ -601,7 +598,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<ReadShareGroupStateResponseData> readFuture = runtime.scheduleWriteOperation(
                     "read-update-leader-epoch-state",
                     topicPartitionFor(coordinatorKey),
-                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.readStateAndMaybeUpdateLeaderEpoch(requestForCurrentPartition)
                 ).exceptionally(readException ->
                     handleOperationException(
@@ -711,7 +707,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<ReadShareGroupStateSummaryResponseData> readFuture = runtime.scheduleWriteOperation(
                     "read-share-group-state-summary",
                     topicPartitionFor(coordinatorKey),
-                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.readStateSummary(requestForCurrentPartition)
                 ).exceptionally(readException ->
                     handleOperationException(
@@ -821,7 +816,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<DeleteShareGroupStateResponseData> deleteFuture = runtime.scheduleWriteOperation(
                     "delete-share-group-state",
                     topicPartitionFor(coordinatorKey),
-                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.deleteState(requestForCurrentPartition)
                 ).exceptionally(deleteException ->
                     handleOperationException(
@@ -921,7 +915,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 CompletableFuture<InitializeShareGroupStateResponseData> initializeFuture = runtime.scheduleWriteOperation(
                     "initialize-share-group-state",
                     topicPartitionFor(coordinatorKey),
-                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.initializeState(requestForCurrentPartition)
                 ).exceptionally(initializeException ->
                     handleOperationException(
@@ -1089,7 +1082,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
             FutureUtils.mapExceptionally(
                 runtime.scheduleWriteAllOperation(
                     "on-topics-deleted",
-                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
                 ),
                 exception -> {
