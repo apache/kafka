@@ -76,6 +76,7 @@ import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.RemoteStorageThreadPool;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
 import org.apache.kafka.storage.internals.log.TxnIndexSearchResult;
+import org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -908,27 +909,63 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         /**
+         * Check if segment is already expired based on global retention time.
+         */
+        private boolean isSegmentExpiredByTime(LogSegment segment, UnifiedLog log) throws IOException {
+            long retentionMs = log.config().retentionMs;
+            if (retentionMs <= 0) {
+                return false;
+            }
+            return time.milliseconds() - segment.largestTimestamp() >= retentionMs;
+        }
+
+        /**
+         * Check if segment should be skipped due to global retention size.
+         */
+        private boolean isSegmentExpiredBySize(LogSegment segment, UnifiedLog log, long accumulatedSkippedSize) {
+            long retentionBytes = log.config().retentionSize;
+            if (retentionBytes <= 0) {
+                return false;
+            }
+            long excessSize = log.size() - retentionBytes;
+            return excessSize - accumulatedSkippedSize >= segment.size();
+        }
+
+        /**
          *  Segments which match the following criteria are eligible for copying to remote storage:
          *  1) Segment is not the active segment and
          *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
          *     committed/acked messages
-         * @param log The log from which the segments are to be copied
-         * @param fromOffset The offset from which the segments are to be copied
-         * @param lastStableOffset The last stable offset of the log
-         * @return candidate log segments to be copied to remote storage
+         * 
+         * Additionally, if a segment is already expired globally (based on retention.ms or retention.bytes),
+         * it will be skipped from upload and logStartOffset will be updated to allow local deletion.
          */
-        List<EnrichedLogSegment> candidateLogSegments(UnifiedLog log, Long fromOffset, Long lastStableOffset) {
+        List<EnrichedLogSegment> candidateLogSegments(UnifiedLog log, Long fromOffset, Long lastStableOffset) throws IOException {
             List<EnrichedLogSegment> candidateLogSegments = new ArrayList<>();
             List<LogSegment> segments = log.logSegments(fromOffset, Long.MAX_VALUE);
-            if (!segments.isEmpty()) {
-                for (int idx = 1; idx < segments.size(); idx++) {
-                    LogSegment previousSeg = segments.get(idx - 1);
-                    LogSegment currentSeg = segments.get(idx);
-                    if (currentSeg.baseOffset() <= lastStableOffset) {
-                        candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
-                    }
+            if (segments.isEmpty()) {
+                return candidateLogSegments;
+            }
+            
+            long accumulatedSkippedSize = 0;
+            for (int idx = 1; idx < segments.size(); idx++) {
+                LogSegment previousSeg = segments.get(idx - 1);
+                LogSegment currentSeg = segments.get(idx);
+                if (currentSeg.baseOffset() > lastStableOffset) {
+                    continue;
                 }
-                // Discard the last active segment
+                
+                if (isSegmentExpiredByTime(previousSeg, log) || 
+                    isSegmentExpiredBySize(previousSeg, log, accumulatedSkippedSize)) {
+                    long newLogStartOffset = currentSeg.baseOffset();
+                    log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion);
+                    logger.info("Segment {} is already expired globally. Skipping upload and incrementing logStartOffset to {} to allow local deletion.",
+                            previousSeg, newLogStartOffset);
+                    accumulatedSkippedSize += previousSeg.size();
+                    continue;
+                }
+                
+                candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
             }
             return candidateLogSegments;
         }
