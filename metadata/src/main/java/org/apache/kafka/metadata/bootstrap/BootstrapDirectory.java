@@ -22,6 +22,7 @@ import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -37,10 +38,11 @@ public interface BootstrapDirectory {
      * configuration defaults if no checkpoint is present.
      *
      * @return the loaded {@link BootstrapMetadata}
-     * @throws IOException if the metadata cannot be read from disk
-     * @throws RuntimeException if the metadata is invalid or the location is misconfigured
+     * @throws UncheckedIOException if the metadata cannot be read from disk
+     * @throws IllegalStateException if the configured location is missing or not a directory
+     * @throws RuntimeException if the metadata is invalid
      */
-    BootstrapMetadata read() throws IOException;
+    BootstrapMetadata read();
 
     /**
      * Read bootstrap metadata from the given binary file path.
@@ -50,10 +52,10 @@ public interface BootstrapDirectory {
      *
      * @param binaryPath the path to the binary bootstrap file
      * @return the loaded {@link BootstrapMetadata}
-     * @throws IOException if the metadata cannot be read from disk
+     * @throws UncheckedIOException if the metadata cannot be read from disk
      * @throws RuntimeException if the binary file contents are invalid
      */
-    static BootstrapMetadata readFromBinaryFile(String binaryPath) throws IOException {
+    static BootstrapMetadata readFromBinaryFile(String binaryPath) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         try (BatchFileReader reader = new BatchFileReader.Builder().
                 setPath(binaryPath).build()) {
@@ -63,6 +65,8 @@ public interface BootstrapDirectory {
                     records.addAll(batchAndType.batch().records());
                 }
             }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Unable to read bootstrap metadata from " + binaryPath, e);
         }
         return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
                 "the binary bootstrap metadata file: " + binaryPath);

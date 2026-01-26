@@ -18,7 +18,7 @@
 package org.apache.kafka.metadata.bootstrap;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -45,7 +45,7 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
     }
 
     @Override
-    public BootstrapMetadata read() throws IOException {
+    public BootstrapMetadata read() {
         Path path = Paths.get(directoryPath);
         if (!Files.isDirectory(path)) {
             if (Files.exists(path)) {
@@ -60,7 +60,8 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
             CLUSTER_METADATA_TOPIC_PARTITION.partition()),
             BINARY_BOOTSTRAP_CHECKPOINT_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
-            throw new FileNotFoundException(binaryBootstrapPath.toString());
+            String binaryPath = binaryBootstrapPath.toString();
+            throw new UncheckedIOException(binaryPath, new FileNotFoundException(binaryPath));
         } else {
             return BootstrapDirectory.readFromBinaryFile(binaryBootstrapPath.toString());
         }
