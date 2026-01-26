@@ -34,7 +34,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
 import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
-import org.apache.kafka.server.common.{FinalizedFeatures, RequestLocal, ShareVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.storage.internals.log.{LogManager => JLogManager}
 
@@ -183,16 +183,6 @@ class BrokerMetadataPublisher(
         } catch {
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
             s"coordinator with local changes in $deltaName", t)
-        }
-        try {
-          // Notify the share coordinator about deleted topics.
-          val deletedTopicIds = topicsDelta.deletedTopicIds()
-          if (!deletedTopicIds.isEmpty) {
-            shareCoordinator.onTopicsDeleted(topicsDelta.deletedTopicIds, RequestLocal.noCaching.bufferSupplier)
-          }
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
-            s"coordinator with deleted partitions in $deltaName", t)
         }
       }
 
