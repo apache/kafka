@@ -1446,7 +1446,7 @@ public final class QuorumController implements Controller {
     /**
      * The bootstrap metadata to use for initialization if needed.
      */
-    private BootstrapMetadata bootstrapMetadata;
+    private volatile BootstrapMetadata bootstrapMetadata;
 
     /**
      * The maximum number of records per batch to allow.
