@@ -115,6 +115,20 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeTest:
 - testWriteEventCompletesOnlyOnce
 - testWriteEventWriteTimeoutTaskIsCancelledWhenHighWatermarkIsUpdated
 - testWriteOpIsNotReleasedWhenStateMachineIsNotCaughtUpAfterLoad
+org.apache.kafka.coordinator.common.runtime.CoordinatorTimerImplTest:
+- testCancelAll
+- testDefaultRetryBackoff
+- testScheduleIfAbsentWhenAbsent
+- testScheduleIfAbsentWhenPresent
+- testTaskCleanupOnFailedFutureWithoutOperationExecution
+- testTimerCancelledAfterExpiryButBeforeWriteOperation
+- testTimerCancelledBeforeExpiry
+- testTimerIgnoredOnCoordinatorLoadInProgressException
+- testTimerIgnoredOnNotCoordinatorException
+- testTimerNoRetryOnFailure
+- testTimerOverridden
+- testTimerRetryOnFailure
+- testTimerSuccessfulLifecycle
 org.apache.kafka.coordinator.common.runtime.DeferredEventCollectionTest:
 - testAddAndSize
 - testCompleteCallsAllEvents
