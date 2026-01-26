@@ -939,6 +939,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          * 
          * Additionally, if a segment is already expired globally (based on retention.ms or retention.bytes),
          * it will be skipped from upload and logStartOffset will be updated to allow local deletion.
+         *
+         * @param log The log from which the segments are to be copied
+         * @param fromOffset The offset from which the segments are to be copied
+         * @param lastStableOffset The last stable offset of the log
+         * @return candidate log segments to be copied to remote storage
          */
         List<EnrichedLogSegment> candidateLogSegments(UnifiedLog log, Long fromOffset, Long lastStableOffset) throws IOException {
             List<EnrichedLogSegment> candidateLogSegments = new ArrayList<>();
