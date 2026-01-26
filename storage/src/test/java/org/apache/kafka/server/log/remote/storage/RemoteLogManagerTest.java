@@ -2113,7 +2113,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testCandidateLogSegmentsSkipsActiveSegment() {
+    public void testCandidateLogSegmentsSkipsActiveSegment() throws IOException {
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
@@ -2136,7 +2136,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() {
+    public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() throws IOException {
         UnifiedLog log = mock(UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
