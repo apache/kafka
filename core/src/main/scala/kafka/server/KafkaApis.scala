@@ -72,7 +72,6 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
-import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
@@ -1792,8 +1791,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               marker.producerEpoch,
               marker.coordinatorEpoch,
               marker.transactionResult,
-              markerTransactionVersion,
-              Duration.ofMillis(config.requestTimeoutMs.toLong)
+              markerTransactionVersion
             ).whenComplete { (_, exception) =>
               val error = if (exception == null) {
                 Errors.NONE

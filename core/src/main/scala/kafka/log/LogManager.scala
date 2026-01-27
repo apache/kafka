@@ -23,7 +23,6 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.server.{KafkaConfig, KafkaRaftServer}
-import kafka.utils.threadsafe
 import kafka.utils.Logging
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
@@ -57,8 +56,9 @@ import java.util.stream.Collectors
  * size or I/O rate.
  *
  * A background thread handles log retention by periodically truncating excess log segments.
+ *
+ * This class is thread-safe.
  */
-@threadsafe
 class LogManager(logDirs: Seq[File],
                  initialOfflineDirs: Seq[File],
                  configRepository: ConfigRepository,

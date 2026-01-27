@@ -461,27 +461,32 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest
-    public void testUpdateInvalidBrokerConfigs() {
+    public void testUpdateInvalidBrokerConfigs() throws InterruptedException {
         updateAndCheckInvalidBrokerConfig(Optional.empty());
         updateAndCheckInvalidBrokerConfig(Optional.of(String.valueOf((cluster.brokers().entrySet().iterator().next().getKey()))));
     }
 
-    private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
+    private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) throws InterruptedException {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         try (Admin client = cluster.admin()) {
             alterConfigWithAdmin(client, brokerIdOrDefault, Map.of("invalid", "2"), alterOpts);
+            AtomicReference<String> last = new AtomicReference<>("");
 
-            Stream<String> describeCommand = Stream.concat(
-                    Stream.concat(
-                            Stream.of("--bootstrap-server", cluster.bootstrapServers()),
-                            Stream.of(entityOp(brokerIdOrDefault).toArray(new String[0]))),
-                    Stream.of("--entity-type", "brokers", "--describe"));
-            String describeResult = captureStandardOut(run(describeCommand));
+            TestUtils.waitForCondition(() -> {
+                Stream<String> describeCommand = Stream.concat(
+                        Stream.concat(
+                                Stream.of("--bootstrap-server", cluster.bootstrapServers()),
+                                Stream.of(entityOp(brokerIdOrDefault).toArray(new String[0]))),
+                        Stream.of("--entity-type", "brokers", "--describe")
+                );
+                String describeResult = captureStandardOut(run(describeCommand));
+                last.set(describeResult);
 
-            // We will treat unknown config as sensitive
-            assertTrue(describeResult.contains("sensitive=true"), describeResult);
-            // Sensitive config will not return
-            assertTrue(describeResult.contains("invalid=null"), describeResult);
+                return describeResult.contains("invalid=null");
+            }, 5000, () -> "Dynamic broker config was not visible within 5s (missing 'invalid=null').\n" + 
+                    "Last describe output:\n" + last.get());
+
+            assertTrue(last.get().contains("sensitive=true"));
         }
     }
 
