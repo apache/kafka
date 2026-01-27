@@ -240,8 +240,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     }
 
     private static void checkDuplicateListenerPorts(List<Endpoint> endpoints, List<String> listeners) {
-        Set<String> distinctHosts = endpoints.stream().map(ep -> ep.host() == null ? "" : ep.host()).collect(Collectors.toSet());
-        if (endpoints.size() > distinctHosts.size()) {
+        Set<Integer> distinctPorts = endpoints.stream().map(Endpoint::port).collect(Collectors.toSet());
+        if (endpoints.size() != distinctPorts.size()) {
             throw new IllegalArgumentException("Each listener must have a different port, listeners: " + listeners);
         }
     }
