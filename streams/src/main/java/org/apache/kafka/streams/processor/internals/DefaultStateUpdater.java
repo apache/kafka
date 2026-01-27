@@ -91,6 +91,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private final WindowedSum checkpointTimeWindowedSum = new WindowedSum();
         private final WindowedSum activeRestoreTimeWindowedSum = new WindowedSum();
         private final WindowedSum standbyRestoreTimeWindowedSum = new WindowedSum();
+        private final WindowedSum runOnceLatencyWindowedSum = new WindowedSum();
         private final MetricConfig metricsConfig;
 
         private boolean timeWindowInitialized = false;
@@ -731,10 +732,11 @@ public class DefaultStateUpdater implements StateUpdater {
                 totalWaitLatency,
                 totalCheckpointLatency,
                 totalRestoreLatency * (changelogReader.isRestoringActive() ? 1.0d : 0.0d),
-                totalRestoreLatency * (changelogReader.isRestoringActive() ? 0.0d : 1.0d)
+                totalRestoreLatency * (changelogReader.isRestoringActive() ? 0.0d : 1.0d),
+                totalLatency
             );
 
-            recordRatios(now, totalLatency);
+            recordRatios(now);
 
             totalCheckpointLatency = 0L;
         }
@@ -745,6 +747,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 checkpointTimeWindowedSum.record(metricsConfig, 0.0, now);
                 activeRestoreTimeWindowedSum.record(metricsConfig, 0.0, now);
                 standbyRestoreTimeWindowedSum.record(metricsConfig, 0.0, now);
+                runOnceLatencyWindowedSum.record(metricsConfig, 0.0, now);
                 timeWindowInitialized = true;
             }
         }
@@ -753,31 +756,31 @@ public class DefaultStateUpdater implements StateUpdater {
                                        final double idleTime,
                                        final double checkpointTime,
                                        final double activeRestoreTime,
-                                       final double standbyRestoreTime) {
+                                       final double standbyRestoreTime,
+                                       final double totalLatency) {
             idleTimeWindowedSum.record(metricsConfig, idleTime, now);
             checkpointTimeWindowedSum.record(metricsConfig, checkpointTime, now);
             activeRestoreTimeWindowedSum.record(metricsConfig, activeRestoreTime, now);
             standbyRestoreTimeWindowedSum.record(metricsConfig, standbyRestoreTime, now);
+            runOnceLatencyWindowedSum.record(metricsConfig, totalLatency, now);
         }
 
-        private void recordRatios(final long now, final long totalTime) {
-            final double idleTime = idleTimeWindowedSum.measure(metricsConfig, now);
-            final double checkpointTime = checkpointTimeWindowedSum.measure(metricsConfig, now);
-            final double activeRestoreTime = activeRestoreTimeWindowedSum.measure(metricsConfig, now);
-            final double standbyRestoreTime = standbyRestoreTimeWindowedSum.measure(metricsConfig, now);
+        private void recordRatios(final long now) {
+            final double runOnceLatencyWindow = runOnceLatencyWindowedSum.measure(metricsConfig, now);
 
-            recordRatio(now, totalTime, idleTime, updaterMetrics.idleRatioSensor);
-            recordRatio(now, totalTime, checkpointTime, updaterMetrics.checkpointRatioSensor);
-            recordRatio(now, totalTime, activeRestoreTime, updaterMetrics.activeRestoreRatioSensor);
-            recordRatio(now, totalTime, standbyRestoreTime, updaterMetrics.standbyRestoreRatioSensor);
+            recordRatio(now, runOnceLatencyWindow, idleTimeWindowedSum, updaterMetrics.idleRatioSensor);
+            recordRatio(now, runOnceLatencyWindow, checkpointTimeWindowedSum, updaterMetrics.checkpointRatioSensor);
+            recordRatio(now, runOnceLatencyWindow, activeRestoreTimeWindowedSum, updaterMetrics.activeRestoreRatioSensor);
+            recordRatio(now, runOnceLatencyWindow, standbyRestoreTimeWindowedSum, updaterMetrics.standbyRestoreRatioSensor);
         }
 
         private void recordRatio(final long now,
-                                 final double totalTime,
-                                 final double elapsedTime,
+                                 final double runOnceLatencyWindow,
+                                 final WindowedSum windowedSum,
                                  final Sensor ratioSensor) {
-            if (totalTime > 0.0) {
-                ratioSensor.record(elapsedTime / totalTime, now);
+            if (runOnceLatencyWindow > 0.0) {
+                final double elapsedTime = windowedSum.measure(metricsConfig, now);
+                ratioSensor.record(elapsedTime / runOnceLatencyWindow, now);
             } else {
                 ratioSensor.record(0.0, now);
             }
