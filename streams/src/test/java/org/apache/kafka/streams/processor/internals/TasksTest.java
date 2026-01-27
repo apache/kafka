@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -79,6 +80,7 @@ public class TasksTest {
         assertEquals(standbyTask, tasks.task(standbyTask.id()));
 
         assertEquals(Set.of(statefulTask, statelessTask), new HashSet<>(tasks.activeTasks()));
+        assertEquals(Set.of(standbyTask), new HashSet<>(tasks.standbyTasks()));
         assertEquals(Set.of(statefulTask, statelessTask, standbyTask), tasks.allTasks());
         assertEquals(Set.of(statefulTask, standbyTask), tasks.tasks(Set.of(statefulTask.id(), standbyTask.id())));
         assertEquals(Set.of(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allTaskIds());
@@ -229,5 +231,19 @@ public class TasksTest {
         assertTrue(tasks.pendingTasksToInit().isEmpty());
         assertTrue(tasks.pendingActiveTasksToCreate().isEmpty());
         assertTrue(tasks.pendingStandbyTasksToCreate().isEmpty());
+    }
+
+    @Test
+    public void shouldRemovePendingTask() {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0))
+                .inState(State.SUSPENDED).build();
+        tasks.addPendingTasksToInit(List.of(activeTask1));
+
+        tasks.removeTask(activeTask1);
+        assertFalse(tasks.pendingTasksToInit().contains(activeTask1));
+        assertFalse(tasks.allTasks().contains(activeTask1));
+
+        tasks.addPendingTasksToInit(List.of(activeTask1));
+        assertTrue(tasks.pendingTasksToInit().contains(activeTask1));
     }
 }

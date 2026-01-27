@@ -71,6 +71,8 @@ public interface TasksRegistry {
 
     Collection<Task> activeTasks();
 
+    Collection<Task> standbyTasks();
+
     Set<Task> allTasks();
 
     Set<Task> allNonFailedTasks();

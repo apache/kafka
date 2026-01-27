@@ -193,7 +193,9 @@ class Tasks implements TasksRegistry {
             throw new IllegalStateException("Attempted to remove a task that is not closed or suspended: " + taskId);
         }
 
-        if (taskToRemove.isActive()) {
+        if (pendingTasksToInit.contains(taskToRemove)) {
+            pendingTasksToInit.remove(taskToRemove);
+        } else if (taskToRemove.isActive()) {
             if (activeTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
@@ -203,7 +205,7 @@ class Tasks implements TasksRegistry {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
         }
-        failedTaskIds.remove(taskToRemove.id());
+        failedTaskIds.remove(taskId);
     }
 
     @Override
@@ -299,6 +301,11 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
+    }
+
+    @Override
+    public synchronized Collection<Task> standbyTasks() {
+        return Collections.unmodifiableCollection(standbyTasksPerId.values());
     }
 
     /**
