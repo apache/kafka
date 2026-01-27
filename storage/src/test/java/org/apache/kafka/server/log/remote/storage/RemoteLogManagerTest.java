@@ -3280,7 +3280,7 @@ public class RemoteLogManagerTest {
             long timestamp = time.milliseconds();
             if (idx < deletableSegmentCount) {
                 // Use -2 instead of -1 because some test cases use retentionMs=1.
-                // With -1, timestamp == cleanupUntilMs, so segment won't be deleted.
+                // With -1, segment's maxTimestampMs == cleanupUntilMs, so the segment won't be deleted.
                 timestamp = time.milliseconds() - 2;
             }
             long startOffset = (long) idx * recordsPerSegment;
