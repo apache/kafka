@@ -140,7 +140,7 @@ public class BrokerLifecycleManager {
     private boolean readyToUnfence = false;
 
     /**
-     * Map of accumulated offline directories. The value is true if the directory couldn't be communicated
+     * Map of accumulated offline directories. The value is true if the directory has been successfully communicated
      * to the Controller.
      * This variable can only be read or written from the event queue thread.
      */
@@ -373,9 +373,6 @@ public class BrokerLifecycleManager {
 
         @Override
         public void run() {
-            if (offlineDirs.isEmpty()) {
-                offlineDirs = new HashMap<>();
-            }
             offlineDirs.put(dir, false);
             if (registered) {
                 scheduleNextCommunicationImmediately();
