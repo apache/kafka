@@ -241,7 +241,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
                                configsToRemove: List[String] = List(),
                                inputTopics: Set[String],
                                changelogTopics: Set[String] = Set(),
-                               streamsGroupId: String): AsyncKafkaConsumer[K, V] = {
+                               streamsGroupId: String,
+                               replicationFactor: Optional[Short] = Optional.empty()): AsyncKafkaConsumer[K, V] = {
     val props = new Properties()
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     props.put(ConsumerConfig.GROUP_ID_CONFIG, streamsGroupId)
@@ -251,6 +252,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     props ++= configOverrides
     configsToRemove.foreach(props.remove(_))
 
+    val boxed: Optional[java.lang.Short] =
+      replicationFactor.map[java.lang.Short](s => java.lang.Short.valueOf(s))
     val streamsRebalanceData = new StreamsRebalanceData(
       UUID.randomUUID(),
       Optional.empty(),
@@ -259,7 +262,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
           inputTopics.asJava,
           util.Set.of(),
           util.Map.of(),
-          changelogTopics.map(c => (c, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.empty(), util.Map.of()))).toMap.asJava,
+          changelogTopics.map(c => (c, new StreamsRebalanceData.TopicInfo(Optional.empty(), boxed, util.Map.of()))).toMap.asJava,
           util.Set.of()
         )),
       Map.empty[String, String].asJava

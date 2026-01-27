@@ -198,7 +198,7 @@ public class GroupMetadataManagerTestContext {
         }
     }
 
-    public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts) {
+    public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts) {
         assertTrue(timeouts.size() <= 1);
         timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result()));
     }
@@ -458,7 +458,7 @@ public class GroupMetadataManagerTestContext {
 
     public static class Builder {
         private MockTime time = new MockTime(0, 0, 0);
-        private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
+        private final MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
         private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
         private final LogContext logContext = new LogContext();
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
@@ -563,7 +563,8 @@ public class GroupMetadataManagerTestContext {
                         new LogContext(),
                         0,
                         group.topology().get(),
-                        metadataImage)
+                        metadataImage,
+                        time)
                     );
                 }
             });
@@ -575,7 +576,7 @@ public class GroupMetadataManagerTestContext {
     }
 
     final MockTime time;
-    final MockCoordinatorTimer<Void, CoordinatorRecord> timer;
+    final MockCoordinatorTimer<CoordinatorRecord> timer;
     final MockCoordinatorExecutor<CoordinatorRecord> executor;
     final SnapshotRegistry snapshotRegistry;
     final GroupCoordinatorMetricsShard metrics;
@@ -589,7 +590,7 @@ public class GroupMetadataManagerTestContext {
 
     public GroupMetadataManagerTestContext(
         MockTime time,
-        MockCoordinatorTimer<Void, CoordinatorRecord> timer,
+        MockCoordinatorTimer<CoordinatorRecord> timer,
         MockCoordinatorExecutor<CoordinatorRecord> executor,
         SnapshotRegistry snapshotRegistry,
         GroupCoordinatorMetricsShard metrics,
@@ -760,9 +761,9 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
-    public List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> sleep(long ms) {
+    public List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> sleep(long ms) {
         time.sleep(ms);
-        List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
+        List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = timer.poll();
         timeouts.forEach(timeout -> {
             if (timeout.result().replayRecords()) {
                 timeout.result().records().forEach(this::replay);
@@ -786,7 +787,7 @@ public class GroupMetadataManagerTestContext {
         String memberId,
         long delayMs
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(groupSessionTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
         assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
@@ -796,17 +797,17 @@ public class GroupMetadataManagerTestContext {
         String groupId,
         String memberId
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(groupSessionTimeoutKey(groupId, memberId));
         assertNull(timeout);
     }
 
-    public MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> assertRebalanceTimeout(
+    public MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> assertRebalanceTimeout(
         String groupId,
         String memberId,
         long delayMs
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(groupRebalanceTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
         assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
@@ -817,17 +818,17 @@ public class GroupMetadataManagerTestContext {
         String groupId,
         String memberId
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(groupRebalanceTimeoutKey(groupId, memberId));
         assertNull(timeout);
     }
 
-    public MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> assertJoinTimeout(
+    public MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> assertJoinTimeout(
         String groupId,
         String memberId,
         long delayMs
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(consumerGroupJoinKey(groupId, memberId));
         assertNotNull(timeout);
         assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
@@ -838,17 +839,17 @@ public class GroupMetadataManagerTestContext {
         String groupId,
         String memberId
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(consumerGroupJoinKey(groupId, memberId));
         assertNull(timeout);
     }
 
-    public MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> assertSyncTimeout(
+    public MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> assertSyncTimeout(
         String groupId,
         String memberId,
         long delayMs
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(consumerGroupSyncKey(groupId, memberId));
         assertNotNull(timeout);
         assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs());
@@ -859,7 +860,7 @@ public class GroupMetadataManagerTestContext {
         String groupId,
         String memberId
     ) {
-        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+        MockCoordinatorTimer.ScheduledTimeout<CoordinatorRecord> timeout =
             timer.timeout(consumerGroupSyncKey(groupId, memberId));
         assertNull(timeout);
     }
@@ -998,7 +999,7 @@ public class GroupMetadataManagerTestContext {
         );
 
         assertTrue(secondJoinResult.records.isEmpty());
-        List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = sleep(classicGroupInitialRebalanceDelayMs);
+        List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = sleep(classicGroupInitialRebalanceDelayMs);
         assertEquals(1, timeouts.size());
         assertTrue(secondJoinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), secondJoinResult.joinFuture.get().errorCode());
@@ -1311,7 +1312,7 @@ public class GroupMetadataManagerTestContext {
                                                  .map(member -> classicGroupHeartbeatKey(group.groupId(), member.memberId())).collect(Collectors.toSet());
 
         // Member should be removed as session expires.
-        List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = sleep(timeoutMs);
+        List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = sleep(timeoutMs);
         List<CoordinatorRecord> expectedRecords = List.of(newGroupMetadataRecord(
             group.groupId(),
             new GroupMetadataValue()

@@ -2,7 +2,7 @@
 title: Kafka Streams Groups Tool
 type: docs
 description: 
-weight: 14
+weight: 15
 tags: ['kafka', 'docs']
 aliases: 
 keywords: 

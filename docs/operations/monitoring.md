@@ -2045,7 +2045,7 @@ Average Poll Idle Ratio
 </td>  
 <td>
 
-The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.
+The ratio of time the Raft IO thread is idle as opposed to doing work (e.g. handling requests or replicating from the leader)
 </td>  
 <td>
 

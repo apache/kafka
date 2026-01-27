@@ -72,7 +72,7 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      * @return The builder.
      */
     CoordinatorShardBuilder<S, U> withTimer(
-        CoordinatorTimer<Void, U> timer
+        CoordinatorTimer<U> timer
     );
 
     /**

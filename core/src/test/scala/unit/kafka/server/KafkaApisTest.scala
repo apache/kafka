@@ -22,7 +22,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.share.SharePartitionManager
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.consumer.AcknowledgeType
@@ -114,7 +114,6 @@ import java.lang.{Byte => JByte}
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.time.Duration
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.function.Consumer
@@ -157,9 +156,9 @@ class KafkaApisTest extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    CoreUtils.swallow(quotas.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => quotas.shutdown())
     if (kafkaApis != null)
-      CoreUtils.swallow(kafkaApis.close(), this)
+      Utils.swallow(this.logger.underlying, () => kafkaApis.close())
     TestUtils.clearYammerMetrics()
     metrics.close()
   }
@@ -3123,8 +3122,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel()),
-      any()
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
     )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     kafkaApis = createKafkaApis()
@@ -3275,8 +3273,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel()),
-      ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
     )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     when(groupCoordinator.completeTransaction(
@@ -3285,8 +3282,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.ABORT),
-      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel()),
-      ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
     )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     val entriesPerPartition: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
@@ -3393,8 +3389,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel()),
-      ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
     )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching)
