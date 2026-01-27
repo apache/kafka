@@ -20,7 +20,7 @@ package org.apache.kafka.storage.internals.log;
 public enum LogStartOffsetIncrementReason {
     LeaderOffsetIncremented("leader offset increment"),
     SegmentDeletion("segment deletion"),
-    LocalSegmentExpiredByRemoteRetention("local segment has already expired based on remote storage retention policy"),
+    SegmentExpiredByRemoteRetention("segment has already expired based on remote storage retention policy"),
     ClientRecordDeletion("client delete records request"),
     SnapshotGenerated("snapshot generated");
 

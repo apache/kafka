@@ -911,8 +911,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         /**
          * Check if segment has already expired based on remote storage's retention time.
          */
-        private boolean isSegmentExpiredByTimeForRemoteStorage(LogSegment segment, UnifiedLog log) throws IOException {
-            long retentionMs = log.config().retentionMs;
+        private boolean isSegmentExpiredByTimeForRemoteStorage(LogSegment segment, long retentionMs) throws IOException {
             if (retentionMs <= 0) {
                 return false;
             }
@@ -922,13 +921,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         /**
          * Check if segment has already expired based on remote storage‘s retention size.
          */
-        private boolean isSegmentExpiredBySizeForRemoteStorage(LogSegment segment, UnifiedLog log, long accumulatedSkippedSize) {
-            long retentionBytes = log.config().retentionSize;
+        private boolean isSegmentExpiredBySizeForRemoteStorage(LogSegment segment, long retentionBytes, long logSize, long accumulatedSkippedSize) {
             if (retentionBytes <= 0) {
                 return false;
             }
-            long excessSize = log.size() - retentionBytes;
-            return excessSize - accumulatedSkippedSize > segment.size();
+            return (logSize - retentionBytes - accumulatedSkippedSize) > segment.size();
         }
 
         /**
@@ -951,7 +948,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             if (segments.isEmpty()) {
                 return candidateLogSegments;
             }
-            
+            long retentionMs = log.config().retentionMs;
+            long retentionSize = log.config().retentionSize;
+            // Compute log.size() once when retention is size-based; skip when not needed to avoid wasted work.
+            long logSize = retentionSize > 0 ? log.size() : -1;
             long accumulatedSkippedSize = 0;
             for (int idx = 1; idx < segments.size(); idx++) {
                 LogSegment previousSeg = segments.get(idx - 1);
@@ -960,10 +960,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     continue;
                 }
                 
-                if (isSegmentExpiredByTimeForRemoteStorage(previousSeg, log) || 
-                    isSegmentExpiredBySizeForRemoteStorage(previousSeg, log, accumulatedSkippedSize)) {
+                if (isSegmentExpiredByTimeForRemoteStorage(previousSeg, retentionMs) || 
+                    isSegmentExpiredBySizeForRemoteStorage(previousSeg, retentionSize, logSize, accumulatedSkippedSize)) {
                     long newLogStartOffset = currentSeg.baseOffset();
-                    log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.LocalSegmentExpiredByRemoteRetention);
+                    log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentExpiredByRemoteRetention);
                     logger.info("Segment {} has already expired based on remote storage's retention configuration. Skipping upload and incrementing logStartOffset to {} to allow local deletion.",
                             previousSeg, newLogStartOffset);
                     accumulatedSkippedSize += previousSeg.size();
