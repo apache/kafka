@@ -21,8 +21,10 @@ import kafka.server.KafkaBroker;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsResult;
@@ -47,6 +49,7 @@ import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -2219,29 +2222,6 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testDeliveryCountNotIncreaseAfterSessionClose() {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer()) {
-            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
-            for (int i = 0; i < 10; i++) {
-                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
-            }
-        }
-
-        // Perform the fetch, close in a loop.
-        for (int count = 0; count < ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT; count++) {
-            consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, false);
-        }
-
-        // If the delivery count is increased, consumer will get nothing.
-        int consumedMessageCount = consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, true);
-        // The records returned belong to offsets 0-9.
-        assertEquals(10, consumedMessageCount);
-        verifyShareGroupStateTopicRecordsProduced();
-    }
-
-    @ClusterTest
     public void testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -2270,13 +2250,13 @@ public class ShareConsumerTest {
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
             assertEquals(2, records.count());
             assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-            assertEquals((short) 1, records.records(tp).get(1).deliveryCount().get());
+            assertEquals((short) 2, records.records(tp).get(1).deliveryCount().get());
         }
     }
 
     @ClusterTest(
         serverProperties = {
-            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "2"),
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "3"),
         }
     )
     public void testBehaviorOnDeliveryCountBoundary() {
@@ -2304,7 +2284,6 @@ public class ShareConsumerTest {
             records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
-
         }
 
         // Start again and same record should be delivered
@@ -2312,7 +2291,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Set.of(tp.topic()));
             ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
-            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+            assertEquals((short) 3, records.records(tp).get(0).deliveryCount().get());
         }
     }
 
@@ -2339,15 +2318,16 @@ public class ShareConsumerTest {
 
         ClientState prodState = new ClientState();
 
-        // Produce messages until we want.
+        // Produce a fixed number of messages for deterministic testing.
+        int targetRecordCount = 2000;
         service.execute(() -> {
             try (Producer<byte[], byte[]> producer = createProducer()) {
-                while (!prodState.done().get()) {
+                do {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
                     producer.send(record);
                     producer.flush();
-                    prodState.count().incrementAndGet();
-                }
+                } while (prodState.count().incrementAndGet() < targetRecordCount);
+                prodState.done().set(true);
             }
         });
 
@@ -2366,12 +2346,9 @@ public class ShareConsumerTest {
             TimeUnit.MILLISECONDS
         );
 
-        // Let the complex consumer read the messages.
-        service.schedule(() -> prodState.done().set(true), 5L, TimeUnit.SECONDS);
-
-        // All messages which can be read are read, some would be redelivered (roughly 3 times the records produced).
+        // All messages which can be read are read, some would be redelivered (roughly 2 times the records produced).
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
-        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 3 * 0.95);    // 3 times with margin of error (5%).
+        int delta = complexCons1.recordsRead() - (int) (prodState.count().get() * 2 * 0.95);    // 2 times with margin of error (5%).
 
         assertTrue(delta > 0,
             String.format("Producer (%d) and share consumer (%d) record count mismatch.", prodState.count().get(), complexCons1.recordsRead()));
@@ -2949,6 +2926,37 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
+    public void testCommitSyncFailsForDeletedTopic() throws InterruptedException {
+        Uuid topicId = createTopic("baz", 1, 1);
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            for (int i = 0; i < 10; i++) {
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("baz", 0, null, "key".getBytes(), ("Message " + i).getBytes());
+                producer.send(record);
+            }
+            producer.flush();
+
+            shareConsumer.subscribe(List.of("baz"));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
+            assertEquals(10, records.count());
+
+            records.forEach(shareConsumer::acknowledge);
+
+            // Topic deletion does not necessarily become apparent across the cluster immediately, so sleep a short while
+            deleteTopic("baz");
+            Thread.sleep(5000);
+
+            Map<TopicIdPartition, Optional<KafkaException>> commitResult = shareConsumer.commitSync();
+            assertEquals(1, commitResult.size());
+            assertInstanceOf(UnknownTopicIdException.class, commitResult.get(new TopicIdPartition(topicId, 0, "baz")).get());
+        }
+    }
+
+    @ClusterTest
     public void testRenewAcknowledgementOnPoll() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -3436,6 +3444,97 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
+    public void testSharePartitionLagAfterAlterShareGroupOffsets() {
+        String groupId = "group1";
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            // Producing 100 records to the topic partition.
+            for (int i = 0; i < 100; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+
+            // Create a new share consumer. Since the share.auto.offset.reset is not altered, it should be latest by default.
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure it joins the group and subscribes to the topic.
+            waitedPoll(shareConsumer, 2500L, 0, true, groupId, List.of(new TopicPartition(tp.topic(), 0)));
+            // Producing 5 additional records to the topic partition.
+            for (int i = 0; i < 5; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            // Polling share consumer to make sure the records are consumed.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
+            // Accept the record first to move the offset forward and register the state with persister.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer.commitSync();
+            // After accepting, the lag should be 0 because the record is consumed successfully.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Closing the share consumer so that the offsets can be altered.
+            shareConsumer.close();
+            // Alter the start offset of the share partition to 40.
+            alterShareGroupOffsets(adminClient, groupId, tp, 40L);
+            // After altering, the share partition start offset should be 40.
+            verifySharePartitionStartOffset(adminClient, groupId, tp, 40L);
+            // Verify that the lag is now 65 since the start offset is altered to 40 and there are total 105 records in the partition.
+            verifySharePartitionLag(adminClient, groupId, tp, 65L);
+        } catch (InterruptedException | ExecutionException e) {
+            fail("Test failed with exception: " + e.getMessage());
+        }
+    }
+
+    @ClusterTest
+    public void testSharePartitionLagAfterDeleteShareGroupOffsets() {
+        String groupId = "group1";
+        alterShareAutoOffsetReset(groupId, "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             Admin adminClient = createAdminClient()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "Message".getBytes());
+            // Producing 5 records to the topic partition.
+            for (int i = 0; i < 5; i++) {
+                producer.send(record);
+            }
+            producer.flush();
+            // Create a new share consumer.
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+            shareConsumer.subscribe(List.of(tp.topic()));
+            // Polling share consumer to make sure it joins the group and consumes the produced records.
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 5);
+            assertEquals(5, records.count());
+            // Accept the records first to move the offset forward and register the state with persister.
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer.commitSync();
+            // After accepting, the lag should be 0 because the record is consumed successfully.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Closing the share consumer so that the offsets can be deleted.
+            shareConsumer.close();
+            // Delete the share group offsets.
+            deleteShareGroupOffsets(adminClient, groupId, tp.topic());
+            // Verify that the share partition offsets are deleted.
+            verifySharePartitionOffsetsDeleted(adminClient, groupId, tp);
+            // Create a new share consumer.
+            ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(groupId, Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT));
+            shareConsumer2.subscribe(List.of(tp.topic()));
+            // Since the offsets are deleted, the share consumer should consume from the beginning (share.auto.offset.reset is earliest).
+            // Thus, the consumer should consume all 5 records again.
+            records = waitedPoll(shareConsumer2, 2500L, 5);
+            assertEquals(5, records.count());
+            // Accept the records first to move the offset forward and register the state with persister.
+            records.forEach(r -> shareConsumer2.acknowledge(r, AcknowledgeType.ACCEPT));
+            shareConsumer2.commitSync();
+            // After accepting, the lag should be 0 because the records are consumed successfully.
+            verifySharePartitionLag(adminClient, groupId, tp, 0L);
+            // Closing the share consumer so that the offsets can be deleted.
+            shareConsumer2.close();
+        } catch (InterruptedException | ExecutionException e) {
+            fail("Test failed with exception: " + e.getMessage());
+        }
+    }
+
+    @ClusterTest
     public void testFetchWithThrottledDelivery() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -3492,7 +3591,11 @@ public class ShareConsumerTest {
         try (Producer<byte[], byte[]> producer = createProducer();
             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                 "group1",
-                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+                Map.of(
+                    ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT,
+                    ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 512
+                )
+            )
         ) {
             // Produce records in complete power of 2 to fully test the throttling behavior.
             int producedMessageCount = 512;
@@ -4115,6 +4218,14 @@ public class ShareConsumerTest {
         return partitionResult;
     }
 
+    private void verifySharePartitionStartOffset(Admin adminClient, String groupId, TopicPartition tp, long expectedStartOffset) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
+            return sharePartitionOffsetInfo != null &&
+                sharePartitionOffsetInfo.startOffset() == expectedStartOffset;
+        }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to retrieve share partition lag");
+    }
+
     private void verifySharePartitionLag(Admin adminClient, String groupId, TopicPartition tp, long expectedLag) throws InterruptedException {
         TestUtils.waitForCondition(() -> {
             SharePartitionOffsetInfo sharePartitionOffsetInfo = sharePartitionOffsetInfo(adminClient, groupId, tp);
@@ -4122,6 +4233,28 @@ public class ShareConsumerTest {
                 sharePartitionOffsetInfo.lag().isPresent() &&
                 sharePartitionOffsetInfo.lag().get() == expectedLag;
         }, DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, () -> "Failed to retrieve share partition lag");
+    }
+
+    private void verifySharePartitionOffsetsDeleted(Admin adminClient, String groupId, TopicPartition tp) throws InterruptedException {
+        TestUtils.waitForCondition(
+            () -> sharePartitionOffsetInfo(adminClient, groupId, tp) == null, 
+            DEFAULT_MAX_WAIT_MS, 
+            DEFAULT_POLL_INTERVAL_MS, 
+            () -> "Failed to retrieve share partition lag");
+    }
+
+    private void alterShareGroupOffsets(Admin adminClient, String groupId, TopicPartition topicPartition, Long newOffset) throws InterruptedException, ExecutionException {
+        adminClient.alterShareGroupOffsets(
+            groupId,
+            Map.of(topicPartition, newOffset),
+            new AlterShareGroupOffsetsOptions().timeoutMs(30000)).partitionResult(topicPartition).get();
+    }
+
+    private void deleteShareGroupOffsets(Admin adminClient, String groupId, String topic) throws InterruptedException, ExecutionException {
+        adminClient.deleteShareGroupOffsets(
+            groupId,
+            Set.of(topic),
+            new DeleteShareGroupOffsetsOptions().timeoutMs(30000)).topicResult(topic).get();
     }
 
     private void alterShareRecordLockDurationMs(String groupId, int newValue) {

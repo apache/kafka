@@ -68,8 +68,6 @@ public class ActiveTaskCreatorTest {
     private InternalTopologyBuilder builder;
     @Mock
     private StateDirectory stateDirectory;
-    @Mock
-    private ChangelogReader changeLogReader;
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", new MockTime());
@@ -272,7 +270,6 @@ public class ActiveTaskCreatorTest {
             config,
             streamsMetrics,
             stateDirectory,
-            changeLogReader,
             new ThreadCache(new LogContext(), 0L, streamsMetrics),
             new MockTime(),
             mockClientSupplier,
@@ -280,7 +277,6 @@ public class ActiveTaskCreatorTest {
             0,
             uuid,
             new LogContext(),
-            false,
             false);
 
         assertThat(

@@ -359,6 +359,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Represents a deleted topic with its ID and name.
+     * Used during offset cleanup to ensure only offsets for the correct
+     * topic incarnation are deleted (preventing race conditions with topic recreation).
+     *
+     * @param id    The topic ID.
+     * @param name  The topic name.
+     */
+    public record DeletedTopic(Uuid id, String name) { }
+
+    /**
      * The group/offsets expiration key to schedule a timer task.
      *
      * Visible for testing.
@@ -1008,19 +1018,19 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Remove offsets of the partitions that have been deleted.
+     * Remove offsets of the topics that have been deleted.
      *
-     * @param topicPartitions   The partitions that have been deleted.
+     * @param deletedTopics   The topics that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> onPartitionsDeleted(
-        List<TopicPartition> topicPartitions
+    public CoordinatorResult<Void, CoordinatorRecord> onTopicsDeleted(
+        List<DeletedTopic> deletedTopics
     ) {
         final long startTimeMs = time.milliseconds();
-        final List<CoordinatorRecord> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+        final List<CoordinatorRecord> records = offsetMetadataManager.onTopicsDeleted(deletedTopics);
 
-        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
-            records.size(), time.milliseconds() - startTimeMs, topicPartitions);
+        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for topics {}.",
+            records.size(), time.milliseconds() - startTimeMs, deletedTopics);
 
         return new CoordinatorResult<>(records, false);
     }

@@ -16324,7 +16324,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -16409,7 +16410,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -16945,7 +16947,8 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
-                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setStatus(List.of()),
             result1.response().data()
         );
         assertRecordsEquals(
@@ -17055,7 +17058,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17175,7 +17179,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17314,7 +17319,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
 
             result.response().data()
         );
@@ -17378,7 +17384,8 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
-                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17440,7 +17447,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17455,7 +17463,77 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(2)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
+            result.response().data()
+        );
+    }
+
+    @Test
+    public void testStreamsGroupHeartbeatAlwaysSetsStatus() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 2)
+                .buildCoordinatorMetadataImage())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        // Prepare new assignment for the group.
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE, TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1))));
+
+        // Heartbeat with no errors should still have status field set to empty list.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        // Verify that status is always set, even when empty.
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setActiveTasks(List.of(
+                    new StreamsGroupHeartbeatResponseData.TaskIds()
+                        .setSubtopologyId(subtopology1)
+                        .setPartitions(List.of(0, 1))))
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
+            result.response().data()
+        );
+
+        // Verify status field is present in subsequent heartbeats as well.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch()));
+
+        assertResponseEquals(
+            new StreamsGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(2)
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -17502,7 +17580,12 @@ public class GroupMetadataManagerTest {
                 .setStandbyTasks(List.of())
                 .setWarmupTasks(List.of())
                 .setPartitionsByUserEndpoint(null)
-                .setEndpointInformationEpoch(0),
+                .setEndpointInformationEpoch(0)
+                .setStatus(List.of(
+                    new StreamsGroupHeartbeatResponseData.Status()
+                        .setStatusCode(Status.ASSIGNMENT_DELAYED.code())
+                        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                )),
             result.response().data()
         );
 
@@ -17530,7 +17613,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
     }
@@ -17696,7 +17780,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17737,7 +17822,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17782,7 +17868,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17815,7 +17902,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17854,7 +17942,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17883,7 +17972,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17909,7 +17999,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology2)
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17939,7 +18030,8 @@ public class GroupMetadataManagerTest {
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
-                .setHeartbeatIntervalMs(5000),
+                .setHeartbeatIntervalMs(5000)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -17981,7 +18073,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(2))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18027,7 +18120,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology2)
                         .setPartitions(List.of(1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18237,7 +18331,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18366,7 +18461,8 @@ public class GroupMetadataManagerTest {
                         .setPartitions(List.of(0, 1, 2, 3, 4, 5))
                 ))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18592,7 +18688,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18630,7 +18727,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18658,7 +18756,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18689,7 +18788,8 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(3)
                 .setHeartbeatIntervalMs(5000)
-                .setEndpointInformationEpoch(0),
+                .setEndpointInformationEpoch(0)
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18753,7 +18853,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18791,7 +18892,8 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setActiveTasks(List.of())
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -18818,7 +18920,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -19000,7 +19103,8 @@ public class GroupMetadataManagerTest {
                                         .setPartitions(List.of(0, 1))))
                         .setStandbyTasks(List.of())
                         .setWarmupTasks(List.of())
-                        .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions)),
+                        .setPartitionsByUserEndpoint(List.of(expectedEndpointToPartitions))
+                        .setStatus(List.of()),
                 result.response().data()
         );
 
@@ -19176,7 +19280,8 @@ public class GroupMetadataManagerTest {
                         .setSubtopologyId(subtopology1)
                         .setPartitions(List.of(0, 1, 2))))
                 .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of()),
+                .setWarmupTasks(List.of())
+                .setStatus(List.of()),
             result.response().data()
         );
 
@@ -24522,6 +24627,238 @@ public class GroupMetadataManagerTest {
             .build());
 
         assertDoesNotThrow(() -> context.replay(record));
+    }
+
+    @Test
+    public void testReplayConsumerGroupCurrentMemberAssignmentWithCompaction() {
+        String groupId = "fooup";
+        String memberIdA = "memberIdA";
+        String memberIdB = "memberIdB";
+        Uuid topicId = Uuid.randomUuid();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        // This test enacts the following scenario:
+        // 1. Member A is assigned partition 0.
+        // 2. Member A is unassigned partition 0 [record removed by compaction].
+        // 3. Member B is assigned partition 0. 
+        // 4. Member A is assigned partition 1. 
+        // If record 2 is processed, there are no issues, however with compaction it is possible that 
+        // unassignment records are removed. We would like to not fail in these cases.
+        // Therefore we will allow assignments to owned partitions as long as the epoch is larger. 
+
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdA)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(topicId, 0)))
+            .build()));
+
+        // Partition 0's owner is replaced by member B at epoch 12.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdB)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(12)
+            .setPreviousMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(topicId, 0)))
+            .build()));
+
+        // Partition 0 must remain with member B at epoch 12 even though member A has just been unassigned partition 0.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdA)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(13)
+            .setPreviousMemberEpoch(12)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(topicId, 1)))
+            .build()));
+
+        // Verify partition epochs.
+        ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
+        assertEquals(12, group.currentPartitionEpoch(topicId, 0));
+        assertEquals(13, group.currentPartitionEpoch(topicId, 1));
+    }
+
+    @Test
+    public void testReplayConsumerGroupCurrentMemberAssignmentUnownedTopicWithCompaction() {
+        String groupId = "fooup";
+        String memberIdA = "memberIdA";
+        String memberIdB = "memberIdB";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        // This test enacts the following scenario:
+        // 1. Member A is assigned partition foo-0.
+        // 2. Member A is unassigned partition foo-0 [record removed by compaction].
+        // 3. Member B is assigned partition foo-0.
+        // 4. Member B is unassigned partition foo-0. 
+        // 5. Member A is assigned partition bar-0. 
+        // This is a legitimate set of assignments but with compaction the unassignment record can be skipped.
+        // This can lead to conflicts from updating an owned partition in step 3 and attempting 
+        // to remove nonexistent ownership in step 5. We want to ensure removing ownership from a 
+        // completely unowned partition in step 5 is allowed.  
+
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdA)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+            .build()));
+
+        // foo-0's owner is replaced by member B at epoch 12.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdB)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(12)
+            .setPreviousMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+            .build()));
+
+        // foo becomes unowned.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdB)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(13)
+            .setPreviousMemberEpoch(12)
+            .build()));
+
+        // Member A is unassigned foo-0.
+        context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberIdA)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(14)
+            .setPreviousMemberEpoch(13)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(barTopicId, 0)))
+            .build()));
+
+        // Verify foo-0 is unowned and bar-0 is owned by member A at epoch 14.
+        ConsumerGroup group = context.groupMetadataManager.consumerGroup(groupId);
+        assertEquals(-1, group.currentPartitionEpoch(fooTopicId, 0));
+        assertEquals(14, group.currentPartitionEpoch(barTopicId, 0));
+    }
+
+    @Test
+    public void testReplayStreamsGroupCurrentMemberAssignmentWithCompaction() {
+        String groupId = "fooup";
+        String memberIdA = "memberIdA";
+        String memberIdB = "memberIdB";
+        String processIdA = "processIdA";
+        String processIdB = "processIdB";
+        String subtopologyId = "subtopology";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        // Initialize members with process Ids.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, 
+            streamsGroupMemberBuilderWithDefaults(memberIdA)
+                .setProcessId(processIdA)
+                .build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, 
+            streamsGroupMemberBuilderWithDefaults(memberIdB)
+                .setProcessId(processIdB)
+                .build()));
+
+        // This test enacts the following scenario:
+        // 1. Member A is assigned task 0.
+        // 2. Member A is unassigned task 0 [record removed by compaction].
+        // 3. Member B is assigned task 0. 
+        // 4. Member A is assigned task 1. 
+        // If record 2 is processed, there are no issues, however with compaction it is possible that 
+        // unassignment records are removed. We would like to not fail in these cases.
+        // Therefore we will allow assignments to owned tasks as long as the epoch is larger.
+
+        // Assign task 0 to member A.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberIdA)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithEpochs(TaskRole.ACTIVE, 
+                    TaskAssignmentTestUtil.mkTasksWithEpochs(subtopologyId, Map.of(0, 11))))
+            .build()));
+
+        // Task 0's owner is replaced by member B at epoch 12.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberIdB)
+            .setMemberEpoch(12)
+            .setPreviousMemberEpoch(11)
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithEpochs(TaskRole.ACTIVE, 
+                    TaskAssignmentTestUtil.mkTasksWithEpochs(subtopologyId, Map.of(0, 12))))
+            .build()));
+
+        // Task 0 must remain with member B at epoch 12 even though member A has just been unassigned task 0.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberIdA)
+            .setMemberEpoch(13)
+            .setPreviousMemberEpoch(12)
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithEpochs(TaskRole.ACTIVE, 
+                    TaskAssignmentTestUtil.mkTasksWithEpochs(subtopologyId, Map.of(1, 13))))
+            .build()));
+
+        // Verify task 1 is assigned to member A and task 0 to member B.
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(processIdA, group.currentActiveTaskProcessId(subtopologyId, 1));
+        assertEquals(processIdB, group.currentActiveTaskProcessId(subtopologyId, 0));
+    }
+
+    @Test
+    public void testReplayStreamsGroupCurrentMemberAssignmentUnownedTopologyWithCompaction() {
+        String groupId = "fooup";
+        String memberIdA = "memberIdA";
+        String memberIdB = "memberIdB";
+        String processIdA = "processIdA";
+        String processIdB = "processIdB";
+        String subtopologyFoo = "subtopologyFoo";
+        String subtopologyBar = "subtopologyBar";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+        // Initialize members with process Ids.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, 
+            streamsGroupMemberBuilderWithDefaults(memberIdA)
+                .setProcessId(processIdA)
+                .build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, 
+            streamsGroupMemberBuilderWithDefaults(memberIdB)
+                .setProcessId(processIdB)
+                .build()));
+
+        // This test enacts the following scenario:
+        // 1. Member A is assigned task foo-0.
+        // 2. Member A is unassigned task foo-0 [record removed by compaction].
+        // 3. Member B is assigned task foo-0.
+        // 4. Member B is unassigned task foo-0. 
+        // 5. Member A is assigned task bar-0. 
+        // This is a legitimate set of assignments but with compaction the unassignment record can be skipped.
+        // This can lead to conflicts from updating an owned subtopology in step 3 and attempting to remove
+        // nonexistent ownership in step 5. We want to ensure removing ownership from a 
+        // completely unowned subtopology in step 5 is allowed.  
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberIdA)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(10)
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithEpochs(TaskRole.ACTIVE, 
+                TaskAssignmentTestUtil.mkTasksWithEpochs(subtopologyFoo, Map.of(0, 11))))
+            .build()));
+
+        // foo-0's owner is replaced by member B at epoch 12.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberIdB)
+            .setMemberEpoch(12)
+            .setPreviousMemberEpoch(11)
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithEpochs(TaskRole.ACTIVE, 
+                TaskAssignmentTestUtil.mkTasksWithEpochs(subtopologyFoo, Map.of(0, 12))))
+            .build()));
+
+        // foo becomes unowned
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberIdB)
+            .setMemberEpoch(13)
+            .setPreviousMemberEpoch(12)
+            .build()));
+
+        // Member A is unassigned foo-0.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(groupId, streamsGroupMemberBuilderWithDefaults(memberIdA)
+            .setMemberEpoch(14)
+            .setPreviousMemberEpoch(13)
+            .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTupleWithEpochs(TaskRole.ACTIVE, 
+                TaskAssignmentTestUtil.mkTasksWithEpochs(subtopologyBar, Map.of(0, 14))))
+            .build()));
+
+        // Verify foo-0 is unassigned and bar-0 is assigned to member A.
+        StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+        assertEquals(null, group.currentActiveTaskProcessId(subtopologyFoo, 0));
+        assertEquals(processIdA, group.currentActiveTaskProcessId(subtopologyBar, 0));
     }
 
     private record PendingAssignmentCase(
