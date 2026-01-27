@@ -44,7 +44,7 @@ public class DynamicConfig {
         }
 
         // In order to avoid circular reference, all DynamicBrokerConfig's variables which are initialized by `DynamicConfig.Broker` should be moved to `DynamicConfig.Broker`.
-        // Otherwise, those variables of DynamicBrokerConfig will see intermediate state of `DynamicConfig.Broker`, because `brokerConfigs` is created by `DynamicBrokerConfig.AllDynamicConfigs`
+        // Otherwise, those variables of DynamicBrokerConfig will see intermediate state of `DynamicConfig.Broker`, because `BROKER_CONFIGS` is created by `DynamicBrokerConfig.ALL_DYNAMIC_CONFIGS`
         public static Set<String> nonDynamicProps() {
             Set<String> nonDynamicProps = new HashSet<>(AbstractKafkaConfig.CONFIG_DEF.names());
             nonDynamicProps.removeAll(BROKER_CONFIGS.names());
@@ -60,15 +60,11 @@ public class DynamicConfig {
         }
 
         public static Map<String, Object> validate(Properties props) {
-            return DynamicConfig.validate(props);
+            // Validate Names
+            Properties propResolved = DynamicBrokerConfig.resolveVariableConfigs(props);
+            // ValidateValues
+            return BROKER_CONFIGS.parse(propResolved);
         }
-    }
-
-    private static Map<String, Object> validate(Properties props) {
-        // Validate Names
-        Properties propResolved = DynamicBrokerConfig.resolveVariableConfigs(props);
-        // ValidateValues
-        return Broker.BROKER_CONFIGS.parse(propResolved);
     }
 
 }
