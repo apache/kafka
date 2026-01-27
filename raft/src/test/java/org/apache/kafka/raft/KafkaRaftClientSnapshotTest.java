@@ -1025,6 +1025,63 @@ public final class KafkaRaftClientSnapshotTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { false, true })
+    public void testFetchSnapshotRequestWithPartialData(boolean withKip853Rpc) throws Exception {
+        int localId = randomReplicaId();
+        Set<Integer> voters = Set.of(localId, localId + 1);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(1, 1);
+        List<String> records = List.of("foo", "bar");
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .appendToLog(snapshotId.epoch(), List.of("a"))
+                .withFetchSnapshotMaxSizeBytes(6)
+                .withKip853Rpc(withKip853Rpc)
+                .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+
+        try (SnapshotWriter<String> snapshot = context.client.createSnapshot(snapshotId, 0).get()) {
+            assertEquals(snapshotId, snapshot.snapshotId());
+            snapshot.append(records);
+            snapshot.freeze();
+        }
+
+        // Test that we will respond with at least 3 equally sized read of the snapshot.
+        RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
+        int expectedNumberOfReads = 3;
+        int maxBytesToReadPerRequest = Math.toIntExact(snapshot.sizeInBytes()) / expectedNumberOfReads;
+        int totalBytesRead = 0;
+        int position = 0;
+        for (int i = 0; i < expectedNumberOfReads; i++) {
+            context.deliverRequest(
+                    fetchSnapshotRequest(
+                            context.metadataPartition,
+                            epoch,
+                            snapshotId,
+                            maxBytesToReadPerRequest,
+                            position
+                    )
+            );
+            context.client.poll();
+
+            FetchSnapshotResponseData.PartitionSnapshot response =
+                    context.assertSentFetchSnapshotResponse(context.metadataPartition).get();
+            assertEquals(epoch, response.currentLeader().leaderEpoch());
+            assertEquals(localId, response.currentLeader().leaderId());
+            int actualSizeBytes = response.unalignedRecords().sizeInBytes();
+            assertEquals(maxBytesToReadPerRequest, actualSizeBytes);
+
+            totalBytesRead += actualSizeBytes;
+            position += maxBytesToReadPerRequest;
+        }
+
+        assertEquals(maxBytesToReadPerRequest * expectedNumberOfReads, totalBytesRead);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { false, true })
     public void testFetchSnapshotRequestWithInvalidPosition(boolean withKip853Rpc) throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId, localId + 1);
