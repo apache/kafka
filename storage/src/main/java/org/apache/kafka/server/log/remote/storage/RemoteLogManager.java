@@ -964,7 +964,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     isSegmentExpiredBySizeForRemoteStorage(previousSeg, log, accumulatedSkippedSize)) {
                     long newLogStartOffset = currentSeg.baseOffset();
                     log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion);
-                    logger.info("Segment {} has already expired based on remote storage retention configuration. Skipping upload and incrementing logStartOffset to {} to allow local deletion.",
+                    logger.info("Segment {} has already expired based on remote storage's retention configuration. Skipping upload and incrementing logStartOffset to {} to allow local deletion.",
                             previousSeg, newLogStartOffset);
                     accumulatedSkippedSize += previousSeg.size();
                     continue;
