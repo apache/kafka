@@ -948,8 +948,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             if (segments.isEmpty()) {
                 return candidateLogSegments;
             }
-            long retentionMs = log.config() != null? log.config().retentionMs : -1;
-            long retentionSize = log.config() != null? log.config().retentionSize : -1;
+            long retentionMs = log.config() != null ? log.config().retentionMs : -1;
+            long retentionSize = log.config() != null ? log.config().retentionSize : -1;
             // Compute log.size() once when retention is size-based; skip when not needed to avoid wasted work.
             long logSize = retentionSize > 0 ? log.size() : -1;
             long accumulatedSkippedSize = 0;
