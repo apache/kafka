@@ -125,24 +125,19 @@ public class ConfigurationsImageTest {
         Set<String> validConfigs = Set.of("foo", "bar");
         DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
 
-        Map<String, String> initialConfigs = Map.of("foo", "value1");
+        Map<String, String> initialConfigs = Map.of("foo", "value1"); // valid
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
 
         ConfigurationDelta delta = new ConfigurationDelta(image, dynamicConfigValidator);
-        // "bar" is valid, should be added
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("bar").setValue("value2"));
-        // "qux" is invalid, should be filtered out in replay()
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("qux").setValue("value3"));
 
         ConfigurationImage result = delta.apply();
 
-        // "foo" is valid and in initial configs, should be present
         assertTrue(result.data().containsKey("foo"));
-        // "bar" is valid and was added via replay, should be present
         assertTrue(result.data().containsKey("bar"));
-        // "qux" is invalid and was filtered out in replay(), should not be present
         assertFalse(result.data().containsKey("qux"));
     }
 
