@@ -2633,7 +2633,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         if (expectDeletion) {
-            advanceTimeForRetentionCheck();
+            advanceTimeToMakeSegmentDeletable();
         }
         task.cleanupExpiredRemoteLogSegments();
 
@@ -2708,7 +2708,7 @@ public class RemoteLogManagerTest {
         assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().count());
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
-        advanceTimeForRetentionCheck();
+        advanceTimeToMakeSegmentDeletable();
         task.cleanupExpiredRemoteLogSegments();
 
         assertEquals(metadata2.endOffset() + 1, currentLogStartOffset.get());
@@ -2763,7 +2763,7 @@ public class RemoteLogManagerTest {
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
 
         verifyRemoteDeleteMetrics(0L, 0L);
-        advanceTimeForRetentionCheck();
+        advanceTimeToMakeSegmentDeletable();
         task.cleanupExpiredRemoteLogSegments();
 
         assertEquals(200L, currentLogStartOffset.get());
@@ -2895,7 +2895,7 @@ public class RemoteLogManagerTest {
                     });
                 });
 
-        advanceTimeForRetentionCheck();
+        advanceTimeToMakeSegmentDeletable();
         leaderTask.cleanupExpiredRemoteLogSegments();
 
         assertEquals(200L, currentLogStartOffset.get());
@@ -2993,7 +2993,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         doThrow(new RemoteStorageException("Failed to delete segment")).when(remoteStorageManager).deleteLogSegmentData(any());
-        advanceTimeForRetentionCheck();
+        advanceTimeToMakeSegmentDeletable();
         assertThrows(RemoteStorageException.class, task::cleanupExpiredRemoteLogSegments);
 
         assertEquals(100L, currentLogStartOffset.get());
@@ -3049,7 +3049,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         doThrow(new RetriableRemoteStorageException("Failed to delete segment with retriable exception")).when(remoteStorageManager).deleteLogSegmentData(any());
-        advanceTimeForRetentionCheck();
+        advanceTimeToMakeSegmentDeletable();
         assertThrows(RetriableRemoteStorageException.class, task::cleanupExpiredRemoteLogSegments);
 
         assertEquals(100L, currentLogStartOffset.get());
@@ -3148,7 +3148,7 @@ public class RemoteLogManagerTest {
      * retention check uses {@code maxTimestampMs < cleanupUntilMs} (not {@code <=}).
      * Advance time by 1ms to make segments eligible for deletion.
      */
-    private void advanceTimeForRetentionCheck() {
+    private void advanceTimeToMakeSegmentDeletable() {
         ((MockTime) time).sleep(1);
     }
 
@@ -3279,8 +3279,8 @@ public class RemoteLogManagerTest {
         for (int idx = 0; idx < segmentCount; idx++) {
             long timestamp = time.milliseconds();
             if (idx < deletableSegmentCount) {
-                // Use -2 to ensure the segment timestamp is strictly less than cleanupUntilMs,
-                // since the retention time check uses strict less-than comparison (maxTimestampMs < cleanupUntilMs).
+                // Use -2 instead of -1 because some test cases use retentionMs=1.
+                // With -1, timestamp == cleanupUntilMs, so segment won't be deleted.
                 timestamp = time.milliseconds() - 2;
             }
             long startOffset = (long) idx * recordsPerSegment;
