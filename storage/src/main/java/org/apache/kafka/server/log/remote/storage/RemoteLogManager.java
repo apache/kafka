@@ -909,26 +909,26 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         /**
-         * Check if segment is already expired based on global retention time.
+         * Check if segment has already expired based on remote storage's retention time.
          */
-        private boolean isSegmentExpiredByTime(LogSegment segment, UnifiedLog log) throws IOException {
+        private boolean isSegmentExpiredByTimeForRemoteStorage(LogSegment segment, UnifiedLog log) throws IOException {
             long retentionMs = log.config().retentionMs;
             if (retentionMs <= 0) {
                 return false;
             }
-            return time.milliseconds() - segment.largestTimestamp() >= retentionMs;
+            return time.milliseconds() - segment.largestTimestamp() > retentionMs;
         }
 
         /**
-         * Check if segment should be skipped due to global retention size.
+         * Check if segment has already expired based on remote storage‘s retention size.
          */
-        private boolean isSegmentExpiredBySize(LogSegment segment, UnifiedLog log, long accumulatedSkippedSize) {
+        private boolean isSegmentExpiredBySizeForRemoteStorage(LogSegment segment, UnifiedLog log, long accumulatedSkippedSize) {
             long retentionBytes = log.config().retentionSize;
             if (retentionBytes <= 0) {
                 return false;
             }
             long excessSize = log.size() - retentionBytes;
-            return excessSize - accumulatedSkippedSize >= segment.size();
+            return excessSize - accumulatedSkippedSize > segment.size();
         }
 
         /**
@@ -937,7 +937,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
          *     committed/acked messages
          * 
-         * Additionally, if a segment is already expired globally (based on retention.ms or retention.bytes),
+         * Additionally, if a segment has already expired based on remote storage's retention configuration,
          * it will be skipped from upload and logStartOffset will be updated to allow local deletion.
          *
          * @param log The log from which the segments are to be copied
@@ -960,11 +960,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     continue;
                 }
                 
-                if (isSegmentExpiredByTime(previousSeg, log) || 
-                    isSegmentExpiredBySize(previousSeg, log, accumulatedSkippedSize)) {
+                if (isSegmentExpiredByTimeForRemoteStorage(previousSeg, log) || 
+                    isSegmentExpiredBySizeForRemoteStorage(previousSeg, log, accumulatedSkippedSize)) {
                     long newLogStartOffset = currentSeg.baseOffset();
                     log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion);
-                    logger.info("Segment {} is already expired globally. Skipping upload and incrementing logStartOffset to {} to allow local deletion.",
+                    logger.info("Segment {} has already expired based on remote storage retention configuration. Skipping upload and incrementing logStartOffset to {} to allow local deletion.",
                             previousSeg, newLogStartOffset);
                     accumulatedSkippedSize += previousSeg.size();
                     continue;
