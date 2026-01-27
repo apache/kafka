@@ -1299,12 +1299,12 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, leaderId);
         int epoch = 2;
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(100L, 1);
-        int maxFetchSnapshotSizeBytes = 6;
+        int expectedFetchMaxSnapshotSizeBytes = 6;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
-            .withFetchSnapshotMaxSizeBytes(maxFetchSnapshotSizeBytes)
+            .withFetchSnapshotMaxSizeBytes(expectedFetchMaxSnapshotSizeBytes)
             .build();
 
         context.pollUntilRequest();
@@ -1323,7 +1323,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            context.fetchSnapshotMaxSizeBytes
+            expectedFetchMaxSnapshotSizeBytes
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
@@ -1359,7 +1359,7 @@ public final class KafkaRaftClientSnapshotTest {
             snapshotRequest,
             context.metadataPartition,
             localId,
-            context.fetchSnapshotMaxSizeBytes
+            expectedFetchMaxSnapshotSizeBytes
         ).get();
         assertEquals(snapshotId.offset(), request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
