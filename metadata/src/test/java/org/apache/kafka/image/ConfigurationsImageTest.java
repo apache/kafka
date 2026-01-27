@@ -163,7 +163,7 @@ public class ConfigurationsImageTest {
     }
 
     @Test
-    public void testConfigurationDeltaFiltersInvalidConfigsFromBaseImage() {
+    public void testConfigurationDeltaPreventsInvalidConfigsInResultingImage() {
         Set<String> validConfigs = Set.of("foo", "bar");
         DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
 

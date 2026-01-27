@@ -47,7 +47,7 @@ import scala.jdk.CollectionConverters._
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
  * as the others. It is not persisted to the metadata log.
  */
-class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) 
+class ControllerConfigurationValidator(private val kafkaConfig: KafkaConfig) 
     extends ConfigurationValidator with DynamicConfigValidator {
   private val validConfigsByType: Map[ConfigResource.Type, util.Set[String]] = {
     val topicConfigs = LogConfig.nonInternalConfigNames.asScala.toSet

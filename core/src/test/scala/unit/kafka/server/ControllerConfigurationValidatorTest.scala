@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.TopicConfig.{REMOTE_LOG_STORAGE_ENABLE_CON
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, assertThrows}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -210,5 +210,45 @@ class ControllerConfigurationValidatorTest {
     assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
+  }
+
+  @Test
+  def testIsValidConfig(): Unit = {
+    // Test valid topic configs
+    assertTrue(validator.isValidConfig(TOPIC, SEGMENT_BYTES_CONFIG))
+    assertTrue(validator.isValidConfig(TOPIC, SEGMENT_MS_CONFIG))
+    assertTrue(validator.isValidConfig(TOPIC, REMOTE_LOG_STORAGE_ENABLE_CONFIG))
+    assertFalse(validator.isValidConfig(TOPIC, "invalid.topic.config"))
+
+    // Test valid broker configs
+    assertTrue(validator.isValidConfig(BROKER, "log.cleaner.threads"))
+    assertTrue(validator.isValidConfig(BROKER, "num.network.threads"))
+    assertTrue(validator.isValidConfig(BROKER, "log.segment.bytes"))
+    assertFalse(validator.isValidConfig(BROKER, "invalid.broker.config"))
+
+    // Test valid client metrics configs
+    assertTrue(validator.isValidConfig(CLIENT_METRICS, ClientMetricsConfigs.INTERVAL_MS_CONFIG))
+    assertTrue(validator.isValidConfig(CLIENT_METRICS, ClientMetricsConfigs.METRICS_CONFIG))
+    assertTrue(validator.isValidConfig(CLIENT_METRICS, ClientMetricsConfigs.MATCH_CONFIG))
+    assertFalse(validator.isValidConfig(CLIENT_METRICS, "invalid.client.metrics.config"))
+
+    // Test valid group configs
+    assertTrue(validator.isValidConfig(GROUP, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG))
+    assertTrue(validator.isValidConfig(GROUP, GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG))
+    assertFalse(validator.isValidConfig(GROUP, "invalid.group.config"))
+
+    // Test unknown resource type
+    assertFalse(validator.isValidConfig(BROKER_LOGGER, "any.config"))
+
+    // Test quota configs are valid for all resource types
+    val quotaConfigs = Seq("producer_byte_rate", "consumer_byte_rate", "request_percentage", "controller_mutation_rate")
+    val resourceTypes = Seq(TOPIC, BROKER, CLIENT_METRICS, GROUP)
+    
+    quotaConfigs.foreach { quotaConfig =>
+      resourceTypes.foreach { resourceType =>
+        assertTrue(validator.isValidConfig(resourceType, quotaConfig),
+          s"Quota config $quotaConfig should be valid for $resourceType")
+      }
+    }
   }
 }
