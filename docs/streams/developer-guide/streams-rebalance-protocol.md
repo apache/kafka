@@ -63,6 +63,8 @@ The following features are not yet available and should be avoided when using th
 
 * **Online Migration**: Group migration while the application is running is not available between the classic and new streams protocol.
 
+* **Custom Client Supplier**: Using a custom `KafkaClientSupplier` will only allow so provide restore/global consumer, producer, and admin client. It's not possible to provide the "main" consumer when "streams" groups are enabled. 
+
 # Why Use the Streams Rebalance Protocol?
 
 The Streams Rebalance Protocol offers several key advantages over the classic client-driven protocol:
