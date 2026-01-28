@@ -36,7 +36,6 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -76,10 +75,10 @@ class LogCleanerManagerTest {
     private static final ProducerStateManagerConfig PRODUCER_STATE_MANAGER_CONFIG =
         new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false);
 
-    private File tmpDir;
-    private File tmpDir2;
-    private File logDir;
-    private File logDir2;
+    private final File tmpDir = TestUtils.tempDirectory();
+    private final File tmpDir2 = TestUtils.tempDirectory();
+    private final File logDir = TestUtils.randomPartitionLogDir(tmpDir);
+    private final File logDir2 = TestUtils.randomPartitionLogDir(tmpDir2);
 
     static class LogCleanerManagerMock extends LogCleanerManager {
         private final Map<TopicPartition, Long> cleanerCheckpoints = new HashMap<>();
@@ -143,14 +142,6 @@ class LogCleanerManagerTest {
         public Collection<Long> getFirstBatchTimestampForSegments(Collection<LogSegment> segments) {
             throw new IllegalStateException("Error!");
         }
-    }
-
-    @BeforeEach
-    public void setup() {
-        tmpDir = TestUtils.tempDirectory();
-        tmpDir2 = TestUtils.tempDirectory();
-        logDir = TestUtils.randomPartitionLogDir(tmpDir);
-        logDir2 = TestUtils.randomPartitionLogDir(tmpDir2);
     }
 
     @AfterEach
