@@ -1240,7 +1240,7 @@ public class StreamsGroupTest {
     @Test
     public void testCancelTimers() {
         StreamsGroup streamsGroup = createStreamsGroup("test-group");
-        CoordinatorTimer<Void, CoordinatorRecord> timer = mock(CoordinatorTimer.class);
+        CoordinatorTimer<CoordinatorRecord> timer = mock(CoordinatorTimer.class);
 
         streamsGroup.cancelTimers(timer);
 
