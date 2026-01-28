@@ -1824,7 +1824,6 @@ kafka.server.DynamicBrokerConfigTest:
 - testRemoteLogManagerFetchQuotaUpdates
 - testRemoteLogManagerMultipleConfigUpdates
 - testSecurityConfigs
-- testSynonyms
 - testUpdateDynamicRemoteLogManagerConfig
 - testUpdateDynamicThreadPool
 - testUpdateMetricReporters

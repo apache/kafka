@@ -206,6 +206,8 @@ org.apache.kafka.server.config.DelegationTokenManagerConfigsTest:
 - testDefaults
 - testInvalidProperty
 - testOverride
+org.apache.kafka.server.config.DynamicBrokerConfigTest:
+- testBrokerConfigSynonyms
 org.apache.kafka.server.config.MinInSyncReplicasConfigTest:
 - testDefaultKafkaConfig
 org.apache.kafka.server.metrics.BrokerServerMetricsTest:
