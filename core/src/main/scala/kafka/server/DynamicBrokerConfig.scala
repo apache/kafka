@@ -582,7 +582,7 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
       val cordonedLogDirs = newConfig.cordonedLogDirs()
       cordonedLogDirs.asScala.foreach(dir =>
         if (!logDirs.contains(dir)) {
-          throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs, s"Invalid entry in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG}: $dir" +
+          throw new ConfigException(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, cordonedLogDirs, s"Invalid entry in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG}: $dir. " +
             s"All cordoned log dirs must be entries of ${ServerLogConfigs.LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}.")
         }
       )

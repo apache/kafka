@@ -490,7 +490,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       require(cordonedLogDirs.size == 1, s"When ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} is set to ${ServerLogConfigs.CORDONED_LOG_DIRS_ALL}, it must not contain other values")
     } else {
       for (cordonedLogDir <- cordonedLogDirs.asScala) {
-        require(logDirs().contains(cordonedLogDir), s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be included in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG}. Missing entry : $cordonedLogDir")
+        require(logDirs().contains(cordonedLogDir), s"All entries in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} must be included in ${ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG} or ${ServerLogConfigs.LOG_DIR_CONFIG}. Missing entry : $cordonedLogDir")
       }
     }
   }
