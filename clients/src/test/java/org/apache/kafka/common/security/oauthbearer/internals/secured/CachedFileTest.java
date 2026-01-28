@@ -110,8 +110,6 @@ public class CachedFileTest extends OAuthBearerTest {
         assertThrows(KafkaException.class, cachedFile::contents);
         assertThrows(KafkaException.class, cachedFile::transformed);
 
-        System.out.println("yo");
-
         // "Restore" the file and make sure it's refreshed.
         Utils.sleep(10);
         Files.writeString(tmpFile.toPath(), "valid data!", StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW);
