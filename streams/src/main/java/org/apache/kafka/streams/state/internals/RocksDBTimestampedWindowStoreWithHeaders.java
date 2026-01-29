@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.state.HeaderBytesStore;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 
 /**
  * A persistent timestamped window store that supports storing Kafka record headers.
@@ -26,10 +26,10 @@ import org.apache.kafka.streams.state.HeaderBytesStore;
  * format: [HeaderSize(2)][Headers][Timestamp(8)][Value]
  *
  * This class extends {@link RocksDBTimestampedWindowStore} to inherit all
- * {@code WindowStore<Bytes, byte[]>} methods, and implements {@link HeaderBytesStore} as a marker
+ * {@code WindowStore<Bytes, byte[]>} methods, and implements {@link HeadersBytesStore} as a marker
  * interface to indicate header support.
  */
-class RocksDBTimestampedWindowStoreWithHeaders extends RocksDBTimestampedWindowStore implements HeaderBytesStore {
+class RocksDBTimestampedWindowStoreWithHeaders extends RocksDBTimestampedWindowStore implements HeadersBytesStore {
 
     RocksDBTimestampedWindowStoreWithHeaders(final SegmentedBytesStore bytesStore,
                                              final boolean retainDuplicates,

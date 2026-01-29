@@ -21,7 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.state.HeaderBytesStore;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -52,7 +52,7 @@ import java.util.Optional;
  * <p>
  * This implementation supports lazy migration from timestamped stores to header-aware stores.
  */
-public class RocksDBHeadersStore extends RocksDBTimestampedStore implements HeaderBytesStore {
+public class RocksDBHeadersStore extends RocksDBTimestampedStore implements HeadersBytesStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBHeadersStore.class);
 
     private static final byte[] HEADERS_COLUMN_FAMILY_NAME = "keyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
@@ -182,7 +182,7 @@ public class RocksDBHeadersStore extends RocksDBTimestampedStore implements Head
                 : accessor.get(oldColumnFamily, key);
             if (timestampedValue != null) {
                 // Convert from [timestamp(8)][value] to [headerSize(2)][headers][timestamp(8)][value]
-                final byte[] valueWithEmptyHeaders = HeaderBytesStore.convertToHeaderFormat(key, timestampedValue);
+                final byte[] valueWithEmptyHeaders = HeadersBytesStore.convertToHeaderFormat(key, timestampedValue);
                 // Migrate the data to the new column family
                 put(accessor, key, valueWithEmptyHeaders);
                 return valueWithEmptyHeaders;
@@ -200,7 +200,7 @@ public class RocksDBHeadersStore extends RocksDBTimestampedStore implements Head
 
             final byte[] timestampedValue = accessor.get(oldColumnFamily, key);
             if (timestampedValue != null) {
-                return HeaderBytesStore.convertToHeaderFormat(key, timestampedValue);
+                return HeadersBytesStore.convertToHeaderFormat(key, timestampedValue);
             }
 
             return null;
@@ -360,7 +360,7 @@ public class RocksDBHeadersStore extends RocksDBTimestampedStore implements Head
             } else {
                 if (nextWithHeaders == null) {
                     next = KeyValue.pair(new Bytes(nextTimestamped),
-                        HeaderBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
+                        HeadersBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
                     nextTimestamped = null;
                     if (forward) {
                         iterTimestamped.next();
@@ -371,7 +371,7 @@ public class RocksDBHeadersStore extends RocksDBTimestampedStore implements Head
                     if (forward) {
                         if (comparator.compare(nextTimestamped, nextWithHeaders) <= 0) {
                             next = KeyValue.pair(new Bytes(nextTimestamped),
-                                HeaderBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
+                                HeadersBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
                             nextTimestamped = null;
                             iterTimestamped.next();
                         } else {
@@ -382,7 +382,7 @@ public class RocksDBHeadersStore extends RocksDBTimestampedStore implements Head
                     } else {
                         if (comparator.compare(nextTimestamped, nextWithHeaders) >= 0) {
                             next = KeyValue.pair(new Bytes(nextTimestamped),
-                                HeaderBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
+                                HeadersBytesStore.convertToHeaderFormat(nextTimestamped, iterTimestamped.value()));
                             nextTimestamped = null;
                             iterTimestamped.prev();
                         } else {

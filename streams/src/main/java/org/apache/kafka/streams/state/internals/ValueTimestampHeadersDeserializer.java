@@ -34,11 +34,11 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  * Deserializer for ValueTimestampHeaders.
  *
  * Deserialization format (per KIP-1271):
- * [HeaderSize(varint)][Headers][Timestamp(8)][Value]
+ * [HeadersSize(varint)][HeadersBytes][Timestamp(8)][Value]
  *
  * Where:
- * - HeaderSize: Size of the Headers section in bytes, encoded as varint
- * - Headers: Serialized headers using HeadersDeserializer (with varint encoding)
+ * - HeadersSize: Size of the HeadersBytes section in bytes, encoded as varint
+ * - HeadersBytes: Serialized headers ([count(varint)][header1][header2]...) to be deserialized by HeadersDeserializer
  * - Timestamp: 8-byte long timestamp
  * - Value: Serialized value to be deserialized with the provided value deserializer
  *
@@ -88,7 +88,7 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         // Read value (remaining bytes)
         final byte[] rawValue = new byte[buffer.remaining()];
         buffer.get(rawValue);
-        final V value = valueDeserializer.deserialize(topic, rawValue);
+        final V value = valueDeserializer.deserialize(topic, headers, rawValue);
 
         return ValueTimestampHeaders.make(value, timestamp, headers);
     }

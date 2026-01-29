@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.HeaderBytesStore;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -61,7 +61,7 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         WindowStore<Bytes, byte[]> store = storeSupplier.get();
 
         // Verify the store supports headers
-        if (!(store instanceof HeaderBytesStore)) {
+        if (!(store instanceof HeadersBytesStore)) {
             throw new IllegalArgumentException(
                 "Store supplier must provide a HeaderBytesStore implementation. " +
                 "Use Stores.persistentTimestampedWindowStoreWithHeaders() to create the supplier."

@@ -38,12 +38,18 @@ import java.util.Iterator;
  * Note: ValueLength is -1 for null values (encoded as varint).
  * All integers are encoded as varints (signed varint encoding).
  *
+ * This serializer produces the headers_bytes portion. The headers_size prefix
+ * is added by the outer serializer (e.g., ValueTimestampHeadersSerializer).
+ *
  * This is used by KIP-1271 to serialize headers for storage in state stores.
  */
 public class HeadersSerializer {
 
     /**
      * Serializes headers into a byte array using varint encoding per KIP-1271.
+     * <p>
+     * The output format is [count][header1][header2]... without a size prefix.
+     * The size prefix is added by the outer serializer that uses this.
      *
      * @param headers the headers to serialize (can be null)
      * @return the serialized byte array

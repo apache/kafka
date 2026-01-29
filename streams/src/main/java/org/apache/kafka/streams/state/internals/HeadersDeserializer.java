@@ -35,12 +35,17 @@ import java.nio.charset.StandardCharsets;
  * Note: ValueLength is -1 for null values (encoded as varint).
  * All integers are decoded from varints (signed varint encoding).
  *
+ * This deserializer expects the headers_bytes portion without a size prefix.
+ * The size prefix is handled by the outer deserializer (e.g., ValueTimestampHeadersDeserializer).
+ *
  * This is used by KIP-1271 to deserialize headers from state stores.
  */
 public class HeadersDeserializer {
 
     /**
      * Deserializes headers from a byte array using varint encoding per KIP-1271.
+     * <p>
+     * The input format is [count][header1][header2]... without a size prefix.
      *
      * @param data the serialized byte array (can be null)
      * @return the deserialized headers

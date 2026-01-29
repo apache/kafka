@@ -256,6 +256,23 @@ public class HeadersStoreDemo {
                 result.append(" [region:").append(region).append("]");
             }
 
+            // Display all headers to demonstrate correct deserialization
+            final StringBuilder allHeaders = new StringBuilder();
+            headers.forEach(header -> {
+                if (allHeaders.length() > 0) {
+                    allHeaders.append(", ");
+                }
+                final String headerValue = header.value() != null
+                    ? new String(header.value(), StandardCharsets.UTF_8)
+                    : "null";
+                allHeaders.append(header.key()).append("=").append(headerValue);
+            });
+
+            if (allHeaders.length() > 0) {
+                result.append(" [all headers: ").append(allHeaders).append("]");
+                System.out.println("    ✓ All headers deserialized: " + allHeaders);
+            }
+
             return result.toString();
         }
     }
