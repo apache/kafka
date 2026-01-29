@@ -115,8 +115,13 @@ public class AdminApiDriver<K, V> {
         // metadata. For all cached keys, they can proceed straight to the fulfillment map.
         // Note that the cache is only used on the initial calls, and any errors that result
         // in additional lookups use the full set of lookup keys.
-        retryLookup(future.uncachedLookupKeys());
-        future.cachedKeyBrokerIdMapping().forEach((key, brokerId) -> fulfillmentMap.put(new FulfillmentScope(brokerId), key));
+        future.cachedKeyBrokerIdMapping().forEach((key, brokerId) -> {
+            if (AdminApiFuture.UNKNOWN_BROKER_ID.equals(brokerId)) {
+                unmap(key);
+            } else {
+                fulfillmentMap.put(new FulfillmentScope(brokerId), key);
+            }
+        });
     }
 
     /**

@@ -45,7 +45,7 @@ import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.AbstractKafkaConfig.getMap
-import org.apache.kafka.server.config.{AbstractKafkaConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DynamicConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
@@ -58,7 +58,7 @@ object KafkaConfig {
 
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
-      DynamicBrokerConfig.dynamicConfigUpdateModes))
+      JDynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
   val configDef = AbstractKafkaConfig.CONFIG_DEF
@@ -95,7 +95,7 @@ object KafkaConfig {
     typeOf(configName) match {
       case Some(t) => Some(t)
       case None =>
-        DynamicBrokerConfig.brokerConfigSynonyms(configName, matchListenerOverride = true).flatMap(typeOf).headOption
+        JDynamicBrokerConfig.brokerConfigSynonyms(configName, true).asScala.flatMap(typeOf).headOption
     }
   }
 

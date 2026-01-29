@@ -219,16 +219,16 @@ public class LogCleanerManager {
     }
 
     /**
-     * Public for unit test. Get the cleaning state of the partition.
+     * For testing only. Get the cleaning state of the partition.
      */
-    public Optional<LogCleaningState> cleaningState(TopicPartition tp) {
+    Optional<LogCleaningState> cleaningState(TopicPartition tp) {
         return inLock(lock, () -> Optional.ofNullable(inProgress.get(tp)));
     }
 
     /**
-     * Public for unit test. Set the cleaning state of the partition.
+     * For testing only. Set the cleaning state of the partition.
      */
-    public void setCleaningState(TopicPartition tp, LogCleaningState state) {
+    void setCleaningState(TopicPartition tp, LogCleaningState state) {
         inLock(lock, () -> inProgress.put(tp, state));
     }
 
@@ -612,7 +612,7 @@ public class LogCleanerManager {
     }
 
     /**
-     * Returns an immutable set of the uncleanable partitions for a given log directory.
+     * For testing only. Returns an immutable set of the uncleanable partitions for a given log directory.
      * Only used for testing.
      */
     public Set<TopicPartition> uncleanablePartitions(String logDir) {
@@ -689,7 +689,8 @@ public class LogCleanerManager {
      * @return OffsetsToClean containing offsets for cleanable portion of log and whether the log checkpoint needs updating
      * @throws IOException    if an I/O error occurs
      */
-    public static OffsetsToClean cleanableOffsets(UnifiedLog log, Optional<Long> lastCleanOffset, long now) throws IOException {
+    // Visible for testing
+    static OffsetsToClean cleanableOffsets(UnifiedLog log, Optional<Long> lastCleanOffset, long now) throws IOException {
         // If the log segments are abnormally truncated and hence the checkpointed offset is no longer valid;
         // reset to the log starting offset and log the error
 
@@ -791,8 +792,6 @@ public class LogCleanerManager {
      * @param forceUpdateCheckpoint       whether to update the checkpoint associated with this log. if true, checkpoint should be
      *                                    reset to firstDirtyOffset
      */
-    public record OffsetsToClean(long firstDirtyOffset, long firstUncleanableDirtyOffset,
-                                 boolean forceUpdateCheckpoint) {
-
+    record OffsetsToClean(long firstDirtyOffset, long firstUncleanableDirtyOffset, boolean forceUpdateCheckpoint) {
     }
 }

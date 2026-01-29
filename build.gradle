@@ -3989,3 +3989,146 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
 }
+
+
+
+// Helper to get version targets and expected patterns
+ext.getVersionTargets = { rawVersion ->
+    // Python Package Version (PEP 440): 4.3.0.dev0
+    def pythonVersion = rawVersion.contains("SNAPSHOT") ?
+            rawVersion.replace("-SNAPSHOT", ".dev0") :
+            rawVersion
+
+    def baseVersion = rawVersion.replace("-SNAPSHOT", "")
+
+    return [
+      // 1. kafka-merge-pr.py
+      [
+        path: "committer-tools/kafka-merge-pr.py",
+        // Regex: match DEFAULT_FIX_VERSION = os.environ.get("DEFAULT_FIX_VERSION", "...")
+        pattern: /DEFAULT_FIX_VERSION\s*=\s*os\.environ\.get\("DEFAULT_FIX_VERSION",\s*".*?"\)/,
+        replace: "DEFAULT_FIX_VERSION = os.environ.get(\"DEFAULT_FIX_VERSION\", \"${baseVersion}\")"
+      ],
+      // 2. version.py
+      [
+        path: "tests/kafkatest/version.py",
+        pattern: /DEV_VERSION\s*=\s*KafkaVersion\(".*"\)/,
+        replace: "DEV_VERSION = KafkaVersion(\"${rawVersion}\")"
+      ],
+      // 3. __init__.py
+      [
+        path: "tests/kafkatest/__init__.py",
+        pattern: /__version__\s*=\s*'.*'/,
+        replace: "__version__ = '${pythonVersion}'"
+      ],
+      // 4. Maven POMs
+      [
+        path: "streams/quickstart/pom.xml",
+        pattern: /(?s)(<artifactId>streams-quickstart<\/artifactId>.*?<version>)([^<]+)(<\/version>)/,
+        replace: { "\$1${rawVersion}\$3" }
+      ],
+      [
+        path: "streams/quickstart/java/pom.xml",
+        pattern: /(?s)(<artifactId>streams-quickstart<\/artifactId>.*?<version>)([^<]+)(<\/version>)/,
+        replace: { "\$1${rawVersion}\$3" }
+      ],
+      [
+        path: "streams/quickstart/java/src/main/resources/archetype-resources/pom.xml",
+        pattern: /(<kafka\.version>)([^<]+)(<\/kafka\.version>)/,
+        replace: { "\$1${rawVersion}\$3" }
+      ]
+    ]
+}
+
+def updateVersionTask = tasks.register('updateVersion') {
+  group = "Release"
+  description = "Syncs python, pom, and script versions with gradle.properties. Fails if files or patterns are missing. Use -PnewVersion=X.Y.Z to set a new version."
+
+  doLast {
+    def rawVersion
+    if (project.hasProperty('newVersion')) {
+      rawVersion = newVersion
+      if (!rawVersion.matches(/^[0-9]+\.[0-9]+\.[0-9]+(-SNAPSHOT)?$/)) {
+        throw new GradleException("Invalid version format: '${rawVersion}'. Expected format: X.Y.Z or X.Y.Z-SNAPSHOT")
+      }
+      // Update gradle.properties
+      def gradlePropsFile = file("${project.rootDir}/gradle.properties")
+      if (gradlePropsFile.exists()) {
+        def propsContent = gradlePropsFile.text
+        def newPropsContent = propsContent.replaceAll(/(?m)^version\s*=.*/, "version=${rawVersion}")
+        if (propsContent != newPropsContent) {
+          gradlePropsFile.text = newPropsContent
+          println "Updated gradle.properties to version ${rawVersion}"
+        }
+      }
+    } else {
+      rawVersion = project.version.toString()
+    }
+
+    def targets = getVersionTargets(rawVersion)
+
+    targets.each { item ->
+      def f = file("${project.rootDir}/${item.path}")
+
+      // Check 1: file must exist
+      if (!f.exists()) {
+        throw new GradleException("File not found: ${item.path}")
+      }
+
+      def content = f.text
+      // Check 2: regex must match
+      def matcher = (content =~ item.pattern)
+      if (!matcher.find()) {
+        throw new GradleException("Pattern not found in ${item.path}.\nExpected pattern: ${item.pattern}")
+      }
+
+      def replacementStr = item.replace instanceof Closure ? item.replace.call() : item.replace
+
+      def newContent = content.replaceAll(item.pattern, replacementStr)
+
+      if (content != newContent) {
+        f.text = newContent
+        println "Updated ${item.path}"
+      }
+    }
+  }
+}
+
+def verifyVersionConsistencyTask = tasks.register('verifyVersionConsistency') {
+  group = "Verification"
+  description = "Verifies that python, pom, and script versions match gradle.properties."
+
+  doLast {
+    def rawVersion = project.version.toString()
+    def targets = getVersionTargets(rawVersion)
+    def inconsistentFiles = []
+
+    targets.each { item ->
+      def f = file("${project.rootDir}/${item.path}")
+      if (!f.exists()) {
+        throw new GradleException("File not found: ${item.path}")
+      }
+
+      def content = f.text
+      // Check if regex matches current content "as is"
+      // Note: We need to see if the file content *already* matches what we want it to be.
+      // One way is to simulate the replacement and see if it changes nothing.
+      
+      def replacementStr = item.replace instanceof Closure ? item.replace.call() : item.replace
+      def newContent = content.replaceAll(item.pattern, replacementStr)
+
+      if (content != newContent) {
+        inconsistentFiles.add(item.path)
+      }
+    }
+
+    if (!inconsistentFiles.isEmpty()) {
+       throw new GradleException("Found inconsistent versions in the following files:\n" + 
+           inconsistentFiles.join("\n") + 
+           "\n\nPlease run './gradlew updateVersion -PnewVersion=...' to fix them.")
+    }
+    println "All versions are consistent."
+  }
+}
+
+check.dependsOn verifyVersionConsistencyTask
