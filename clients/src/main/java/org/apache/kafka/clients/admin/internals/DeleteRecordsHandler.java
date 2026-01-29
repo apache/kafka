@@ -73,7 +73,7 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<DeletedRecords> newFuture(
             Collection<TopicPartition> topicPartitions,
-            Map<TopicPartition, Integer> partitionLeaderCache
+            PartitionLeaderCache partitionLeaderCache
     ) {
         return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
     }

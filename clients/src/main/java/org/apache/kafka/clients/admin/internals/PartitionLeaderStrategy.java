@@ -33,7 +33,6 @@ import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -208,10 +207,10 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
      */
     public static class PartitionLeaderFuture<V> implements AdminApiFuture<TopicPartition, V> {
         private final Set<TopicPartition> requestKeys;
-        private final Map<TopicPartition, Integer> partitionLeaderCache;
+        private final PartitionLeaderCache partitionLeaderCache;
         private final Map<TopicPartition, KafkaFuture<V>> futures;
 
-        public PartitionLeaderFuture(Set<TopicPartition> requestKeys, Map<TopicPartition, Integer> partitionLeaderCache) {
+        public PartitionLeaderFuture(Set<TopicPartition> requestKeys, PartitionLeaderCache partitionLeaderCache) {
             this.requestKeys = requestKeys;
             this.partitionLeaderCache = partitionLeaderCache;
             this.futures = requestKeys.stream().collect(Collectors.toUnmodifiableMap(
@@ -226,25 +225,11 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
         }
 
         @Override
-        public Set<TopicPartition> uncachedLookupKeys() {
-            Set<TopicPartition> keys = new HashSet<>();
-            requestKeys.forEach(tp -> {
-                if (!partitionLeaderCache.containsKey(tp)) {
-                    keys.add(tp);
-                }
-            });
-            return keys;
-        }
-
-        @Override
         public Map<TopicPartition, Integer> cachedKeyBrokerIdMapping() {
+            Map<TopicPartition, Integer> cache = partitionLeaderCache.get(requestKeys);
+
             Map<TopicPartition, Integer> mapping = new HashMap<>();
-            requestKeys.forEach(tp -> {
-                Integer brokerId = partitionLeaderCache.get(tp);
-                if (brokerId != null) {
-                    mapping.put(tp, brokerId);
-                }
-            });
+            requestKeys.forEach(tp -> mapping.put(tp, cache.getOrDefault(tp, UNKNOWN_BROKER_ID)));
             return mapping;
         }
 
@@ -263,16 +248,16 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
 
         @Override
         public void completeLookup(Map<TopicPartition, Integer> brokerIdMapping) {
-            partitionLeaderCache.putAll(brokerIdMapping);
+            partitionLeaderCache.put(brokerIdMapping);
         }
 
         @Override
         public void completeExceptionally(Map<TopicPartition, Throwable> errors) {
+            partitionLeaderCache.remove(errors.keySet());
             errors.forEach(this::completeExceptionally);
         }
 
         private void completeExceptionally(TopicPartition key, Throwable t) {
-            partitionLeaderCache.remove(key);
             futureOrThrow(key).completeExceptionally(t);
         }
 
