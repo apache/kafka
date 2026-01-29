@@ -84,7 +84,7 @@ public class ExceptionHandlerUtils {
             throw new InvalidConfigurationException(String.format("%s cannot be null while building dead letter queue record", StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
         }
         final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(deadLetterQueueTopicName, null, context.timestamp(), key, value);
-        // Copy original headers from source record
+        // Copy original headers from record that causes exception
         if (context.headers() != null) {
             for (Header header : context.headers()) {
                 producerRecord.headers().add(header);
