@@ -33,6 +33,8 @@ org.apache.kafka.clients.admin.ClientTelemetryTest:
 - testClientInstanceId
 - testIntervalMsParser
 - testMetrics
+org.apache.kafka.clients.admin.ConcurrentListOffsetsRequestTest:
+- correctlyHandleConcurrentModificationOfPartitionLeaderCache
 org.apache.kafka.clients.admin.DeleteTopicTest:
 - testAddPartitionDuringDeleteTopic
 - testDeleteNonExistingTopic
