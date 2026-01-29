@@ -1099,6 +1099,7 @@ kafka.log.LogManagerTest:
 - testMetricsExistWhenLogIsRecreatedBeforeDeletion
 - testRecoveryDirectoryMappingWithRelativeDirectory
 - testRecoveryDirectoryMappingWithTrailingSlash
+- testReplaceCurrentWithFutureLogDoesNotCloseSourceLog
 - testShutdownWithZeroFileDeleteDelayMs
 - testTimeBasedFlush
 - testTopicConfigChangeStopCleaningIfCompactIsRemoved
