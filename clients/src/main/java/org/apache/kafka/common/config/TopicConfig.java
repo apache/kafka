@@ -101,10 +101,10 @@ public class TopicConfig {
             "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
             "(i.e. retention.ms/bytes).";
 
-    public static final String REMOTE_LOG_LATEST_ENABLE_CONFIG = "remote.log.latest.enable";
-    public static final String REMOTE_LOG_LATEST_ENABLE_DOC = "Determines whether to upload all non-active segments to remote storage, including those still within local retention. " +
-            "When set to true (default), all non-active segments will be uploaded without checking local retention constraints. " +
-            "When set to false, only segments beyond local retention period will be uploaded to remote storage.";
+    public static final String REMOTE_COPY_LAZY_ENABLE_CONFIG = "remote.copy.lazy.enable";
+    public static final String REMOTE_COPY_LAZY_ENABLE_DOC = "Determines whether to delay uploading segments to remote storage. " +
+            "When set to false (default), all non-active segments will be uploaded immediately without checking local retention constraints. " +
+            "When set to true, segments within local retention will not be uploaded, the upload is delayed until they expire.";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +

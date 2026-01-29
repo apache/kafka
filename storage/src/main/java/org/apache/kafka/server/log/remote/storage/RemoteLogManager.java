@@ -964,8 +964,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          *  1) Segment is not the active segment and
          *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
          *     committed/acked messages
-         *  3) When remote.log.latest.enable is true (default): All segments are eligible including the latest ones within local retention
-         *     When remote.log.latest.enable is false: Segment is not within local retention time or size (close to expiration or already expired)
+         *  3) When remote.copy.lazy.enable is false (default): All segments are eligible including the latest ones within local retention
+         *     When remote.copy.lazy.enable is true: Segments within local retention will not be uploaded, upload is delayed until they expire
          * @param log The log from which the segments are to be copied
          * @param fromOffset The offset from which the segments are to be copied
          * @param lastStableOffset The last stable offset of the log
@@ -978,14 +978,14 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 long localLogSize = log.size();
                 long accumulatedUploadedSize = 0;
                 long currentTimeMs = time.milliseconds();
-                // Use default value true (original behavior) if config is null
-                boolean remoteLogLatestEnable = log.config() != null ? log.config().remoteLogLatestEnable() : true;
+                // Use default value false if config is null
+                boolean remoteCopyLazyEnable = log.config() != null ? log.config().remoteCopyLazyEnable() : false;
 
                 for (int idx = 1; idx < segments.size(); idx++) {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
-                        if (!remoteLogLatestEnable && log.config() != null) {
+                        if (remoteCopyLazyEnable && log.config() != null) {
                             // Check time-based retention
                             long localRetentionMs = log.config().localRetentionMs();
                             if (isWithinLocalRetentionTime(previousSeg, localRetentionMs, currentTimeMs)) {
