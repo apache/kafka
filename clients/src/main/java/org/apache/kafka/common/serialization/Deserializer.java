@@ -94,6 +94,11 @@ public interface Deserializer<T> extends Closeable {
      *
      * <p>Similarly, if this method is overridden, the implementation cannot make any assumptions about the
      * passed in {@link ByteBuffer} either.
+     * 
+     * <p>The deserializer is expected to read data starting from the buffer's current position.
+     * Implementations may advance the buffer position by the number of bytes consumed during
+     * deserialization, but must not modify the buffer limit. Callers should not make assumptions
+     * about the buffer's position after deserialization and should treat the buffer as consumed.</p>
      *
      * <p>It is recommended to deserialize a {@code null} {@link ByteBuffer} to a {@code null} object.
      *
