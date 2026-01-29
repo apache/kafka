@@ -160,4 +160,7 @@ public class ServerLogConfigs {
 
     public static final int MAX_MESSAGE_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
     public static final String COMPRESSION_TYPE_DEFAULT = BrokerCompressionType.PRODUCER.name;
+
+    public static final String LOG_REMOTE_COPY_LAZY_ENABLE_CONFIG = LOG_PREFIX + TopicConfig.REMOTE_COPY_LAZY_ENABLE_CONFIG;
+    public static final String LOG_REMOTE_COPY_LAZY_ENABLE_DOC = TopicConfig.REMOTE_COPY_LAZY_ENABLE_DOC;
 }
