@@ -87,6 +87,10 @@ public class ExceptionHandlerUtilsTest {
         assertEquals("source", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_TOPIC_NAME).value()));
         assertEquals("3", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_PARTITION_NAME).value()));
         assertEquals("2", stringDeserializer.deserialize(null, headers.lastHeader(ExceptionHandlerUtils.HEADER_ERRORS_OFFSET_NAME).value()));
+        // Verify original source headers are preserved
+        assertEquals("hello world",
+            stringDeserializer.deserialize(null,
+                headers.lastHeader("sourceHeader").value()));
     }
 
     @Test

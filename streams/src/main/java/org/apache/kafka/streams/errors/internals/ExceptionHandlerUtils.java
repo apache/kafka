@@ -19,6 +19,7 @@ package org.apache.kafka.streams.errors.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ErrorHandlerContext;
@@ -83,6 +84,12 @@ public class ExceptionHandlerUtils {
             throw new InvalidConfigurationException(String.format("%s cannot be null while building dead letter queue record", StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG));
         }
         final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(deadLetterQueueTopicName, null, context.timestamp(), key, value);
+        // Copy original headers from source record
+        if (context.headers() != null) {
+            for (Header header : context.headers()) {
+                producerRecord.headers().add(header);
+            }
+        }
         final StringWriter stackTraceStringWriter = new StringWriter();
         final PrintWriter stackTracePrintWriter = new PrintWriter(stackTraceStringWriter);
         e.printStackTrace(stackTracePrintWriter);
