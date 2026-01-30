@@ -985,7 +985,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
-                        if (remoteCopyLazyEnable && log.config() != null) {
+                        if (remoteCopyLazyEnable) {
                             // Check time-based retention
                             long localRetentionMs = log.config().localRetentionMs();
                             if (isWithinLocalRetentionTime(previousSeg, localRetentionMs, currentTimeMs)) {
