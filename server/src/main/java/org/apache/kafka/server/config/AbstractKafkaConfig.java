@@ -210,9 +210,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
                 checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners);
 
-                if (duplicatesWithIpHosts.isEmpty()) {
-                    // No-op
-                } else if (duplicatesWithIpHosts.size() == 2) {
+                if (duplicatesWithIpHosts.isEmpty()) return;
+                if (duplicatesWithIpHosts.size() == 2) {
                     String errorMessage = "If you have two listeners on the same port then one needs to be IPv4 and the other IPv6, listeners: " + listeners + ", port: " + port;
                     Endpoint ep1 = duplicatesWithIpHosts.get(0);
                     Endpoint ep2 = duplicatesWithIpHosts.get(1);
@@ -226,11 +225,11 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
                     if (!duplicatesWithoutIpHosts.isEmpty()) {
                         throw new IllegalArgumentException(errorMessage);
                     }
-                } else {
-                    // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
-                    // and the other is IPv6)
-                    throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
+                    return;
                 }
+                // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
+                // and the other is IPv6)
+                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
             });
     }
 
