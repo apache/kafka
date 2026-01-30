@@ -1675,7 +1675,7 @@ public class QuorumControllerTest {
             new ImageDeltaPair<>(() -> AclsImage.EMPTY, AclsDelta::new),
             new ImageDeltaPair<>(() -> ClientQuotasImage.EMPTY, ClientQuotasDelta::new),
             new ImageDeltaPair<>(() -> ClusterImage.EMPTY, ClusterDelta::new),
-            new ImageDeltaPair<>(() -> ConfigurationsImage.EMPTY, ConfigurationsDelta::new),
+            new ImageDeltaPair<>(() -> ConfigurationsImage.EMPTY, image -> new ConfigurationsDelta(image, (resourceType, configName) -> true)),
             new ImageDeltaPair<>(() -> DelegationTokenImage.EMPTY, DelegationTokenDelta::new),
             new ImageDeltaPair<>(() -> FeaturesImage.EMPTY, FeaturesDelta::new),
             new ImageDeltaPair<>(() -> ProducerIdsImage.EMPTY, ProducerIdsDelta::new),
