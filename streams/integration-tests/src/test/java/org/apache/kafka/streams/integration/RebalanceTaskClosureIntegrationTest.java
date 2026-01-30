@@ -72,7 +72,6 @@ public class RebalanceTaskClosureIntegrationTest {
         cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, NUM_PARTITIONS, 1);
         safeTestName = safeUniqueTestName(testInfo);
-
     }
 
     @AfterEach
