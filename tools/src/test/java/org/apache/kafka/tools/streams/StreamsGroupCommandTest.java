@@ -310,7 +310,7 @@ public class StreamsGroupCommandTest {
             .thenReturn(describeStreamsResult(groupId, GroupState.DEAD));
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()))
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
             .thenReturn(describeTopicsResult);
@@ -455,7 +455,7 @@ public class StreamsGroupCommandTest {
 
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()))
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
         when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class)))
             .thenReturn(describeTopicsResult);

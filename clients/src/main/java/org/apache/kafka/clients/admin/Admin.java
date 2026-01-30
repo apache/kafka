@@ -2149,5 +2149,5 @@ public interface Admin extends AutoCloseable {
      * @return The TerminateTransactionResult.
      */
     TerminateTransactionResult forceTerminateTransaction(String transactionalId, 
-                                                        TerminateTransactionOptions options);
+                                                         TerminateTransactionOptions options);
 }
