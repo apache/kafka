@@ -30,7 +30,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.DynamicConfigValidator;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
@@ -77,7 +77,7 @@ public class ConfigurationControlManager {
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
     private final FeatureControlManager featureControl;
-    private final DynamicConfigValidator dynamicConfigValidator;
+    private final SupportedConfigChecker supportedConfigChecker;
 
     static class Builder {
         private LogContext logContext = null;
@@ -89,7 +89,7 @@ public class ConfigurationControlManager {
         private Map<String, Object> staticConfig = Map.of();
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
-        private DynamicConfigValidator dynamicConfigValidator = null;
+        private SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> true;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -136,8 +136,8 @@ public class ConfigurationControlManager {
             return this;
         }
 
-        Builder setConfigValidator(DynamicConfigValidator dynamicConfigValidator) {
-            this.dynamicConfigValidator = dynamicConfigValidator;
+        Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
             return this;
         }
 
@@ -160,7 +160,7 @@ public class ConfigurationControlManager {
                 staticConfig,
                 nodeId,
                 featureControl,
-                dynamicConfigValidator);
+                supportedConfigChecker);
         }
     }
 
@@ -173,7 +173,7 @@ public class ConfigurationControlManager {
             Map<String, Object> staticConfig,
             int nodeId,
             FeatureControlManager featureControl,
-            DynamicConfigValidator dynamicConfigValidator
+            SupportedConfigChecker supportedConfigChecker
     ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
@@ -186,7 +186,7 @@ public class ConfigurationControlManager {
         this.staticConfig = Map.copyOf(staticConfig);
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
-        this.dynamicConfigValidator = dynamicConfigValidator;
+        this.supportedConfigChecker = supportedConfigChecker;
     }
 
     SnapshotRegistry snapshotRegistry() {
@@ -338,13 +338,6 @@ public class ConfigurationControlManager {
         Map<String, String> alteredConfigsForAlterConfigPolicyCheck = new HashMap<>();
         TimelineHashMap<String, String> existingConfigsSnapshot = configData.get(configResource);
         if (existingConfigsSnapshot != null) {
-            if (dynamicConfigValidator != null) {
-                for (String name : existingConfigsSnapshot.keySet()) {
-                    if (!dynamicConfigValidator.isValidConfig(configResource.type(), name)) {
-                        existingConfigsSnapshot.remove(name);
-                    }
-                }
-            }
             allConfigs.putAll(existingConfigsSnapshot);
             existingConfigsMap.putAll(existingConfigsSnapshot);
         }
@@ -528,8 +521,7 @@ public class ConfigurationControlManager {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
 
-        // Filter out invalid configurations using DynamicConfigValidator
-        if (dynamicConfigValidator != null && !dynamicConfigValidator.isValidConfig(configResource.type(), record.name())) {
+        if (!supportedConfigChecker.isSupported(configResource.type(), record.name())) {
             return;
         }
         

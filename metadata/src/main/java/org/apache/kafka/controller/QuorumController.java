@@ -98,7 +98,7 @@ import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
-import org.apache.kafka.metadata.DynamicConfigValidator;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.VersionRange;
@@ -210,7 +210,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
-        private DynamicConfigValidator dynamicConfigValidator = null;
+        private SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> true;
         private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
@@ -347,8 +347,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setConfigValidator(DynamicConfigValidator dynamicConfigValidator) {
-            this.dynamicConfigValidator = dynamicConfigValidator;
+        public Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
             return this;
         }
 
@@ -443,7 +443,7 @@ public final class QuorumController implements Controller {
                     createTopicPolicy,
                     alterConfigPolicy,
                     configurationValidator,
-                    dynamicConfigValidator,
+                    supportedConfigChecker,
                     staticConfig,
                     bootstrapMetadata,
                     maxRecordsPerBatch,
@@ -1494,7 +1494,7 @@ public final class QuorumController implements Controller {
         Optional<CreateTopicPolicy> createTopicPolicy,
         Optional<AlterConfigPolicy> alterConfigPolicy,
         ConfigurationValidator configurationValidator,
-        DynamicConfigValidator dynamicConfigValidator,
+        SupportedConfigChecker supportedConfigChecker,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
         int maxRecordsPerBatch,
@@ -1557,7 +1557,7 @@ public final class QuorumController implements Controller {
             setStaticConfig(staticConfig).
             setNodeId(nodeId).
             setFeatureControl(featureControl).
-            setConfigValidator(dynamicConfigValidator).
+            setSupportedConfigChecker(supportedConfigChecker).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).

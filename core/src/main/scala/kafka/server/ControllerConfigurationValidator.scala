@@ -22,7 +22,7 @@ import java.util.Properties
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
-import org.apache.kafka.metadata.DynamicConfigValidator
+import org.apache.kafka.metadata.SupportedConfigChecker
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager}
@@ -48,7 +48,7 @@ import scala.jdk.CollectionConverters._
  * as the others. It is not persisted to the metadata log.
  */
 class ControllerConfigurationValidator(private val kafkaConfig: KafkaConfig) 
-    extends ConfigurationValidator with DynamicConfigValidator {
+    extends ConfigurationValidator with SupportedConfigChecker {
   private val validConfigsByType: Map[ConfigResource.Type, util.Set[String]] = {
     val topicConfigs = LogConfig.nonInternalConfigNames.asScala.toSet
     val brokerConfigs = DynamicConfig.Broker.names.asScala.toSet
@@ -67,7 +67,7 @@ class ControllerConfigurationValidator(private val kafkaConfig: KafkaConfig)
     )
   }
 
-  override def isValidConfig(resourceType: ConfigResource.Type, configName: String): Boolean = {
+  override def isSupported(resourceType: ConfigResource.Type, configName: String): Boolean = {
     validConfigsByType.get(resourceType) match {
       case Some(configs) => configs.contains(configName)
       case None => false

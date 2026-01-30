@@ -20,16 +20,16 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.config.ConfigResource;
 
 /**
- * Validator interface for checking if a configuration name is valid for a given resource type.
+ * Interface for checking if a configuration name is supported for a given resource type.
  */
 @FunctionalInterface
-public interface DynamicConfigValidator {
+public interface SupportedConfigChecker {
     /**
-     * Check if a configuration name is valid for the given resource type.
+     * Check if a configuration name is supported for the given resource type.
      *
      * @param resourceType the type of resource (broker, topic, user, etc.)
      * @param configName   the name of the configuration
-     * @return true if the configuration is valid for the resource type, false otherwise
+     * @return true if the configuration is supported for the resource type, false otherwise
      */
-    boolean isValidConfig(ConfigResource.Type resourceType, String configName);
+    boolean isSupported(ConfigResource.Type resourceType, String configName);
 }

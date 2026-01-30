@@ -215,30 +215,30 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testIsValidConfig(): Unit = {
     // Test valid topic configs
-    assertTrue(validator.isValidConfig(TOPIC, SEGMENT_BYTES_CONFIG))
-    assertTrue(validator.isValidConfig(TOPIC, SEGMENT_MS_CONFIG))
-    assertTrue(validator.isValidConfig(TOPIC, REMOTE_LOG_STORAGE_ENABLE_CONFIG))
-    assertFalse(validator.isValidConfig(TOPIC, "invalid.topic.config"))
+    assertTrue(validator.isSupported(TOPIC, SEGMENT_BYTES_CONFIG))
+    assertTrue(validator.isSupported(TOPIC, SEGMENT_MS_CONFIG))
+    assertTrue(validator.isSupported(TOPIC, REMOTE_LOG_STORAGE_ENABLE_CONFIG))
+    assertFalse(validator.isSupported(TOPIC, "invalid.topic.config"))
 
     // Test valid broker configs
-    assertTrue(validator.isValidConfig(BROKER, "log.cleaner.threads"))
-    assertTrue(validator.isValidConfig(BROKER, "num.network.threads"))
-    assertTrue(validator.isValidConfig(BROKER, "log.segment.bytes"))
-    assertFalse(validator.isValidConfig(BROKER, "invalid.broker.config"))
+    assertTrue(validator.isSupported(BROKER, "log.cleaner.threads"))
+    assertTrue(validator.isSupported(BROKER, "num.network.threads"))
+    assertTrue(validator.isSupported(BROKER, "log.segment.bytes"))
+    assertFalse(validator.isSupported(BROKER, "invalid.broker.config"))
 
     // Test valid client metrics configs
-    assertTrue(validator.isValidConfig(CLIENT_METRICS, ClientMetricsConfigs.INTERVAL_MS_CONFIG))
-    assertTrue(validator.isValidConfig(CLIENT_METRICS, ClientMetricsConfigs.METRICS_CONFIG))
-    assertTrue(validator.isValidConfig(CLIENT_METRICS, ClientMetricsConfigs.MATCH_CONFIG))
-    assertFalse(validator.isValidConfig(CLIENT_METRICS, "invalid.client.metrics.config"))
+    assertTrue(validator.isSupported(CLIENT_METRICS, ClientMetricsConfigs.INTERVAL_MS_CONFIG))
+    assertTrue(validator.isSupported(CLIENT_METRICS, ClientMetricsConfigs.METRICS_CONFIG))
+    assertTrue(validator.isSupported(CLIENT_METRICS, ClientMetricsConfigs.MATCH_CONFIG))
+    assertFalse(validator.isSupported(CLIENT_METRICS, "invalid.client.metrics.config"))
 
     // Test valid group configs
-    assertTrue(validator.isValidConfig(GROUP, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG))
-    assertTrue(validator.isValidConfig(GROUP, GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG))
-    assertFalse(validator.isValidConfig(GROUP, "invalid.group.config"))
+    assertTrue(validator.isSupported(GROUP, GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG))
+    assertTrue(validator.isSupported(GROUP, GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG))
+    assertFalse(validator.isSupported(GROUP, "invalid.group.config"))
 
     // Test unknown resource type
-    assertFalse(validator.isValidConfig(BROKER_LOGGER, "any.config"))
+    assertFalse(validator.isSupported(BROKER_LOGGER, "any.config"))
 
     // Test quota configs are valid for all resource types
     val quotaConfigs = Seq("producer_byte_rate", "consumer_byte_rate", "request_percentage", "controller_mutation_rate")
@@ -246,8 +246,8 @@ class ControllerConfigurationValidatorTest {
     
     quotaConfigs.foreach { quotaConfig =>
       resourceTypes.foreach { resourceType =>
-        assertTrue(validator.isValidConfig(resourceType, quotaConfig),
-          s"Quota config $quotaConfig should be valid for $resourceType")
+        assertTrue(validator.isSupported(resourceType, quotaConfig),
+          s"Quota config $quotaConfig should be supported for $resourceType")
       }
     }
   }

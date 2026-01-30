@@ -24,7 +24,7 @@ import kafka.tools.TerseFailure;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.loader.MetadataLoader;
-import org.apache.kafka.metadata.DynamicConfigValidator;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.util.SnapshotFileReader;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.LoggingFaultHandler;
@@ -152,13 +152,13 @@ public final class MetadataShell {
 
     private void initializeWithSnapshotFileReader() throws Exception {
         this.fileLock = takeDirectoryLockIfExists(parentParent(new File(snapshotPath)));
-        DynamicConfigValidator dynamicConfigValidator = new ControllerConfigurationValidator(new KafkaConfig(new Properties(), false));
+        SupportedConfigChecker supportedConfigChecker = new ControllerConfigurationValidator(new KafkaConfig(new Properties(), false));
 
         this.loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
                 setNodeId(-1).
                 setHighWaterMarkAccessor(() -> snapshotFileReader.highWaterMark()).
-                setConfigValidator(dynamicConfigValidator).
+                setSupportedConfigChecker(supportedConfigChecker).
                 build();
         snapshotFileReader = new SnapshotFileReader(snapshotPath, loader);
         snapshotFileReader.startup();

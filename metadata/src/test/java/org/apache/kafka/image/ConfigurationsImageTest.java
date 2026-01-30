@@ -20,7 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
-import org.apache.kafka.metadata.DynamicConfigValidator;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -84,7 +84,7 @@ public class ConfigurationsImageTest {
             setResourceName("2").setName("foo").setValue("bar"),
             CONFIG_RECORD.highestSupportedVersion()));
 
-        DELTA1 = new ConfigurationsDelta(IMAGE1);
+        DELTA1 = new ConfigurationsDelta(IMAGE1, (resourceType, configName) -> true);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<ConfigResource, ConfigurationImage> map2 = new HashMap<>();
@@ -123,12 +123,12 @@ public class ConfigurationsImageTest {
     @Test
     public void testConfigurationDeltaFiltering() {
         Set<String> validConfigs = Set.of("foo", "bar");
-        DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
 
         Map<String, String> initialConfigs = Map.of("foo", "value1"); // valid
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
 
-        ConfigurationDelta delta = new ConfigurationDelta(image, dynamicConfigValidator);
+        ConfigurationDelta delta = new ConfigurationDelta(image, supportedConfigChecker);
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("bar").setValue("value2"));
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
@@ -146,7 +146,7 @@ public class ConfigurationsImageTest {
         Map<String, String> initialConfigs = Map.of("foo", "value1", "bar", "value2");
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
 
-        ConfigurationDelta delta = new ConfigurationDelta(image, null);
+        ConfigurationDelta delta = new ConfigurationDelta(image, (resourceType, configName) -> true);
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("baz").setValue("value3"));
 
@@ -160,7 +160,7 @@ public class ConfigurationsImageTest {
     @Test
     public void testConfigurationDeltaPreventsInvalidConfigsInResultingImage() {
         Set<String> validConfigs = Set.of("foo", "bar");
-        DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
 
         Map<String, String> initialConfigs = Map.of(
             "foo", "value1",      // valid
@@ -168,7 +168,7 @@ public class ConfigurationsImageTest {
             "invalid", "value3"   // invalid
         );
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
-        ConfigurationDelta delta = new ConfigurationDelta(image, dynamicConfigValidator);
+        ConfigurationDelta delta = new ConfigurationDelta(image, supportedConfigChecker);
 
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("foo").setValue("value1"));
@@ -195,7 +195,7 @@ public class ConfigurationsImageTest {
         // test from empty image stopping each of the various intermediate images along the way
         new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
             () -> ConfigurationsImage.EMPTY,
-            ConfigurationsDelta::new
+            img -> new ConfigurationsDelta(img, (resourceType, configName) -> true)
         ).test(image, fromRecords);
     }
 

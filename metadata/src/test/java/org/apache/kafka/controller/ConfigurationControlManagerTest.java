@@ -28,7 +28,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.metadata.DynamicConfigValidator;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -564,14 +564,14 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
-    public void testValidateAlterConfigFiltersInvalidExistingConfigs() {
+    public void testValidateAlterConfigWithInvalidExistingConfigs() {
         Set<String> validConfigs = Set.of("abc", "def");
-        DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
 
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
-            setConfigValidator(dynamicConfigValidator).
+            setSupportedConfigChecker(supportedConfigChecker).
             build();
 
         manager.replay(new ConfigRecord().
@@ -579,11 +579,11 @@ public class ConfigurationControlManagerTest {
             setName("abc").setValue("value1"));  // valid
         manager.replay(new ConfigRecord().
             setResourceType(TOPIC.id()).setResourceName("mytopic").
-            setName("invalid.config").setValue("should-be-filtered"));  // invalid
+            setName("invalid.config").setValue("should-be-filtered"));  // invalid, filtered in replay()
 
         Map<String, String> configs = manager.getConfigs(MYTOPIC);
         assertTrue(configs.containsKey("abc"), "Valid config should be in configData");
-        assertFalse(configs.containsKey("invalid.config"), "Invalid config should be filtered out from configData");
+        assertFalse(configs.containsKey("invalid.config"), "Invalid config should be filtered out in replay()");
 
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(
             MYTOPIC,
@@ -596,11 +596,11 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testReplayFiltersInvalidConfigs() {
         Set<String> validConfigs = Set.of("abc", "def", "ghi");
-        DynamicConfigValidator dynamicConfigValidator = (resourceType, configName) -> validConfigs.contains(configName);
+        SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> validConfigs.contains(configName);
 
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
-            setConfigValidator(dynamicConfigValidator).
+            setSupportedConfigChecker(supportedConfigChecker).
             build();
 
         // Replay valid configs

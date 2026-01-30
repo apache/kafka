@@ -18,7 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.ConfigRecord;
-import org.apache.kafka.metadata.DynamicConfigValidator;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -32,11 +32,11 @@ import java.util.Optional;
 public final class ConfigurationDelta {
     private final ConfigurationImage image;
     private final Map<String, Optional<String>> changes = new HashMap<>();
-    private final DynamicConfigValidator dynamicConfigValidator;
+    private final SupportedConfigChecker supportedConfigChecker;
 
-    public ConfigurationDelta(ConfigurationImage image, DynamicConfigValidator dynamicConfigValidator) {
+    public ConfigurationDelta(ConfigurationImage image, SupportedConfigChecker supportedConfigChecker) {
         this.image = image;
-        this.dynamicConfigValidator = dynamicConfigValidator;
+        this.supportedConfigChecker = supportedConfigChecker;
     }
 
     public void finishSnapshot() {
@@ -48,7 +48,7 @@ public final class ConfigurationDelta {
     }
 
     public void replay(ConfigRecord record) {
-        if (dynamicConfigValidator != null && !dynamicConfigValidator.isValidConfig(image.resource().type(), record.name())) {
+        if (!supportedConfigChecker.isSupported(image.resource().type(), record.name())) {
             return;
         }
         changes.put(record.name(), Optional.ofNullable(record.value()));

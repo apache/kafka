@@ -34,7 +34,7 @@ public class MetadataImageBuilder {
     }
 
     public MetadataImageBuilder(MetadataImage image) {
-        this.delta = new MetadataDelta(image);
+        this.delta = new MetadataDelta.Builder().setImage(image).build();
     }
 
     public MetadataImageBuilder addTopic(

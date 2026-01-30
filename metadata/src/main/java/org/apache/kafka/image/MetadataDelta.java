@@ -40,7 +40,7 @@ import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.metadata.DynamicConfigValidator;
+import org.apache.kafka.metadata.SupportedConfigChecker;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Optional;
@@ -52,26 +52,26 @@ import java.util.Optional;
 public final class MetadataDelta {
     public static class Builder {
         private MetadataImage image = MetadataImage.EMPTY;
-        private DynamicConfigValidator dynamicConfigValidator = null;
+        private SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> true;
 
         public Builder setImage(MetadataImage image) {
             this.image = image;
             return this;
         }
 
-        public Builder setConfigValidator(DynamicConfigValidator dynamicConfigValidator) {
-            this.dynamicConfigValidator = dynamicConfigValidator;
+        public Builder setSupportedConfigChecker(SupportedConfigChecker supportedConfigChecker) {
+            this.supportedConfigChecker = supportedConfigChecker;
             return this;
         }
 
         public MetadataDelta build() {
-            return new MetadataDelta(image, dynamicConfigValidator);
+            return new MetadataDelta(image, supportedConfigChecker);
         }
     }
 
     private final MetadataImage image;
 
-    private final DynamicConfigValidator dynamicConfigValidator;
+    private final SupportedConfigChecker supportedConfigChecker;
 
     private FeaturesDelta featuresDelta = null;
 
@@ -91,13 +91,9 @@ public final class MetadataDelta {
 
     private DelegationTokenDelta delegationTokenDelta = null;
 
-    public MetadataDelta(MetadataImage image) {
-        this(image, null);
-    }
-
-    public MetadataDelta(MetadataImage image, DynamicConfigValidator dynamicConfigValidator) {
+    private MetadataDelta(MetadataImage image, SupportedConfigChecker supportedConfigChecker) {
         this.image = image;
-        this.dynamicConfigValidator = dynamicConfigValidator;
+        this.supportedConfigChecker = supportedConfigChecker;
     }
 
     public MetadataImage image() {
@@ -136,7 +132,7 @@ public final class MetadataDelta {
     }
 
     public ConfigurationsDelta getOrCreateConfigsDelta() {
-        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs(), dynamicConfigValidator);
+        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs(), supportedConfigChecker);
         return configsDelta;
     }
 
