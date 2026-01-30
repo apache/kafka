@@ -37,8 +37,10 @@ org.apache.kafka.coordinator.share.ShareCoordinatorServiceTest:
 - testInitializeStateSuccess
 - testInitializeStateValidationError
 - testInitializeStateWhenNotStarted
-- testOnTopicsDeletedDoesNotThrowExp
-- testOnTopicsDeletedEmptyList
+- testOnMetadataUpdateDoesNotScheduleOperationsWhenNoTopicsDeleted
+- testOnMetadataUpdateDoesNotScheduleOperationsWhenTopicsDeltaIsNull
+- testOnMetadataUpdateSchedulesOperationsWhenTopicsDeleted
+- testOnMetadataUpdateSwallowsErrorsWhenTopicsDeleted
 - testPartitionFor
 - testPeriodicJobsDoNotRunWhenShareGroupsDisabled
 - testReadFutureReturnsError
