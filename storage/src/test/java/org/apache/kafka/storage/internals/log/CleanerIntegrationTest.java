@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -26,6 +25,8 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
 
 import java.util.List;
 import java.util.Map;
