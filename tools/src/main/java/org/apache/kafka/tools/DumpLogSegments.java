@@ -36,6 +36,7 @@ import org.apache.kafka.common.metadata.MetadataJsonConverters;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.AbstractLegacyRecordBatch;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.ControlRecordUtils;
@@ -84,6 +85,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -427,7 +429,7 @@ public class DumpLogSegments {
 
         if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
             System.out.print(" sequence: " + record.sequence() +
-                " headerKeys: " + java.util.Arrays.stream(record.headers())
+                " headerKeys: " + Arrays.stream(record.headers())
                     .map(Header::key)
                     .collect(Collectors.joining(",", "[", "]")));
         }
@@ -535,26 +537,18 @@ public class DumpLogSegments {
         void recordMismatchTimeIndex(File file, long indexTimestamp, long logTimestamp) {
             List<Pair<Long, Long>> misMatchesSeq = misMatchesForTimeIndexFilesMap
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            if (misMatchesSeq.isEmpty()) {
-                misMatchesForTimeIndexFilesMap.put(file.getAbsolutePath(), misMatchesSeq);
-            }
             misMatchesSeq.add(new Pair<>(indexTimestamp, logTimestamp));
         }
 
         void recordOutOfOrderIndexTimestamp(File file, long indexTimestamp, long prevIndexTimestamp) {
             List<Pair<Long, Long>> outOfOrderSeq = outOfOrderTimestamp
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            if (outOfOrderSeq.isEmpty())
-                outOfOrderTimestamp.put(file.getAbsolutePath(), outOfOrderSeq);
             outOfOrderSeq.add(new Pair<>(indexTimestamp, prevIndexTimestamp));
         }
 
         void recordShallowOffsetNotFound(File file, long indexOffset, long logOffset) {
             List<Pair<Long, Long>> shallowOffsetNotFoundSeq = shallowOffsetNotFound
                 .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-            if (shallowOffsetNotFoundSeq.isEmpty()) {
-                shallowOffsetNotFound.put(file.getAbsolutePath(), shallowOffsetNotFoundSeq);
-            }
             shallowOffsetNotFoundSeq.add(new Pair<>(indexOffset, logOffset));
         }
 
@@ -694,7 +688,7 @@ public class DumpLogSegments {
         private <T> void replaceField(
             JsonNode node,
             String field,
-            BiFunction<org.apache.kafka.common.protocol.Readable, Short, T> reader,
+            BiFunction<Readable, Short, T> reader,
             BiFunction<T, Short, JsonNode> writer
         ) {
             JsonNode fieldNode = node.get(field);
