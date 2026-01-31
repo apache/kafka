@@ -239,9 +239,6 @@ org.apache.kafka.server.metrics.ClientMetricsTelemetryPluginTest:
 org.apache.kafka.server.metrics.ClientTelemetryTest:
 - testMultipleDeprecatedReceivers
 - testMultipleNewExporters
-org.apache.kafka.server.metrics.DefaultExternalKRaftMetricsTest:
-- testDefaultExternalKRaftMetrics
-- testEmptyDefaultExternalKRaftMetrics
 org.apache.kafka.server.metrics.ForwardingManagerMetricsTest:
 - testMetricsNames
 - testQueueLength
