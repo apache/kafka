@@ -44,11 +44,13 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.EndTransactionMarker;
+import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
@@ -1411,5 +1413,46 @@ public class DumpLogSegmentsTest {
             3, InetSocketAddress.createUnresolved("localhost", 9993)
         );
         return VoterSet.fromInetSocketAddresses(ListenerName.normalised("LISTENER"), voters);
+    }
+
+    @Test
+    public void testLegacyRecordBatchOutputFormat() throws Exception {
+        // Create a legacy format log file directly (bypassing UnifiedLog which auto-upgrades to V2)
+        // Must use numeric naming format expected by DumpLogSegments
+        File legacyLogFile = new File(logDir, "00000000000000001000.log");
+
+        MemoryRecords legacyRecords = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+            Compression.NONE, TimestampType.CREATE_TIME,
+            new SimpleRecord(time.milliseconds(), "key1".getBytes(), "value1".getBytes()),
+            new SimpleRecord(time.milliseconds(), "key2".getBytes(), "value2".getBytes())
+        );
+
+        // Write the legacy records directly to a file (create it first)
+        try (FileRecords fileRecords = FileRecords.open(legacyLogFile, true)) {
+            fileRecords.append(legacyRecords);
+            fileRecords.flush();
+        }
+
+        // Dump the legacy log file
+        String output = runDumpLogSegments(new String[] {"--deep-iteration", "--files", legacyLogFile.getAbsolutePath()});
+
+        // Verify the output contains legacy batch fields
+        assertTrue(output.contains("Log starting offset:"), "Output should contain log starting offset");
+
+        // For legacy batches, the wrapper record is an AbstractLegacyRecordBatch
+        // and should output "isValid:" and "crc:" fields
+        assertTrue(output.contains("isValid:"),
+            "Output should contain 'isValid:' field for legacy batches. Output:\n" + output);
+        assertTrue(output.contains("crc:"),
+            "Output should contain 'crc:' field for legacy batches. Output:\n" + output);
+
+        // Critical: Verify no unmatched closing braces in the output
+        // Count all braces in the entire output
+        long openBraces = output.chars().filter(ch -> ch == '{').count();
+        long closeBraces = output.chars().filter(ch -> ch == '}').count();
+
+        assertEquals(openBraces, closeBraces,
+            "Output should have balanced braces (no unmatched closing brace). " +
+            "Found " + openBraces + " '{' and " + closeBraces + " '}'");
     }
 }
