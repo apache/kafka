@@ -32,7 +32,7 @@ import org.apache.kafka.common.errors.{InvalidConfigurationException, TimeoutExc
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry, FeatureUpdate, UpdateFeaturesOptions}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry, FeatureUpdate}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -127,8 +127,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   private def disableEligibleLeaderReplicas(): Unit = {
     if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
       admin.updateFeatures(
-        util.Map.of("eligible.leader.replicas.version", new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
-        new UpdateFeaturesOptions()).all().get()
+        util.Map.of("eligible.leader.replicas.version", new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))).all().get()
     }
   }
 
