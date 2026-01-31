@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -41,10 +42,13 @@ import org.apache.kafka.server.util.Csv;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
+import org.apache.commons.validator.routines.InetAddressValidator;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +58,9 @@ import java.util.stream.Collectors;
  * For more details check KAFKA-15853
  */
 public abstract class AbstractKafkaConfig extends AbstractConfig {
+
+    private static final InetAddressValidator INET_ADDRESS_VALIDATOR = InetAddressValidator.getInstance();
+
     public static final ConfigDef CONFIG_DEF = Utils.mergeConfigs(List.of(
         RemoteLogManagerConfig.configDef(),
         ServerConfigs.CONFIG_DEF,
@@ -120,6 +127,22 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         return interBrokerListenerNameAndSecurityProtocol().getValue();
     }
 
+    public int initialRegistrationTimeoutMs() {
+        return getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG);
+    }
+
+    public int brokerHeartbeatIntervalMs() {
+        return getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG);
+    }
+
+    public Optional<String> rack() {
+        return Optional.ofNullable(getString(ServerConfigs.BROKER_RACK_CONFIG));
+    }
+
+    public int nodeId() {
+        return getInt(KRaftConfigs.NODE_ID_CONFIG);
+    }
+
     public Map<ListenerName, SecurityProtocol> effectiveListenerSecurityProtocolMap() {
         Map<ListenerName, SecurityProtocol> mapValue =
                 getMap(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
@@ -160,6 +183,81 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         } catch (Exception e) {
             throw new IllegalArgumentException(
                     String.format("Error parsing configuration property '%s': %s", propName, e.getMessage()));
+        }
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(List<String> listeners, Map<ListenerName, SecurityProtocol> securityProtocolMap) {
+        return listenerListToEndPoints(listeners, securityProtocolMap, true);
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(List<String> listeners, Map<ListenerName, SecurityProtocol> securityProtocolMap, boolean requireDistinctPorts) {
+        try {
+            List<Endpoint> endPoints = SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap);
+            validate(endPoints, listeners, requireDistinctPorts);
+            return endPoints;
+        } catch (Exception e) {
+            throw new IllegalArgumentException(String.format("Error creating broker listeners from '%s': %s", listeners, e.getMessage()), e);
+        }
+    }
+
+    private static void validate(List<Endpoint> endPoints, List<String> listeners, boolean requireDistinctPorts) {
+        long distinctListenerNames = endPoints.stream().map(Endpoint::listener).distinct().count();
+        if (distinctListenerNames != endPoints.size()) {
+            throw new IllegalArgumentException("Each listener must have a different name, listeners: " + listeners);
+        }
+
+        if (!requireDistinctPorts) return;
+
+        endPoints.stream()
+            .filter(ep -> ep.port() != 0) // filter port 0 for unit tests
+            .collect(Collectors.groupingBy(Endpoint::port))
+            .entrySet().stream()
+            .filter(entry -> entry.getValue().size() > 1)
+            .forEach(entry -> {
+                // Iterate through every grouping of duplicates by port to see if they are valid
+                int port = entry.getKey();
+                List<Endpoint> eps = entry.getValue();
+                // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
+                Map<Boolean, List<Endpoint>> partitionedByValidIp = eps.stream()
+                        .collect(Collectors.partitioningBy(ep -> ep.host() != null && INET_ADDRESS_VALIDATOR.isValid(ep.host())));
+
+                List<Endpoint> duplicatesWithIpHosts = partitionedByValidIp.get(true);
+                List<Endpoint> duplicatesWithoutIpHosts = partitionedByValidIp.get(false);
+
+                checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners);
+
+                if (duplicatesWithIpHosts.isEmpty()) return;
+                if (duplicatesWithIpHosts.size() == 2) {
+                    String errorMessage = "If you have two listeners on the same port then one needs to be IPv4 and the other IPv6, listeners: " + listeners + ", port: " + port;
+                    Endpoint ep1 = duplicatesWithIpHosts.get(0);
+                    Endpoint ep2 = duplicatesWithIpHosts.get(1);
+                    if (!validateOneIsIpv4AndOtherIpv6(ep1.host(), ep2.host())) {
+                        throw new IllegalArgumentException(errorMessage);
+                    }
+
+                    // If we reach this point it means that even though duplicatesWithIpHosts in isolation can be valid, if
+                    // there happens to be ANOTHER listener on this port without an IP host (such as a null host) then its
+                    // not valid.
+                    if (!duplicatesWithoutIpHosts.isEmpty()) {
+                        throw new IllegalArgumentException(errorMessage);
+                    }
+                    return;
+                }
+                // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
+                // and the other is IPv6)
+                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has an IPv4 address and the other IPv6 address, listeners: " + listeners + ", port: " + port);
+            });
+    }
+
+    private static boolean validateOneIsIpv4AndOtherIpv6(String first, String second) {
+        return (INET_ADDRESS_VALIDATOR.isValidInet4Address(first) && INET_ADDRESS_VALIDATOR.isValidInet6Address(second)) ||
+                (INET_ADDRESS_VALIDATOR.isValidInet6Address(first) && INET_ADDRESS_VALIDATOR.isValidInet4Address(second));
+    }
+
+    private static void checkDuplicateListenerPorts(List<Endpoint> endpoints, List<String> listeners) {
+        Set<Integer> distinctPorts = endpoints.stream().map(Endpoint::port).collect(Collectors.toSet());
+        if (endpoints.size() != distinctPorts.size()) {
+            throw new IllegalArgumentException("Each listener must have a different port, listeners: " + listeners);
         }
     }
 

@@ -42,11 +42,9 @@ import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
-import org.apache.kafka.server.metrics.DefaultExternalKRaftMetrics
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
 
-import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 /**
@@ -105,7 +103,7 @@ class TestRaftServer(
       topicId,
       time,
       metrics,
-      new DefaultExternalKRaftMetrics(Optional.empty, Optional.empty),
+      _ => {},
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),

@@ -1645,25 +1645,25 @@ class DefaultStateUpdaterTest {
 
         metricName = new MetricName("idle-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on being idle",
+            "The ratio, over a rolling measurement window, of the time this thread spent being idle",
             tagMap);
         verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
         metricName = new MetricName("active-restore-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on restoring active tasks",
+            "The ratio, over a rolling measurement window, of the time this thread spent restoring active tasks",
             tagMap);
         verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 
         metricName = new MetricName("standby-update-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on updating standby tasks",
+            "The ratio, over a rolling measurement window, of the time this thread spent updating standby tasks",
             tagMap);
         verifyMetric(metrics, metricName, is(0.0d));
 
         metricName = new MetricName("checkpoint-ratio",
             "stream-state-updater-metrics",
-            "The fraction of time the thread spent on checkpointing tasks restored progress",
+            "The ratio, over a rolling measurement window, of the time this thread spent checkpointing tasks restored progress",
             tagMap);
         verifyMetric(metrics, metricName, greaterThanOrEqualTo(0.0d));
 

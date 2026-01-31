@@ -835,7 +835,7 @@ public class StreamsGroup implements Group {
     }
 
     @Override
-    public void cancelTimers(CoordinatorTimer<Void, CoordinatorRecord> timer) {
+    public void cancelTimers(CoordinatorTimer<CoordinatorRecord> timer) {
         timer.cancel(initialRebalanceTimeoutKey(groupId));
     }
 

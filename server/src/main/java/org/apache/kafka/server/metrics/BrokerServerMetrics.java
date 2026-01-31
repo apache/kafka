@@ -99,11 +99,11 @@ public final class BrokerServerMetrics implements AutoCloseable {
             "1 if controller.quorum.voters is set but was not used by the broker, 0 otherwise."
         );
 
-        metrics.addMetric(lastAppliedRecordOffsetName, (config, now) -> lastAppliedImageProvenance.get().lastContainedOffset());
-        metrics.addMetric(lastAppliedRecordTimestampName, (config, now) -> lastAppliedImageProvenance.get().lastContainedLogTimeMs());
-        metrics.addMetric(lastAppliedRecordLagMsName, (config, now) -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
-        metrics.addMetric(metadataLoadErrorCountName, (config, now) -> metadataLoadErrorCount.get());
-        metrics.addMetric(metadataApplyErrorCountName, (config, now) -> metadataApplyErrorCount.get());
+        metrics.addMetric(lastAppliedRecordOffsetName, (Gauge<Long>) (config, now) -> lastAppliedImageProvenance.get().lastContainedOffset());
+        metrics.addMetric(lastAppliedRecordTimestampName, (Gauge<Long>) (config, now) -> lastAppliedImageProvenance.get().lastContainedLogTimeMs());
+        metrics.addMetric(lastAppliedRecordLagMsName, (Gauge<Long>) (config, now) -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
+        metrics.addMetric(metadataLoadErrorCountName, (Gauge<Long>) (config, now) -> metadataLoadErrorCount.get());
+        metrics.addMetric(metadataApplyErrorCountName, (Gauge<Long>) (config, now) -> metadataApplyErrorCount.get());
         metrics.addMetric(ignoredStaticVotersName, (Gauge<Integer>) (config, now) -> ignoredStaticVoters.get() ? 1 : 0);
     }
 

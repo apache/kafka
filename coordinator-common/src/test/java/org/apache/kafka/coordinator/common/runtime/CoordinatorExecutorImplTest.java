@@ -16,13 +16,11 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.util.FutureUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -47,35 +45,27 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 public class CoordinatorExecutorImplTest {
     private static final LogContext LOG_CONTEXT = new LogContext();
-    private static final TopicPartition SHARD_PARTITION = new TopicPartition("__consumer_offsets", 0);
-    private static final Duration WRITE_TIMEOUT = Duration.ofMillis(1000);
     private static final String TASK_KEY = "task";
 
     @Test
     public void testTaskSuccessfulLifecycle() {
-        CoordinatorShard<String> coordinatorShard = mock(CoordinatorShard.class);
-        CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
         ExecutorService executorService = mock(ExecutorService.class);
-        CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            SHARD_PARTITION,
-            runtime,
             executorService,
-            WRITE_TIMEOUT
+            scheduler
         );
 
-        when(runtime.scheduleWriteOperation(
+        when(scheduler.scheduleWriteOperation(
             eq(TASK_KEY),
-            eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             assertTrue(executor.isScheduled(TASK_KEY));
-            CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+            CoordinatorShardScheduler.WriteOperation<String> op = args.getArgument(1);
             assertEquals(
                 new CoordinatorResult<>(List.of("record"), null),
-                op.generateRecordsAndResult(coordinatorShard)
+                op.generate()
             );
             return CompletableFuture.completedFuture(null);
         });
@@ -113,28 +103,22 @@ public class CoordinatorExecutorImplTest {
 
     @Test
     public void testTaskFailedLifecycle() {
-        CoordinatorShard<String> coordinatorShard = mock(CoordinatorShard.class);
-        CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
         ExecutorService executorService = mock(ExecutorService.class);
-        CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            SHARD_PARTITION,
-            runtime,
             executorService,
-            WRITE_TIMEOUT
+            scheduler
         );
 
-        when(runtime.scheduleWriteOperation(
+        when(scheduler.scheduleWriteOperation(
             eq(TASK_KEY),
-            eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
-            CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
+            CoordinatorShardScheduler.WriteOperation<String> op = args.getArgument(1);
             assertEquals(
                 new CoordinatorResult<>(List.of(), null),
-                op.generateRecordsAndResult(coordinatorShard)
+                op.generate()
             );
             return CompletableFuture.completedFuture(null);
         });
@@ -172,14 +156,12 @@ public class CoordinatorExecutorImplTest {
 
     @Test
     public void testTaskCancelledBeforeBeingExecuted() {
-        CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
         ExecutorService executorService = mock(ExecutorService.class);
-        CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            SHARD_PARTITION,
-            runtime,
             executorService,
-            WRITE_TIMEOUT
+            scheduler
         );
 
         when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
@@ -216,29 +198,23 @@ public class CoordinatorExecutorImplTest {
 
     @Test
     public void testTaskCancelledAfterBeingExecutedButBeforeWriteOperationIsExecuted() {
-        CoordinatorShard<String> coordinatorShard = mock(CoordinatorShard.class);
-        CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
         ExecutorService executorService = mock(ExecutorService.class);
-        CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            SHARD_PARTITION,
-            runtime,
             executorService,
-            WRITE_TIMEOUT
+            scheduler
         );
 
-        when(runtime.scheduleWriteOperation(
+        when(scheduler.scheduleWriteOperation(
             eq(TASK_KEY),
-            eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
             // Cancel the task before running the write operation.
             executor.cancel(TASK_KEY);
 
-            CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
-                args.getArgument(3);
-            Throwable ex = assertThrows(RejectedExecutionException.class, () -> op.generateRecordsAndResult(coordinatorShard));
+            CoordinatorShardScheduler.WriteOperation<String> op = args.getArgument(1);
+            Throwable ex = assertThrows(RejectedExecutionException.class, op::generate);
             return FutureUtils.failedFuture(ex);
         });
 
@@ -272,20 +248,16 @@ public class CoordinatorExecutorImplTest {
 
     @Test
     public void testTaskSchedulingWriteOperationFailed() {
-        CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
         ExecutorService executorService = mock(ExecutorService.class);
-        CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            SHARD_PARTITION,
-            runtime,
             executorService,
-            WRITE_TIMEOUT
+            scheduler
         );
 
-        when(runtime.scheduleWriteOperation(
+        when(scheduler.scheduleWriteOperation(
             eq(TASK_KEY),
-            eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenReturn(FutureUtils.failedFuture(new Throwable("Oh no!")));
 
@@ -320,26 +292,21 @@ public class CoordinatorExecutorImplTest {
 
     @Test
     public void testCancelAllTasks() {
-        CoordinatorShard<String> coordinatorShard = mock(CoordinatorShard.class);
-        CoordinatorRuntime<CoordinatorShard<String>, String> runtime = mock(CoordinatorRuntime.class);
+        CoordinatorShardScheduler<String> scheduler = mock(CoordinatorShardScheduler.class);
         ExecutorService executorService = mock(ExecutorService.class);
-        CoordinatorExecutorImpl<CoordinatorShard<String>, String> executor = new CoordinatorExecutorImpl<>(
+        CoordinatorExecutorImpl<String> executor = new CoordinatorExecutorImpl<>(
             LOG_CONTEXT,
-            SHARD_PARTITION,
-            runtime,
             executorService,
-            WRITE_TIMEOUT
+            scheduler
         );
 
-        List<CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String>> writeOperations = new ArrayList<>();
+        List<CoordinatorShardScheduler.WriteOperation<String>> writeOperations = new ArrayList<>();
         List<CompletableFuture<Void>> writeFutures = new ArrayList<>();
-        when(runtime.scheduleWriteOperation(
+        when(scheduler.scheduleWriteOperation(
             anyString(),
-            eq(SHARD_PARTITION),
-            eq(WRITE_TIMEOUT),
             any()
         )).thenAnswer(args -> {
-            writeOperations.add(args.getArgument(3));
+            writeOperations.add(args.getArgument(1));
             CompletableFuture<Void> writeFuture = new CompletableFuture<>();
             writeFutures.add(writeFuture);
             return writeFuture;
@@ -374,9 +341,9 @@ public class CoordinatorExecutorImplTest {
         executor.cancelAll();
 
         for (int i = 0; i < writeOperations.size(); i++) {
-            CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> writeOperation = writeOperations.get(i);
+            CoordinatorShardScheduler.WriteOperation<String> writeOperation = writeOperations.get(i);
             CompletableFuture<Void> writeFuture = writeFutures.get(i);
-            Throwable ex = assertThrows(RejectedExecutionException.class, () -> writeOperation.generateRecordsAndResult(coordinatorShard));
+            Throwable ex = assertThrows(RejectedExecutionException.class, writeOperation::generate);
             writeFuture.completeExceptionally(ex);
         }
 
