@@ -29,14 +29,15 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanedTransactionMetadata, Cleaner, CleanerConfig, CleanerStats, LocalLog, LogAppendInfo, LogCleaner, LogCleanerManager, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanedTransactionMetadata, Cleaner, CleanerConfig, CleanerStats, LocalLog, LogAppendInfo, LogCleaner, LogCleanerManager, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, SegmentOverflowException, TransactionIndex, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.mockito.ArgumentMatchers
+import org.mockito.{ArgumentMatchers, MockedConstruction, Mockito}
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mockConstruction, times, verify, verifyNoMoreInteractions}
+import org.mockito.invocation.InvocationOnMock
 
 import java.io.{File, RandomAccessFile}
 import java.nio._
@@ -2215,6 +2216,79 @@ class LogCleanerTest extends Logging {
       assertMaxCompactionDelay(1)
     } finally {
       logCleaner.shutdown()
+    }
+  }
+
+  @Test
+  def testSegmentWithCompactionDataOverflow(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    val log = makeLog(config = config)
+    val dir = log.parentDir
+
+    log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, key = "test".getBytes), 0)
+
+    val segments = log.logSegments.asScala.toList
+    val segmentToClean = segments.head
+    val topicPartition = log.topicPartition()
+
+    val mockTxnIndex = Mockito.mock(classOf[TransactionIndex])
+    Mockito.when(mockTxnIndex.file()).thenReturn(new File(dir, "mock.txnindex"))
+
+    val appendCallCount = new java.util.concurrent.atomic.AtomicInteger(0)
+
+    val mockLogSegmentCtor = Mockito.mockConstruction(
+      classOf[LogSegment],
+      new MockedConstruction.MockInitializer[LogSegment] {
+        override def prepare(mock: LogSegment, context: MockedConstruction.Context): Unit = {
+          Mockito.when(mock.txnIndex()).thenReturn(mockTxnIndex)
+          Mockito.when(mock.baseOffset()).thenReturn(segmentToClean.baseOffset())
+
+          Mockito.when(mock.readNextOffset()).thenReturn(segmentToClean.baseOffset() + 1)
+          Mockito.doNothing().when(mock).onBecomeInactiveSegment()
+          Mockito.doNothing().when(mock).flush()
+          Mockito.doNothing().when(mock).setLastModified(ArgumentMatchers.anyLong())
+
+          Mockito.doAnswer((invocation: InvocationOnMock) => {
+            if (appendCallCount.incrementAndGet() == 1) {
+              // first time, it should throw SegmentOverflowException
+              throw new SegmentOverflowException(mock)
+            } else {
+              // second time, it should work fine
+              null
+            }
+          }).when(mock).append(
+            ArgumentMatchers.anyLong(),
+            ArgumentMatchers.any(classOf[MemoryRecords])
+          )
+        }
+      }
+    )
+
+    try {
+      assertThrows(classOf[LogCleaningAbortedException], () =>
+        cleaner.cleanSegments(log, util.List.of(segmentToClean),
+          cleaner.offsetMap, 0L,
+          new CleanerStats(Time.SYSTEM),
+          new CleanedTransactionMetadata(),
+          -1, log.logEndOffset)
+      )
+
+      assertTrue(cleaner.segmentOverflowPartitions().containsKey(topicPartition))
+      val segmentRatio = cleaner.segmentOverflowPartitions().get(topicPartition)
+      assertEquals(0.9, segmentRatio)
+
+      val cleanable = new LogToClean(log, 0L, log.activeSegment.baseOffset, true)
+      cleaner.doClean(cleanable, time.milliseconds())
+
+      assertFalse(cleaner.segmentOverflowPartitions().containsKey(topicPartition))
+
+    } finally {
+      mockLogSegmentCtor.close()
+      log.close()
     }
   }
 

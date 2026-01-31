@@ -38,6 +38,7 @@ import java.security.DigestException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +60,11 @@ public class Cleaner {
     private final Throttler throttler;
     private final Time time;
     private final Consumer<TopicPartition> checkDone;
+
+    /**
+     * The topic partitions that have segment overflow history mapped to their segment size ratio
+     */
+    private final Map<TopicPartition, Double> segmentOverflowPartitions = new HashMap<>();
 
     /**
      * Buffer used for read i/o
@@ -169,15 +175,31 @@ public class Cleaner {
                 log.name(), new Date(cleanableHorizonMs), new Date(legacyDeleteHorizonMs));
         CleanedTransactionMetadata transactionMetadata = new CleanedTransactionMetadata();
 
+        double sizeRatio = 1.0;
+        if (segmentOverflowPartitions.containsKey(log.topicPartition())) {
+            sizeRatio = segmentOverflowPartitions.get(log.topicPartition());
+            logger.info("Partition {} has overflow history. " + "Reducing effective segment size to {}% for this round.",
+                    log.topicPartition(), sizeRatio * 100);
+        }
+
+        int effectiveMaxSize = (int) (log.config().segmentSize() * sizeRatio);
+
         List<List<LogSegment>> groupedSegments = groupSegmentsBySize(
                 log.logSegments(0, endOffset),
-                log.config().segmentSize(),
+                effectiveMaxSize,
                 log.config().maxIndexSize,
                 cleanable.firstUncleanableOffset()
         );
 
         for (List<LogSegment> group : groupedSegments) {
             cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, upperBoundOffset);
+        }
+
+        if (segmentOverflowPartitions.containsKey(log.topicPartition())) {
+            segmentOverflowPartitions.remove(log.topicPartition());
+            logger.info("Successfully cleaned log {} with degraded size (ratio: {}%). " +
+                            "Cleared overflow marker. Next cleaning will use normal size.",
+                    log.name(), sizeRatio * 100);
         }
 
         // record buffer utilization
@@ -254,6 +276,20 @@ public class Cleaner {
                             stats,
                             currentTime
                     );
+                } catch (SegmentOverflowException e) {
+                    if (segmentOverflowPartitions.containsKey(log.topicPartition())) {
+                        Double segmentRatio = segmentOverflowPartitions.get(log.topicPartition());
+                        segmentOverflowPartitions.put(log.topicPartition(), segmentRatio * 0.9);
+                        logger.warn("Repeated segment overflow for partition {}: {}. " +
+                                        "Further degrading to {}% size in next cleaning round.",
+                                log.topicPartition(), e.getMessage(), segmentRatio * 100);
+                    } else {
+                        segmentOverflowPartitions.put(log.topicPartition(), 0.9);
+                        logger.warn("Segment overflow detected for partition {}: {}. " +
+                                        "Marked for degradation to 90% size in next cleaning round.",
+                                log.topicPartition(), e.getMessage());
+                    }
+                    throw new LogCleaningAbortedException();
                 } catch (LogSegmentOffsetOverflowException e) {
                     // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
                     // scratch once the split is complete.
@@ -400,10 +436,15 @@ public class Cleaner {
             if (outputBuffer.position() > 0) {
                 outputBuffer.flip();
                 MemoryRecords retained = MemoryRecords.readableRecords(outputBuffer);
-                // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
-                // after `Log.replaceSegments` (which acquires the lock) is called
-                dest.append(result.maxOffset(), retained);
-                throttler.maybeThrottle(outputBuffer.limit());
+                try {
+                    // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
+                    // after `Log.replaceSegments` (which acquires the lock) is called
+                    dest.append(result.maxOffset(), retained);
+                    throttler.maybeThrottle(outputBuffer.limit());
+                } catch (IllegalArgumentException e) {
+                    // this indicates that we have an offset overflow in the destination segment
+                    throw new SegmentOverflowException(dest);
+                }
             }
 
             // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
@@ -762,5 +803,10 @@ public class Cleaner {
         restoreBuffers();
 
         return false;
+    }
+    
+    // only for testing
+    public Map<TopicPartition, Double> segmentOverflowPartitions() {
+        return Map.copyOf(segmentOverflowPartitions);
     }
 }
