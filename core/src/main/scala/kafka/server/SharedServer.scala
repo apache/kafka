@@ -283,8 +283,8 @@ class SharedServer(
         }
 
         val externalKRaftMetrics: ExternalKRaftMetrics = ignoredStaticVoters => {
-          if (brokerMetrics != null) brokerMetrics.setIgnoredStaticVoters(ignoredStaticVoters)
-          if (controllerServerMetrics != null) controllerServerMetrics.setIgnoredStaticVoters(ignoredStaticVoters)
+          Option(brokerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
+          Option(controllerServerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
         }
 
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
