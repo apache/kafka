@@ -111,7 +111,7 @@ public class DumpLogSegments {
 
         Map<String, Map<Long, Long>> misMatchesForIndexFilesMap = new HashMap<>();
         TimeIndexDumpErrors timeIndexDumpErrors = new TimeIndexDumpErrors();
-        Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap = new HashMap<>();
+        Map<String, Map<Long, Long>> nonConsecutivePairsForLogFilesMap = new HashMap<>();
 
         for (String arg : opts.files()) {
             File file = new File(arg);
@@ -144,8 +144,7 @@ public class DumpLogSegments {
 
         nonConsecutivePairsForLogFilesMap.forEach((fileName, listOfNonConsecutivePairs) -> {
             System.err.println("Non-consecutive offsets in " + fileName);
-            listOfNonConsecutivePairs.forEach(pair ->
-                System.err.println("  " + pair.first + " is followed by " + pair.second));
+            listOfNonConsecutivePairs.forEach((key, value) -> System.err.println("  " + key + " is followed by " + value));
         });
     }
 
@@ -352,7 +351,7 @@ public class DumpLogSegments {
     /* print out the contents of the log */
     private static void dumpLog(File file,
                                 boolean printContents,
-                                Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap,
+                                Map<String, Map<Long, Long>> nonConsecutivePairsForLogFilesMap,
                                 boolean isDeepIteration,
                                 MessageParser<?, ?> parser,
                                 boolean skipRecordMetadata,
@@ -396,16 +395,16 @@ public class DumpLogSegments {
     private static void dumpBatchRecords(FileLogInputStream.FileChannelRecordBatch batch,
                                          AtomicLong lastOffset,
                                          File file,
-                                         Map<String, List<Pair<Long, Long>>> nonConsecutivePairsForLogFilesMap,
+                                         Map<String, Map<Long, Long>> nonConsecutivePairsForLogFilesMap,
                                          boolean skipRecordMetadata,
                                          boolean printContents,
                                          MessageParser<?, ?> parser) {
         for (Record record : batch) {
             long previousOffset = lastOffset.get();
             if (record.offset() != previousOffset + 1) {
-                List<Pair<Long, Long>> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
-                    .computeIfAbsent(file.getAbsolutePath(), k -> new ArrayList<>());
-                nonConsecutivePairsSeq.add(0, new Pair<>(previousOffset, record.offset()));
+                Map<Long, Long> nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap
+                    .computeIfAbsent(file.getAbsolutePath(), k -> new TreeMap<>());
+                nonConsecutivePairsSeq.put(previousOffset, record.offset());
             }
             lastOffset.set(record.offset());
 
