@@ -86,7 +86,7 @@ public class ExceptionHandlerUtils {
         final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(deadLetterQueueTopicName, null, context.timestamp(), key, value);
         // Copy original headers from record that causes exception
         if (context.headers() != null) {
-            for (Header header : context.headers()) {
+            for (final Header header : context.headers()) {
                 producerRecord.headers().add(header);
             }
         }
