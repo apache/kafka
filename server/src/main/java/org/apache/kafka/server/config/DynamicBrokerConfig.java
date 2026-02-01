@@ -154,6 +154,20 @@ public class DynamicBrokerConfig {
         DynamicConfig.Broker.validate(baseProps);
     }
 
+    public static void  validateControllerConfigTypes(Properties props) {
+        Properties baseProps = new Properties();
+        props.forEach((name, value) -> {
+            Matcher matcher = LISTENER_CONFIG_REGEX.matcher((String) name);
+            if (matcher.matches()) {
+                String baseName = matcher.group(1);
+                baseProps.put(baseName, value);
+            } else {
+                baseProps.put(name, value);
+            }
+        });
+        DynamicConfig.Controller.validate(baseProps);
+    }
+
     public static Set<String> perBrokerConfigs(Properties props) {
         Set<String> configNames = props.stringPropertyNames();
         Set<String> perBrokerConfigs = new HashSet<>();

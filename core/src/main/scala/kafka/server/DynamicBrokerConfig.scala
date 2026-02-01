@@ -89,12 +89,7 @@ object DynamicBrokerConfig {
   private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
 
   private[server] def validateControllerConfigTypes(props: Properties): Unit = {
-    val baseProps = new Properties
-    props.asScala.foreach {
-      case (ListenerConfigRegex(baseName), v) => baseProps.put(baseName, v)
-      case (k, v) => baseProps.put(k, v)
-    }
-    DynamicConfig.Controller.validate(baseProps)
+    JDynamicBrokerConfig.validateControllerConfigTypes(props)
   }
   
   private[server] def readDynamicBrokerConfigsFromSnapshot(
