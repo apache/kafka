@@ -217,7 +217,8 @@ public class StateDirectory implements AutoCloseable {
     }
 
     public void initializeStartupTasks(final TopologyMetadata topologyMetadata,
-                                       final LogContext logContext) {
+                                       final LogContext logContext,
+                                       final StreamsMetricsImpl metricsImpl) {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
@@ -244,7 +245,7 @@ public class StateDirectory implements AutoCloseable {
                         subTopology.storeToChangelogTopic(),
                         inputPartitions
                     );
-                    final StartupContext initContext = new StartupContext(id, config, stateManager);
+                    final StartupContext initContext = new StartupContext(id, config, stateManager, metricsImpl);
                     final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
                     StateManagerUtil.registerStartupStateStores(log, threadLogPrefix, subTopology, stateManager, this, initContext);
                     for (final StateStore stateStore : subTopology.stateStores()) {
@@ -837,10 +838,12 @@ public class StateDirectory implements AutoCloseable {
     private static class StartupContext extends AbstractProcessorContext<Object, Object> {
 
         private final StateManager stateManager;
+        final StreamsMetricsImpl metricsImpl;
 
-        public StartupContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager) {
+        public StartupContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager, final StreamsMetricsImpl metricsImpl) {
             super(taskId, config, null, null);
             this.stateManager = stateManager;
+            this.metricsImpl = metricsImpl;
         }
 
         @Override
@@ -890,7 +893,7 @@ public class StateDirectory implements AutoCloseable {
 
         @Override
         public StreamsMetricsImpl metrics() {
-            throw new IllegalStateException("Should not be called");
+            return metricsImpl;
         }
 
         @Override

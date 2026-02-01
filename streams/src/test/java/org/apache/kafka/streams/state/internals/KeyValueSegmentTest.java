@@ -71,7 +71,7 @@ public class KeyValueSegmentTest {
         when(mockContext.appConfigs()).thenReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
         when(mockContext.stateDir()).thenReturn(directory);
 
-        segment.preInit(mockContext);
+        segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());

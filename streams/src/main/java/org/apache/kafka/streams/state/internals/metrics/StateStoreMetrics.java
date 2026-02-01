@@ -285,6 +285,9 @@ public class StateStoreMetrics {
                                           final String storeType,
                                           final String storeName,
                                           final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics == null) {
+            return null;
+        }
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, PREFIX_SCAN, RecordingLevel.DEBUG);
         addInvocationRateToSensor(
@@ -408,6 +411,9 @@ public class StateStoreMetrics {
                                           final String storeType,
                                           final String storeName,
                                           final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics == null) {
+            return null;
+        }
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, RECORD_E2E_LATENCY, RecordingLevel.TRACE);
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMinAndMaxToSensor(
@@ -426,6 +432,9 @@ public class StateStoreMetrics {
                                                 final String storeType,
                                                 final String storeName,
                                                 final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics == null) {
+            return null;
+        }
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, ITERATOR_DURATION, RecordingLevel.DEBUG);
         final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMaxToSensor(
@@ -444,6 +453,9 @@ public class StateStoreMetrics {
                                                 final String storeName,
                                                 final StreamsMetricsImpl streamsMetrics,
                                                 final Gauge<Long> numOpenIteratorsGauge) {
+        if (streamsMetrics == null) {
+            return;
+        }
         streamsMetrics.addStoreLevelMutableMetric(
                 taskId,
                 storeType,
@@ -461,6 +473,9 @@ public class StateStoreMetrics {
                                                         final String storeName,
                                                         final StreamsMetricsImpl streamsMetrics,
                                                         final Gauge<Long> oldestOpenIteratorGauge) {
+        if (streamsMetrics == null) {
+            return null;
+        }
         return streamsMetrics.addStoreLevelMutableMetric(
                 taskId,
                 storeType,
@@ -499,6 +514,9 @@ public class StateStoreMetrics {
                                                      final String descriptionOfMax,
                                                      final RecordingLevel recordingLevel,
                                                      final StreamsMetricsImpl streamsMetrics) {
+        if (streamsMetrics == null) {
+            return null;
+        }
         // use operation as the sensor suffix and metric name prefix
         final Sensor sensor;
         final String latencyMetricName = operation + LATENCY_SUFFIX;

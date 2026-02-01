@@ -270,7 +270,7 @@ public class ProcessorStateManager implements StateManager {
     void registerStartupStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         for (final StateStore store : allStores) {
             if (!startupStores.containsKey(store.name())) {
-                store.preInit(processorContext);
+                store.init(processorContext, store);
                 startupStores.put(store.name(), new StateStoreMetadata(store));
             } else {
                 throw new IllegalStateException("State store " + store.name() + " is already registered as startup store");

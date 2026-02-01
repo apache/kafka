@@ -210,7 +210,6 @@ public class MeteredTimestampedWindowStoreTest {
     @Test
     public void shouldCloseOnPreInitPhase() {
         setUp();
-        store.preInit(context);
         store.close();
         verify(innerStoreMock).close();
     }

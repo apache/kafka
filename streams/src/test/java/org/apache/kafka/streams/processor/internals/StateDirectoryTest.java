@@ -984,7 +984,7 @@ public class StateDirectoryTest {
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
         Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
 
-        directory.initializeStartupTasks(metadata, new LogContext("test"));
+        directory.initializeStartupTasks(metadata, new LogContext("test"), null);
 
         return store;
     }

@@ -416,7 +416,6 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldCloseOnPreInitPhase() {
         doNothing().when(innerStoreMock).close();
-        store.preInit(context);
         store.close();
     }
 

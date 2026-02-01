@@ -105,7 +105,7 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     @Override
     public void openExisting(final StateStoreContext context, final long streamTime) {
         metricsRecorder.init(ProcessorContextUtils.metricsImpl(context), context.taskId());
-        physicalStore.preInit(context);
+        physicalStore.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override
