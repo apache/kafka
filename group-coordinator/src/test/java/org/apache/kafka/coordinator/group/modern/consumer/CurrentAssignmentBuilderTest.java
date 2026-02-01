@@ -821,9 +821,10 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setState(MemberState.STABLE)
             .setMemberEpoch(memberEpoch)
-            .setPreviousMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch - 1)
             .setSubscribedTopicNames(List.of(topic2))
             .setAssignedPartitions(mkAssignment(
+                // Topic 1 is assigned, but no longer in the subscription.
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
@@ -845,6 +846,9 @@ public class CurrentAssignmentBuilderTest {
             new ConsumerGroupMember.Builder("member")
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(expectedMemberEpoch)
+                // The previous member epoch is updated in all cases tested here,
+                // including the case where assigned partitions are removed due to a subscription
+                // change, regardless of whether the member epoch is advanced.
                 .setPreviousMemberEpoch(memberEpoch)
                 .setSubscribedTopicNames(List.of(topic2))
                 .setAssignedPartitions(mkAssignment(
@@ -879,9 +883,10 @@ public class CurrentAssignmentBuilderTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
             .setState(MemberState.STABLE)
             .setMemberEpoch(memberEpoch)
-            .setPreviousMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch - 1)
             .setSubscribedTopicNames(List.of(topic2))
             .setAssignedPartitions(mkAssignment(
+                // Topic 1 is assigned, but no longer in the subscription.
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
@@ -906,6 +911,7 @@ public class CurrentAssignmentBuilderTest {
             new ConsumerGroupMember.Builder("member")
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(expectedMemberEpoch)
+                // The previous member epoch is updated in all cases.
                 .setPreviousMemberEpoch(memberEpoch)
                 .setSubscribedTopicNames(List.of(topic2))
                 .setAssignedPartitions(mkAssignment(

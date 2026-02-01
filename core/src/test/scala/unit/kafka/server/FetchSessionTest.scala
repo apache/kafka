@@ -24,6 +24,10 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollection
+import org.apache.kafka.server.FetchContext.{FullFetchContext, IncrementalFetchContext, SessionErrorContext, SessionlessFetchContext}
+import org.apache.kafka.server.{FetchContext, FetchManager, FetchSession, FetchSessionCacheShard}
+import org.apache.kafka.server.FetchSession.{CachedPartition, FetchSessionCache}
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
@@ -40,15 +44,15 @@ class FetchSessionTest {
 
   @AfterEach
   def afterEach(): Unit = {
-    FetchSessionCache.metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
-    FetchSessionCache.metricsGroup.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
-    FetchSessionCache.metricsGroup.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
-    FetchSessionCache.counter.set(0)
+    FetchSessionCache.METRICS_GROUP.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_SESSIONS)
+    FetchSessionCache.METRICS_GROUP.removeMetric(FetchSession.NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED)
+    FetchSessionCache.METRICS_GROUP.removeMetric(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC)
+    FetchSessionCache.COUNTER.set(0)
   }
 
   @Test
   def testNewSessionId(): Unit = {
-    val cacheShard = new FetchSessionCacheShard(3, 100)
+    val cacheShard = new FetchSessionCacheShard(3, 100, Int.MaxValue, 0)
     for (_ <- 0 to 10000) {
       val id = cacheShard.newSessionId()
       assertTrue(id > 0)
@@ -59,14 +63,14 @@ class FetchSessionTest {
     var i = 0
     for (sessionId <- sessionIds) {
       i = i + 1
-      assertTrue(cacheShard.get(sessionId).isDefined,
+      assertTrue(cacheShard.get(sessionId).isPresent,
         s"Missing session $i out of ${sessionIds.size} ($sessionId)")
     }
     assertEquals(sessionIds.size, cacheShard.size)
   }
 
-  private def dummyCreate(size: Int): FetchSession.CACHE_MAP = {
-    val cacheMap = new FetchSession.CACHE_MAP(size)
+  private def dummyCreate(size: Int): ImplicitLinkedHashCollection[CachedPartition] = {
+    val cacheMap = new ImplicitLinkedHashCollection[CachedPartition](size)
     for (i <- 0 until size) {
       cacheMap.add(new CachedPartition("test", Uuid.randomUuid(), i))
     }
@@ -75,34 +79,34 @@ class FetchSessionTest {
 
   @Test
   def testSessionCache(): Unit = {
-    val cacheShard = new FetchSessionCacheShard(3, 100)
+    val cacheShard = new FetchSessionCacheShard(3, 100, Int.MaxValue, 0)
     assertEquals(0, cacheShard.size)
-    val id1 = cacheShard.maybeCreateSession(0, privileged = false, 10, usesTopicIds = true, () => dummyCreate(10))
-    val id2 = cacheShard.maybeCreateSession(10, privileged = false, 20, usesTopicIds = true, () => dummyCreate(20))
-    val id3 = cacheShard.maybeCreateSession(20, privileged = false, 30, usesTopicIds = true, () => dummyCreate(30))
-    assertEquals(INVALID_SESSION_ID, cacheShard.maybeCreateSession(30, privileged = false, 40, usesTopicIds = true, () => dummyCreate(40)))
-    assertEquals(INVALID_SESSION_ID, cacheShard.maybeCreateSession(40, privileged = false, 5, usesTopicIds = true, () => dummyCreate(5)))
+    val id1 = cacheShard.maybeCreateSession(0, false, 10, true, () => dummyCreate(10))
+    val id2 = cacheShard.maybeCreateSession(10, false, 20, true, () => dummyCreate(20))
+    val id3 = cacheShard.maybeCreateSession(20, false, 30, true, () => dummyCreate(30))
+    assertEquals(INVALID_SESSION_ID, cacheShard.maybeCreateSession(30, false, 40, true, () => dummyCreate(40)))
+    assertEquals(INVALID_SESSION_ID, cacheShard.maybeCreateSession(40, false, 5, true, () => dummyCreate(5)))
     assertCacheContains(cacheShard, id1, id2, id3)
     cacheShard.touch(cacheShard.get(id1).get, 200)
-    val id4 = cacheShard.maybeCreateSession(210, privileged = false, 11, usesTopicIds = true, () => dummyCreate(11))
+    val id4 = cacheShard.maybeCreateSession(210, false, 11, true, () => dummyCreate(11))
     assertCacheContains(cacheShard, id1, id3, id4)
     cacheShard.touch(cacheShard.get(id1).get, 400)
     cacheShard.touch(cacheShard.get(id3).get, 390)
     cacheShard.touch(cacheShard.get(id4).get, 400)
-    val id5 = cacheShard.maybeCreateSession(410, privileged = false, 50, usesTopicIds = true, () => dummyCreate(50))
+    val id5 = cacheShard.maybeCreateSession(410, false, 50, true, () => dummyCreate(50))
     assertCacheContains(cacheShard, id3, id4, id5)
-    assertEquals(INVALID_SESSION_ID, cacheShard.maybeCreateSession(410, privileged = false, 5, usesTopicIds = true, () => dummyCreate(5)))
-    val id6 = cacheShard.maybeCreateSession(410, privileged = true, 5, usesTopicIds = true, () => dummyCreate(5))
+    assertEquals(INVALID_SESSION_ID, cacheShard.maybeCreateSession(410, false, 5, true, () => dummyCreate(5)))
+    val id6 = cacheShard.maybeCreateSession(410, true, 5, true, () => dummyCreate(5))
     assertCacheContains(cacheShard, id3, id5, id6)
   }
 
   @Test
   def testResizeCachedSessions(): Unit = {
-    val cacheShard = new FetchSessionCacheShard(2, 100)
+    val cacheShard = new FetchSessionCacheShard(2, 100, Int.MaxValue, 0)
     assertEquals(0, cacheShard.totalPartitions)
     assertEquals(0, cacheShard.size)
     assertEquals(0, cacheShard.evictionsMeter.count)
-    val id1 = cacheShard.maybeCreateSession(0, privileged = false, 2, usesTopicIds = true, () => dummyCreate(2))
+    val id1 = cacheShard.maybeCreateSession(0, false, 2, true, () => dummyCreate(2))
     assertTrue(id1 > 0)
     assertCacheContains(cacheShard, id1)
     val session1 = cacheShard.get(id1).get
@@ -110,7 +114,7 @@ class FetchSessionTest {
     assertEquals(2, cacheShard.totalPartitions)
     assertEquals(1, cacheShard.size)
     assertEquals(0, cacheShard.evictionsMeter.count)
-    val id2 = cacheShard.maybeCreateSession(0, privileged = false, 4, usesTopicIds = true, () => dummyCreate(4))
+    val id2 = cacheShard.maybeCreateSession(0, false, 4, true, () => dummyCreate(4))
     val session2 = cacheShard.get(id2).get
     assertTrue(id2 > 0)
     assertCacheContains(cacheShard, id1, id2)
@@ -119,7 +123,7 @@ class FetchSessionTest {
     assertEquals(0, cacheShard.evictionsMeter.count)
     cacheShard.touch(session1, 200)
     cacheShard.touch(session2, 200)
-    val id3 = cacheShard.maybeCreateSession(200, privileged = false, 5, usesTopicIds = true, () => dummyCreate(5))
+    val id3 = cacheShard.maybeCreateSession(200, false, 5, true, () => dummyCreate(5))
     assertTrue(id3 > 0)
     assertCacheContains(cacheShard, id2, id3)
     assertEquals(9, cacheShard.totalPartitions)
@@ -159,7 +163,7 @@ class FetchSessionTest {
   @Test
   def testCachedLeaderEpoch(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
 
     val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid()).asJava
@@ -253,7 +257,7 @@ class FetchSessionTest {
   @Test
   def testLastFetchedEpoch(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
 
     val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid()).asJava
@@ -352,7 +356,7 @@ class FetchSessionTest {
   @Test
   def testFetchRequests(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val topicNames = Map(Uuid.randomUuid() -> "foo", Uuid.randomUuid() -> "bar").asJava
     val topicIds = topicNames.asScala.map(_.swap).asJava
@@ -541,7 +545,7 @@ class FetchSessionTest {
   @ValueSource(booleans = Array(true, false))
   def testIncrementalFetchSession(usesTopicIds: Boolean): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val topicNames = if (usesTopicIds) Map(Uuid.randomUuid() -> "foo", Uuid.randomUuid() -> "bar").asJava else Map[Uuid, String]().asJava
     val topicIds = topicNames.asScala.map(_.swap).asJava
@@ -605,10 +609,10 @@ class FetchSessionTest {
     context2.foreachPartition((topicIdPart, _) => {
       assertEquals(reqData2Iter.next(), topicIdPart)
     })
-    assertEquals(None, context2.getFetchOffset(tp0))
+    assertEquals(Optional.empty(), context2.getFetchOffset(tp0))
     assertEquals(10, context2.getFetchOffset(tp1).get)
     assertEquals(15, context2.getFetchOffset(tp2).get)
-    assertEquals(None, context2.getFetchOffset(new TopicIdPartition(barId, new TopicPartition("bar", 2))))
+    assertEquals(Optional.empty(), context2.getFetchOffset(new TopicIdPartition(barId, new TopicPartition("bar", 2))))
     val respData2 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     respData2.put(tp1, new FetchResponseData.PartitionData()
         .setPartitionIndex(1)
@@ -630,7 +634,7 @@ class FetchSessionTest {
   @Test
   def testFetchSessionWithUnknownIdOldRequestVersion(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val topicNames = Map(Uuid.randomUuid() -> "foo", Uuid.randomUuid() -> "bar").asJava
     val topicIds = topicNames.asScala.map(_.swap).asJava
@@ -678,7 +682,7 @@ class FetchSessionTest {
   @Test
   def testFetchSessionWithUnknownId(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val fooId = Uuid.randomUuid()
     val barId = Uuid.randomUuid()
@@ -787,7 +791,7 @@ class FetchSessionTest {
   @Test
   def testIncrementalFetchSessionWithIdsWhenSessionDoesNotUseIds() : Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val topicNames = new util.HashMap[Uuid, String]()
     val foo0 = new TopicIdPartition(Uuid.ZERO_UUID, new TopicPartition("foo", 0))
@@ -841,7 +845,7 @@ class FetchSessionTest {
   @Test
   def testIncrementalFetchSessionWithoutIdsWhenSessionUsesIds() : Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val fooId = Uuid.randomUuid()
     val topicNames = new util.HashMap[Uuid, String]()
@@ -898,7 +902,7 @@ class FetchSessionTest {
   @Test
   def testFetchSessionUpdateTopicIdsBrokerSide(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val topicNames = Map(Uuid.randomUuid() -> "foo", Uuid.randomUuid() -> "bar").asJava
     val topicIds = topicNames.asScala.map(_.swap).asJava
@@ -990,7 +994,7 @@ class FetchSessionTest {
   @Test
   def testResolveUnknownPartitions(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
 
     def newContext(
@@ -1112,7 +1116,7 @@ class FetchSessionTest {
   @MethodSource(Array("idUsageCombinations"))
   def testToForgetPartitions(fooStartsResolved: Boolean, fooEndsResolved: Boolean): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
 
     def newContext(
@@ -1212,7 +1216,7 @@ class FetchSessionTest {
   @Test
   def testUpdateAndGenerateResponseData(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
 
     def newContext(
@@ -1323,7 +1327,7 @@ class FetchSessionTest {
   def testFetchSessionExpiration(): Unit = {
     val time = new MockTime()
     // set maximum entries to 2 to allow for eviction later
-    val cacheShard = new FetchSessionCacheShard(2, 1000)
+    val cacheShard = new FetchSessionCacheShard(2, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val fooId = Uuid.randomUuid()
     val topicNames = Map(fooId -> "foo").asJava
@@ -1363,7 +1367,7 @@ class FetchSessionTest {
     assertEquals(2, session1resp.responseData(topicNames, session1request1.version).size)
 
     // check session entered into case
-    assertTrue(cacheShard.get(session1resp.sessionId()).isDefined)
+    assertTrue(cacheShard.get(session1resp.sessionId()).isPresent)
     time.sleep(500)
 
     // Create a second new fetch session
@@ -1400,8 +1404,8 @@ class FetchSessionTest {
     assertEquals(2, session2resp.responseData(topicNames, session2request1.version()).size())
 
     // both newly created entries are present in cache
-    assertTrue(cacheShard.get(session1resp.sessionId()).isDefined)
-    assertTrue(cacheShard.get(session2resp.sessionId()).isDefined)
+    assertTrue(cacheShard.get(session1resp.sessionId()).isPresent)
+    assertTrue(cacheShard.get(session2resp.sessionId()).isPresent)
     time.sleep(500)
 
     // Create an incremental fetch request for session 1
@@ -1457,16 +1461,16 @@ class FetchSessionTest {
     assertTrue(session3resp.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, session3resp.responseData(topicNames, session3request1.version).size)
 
-    assertTrue(cacheShard.get(session1resp.sessionId()).isDefined)
-    assertFalse(cacheShard.get(session2resp.sessionId()).isDefined, "session 2 should have been evicted by latest session, as session 1 was used more recently")
-    assertTrue(cacheShard.get(session3resp.sessionId()).isDefined)
+    assertTrue(cacheShard.get(session1resp.sessionId()).isPresent)
+    assertFalse(cacheShard.get(session2resp.sessionId()).isPresent, "session 2 should have been evicted by latest session, as session 1 was used more recently")
+    assertTrue(cacheShard.get(session3resp.sessionId()).isPresent)
   }
 
   @Test
   def testPrivilegedSessionHandling(): Unit = {
     val time = new MockTime()
     // set maximum entries to 2 to allow for eviction later
-    val cacheShard = new FetchSessionCacheShard(2, 1000)
+    val cacheShard = new FetchSessionCacheShard(2, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val fooId = Uuid.randomUuid()
     val topicNames = Map(fooId -> "foo").asJava
@@ -1544,8 +1548,8 @@ class FetchSessionTest {
     assertEquals(2, session2resp.responseData(topicNames, session2request.version).size)
 
     // both newly created entries are present in cache
-    assertTrue(cacheShard.get(session1resp.sessionId()).isDefined)
-    assertTrue(cacheShard.get(session2resp.sessionId()).isDefined)
+    assertTrue(cacheShard.get(session1resp.sessionId()).isPresent)
+    assertTrue(cacheShard.get(session2resp.sessionId()).isPresent)
     assertEquals(2, cacheShard.size)
     time.sleep(500)
 
@@ -1583,11 +1587,11 @@ class FetchSessionTest {
     assertTrue(session3resp.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, session3resp.responseData(topicNames, session3request.version).size)
 
-    assertTrue(cacheShard.get(session1resp.sessionId()).isDefined)
+    assertTrue(cacheShard.get(session1resp.sessionId()).isPresent)
     // even though session 2 is more recent than session 1, and has not reached expiry time, it is less
     // privileged than session 2, and thus session 3 should be entered and session 2 evicted.
-    assertFalse(cacheShard.get(session2resp.sessionId()).isDefined, "session 2 should have been evicted by session 3")
-    assertTrue(cacheShard.get(session3resp.sessionId()).isDefined)
+    assertFalse(cacheShard.get(session2resp.sessionId()).isPresent, "session 2 should have been evicted by session 3")
+    assertTrue(cacheShard.get(session3resp.sessionId()).isPresent)
     assertEquals(2, cacheShard.size)
 
     time.sleep(501)
@@ -1626,16 +1630,16 @@ class FetchSessionTest {
     assertTrue(session4resp.sessionId() != INVALID_SESSION_ID)
     assertEquals(2, session4resp.responseData(topicNames, session4request.version).size)
 
-    assertFalse(cacheShard.get(session1resp.sessionId()).isDefined, "session 1 should have been evicted by session 4 even though it is privileged as it has hit eviction time")
-    assertTrue(cacheShard.get(session3resp.sessionId()).isDefined)
-    assertTrue(cacheShard.get(session4resp.sessionId()).isDefined)
+    assertFalse(cacheShard.get(session1resp.sessionId()).isPresent, "session 1 should have been evicted by session 4 even though it is privileged as it has hit eviction time")
+    assertTrue(cacheShard.get(session3resp.sessionId()).isPresent)
+    assertTrue(cacheShard.get(session4resp.sessionId()).isPresent)
     assertEquals(2, cacheShard.size)
   }
 
   @Test
   def testZeroSizeFetchSession(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val fooId = Uuid.randomUuid()
     val topicNames = Map(fooId -> "foo").asJava
@@ -1700,7 +1704,7 @@ class FetchSessionTest {
   @Test
   def testDivergingEpoch(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val topicNames = Map(Uuid.randomUuid() -> "foo", Uuid.randomUuid() -> "bar").asJava
     val topicIds = topicNames.asScala.map(_.swap).asJava
@@ -1785,7 +1789,7 @@ class FetchSessionTest {
   @Test
   def testDeprioritizesPartitionsWithRecordsOnly(): Unit = {
     val time = new MockTime()
-    val cacheShard = new FetchSessionCacheShard(10, 1000)
+    val cacheShard = new FetchSessionCacheShard(10, 1000, Int.MaxValue, 0)
     val fetchManager = new FetchManager(time, cacheShard)
     val topicIds = Map("foo" -> Uuid.randomUuid(), "bar" -> Uuid.randomUuid(), "zar" -> Uuid.randomUuid()).asJava
     val topicNames = topicIds.asScala.map(_.swap).asJava
@@ -1799,7 +1803,7 @@ class FetchSessionTest {
     reqData.put(tp3, new FetchRequest.PartitionData(tp3.topicId, 100, 0, 1000, Optional.of(5), Optional.of(4)))
 
     // Full fetch context returns all partitions in the response
-    val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, isFollower = false,
+    val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, false,
      reqData, Collections.emptyList(), topicNames)
     assertEquals(classOf[FullFetchContext], context1.getClass)
 
@@ -1827,7 +1831,7 @@ class FetchSessionTest {
 
     // Incremental fetch context returns partitions with changes but only deprioritizes
     // the partitions with records
-    val context2 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), new JFetchMetadata(resp1.sessionId, 1), isFollower = false,
+    val context2 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), new JFetchMetadata(resp1.sessionId, 1), false,
       reqData, Collections.emptyList(), topicNames)
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
 
@@ -1945,7 +1949,7 @@ class FetchSessionTest {
     // Given
     val numShards = 8
     val sessionIdRange = Int.MaxValue / numShards
-    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum))
+    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum)).asJava
     val cache = new FetchSessionCache(cacheShards)
 
     // When
@@ -1954,9 +1958,9 @@ class FetchSessionTest {
     val cache2 = cache.getCacheShard(sessionIdRange * 2)
 
     // Then
-    assertEquals(cache0, cacheShards(0))
-    assertEquals(cache1, cacheShards(1))
-    assertEquals(cache2, cacheShards(2))
+    assertEquals(cache0, cacheShards.get(0))
+    assertEquals(cache1, cacheShards.get(1))
+    assertEquals(cache2, cacheShards.get(2))
     assertThrows(classOf[IndexOutOfBoundsException], () => cache.getCacheShard(sessionIdRange * numShards))
   }
 
@@ -1965,12 +1969,12 @@ class FetchSessionTest {
     // Given
     val numShards = 8
     val sessionIdRange = Int.MaxValue / numShards
-    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum))
+    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum)).asJava
     val cache = new FetchSessionCache(cacheShards)
 
     // When / Then
     (0 until numShards*2).foreach { shardNum =>
-      assertEquals(cacheShards(shardNum % numShards), cache.getNextCacheShard)
+      assertEquals(cacheShards.get(shardNum % numShards), cache.getNextCacheShard)
     }
   }
 
@@ -1978,15 +1982,15 @@ class FetchSessionTest {
   def testFetchSessionCache_RoundRobinsIntoShards_WhenIntegerOverflows(): Unit = {
     // Given
     val maxInteger = Int.MaxValue
-    FetchSessionCache.counter.set(maxInteger + 1)
+    FetchSessionCache.COUNTER.set(maxInteger + 1)
     val numShards = 8
     val sessionIdRange = Int.MaxValue / numShards
-    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum))
+    val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum)).asJava
     val cache = new FetchSessionCache(cacheShards)
 
     // When / Then
     (0 until numShards*2).foreach { shardNum =>
-      assertEquals(cacheShards(shardNum % numShards), cache.getNextCacheShard)
+      assertEquals(cacheShards.get(shardNum % numShards), cache.getNextCacheShard)
     }
   }
 }

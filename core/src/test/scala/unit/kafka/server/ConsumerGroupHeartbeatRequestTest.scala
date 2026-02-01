@@ -764,4 +764,338 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupC
 
     assertEquals(expectedRejoinResponse, rejoinResponse.data)
   }
+
+  @ClusterTest
+  def testDuplicateFullHeartbeatInStableState(): Unit = {
+    createOffsetsTopic()
+
+    val memberId = Uuid.randomUuid().toString
+    val groupId = "test-duplicate-stable-grp"
+
+    // Create topic first so member gets assignment immediately.
+    val topicId = createTopic(topic = "foo", numPartitions = 3)
+
+    // Join the group.
+    val request = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response: ConsumerGroupHeartbeatResponse = null
+    val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      response = connectAndReceive[ConsumerGroupHeartbeatResponse](request)
+      response.data.errorCode == Errors.NONE.code &&
+        response.data.assignment == expectedAssignment
+    }, msg = s"Could not get assignment. Last response $response.")
+
+    val stableEpoch = response.data.memberEpoch
+
+    // Send full heartbeat request.
+    val fullRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId)
+        .setMemberEpoch(stableEpoch)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+          .setTopicId(topicId)
+          .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+    ).build()
+
+    val firstResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest)
+
+    val expectedFirstResponse = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId)
+      .setMemberEpoch(stableEpoch)
+      .setHeartbeatIntervalMs(firstResponse.data.heartbeatIntervalMs)
+      .setAssignment(expectedAssignment)
+
+    assertEquals(expectedFirstResponse, firstResponse.data)
+
+    // Send duplicate heartbeat request.
+    val duplicateResponse = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest)
+
+    // Verify duplicate produces same response.
+    assertEquals(expectedFirstResponse, duplicateResponse.data)
+  }
+
+  @ClusterTest
+  def testDuplicateFullHeartbeatWhileWaitingForPartitions(): Unit = {
+    createOffsetsTopic()
+
+    val memberId1 = Uuid.randomUuid().toString
+    val memberId2 = Uuid.randomUuid().toString
+    val groupId = "test-duplicate-waiting-grp"
+
+    // Create topic.
+    val topicId = createTopic(topic = "foo", numPartitions = 2)
+
+    // Member 1 joins and gets all partitions.
+    val request1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response1: ConsumerGroupHeartbeatResponse = null
+    val allPartitions = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1).asJava)).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      response1 = connectAndReceive[ConsumerGroupHeartbeatResponse](request1)
+      response1.data.errorCode == Errors.NONE.code &&
+        response1.data.assignment == allPartitions
+    }, msg = s"Member 1 could not get assignment. Last response $response1.")
+
+    // Member 2 joins, triggering rebalance. Member 2 will wait for Member 1 to release partitions.
+    val request2 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId2)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response2: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      response2 = connectAndReceive[ConsumerGroupHeartbeatResponse](request2)
+      response2.data.errorCode == Errors.NONE.code
+    }, msg = s"Member 2 could not join. Last response $response2.")
+
+    val member2Epoch = response2.data.memberEpoch
+
+    // Member 2 sends full heartbeat while waiting for partitions from Member 1.
+    val fullRequest2 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId2)
+        .setMemberEpoch(member2Epoch)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    val firstResponse2 = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest2)
+
+    val expectedFirstResponse2 = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId2)
+      .setMemberEpoch(member2Epoch)
+      .setHeartbeatIntervalMs(firstResponse2.data.heartbeatIntervalMs)
+      .setAssignment(firstResponse2.data.assignment)
+
+    assertEquals(expectedFirstResponse2, firstResponse2.data)
+
+    // Send duplicate heartbeat request.
+    val duplicateResponse2 = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest2)
+
+    // Verify duplicate produces same response.
+    assertEquals(expectedFirstResponse2, duplicateResponse2.data)
+  }
+
+  @ClusterTest
+  def testDuplicateFullHeartbeatDuringRevocation(): Unit = {
+    createOffsetsTopic()
+
+    val memberId1 = Uuid.randomUuid().toString
+    val memberId2 = Uuid.randomUuid().toString
+    val groupId = "test-duplicate-revocation-grp"
+
+    // Create topic.
+    val topicId = createTopic(topic = "foo", numPartitions = 2)
+
+    // Member 1 joins and gets all partitions.
+    val request1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response1: ConsumerGroupHeartbeatResponse = null
+    val allPartitions = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1).asJava)).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      response1 = connectAndReceive[ConsumerGroupHeartbeatResponse](request1)
+      response1.data.errorCode == Errors.NONE.code &&
+        response1.data.assignment == allPartitions
+    }, msg = s"Member 1 could not get assignment. Last response $response1.")
+
+    val member1Epoch = response1.data.memberEpoch
+
+    // Member 2 joins, triggering rebalance.
+    val request2 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId2)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response2: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      response2 = connectAndReceive[ConsumerGroupHeartbeatResponse](request2)
+      response2.data.errorCode == Errors.NONE.code
+    }, msg = s"Member 2 could not join. Last response $response2.")
+
+    // Member 1 sends full heartbeat (still reporting all partitions).
+    val fullRequest1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(member1Epoch)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+          .setTopicId(topicId)
+          .setPartitions(List[Integer](0, 1).asJava)).asJava)
+    ).build()
+
+    val firstResponse1 = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest1)
+
+    val expectedFirstResponse1 = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId1)
+      .setMemberEpoch(firstResponse1.data.memberEpoch)
+      .setHeartbeatIntervalMs(firstResponse1.data.heartbeatIntervalMs)
+      .setAssignment(firstResponse1.data.assignment)
+
+    assertEquals(expectedFirstResponse1, firstResponse1.data)
+
+    // Send duplicate heartbeat request.
+    val duplicateResponse1 = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest1)
+
+    // Verify duplicate produces same response.
+    assertEquals(expectedFirstResponse1, duplicateResponse1.data)
+  }
+
+  @ClusterTest
+  def testDuplicateFullHeartbeatWithRevocationAck(): Unit = {
+    createOffsetsTopic()
+
+    val memberId1 = Uuid.randomUuid().toString
+    val memberId2 = Uuid.randomUuid().toString
+    val groupId = "test-duplicate-revocation-ack-grp"
+
+    // Create topic.
+    val topicId = createTopic(topic = "foo", numPartitions = 2)
+
+    // Member 1 joins and gets all partitions.
+    val request1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response1: ConsumerGroupHeartbeatResponse = null
+    val allPartitions = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1).asJava)).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      response1 = connectAndReceive[ConsumerGroupHeartbeatResponse](request1)
+      response1.data.errorCode == Errors.NONE.code &&
+        response1.data.assignment == allPartitions
+    }, msg = s"Member 1 could not get assignment. Last response $response1.")
+
+    val member1InitialEpoch = response1.data.memberEpoch
+
+    // Member 2 joins, triggering rebalance.
+    val request2 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId2)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    var response2: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      response2 = connectAndReceive[ConsumerGroupHeartbeatResponse](request2)
+      response2.data.errorCode == Errors.NONE.code
+    }, msg = s"Member 2 could not join. Last response $response2.")
+
+    // Member 1 sends heartbeat acknowledging revocation (only reporting partition 0).
+    val ackRequest1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(member1InitialEpoch)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+          .setTopicId(topicId)
+          .setPartitions(List[Integer](0).asJava)).asJava)
+    ).build()
+
+    val ackResponse1 = connectAndReceive[ConsumerGroupHeartbeatResponse](ackRequest1)
+    assertEquals(Errors.NONE.code, ackResponse1.data.errorCode)
+
+    val member1NewEpoch = ackResponse1.data.memberEpoch
+
+    // Member 1 sends full heartbeat with new epoch.
+    val fullRequest1 = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId(groupId)
+        .setMemberId(memberId1)
+        .setMemberEpoch(member1NewEpoch)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+          .setTopicId(topicId)
+          .setPartitions(List[Integer](0).asJava)).asJava)
+    ).build()
+
+    val firstResponse1 = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest1)
+
+    val expectedFirstResponse1 = new ConsumerGroupHeartbeatResponseData()
+      .setErrorCode(Errors.NONE.code)
+      .setMemberId(memberId1)
+      .setMemberEpoch(firstResponse1.data.memberEpoch)
+      .setHeartbeatIntervalMs(firstResponse1.data.heartbeatIntervalMs)
+      .setAssignment(firstResponse1.data.assignment)
+
+    assertEquals(expectedFirstResponse1, firstResponse1.data)
+
+    // Send duplicate heartbeat request.
+    val duplicateResponse1 = connectAndReceive[ConsumerGroupHeartbeatResponse](fullRequest1)
+
+    // Verify duplicate produces same response.
+    assertEquals(expectedFirstResponse1, duplicateResponse1.data)
+  }
 }
