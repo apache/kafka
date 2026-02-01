@@ -17,6 +17,7 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.raft.KRaftConfigs;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
