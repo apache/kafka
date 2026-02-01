@@ -202,6 +202,10 @@ org.apache.kafka.server.ReconfigurableQuorumIntegrationTest:
 - testRemoveAndAddVoterWithInconsistentClusterId
 - testRemoveAndAddVoterWithValidClusterId
 - testRemoveController
+org.apache.kafka.server.config.AbstractKafkaConfigTest:
+- testPopulateSynonymsOnEmptyMap
+- testPopulateSynonymsOnMapWithoutBrokerId
+- testPopulateSynonymsOnMapWithoutNodeId
 org.apache.kafka.server.config.DelegationTokenManagerConfigsTest:
 - testDefaults
 - testInvalidProperty

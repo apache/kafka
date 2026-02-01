@@ -2282,9 +2282,6 @@ kafka.server.KafkaConfigTest:
 - testNodeIdOrBrokerIdMustBeSetWithKraft
 - testNonroutableAdvertisedListeners
 - testParseQuorumBootstrapServers
-- testPopulateSynonymsOnEmptyMap
-- testPopulateSynonymsOnMapWithoutBrokerId
-- testPopulateSynonymsOnMapWithoutNodeId
 - testPortInQuorumVotersNotRequiredToMatchFirstControllerListenerPortForThisKRaftController
 - testRejectsNegativeBrokerId
 - testRejectsNegativeNodeId
