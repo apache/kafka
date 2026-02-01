@@ -175,9 +175,8 @@ public class Cleaner {
                 log.name(), new Date(cleanableHorizonMs), new Date(legacyDeleteHorizonMs));
         CleanedTransactionMetadata transactionMetadata = new CleanedTransactionMetadata();
 
-        double sizeRatio = 1.0;
-        if (segmentOverflowPartitions.containsKey(log.topicPartition())) {
-            sizeRatio = segmentOverflowPartitions.get(log.topicPartition());
+        double sizeRatio = segmentOverflowPartitions.getOrDefault(log.topicPartition(), 1.0);
+        if (sizeRatio != 1.0) {
             logger.info("Partition {} has overflow history. " + "Reducing effective segment size to {}% for this round.",
                     log.topicPartition(), sizeRatio * 100);
         }
@@ -195,8 +194,7 @@ public class Cleaner {
             cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, upperBoundOffset);
         }
 
-        if (segmentOverflowPartitions.containsKey(log.topicPartition())) {
-            segmentOverflowPartitions.remove(log.topicPartition());
+        if (segmentOverflowPartitions.remove(log.topicPartition()) != null) {
             logger.info("Successfully cleaned log {} with degraded size (ratio: {}%). " +
                             "Cleared overflow marker. Next cleaning will use normal size.",
                     log.name(), sizeRatio * 100);
@@ -277,17 +275,16 @@ public class Cleaner {
                             currentTime
                     );
                 } catch (SegmentOverflowException e) {
-                    if (segmentOverflowPartitions.containsKey(log.topicPartition())) {
-                        Double segmentRatio = segmentOverflowPartitions.get(log.topicPartition());
-                        segmentOverflowPartitions.put(log.topicPartition(), segmentRatio * 0.9);
-                        logger.warn("Repeated segment overflow for partition {}: {}. " +
-                                        "Further degrading to {}% size in next cleaning round.",
-                                log.topicPartition(), e.getMessage(), segmentRatio * 100);
-                    } else {
-                        segmentOverflowPartitions.put(log.topicPartition(), 0.9);
+                    var previousRatio = segmentOverflowPartitions.put(log.topicPartition(),
+                            segmentOverflowPartitions.getOrDefault(log.topicPartition(), 1.0) * 0.9);
+                    if (previousRatio == null) {
                         logger.warn("Segment overflow detected for partition {}: {}. " +
                                         "Marked for degradation to 90% size in next cleaning round.",
                                 log.topicPartition(), e.getMessage());
+                    } else {
+                        logger.warn("Repeated segment overflow for partition {}: {}. " +
+                                        "Further degrading to {}% size in next cleaning round.",
+                                log.topicPartition(), e.getMessage(), previousRatio * 0.9 * 100);
                     }
                     throw new LogCleaningAbortedException();
                 } catch (LogSegmentOffsetOverflowException e) {
@@ -440,12 +437,12 @@ public class Cleaner {
                     // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
                     // after `Log.replaceSegments` (which acquires the lock) is called
                     dest.append(result.maxOffset(), retained);
-                    throttler.maybeThrottle(outputBuffer.limit());
                 } catch (IllegalArgumentException e) {
                     // this indicates that we have an offset overflow in the destination segment
                     throw new SegmentOverflowException(dest);
                 }
             }
+            throttler.maybeThrottle(outputBuffer.limit());
 
             // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
             // `result.bytesRead` contains bytes from `messagesRead` and any discarded batches.

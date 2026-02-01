@@ -22,10 +22,8 @@ import org.apache.kafka.common.KafkaException;
  * Exception thrown when segment size would overflow during compaction
  */
 public class SegmentOverflowException extends KafkaException {
-    public final LogSegment segment;
 
     public SegmentOverflowException(LogSegment segment) {
         super("Segment size would overflow during compaction for segment " + segment);
-        this.segment = segment;
     }
 }
