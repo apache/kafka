@@ -24,7 +24,6 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
@@ -32,6 +31,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.jmh.util.BenchmarkConfigUtils;
 import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.LeaderRecoveryState;
@@ -45,6 +45,7 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
+import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -107,10 +108,8 @@ public class PartitionCreationBench {
             topicId = Option.empty();
 
         this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
-        this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-                0, true, true, 9092, Option.empty(), Option.empty(),
-                Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
-                (short) 1, false));
+        Properties configs = BenchmarkConfigUtils.createDummyBrokerConfig();
+        this.brokerProperties = KafkaConfig.fromProps(configs);
         this.metrics = new Metrics();
         this.time = Time.SYSTEM;
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
@@ -141,7 +140,8 @@ public class PartitionCreationBench {
             build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "", "");
-        this.alterPartitionManager = TestUtils.createAlterIsrManager();
+        this.alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
+
         this.replicaManager = new ReplicaManagerBuilder().
             setConfig(brokerProperties).
             setMetrics(metrics).

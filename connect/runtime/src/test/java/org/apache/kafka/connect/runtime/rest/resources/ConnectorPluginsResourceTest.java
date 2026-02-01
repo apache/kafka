@@ -401,6 +401,22 @@ public class ConnectorPluginsResourceTest {
     }
 
     @Test
+    public void testConnectorPluginsEndpointReturnsLowercaseTypeInJson() throws Exception {
+        // Call the actual endpoint method
+        List<PluginInfo> plugins = connectorPluginsResource.listConnectorPlugins(true);
+
+        // Serialize the response to JSON (simulating what the REST API does)
+        final ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(plugins);
+
+        // Verify the JSON contains lowercase type fields
+        assertTrue(json.contains("\"type\":\"sink\""),
+            "Expected JSON to contain '\"type\":\"sink\"' but got: " + json);
+        assertTrue(json.contains("\"type\":\"source\""),
+            "Expected JSON to contain '\"type\":\"source\"' but got: " + json);
+    }
+
+    @Test
     public void testListAllPlugins() {
         List<PluginInfo> expectedConnectorPlugins = Stream.of(
                         SINK_CONNECTOR_PLUGINS,

@@ -26,7 +26,7 @@ type: docs
 -->
 
 
-Below is the Tiered Storage configuration. {{< include-html file="/static/43/generated/remote_log_manager_config.html" >}} 
+Below is the Tiered Storage configuration. {{< include-html file="/static/{version}/generated/remote_log_manager_config.html" >}} 
 
 ## RLMM Configs
 
@@ -34,7 +34,7 @@ Below is the configuration for `TopicBasedRemoteLogMetadataManager`, which is th
 
 All configurations here should start with the prefix defined by `remote.log.metadata.manager.impl.prefix`, for example, `rlmm.config.remote.log.metadata.consume.wait.ms`.
 
-{{< include-html file="/static/43/generated/remote_log_metadata_manager_config.html" >}} 
+{{< include-html file="/static/{version}/generated/remote_log_metadata_manager_config.html" >}} 
 
 The implementation of `TopicBasedRemoteLogMetadataManager` needs to create admin, producer, and consumer clients for the internal topic `__remote_log_metadata`.
 
@@ -43,6 +43,9 @@ Additional configurations can be provided for different types of clients using t
     
     # Configs for admin, producer, and consumer clients
     <rlmm.prefix>.remote.log.metadata.common.client.<kafka.property> = <value>
+
+    # Configs only for admin client
+    <rlmm.prefix>.remote.log.metadata.admin.<kafka.property> = <value>
     
     # Configs only for producer client
     <rlmm.prefix>.remote.log.metadata.producer.<kafka.property> = <value>

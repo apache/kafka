@@ -52,9 +52,8 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.KRaftMetadataCache
-import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.{Session, SocketServerConfigs}
 import org.apache.kafka.network.metrics.RequestChannelMetrics
-import org.apache.kafka.network.Session
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig, RaftManager}
 import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
