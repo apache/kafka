@@ -482,32 +482,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.timer = new CoordinatorTimerImpl<>(
                 logContext,
                 CoordinatorRuntime.this.timer,
-                (operationName, operation) -> {
-                    try {
-                        return scheduleWriteOperation(
-                            operationName,
-                            tp,
-                            coordinator -> operation.generate()
-                        );
-                    } catch (Throwable t) {
-                        return CompletableFuture.failedFuture(t);
-                    }
-                }
+                (operationName, operation) -> scheduleWriteOperation(
+                    operationName,
+                    tp,
+                    coordinator -> operation.generate()
+                )
             );
             this.executor = new CoordinatorExecutorImpl<>(
                 logContext,
                 executorService,
-                (operationName, operation) -> {
-                    try {
-                        return scheduleWriteOperation(
-                            operationName,
-                            tp,
-                            coordinator -> operation.generate()
-                        );
-                    } catch (Throwable t) {
-                        return CompletableFuture.failedFuture(t);
-                    }
-                }
+                (operationName, operation) -> scheduleWriteOperation(
+                    operationName,
+                    tp,
+                    coordinator -> operation.generate()
+                )
             );
             this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
             this.cachedBufferSize = new AtomicLong(0);
@@ -2072,11 +2060,15 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         TopicPartition tp,
         CoordinatorWriteOperation<S, T, U> op
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of write operation {}.", name);
-        CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, writeTimeout, op);
-        enqueueLast(event);
-        return event.future;
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of write operation {}.", name);
+            CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, writeTimeout, op);
+            enqueueLast(event);
+            return event.future;
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2094,7 +2086,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         String name,
         CoordinatorWriteOperation<S, T, U> op
     ) {
-        throwIfNotRunning();
         log.debug("Scheduled execution of write all operation {}.", name);
         return coordinators
             .keySet()
@@ -2128,28 +2119,32 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorWriteOperation<S, T, U> op,
         int apiVersion
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of transactional write operation {}.", name);
-        return partitionWriter.maybeStartTransactionVerification(
-            tp,
-            transactionalId,
-            producerId,
-            producerEpoch,
-            apiVersion
-        ).thenCompose(verificationGuard -> {
-            CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
-                name,
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of transactional write operation {}.", name);
+            return partitionWriter.maybeStartTransactionVerification(
                 tp,
                 transactionalId,
                 producerId,
                 producerEpoch,
-                verificationGuard,
-                writeTimeout,
-                op
-            );
-            enqueueLast(event);
-            return event.future;
-        });
+                apiVersion
+            ).thenCompose(verificationGuard -> {
+                CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
+                    name,
+                    tp,
+                    transactionalId,
+                    producerId,
+                    producerEpoch,
+                    verificationGuard,
+                    writeTimeout,
+                    op
+                );
+                enqueueLast(event);
+                return event.future;
+            });
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2175,21 +2170,25 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         TransactionResult result,
         short transactionVersion
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of transaction completion for {} with producer id={}, producer epoch={}, " +
-            "coordinator epoch={}, transaction version={} and transaction result={}.", tp, producerId, producerEpoch, coordinatorEpoch, transactionVersion, result);
-        CoordinatorCompleteTransactionEvent event = new CoordinatorCompleteTransactionEvent(
-            name,
-            tp,
-            producerId,
-            producerEpoch,
-            coordinatorEpoch,
-            result,
-            transactionVersion,
-            writeTimeout
-        );
-        enqueueLast(event);
-        return event.future;
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of transaction completion for {} with producer id={}, producer epoch={}, " +
+                "coordinator epoch={}, transaction version={} and transaction result={}.", tp, producerId, producerEpoch, coordinatorEpoch, transactionVersion, result);
+            CoordinatorCompleteTransactionEvent event = new CoordinatorCompleteTransactionEvent(
+                name,
+                tp,
+                producerId,
+                producerEpoch,
+                coordinatorEpoch,
+                result,
+                transactionVersion,
+                writeTimeout
+            );
+            enqueueLast(event);
+            return event.future;
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2209,11 +2208,15 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         TopicPartition tp,
         CoordinatorReadOperation<S, T> op
     ) {
-        throwIfNotRunning();
-        log.debug("Scheduled execution of read operation {}.", name);
-        CoordinatorReadEvent<T> event = new CoordinatorReadEvent<>(name, tp, op);
-        enqueueLast(event);
-        return event.future;
+        try {
+            throwIfNotRunning();
+            log.debug("Scheduled execution of read operation {}.", name);
+            CoordinatorReadEvent<T> event = new CoordinatorReadEvent<>(name, tp, op);
+            enqueueLast(event);
+            return event.future;
+        } catch (Throwable t) {
+            return CompletableFuture.failedFuture(t);
+        }
     }
 
     /**
@@ -2231,7 +2234,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         String name,
         CoordinatorReadOperation<S, T> op
     ) {
-        throwIfNotRunning();
         log.debug("Scheduled execution of read all operation {}.", name);
         return coordinators
             .keySet()
