@@ -102,7 +102,7 @@ import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.metadata.bootstrap.LegacyBootstrapDirectory;
+import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.util.RecordRedactor;
@@ -1026,7 +1026,7 @@ public final class QuorumController implements Controller {
                         // KIP-1170: The bootstrap checkpoint can contain metadata records. If it does,
                         // they should be considered the bootstrap metadata for the cluster.
                         if (!reader.isCommittedSnapshot() && !messages.isEmpty()) {
-                            if (bootstrapMetadata.source().contains(LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
+                            if (bootstrapMetadata.source().contains(BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME)) {
                                 log.warn("Legacy metadata bootstrap checkpoint file exists alongside " +
                                     "the bootstrap metadata records in the bootstrap checkpoint. ");
                             }

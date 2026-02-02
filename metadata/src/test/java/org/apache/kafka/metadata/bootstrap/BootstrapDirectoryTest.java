@@ -56,7 +56,7 @@ public class BootstrapDirectoryTest {
         }
 
         synchronized String binaryBootstrapPath() {
-            return new File(directory, LegacyBootstrapDirectory.BINARY_BOOTSTRAP_FILENAME).getAbsolutePath();
+            return new File(directory, BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME).getAbsolutePath();
         }
 
         @Override
@@ -73,7 +73,7 @@ public class BootstrapDirectoryTest {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
                     "the default bootstrap"),
-                new LegacyBootstrapDirectory(testDirectory.path()).read());
+                new BootstrapDirectory(testDirectory.path()).read());
         }
     }
 
@@ -81,6 +81,6 @@ public class BootstrapDirectoryTest {
     public void testMissingDirectory() {
         assertEquals("No such directory as ./non/existent/directory",
             assertThrows(RuntimeException.class, () ->
-                new LegacyBootstrapDirectory("./non/existent/directory").read()).getMessage());
+                new BootstrapDirectory("./non/existent/directory").read()).getMessage());
     }
 }

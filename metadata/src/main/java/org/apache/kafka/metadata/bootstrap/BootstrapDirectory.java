@@ -17,22 +17,87 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
+import org.apache.kafka.metadata.util.BatchFileReader;
+import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 
 /**
- * Abstraction for reading controller bootstrap metadata from disk.
+ * Reads bootstrap metadata from a binary checkpoint file.
  */
-public interface BootstrapDirectory {
+public class BootstrapDirectory {
+    public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
+
+    private final Path binaryBootstrapPath;
+    private final boolean requireFile;
+
+    /**
+     * Reads from {directoryPath}/bootstrap.checkpoint, falling back to defaults if missing.
+     */
+    public BootstrapDirectory(String directoryPath) {
+        this(Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME), false);
+    }
+
+    /**
+     * Reads from the given path. If requireFile is true, throws when the file is missing.
+     */
+    public BootstrapDirectory(Path binaryBootstrapPath, boolean requireFile) {
+        this.binaryBootstrapPath = Objects.requireNonNull(binaryBootstrapPath);
+        this.requireFile = requireFile;
+    }
 
     /**
      * Read the bootstrap metadata from the configured location.
-     * Implementations may read from a binary checkpoint file on disk, or fall back to
-     * configuration defaults if no checkpoint is present.
-     *
-     * @return the loaded {@link BootstrapMetadata}
-     * @throws UncheckedIOException if the metadata cannot be read from disk
-     * @throws IllegalStateException if the configured location is missing or not a directory
-     * @throws RuntimeException if the metadata is invalid
      */
-    BootstrapMetadata read();
+    public BootstrapMetadata read() {
+        Path directoryPath = binaryBootstrapPath.getParent();
+        if (directoryPath != null && !Files.isDirectory(directoryPath)) {
+            if (Files.exists(directoryPath)) {
+                throw new IllegalStateException("Path " + directoryPath + " exists, but is not " +
+                        "a directory.");
+            } else {
+                throw new IllegalStateException("No such directory as " + directoryPath);
+            }
+        }
+        if (!Files.exists(binaryBootstrapPath)) {
+            if (requireFile) {
+                String path = binaryBootstrapPath.toString();
+                throw new UncheckedIOException(path, new FileNotFoundException(path));
+            }
+            return readFromConfiguration();
+        }
+        return readFromBinaryFile(binaryBootstrapPath.toString());
+    }
+
+    private BootstrapMetadata readFromConfiguration() {
+        return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
+    }
+
+    private static BootstrapMetadata readFromBinaryFile(String binaryPath) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        try (BatchFileReader reader = new BatchFileReader.Builder().
+                setPath(binaryPath).build()) {
+            while (reader.hasNext()) {
+                BatchAndType batchAndType = reader.next();
+                if (!batchAndType.isControl()) {
+                    records.addAll(batchAndType.batch().records());
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Unable to read bootstrap metadata from " + binaryPath, e);
+        }
+        return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
+                "the binary bootstrap metadata file: " + binaryPath);
+    }
 }

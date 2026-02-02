@@ -21,7 +21,11 @@ import java.nio.file.Files
 import java.util.{Optional, Properties}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.metadata.bootstrap.{BootstrapMetadata, TestBootstrapDirectory}
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+
+import java.nio.file.Paths
+
+import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
@@ -35,6 +39,14 @@ import org.junit.jupiter.api.Test
 
 class KafkaRaftServerTest {
   private val clusterIdBase64 = "H3KKO4NTRPaCWtEmm3vW7A"
+  private val SNAPSHOT_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint"
+
+  private def readBootstrapMetadata(directoryPath: String): BootstrapMetadata = {
+    val checkpointPath = Paths.get(directoryPath,
+      s"${CLUSTER_METADATA_TOPIC_PARTITION.topic()}-${CLUSTER_METADATA_TOPIC_PARTITION.partition()}",
+      SNAPSHOT_CHECKPOINT_FILENAME)
+    new BootstrapDirectory(checkpointPath, true).read()
+  }
 
   @Test
   def testSuccessfulLoadMetaProperties(): Unit = {
@@ -299,7 +311,7 @@ class KafkaRaftServerTest {
       assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
       assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
 
-      val bootstrapMetadata = new TestBootstrapDirectory(logDir.getAbsolutePath).read()
+      val bootstrapMetadata = readBootstrapMetadata(logDir.getAbsolutePath)
       assertEquals(MetadataVersion.IBP_3_3_IV3, bootstrapMetadata.metadataVersion())
     } finally {
       Utils.delete(logDir)
