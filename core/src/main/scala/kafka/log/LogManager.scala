@@ -1238,9 +1238,13 @@ class LogManager(logDirs: Seq[File],
     try {
       sourceLog.foreach { srcLog =>
         srcLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), shouldReinitialize = true)
-        // Now that replica in source log directory has been successfully renamed for deletion.
-        // Close the log, update checkpoint files, and enqueue this log to be deleted.
-        srcLog.close()
+        // Now that replica in source log directory has been successfully renamed for deletion,
+        // update checkpoint files and enqueue this log to be deleted.
+        // Note: We intentionally do NOT close the log here to avoid race conditions where concurrent
+        // operations (e.g., log flusher, fetch requests) might encounter ClosedChannelException.
+        // The log will be deleted asynchronously by the background delete-logs thread.
+        // File handles are intentionally left open; Unix semantics allow the renamed files
+        // to remain accessible until all handles are closed.
         val logDir = srcLog.parentDirFile
         val logsToCheckpoint = logsInDir(logDir)
         checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
