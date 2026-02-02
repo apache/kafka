@@ -17,15 +17,7 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
-import org.apache.kafka.metadata.util.BatchFileReader;
-import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-
-import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * Abstraction for reading controller bootstrap metadata from disk.
@@ -43,32 +35,4 @@ public interface BootstrapDirectory {
      * @throws RuntimeException if the metadata is invalid
      */
     BootstrapMetadata read();
-
-    /**
-     * Read bootstrap metadata from the given binary file path.
-     *
-     * This is a shared helper used by {@link BootstrapDirectory} implementations; it is not
-     * intended as part of the public instance contract of {@link #read()}.
-     *
-     * @param binaryPath the path to the binary bootstrap file
-     * @return the loaded {@link BootstrapMetadata}
-     * @throws UncheckedIOException if the metadata cannot be read from disk
-     * @throws RuntimeException if the binary file contents are invalid
-     */
-    static BootstrapMetadata readFromBinaryFile(String binaryPath) {
-        List<ApiMessageAndVersion> records = new ArrayList<>();
-        try (BatchFileReader reader = new BatchFileReader.Builder().
-                setPath(binaryPath).build()) {
-            while (reader.hasNext()) {
-                BatchAndType batchAndType = reader.next();
-                if (!batchAndType.isControl()) {
-                    records.addAll(batchAndType.batch().records());
-                }
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException("Unable to read bootstrap metadata from " + binaryPath, e);
-        }
-        return BootstrapMetadata.fromRecords(Collections.unmodifiableList(records),
-                "the binary bootstrap metadata file: " + binaryPath);
-    }
 }

@@ -57,7 +57,7 @@ public class LegacyBootstrapDirectory implements BootstrapDirectory {
         if (!Files.exists(binaryBootstrapPath)) {
             return readFromConfiguration();
         } else {
-            return BootstrapDirectory.readFromBinaryFile(binaryBootstrapPath.toString());
+            return BootstrapFileUtils.readFromBinaryFile(binaryBootstrapPath.toString());
         }
     }
 

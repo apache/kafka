@@ -63,7 +63,7 @@ public class TestBootstrapDirectory implements BootstrapDirectory {
             String binaryPath = binaryBootstrapPath.toString();
             throw new UncheckedIOException(binaryPath, new FileNotFoundException(binaryPath));
         } else {
-            return BootstrapDirectory.readFromBinaryFile(binaryBootstrapPath.toString());
+            return BootstrapFileUtils.readFromBinaryFile(binaryBootstrapPath.toString());
         }
     }
 }
