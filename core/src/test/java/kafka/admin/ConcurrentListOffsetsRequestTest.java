@@ -14,11 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package kafka.admin;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.DefaultHostResolver;
+import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.internals.PartitionLeaderCache;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
@@ -31,7 +38,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -59,25 +65,28 @@ public class ConcurrentListOffsetsRequestTest {
     private static final short REPLICAS = 1;
     private static final int PARTITION = 2;
     private static final int TIMEOUT = 1000;
-    private final ClusterInstance clusterInstance;
     private Admin adminClient;
     private NetworkClient networkClient;
     private final AtomicBoolean injectHostResolverError = new AtomicBoolean(false);
 
-    ConcurrentListOffsetsRequestTest(ClusterInstance clusterInstance) {
-        this.clusterInstance = clusterInstance;
-    }
-
-    @BeforeEach
-    public void setup() throws Exception {
+    private void setup(ClusterInstance clusterInstance) throws Exception {
         clusterInstance.waitForReadyBrokers();
         clusterInstance.createTopic(TOPIC, PARTITION, REPLICAS);
         Map<String, Object> props = Map.of(
                 "default.api.timeout.ms", TIMEOUT,
                 "request.timeout.ms", TIMEOUT,
                 CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        adminClient = KafkaAdminClient.createInternal(new AdminClientConfig(clusterInstance.setClientSaslConfig(props), true),
-                null, new TestHostResolver());
+
+        var createInternalMethod = KafkaAdminClient.class.getDeclaredMethod(
+                "createInternal",
+                AdminClientConfig.class,
+                Class.forName("org.apache.kafka.clients.admin.KafkaAdminClient$TimeoutProcessorFactory"),
+                HostResolver.class
+        );
+
+        createInternalMethod.setAccessible(true);
+
+        adminClient = (Admin) createInternalMethod.invoke(null, new AdminClientConfig(clusterInstance.setClientSaslConfig(props)), null, new TestHostResolver());
 
         networkClient = TestUtils.fieldValue(adminClient, KafkaAdminClient.class, "client");
     }
@@ -88,7 +97,8 @@ public class ConcurrentListOffsetsRequestTest {
     }
 
     @ClusterTest
-    public void correctlyHandleConcurrentModificationOfPartitionLeaderCache() throws Exception {
+    public void correctlyHandleConcurrentModificationOfPartitionLeaderCache(ClusterInstance clusterInstance) throws Exception {
+        setup(clusterInstance);
         // making one request to prepopulate the partition leader cache so we have something to delete later
         listAllOffsets().all().get(TIMEOUT * 2, TimeUnit.SECONDS);
 
