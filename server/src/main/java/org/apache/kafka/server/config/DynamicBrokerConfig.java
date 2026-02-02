@@ -61,7 +61,8 @@ public class DynamicBrokerConfig {
 
     private static final Set<String> PER_BROKER_CONFIGS = Stream.of(
             DYNAMIC_SECURITY_CONFIGS,
-            DynamicListenerConfig.RECONFIGURABLE_CONFIGS)
+            DynamicListenerConfig.RECONFIGURABLE_CONFIGS,
+            DynamicQuotaConfig.RECONFIGURABLE_CONFIGS)
         .flatMap(Collection::stream)
         .filter(c -> !CLUSTER_LEVEL_LISTENER_CONFIGS.contains(c))
         .collect(Collectors.toUnmodifiableSet());
@@ -79,8 +80,8 @@ public class DynamicBrokerConfig {
             DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
             List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
             GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
-            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS, 
-            QuotaConfig.BROKER_QUOTA_CONFIGS)
+            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS,
+            DynamicQuotaConfig.RECONFIGURABLE_CONFIGS)
         .flatMap(Collection::stream)
         .collect(Collectors.toUnmodifiableSet());
 
@@ -278,5 +279,9 @@ public class DynamicBrokerConfig {
     public static class DynamicReplicationConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
                 ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
+    }
+
+    public static class DynamicQuotaConfig {
+        public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIG_DEF.names();
     }
 }
