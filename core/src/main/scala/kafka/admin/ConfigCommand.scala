@@ -367,9 +367,7 @@ object ConfigCommand extends Logging {
               return
             }
           case GroupType =>
-            if (adminClient.listGroups().all.get.stream.noneMatch(_.groupId() == name) &&
-              adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all.get
-                .stream.noneMatch(_.name == name)) {
+            if (adminClient.listGroups().all.get.stream.noneMatch(_.groupId() == name) && listGroupConfigResources(adminClient).stream.noneMatch(_.name == name)) {
               System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
               return
             }
@@ -388,8 +386,7 @@ object ConfigCommand extends Logging {
         case ClientMetricsType =>
           adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSeq
         case GroupType =>
-          adminClient.listGroups().all.get.asScala.map(_.groupId).toSet ++
-            adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSet
+          adminClient.listGroups().all.get.asScala.map(_.groupId).toSet ++ listGroupConfigResources(adminClient).asScala.map(_.name).toSet
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
@@ -535,6 +532,15 @@ object ConfigCommand extends Logging {
     }
 
     adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
+  }
+
+  private def listGroupConfigResources(adminClient: Admin): java.util.Collection[ConfigResource] = {
+    try {
+      adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all().get()
+    } catch {
+      // 4.1 and later admin client connecting to an older broker will not be able to list group config resources (KIP-1142)
+      case _: UnsupportedVersionException => java.util.Set.of()
+    }
   }
 
 
