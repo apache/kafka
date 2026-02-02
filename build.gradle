@@ -969,6 +969,8 @@ project(':server') {
     compileOnly libs.bndlib
     compileOnly libs.spotbugs
 
+    implementation libs.commonsValidator
+
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':server-common')
@@ -1091,7 +1093,6 @@ project(':core') {
     implementation project(':share-coordinator')
 
     implementation libs.argparse4j
-    implementation libs.commonsValidator
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes

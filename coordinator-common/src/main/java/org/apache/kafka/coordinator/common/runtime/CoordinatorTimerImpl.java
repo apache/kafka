@@ -24,9 +24,9 @@ import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -42,7 +42,7 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<U> {
     private final Logger log;
     private final Timer timer;
     private final CoordinatorShardScheduler<U> scheduler;
-    private final Map<String, TimerTask> tasks = new HashMap<>();
+    private final Map<String, TimerTask> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorTimerImpl(
         LogContext logContext,

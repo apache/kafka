@@ -4114,8 +4114,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   private def disableEligibleLeaderReplicas(admin: Admin): Unit = {
     if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
       admin.updateFeatures(
-        util.Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
-        new UpdateFeaturesOptions()).all().get()
+        util.Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))).all().get()
     }
   }
 

@@ -34,19 +34,21 @@ import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
@@ -2126,7 +2128,7 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnTopicsDeletedEmptyList() {
+    public void testOnMetadataUpdateSchedulesOperationsWhenTopicsDeleted() {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         MockTime time = new MockTime();
         MockTimer timer = new MockTimer(time);
@@ -2146,6 +2148,16 @@ class ShareCoordinatorServiceTest {
 
         service.startup(() -> 3);
 
+        Uuid topicId = Uuid.randomUuid();
+        MetadataImage initialImage = new MetadataImageBuilder()
+            .addTopic(topicId, "foo", 1)
+            .build();
+
+        // Create a delta that deletes the topic.
+        MetadataDelta delta = new MetadataDelta(initialImage);
+        delta.replay(new RemoveTopicRecord().setTopicId(topicId));
+        MetadataImage newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
+
         when(runtime.scheduleWriteAllOperation(
             eq("on-topics-deleted"),
             any()
@@ -2153,11 +2165,48 @@ class ShareCoordinatorServiceTest {
             List.of(
                 CompletableFuture.completedFuture(null),
                 CompletableFuture.completedFuture(null),
-                CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+                CompletableFuture.completedFuture(null)
             )
         );
 
-        assertDoesNotThrow(() -> service.onTopicsDeleted(Set.of(), BufferSupplier.NO_CACHING));
+        assertDoesNotThrow(() -> service.onMetadataUpdate(delta, newImage));
+
+        verify(runtime, times(1)).scheduleWriteAllOperation(
+            eq("on-topics-deleted"),
+            any()
+        );
+    }
+
+    @Test
+    public void testOnMetadataUpdateDoesNotScheduleOperationsWhenNoTopicsDeleted() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        Metrics metrics = new Metrics();
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer,
+            () -> true
+        ));
+
+        service.startup(() -> 3);
+
+        // Create an image with a topic and a delta with no deletions.
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), "foo", 1)
+            .build();
+        MetadataDelta delta = new MetadataDelta(image);
+
+        assertDoesNotThrow(() -> service.onMetadataUpdate(delta, image));
+
+        // Verify no operations scheduled.
         verify(runtime, times(0)).scheduleWriteAllOperation(
             eq("on-topics-deleted"),
             any()
@@ -2165,7 +2214,7 @@ class ShareCoordinatorServiceTest {
     }
 
     @Test
-    public void testOnTopicsDeletedDoesNotThrowExp() {
+    public void testOnMetadataUpdateDoesNotScheduleOperationsWhenTopicsDeltaIsNull() {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         MockTime time = new MockTime();
         MockTimer timer = new MockTimer(time);
@@ -2185,6 +2234,52 @@ class ShareCoordinatorServiceTest {
 
         service.startup(() -> 3);
 
+        // Use mocks where topicsDelta() returns null.
+        MetadataDelta delta = mock(MetadataDelta.class);
+        MetadataImage image = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
+        when(delta.topicsDelta()).thenReturn(null);
+
+        assertDoesNotThrow(() -> service.onMetadataUpdate(delta, image));
+
+        // Verify no cleanup operations scheduled.
+        verify(runtime, times(0)).scheduleWriteAllOperation(
+            eq("on-topics-deleted"),
+            any()
+        );
+    }
+
+    @Test
+    public void testOnMetadataUpdateSwallowsErrorsWhenTopicsDeleted() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        Metrics metrics = new Metrics();
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer,
+            () -> true
+        ));
+
+        service.startup(() -> 3);
+
+        Uuid topicId = Uuid.randomUuid();
+        MetadataImage initialImage = new MetadataImageBuilder()
+            .addTopic(topicId, "foo", 1)
+            .build();
+
+        // Create a delta that deletes the topic.
+        MetadataDelta delta = new MetadataDelta(initialImage);
+        delta.replay(new RemoveTopicRecord().setTopicId(topicId));
+        MetadataImage newImage = delta.apply(new MetadataProvenance(1, 0, 0L, true));
+
+        // Mock operations with some futures failing.
         when(runtime.scheduleWriteAllOperation(
             eq("on-topics-deleted"),
             any()
@@ -2192,11 +2287,14 @@ class ShareCoordinatorServiceTest {
             List.of(
                 CompletableFuture.completedFuture(null),
                 CompletableFuture.completedFuture(null),
-                CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+                FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
             )
         );
 
-        assertDoesNotThrow(() -> service.onTopicsDeleted(Set.of(Uuid.randomUuid()), BufferSupplier.NO_CACHING));
+        // Verify no exception thrown.
+        assertDoesNotThrow(() -> service.onMetadataUpdate(delta, newImage));
+
+        // Verify operations were still scheduled.
         verify(runtime, times(1)).scheduleWriteAllOperation(
             eq("on-topics-deleted"),
             any()
