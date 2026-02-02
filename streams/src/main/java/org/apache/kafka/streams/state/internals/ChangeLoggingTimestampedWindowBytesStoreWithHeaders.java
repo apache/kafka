@@ -25,7 +25,7 @@ import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDese
 /**
  * ChangeLogging wrapper for timestamped window stores with headers support (KIP-1271).
  * <p>
- * This wrapper handles the ValueTimestampHeaders format: [HeaderSize][Headers][Timestamp][Value]
+ * This wrapper handles the ValueTimestampHeaders format: [headersSize(varint)][headersBytes][timestamp(8)][value]
  * Headers are stored in the state store but NOT logged to the changelog topic, per KIP-1271 design.
  * <p>
  * The changelog only contains the key, value, and timestamp - headers are omitted as they are

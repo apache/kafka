@@ -37,13 +37,13 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  * Serializer for ValueTimestampHeaders.
  *
  * Serialization format (per KIP-1271):
- * [HeadersSize(varint)][HeadersBytes][Timestamp(8)][Value]
+ * [headersSize(varint)][headersBytes][timestamp(8)][value]
  *
  * Where:
- * - HeadersSize: Size of the HeadersBytes section in bytes, encoded as varint
- * - HeadersBytes: Serialized headers ([count(varint)][header1][header2]...) from HeadersSerializer
- * - Timestamp: 8-byte long timestamp
- * - Value: Serialized value using the provided value serializer
+ * - headersSize: Size of the headersBytes section in bytes, encoded as varint
+ * - headersBytes: Serialized headers ([count(varint)][header1][header2]...) from HeadersSerializer
+ * - timestamp: 8-byte long timestamp
+ * - value: Serialized value using the provided value serializer
  *
  * This is used by KIP-1271 to serialize values with timestamps and headers for state stores.
  */
@@ -91,11 +91,11 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
         final byte[] rawHeaders = headersSerializer.serialize(headers);  // [count][header1][header2]...
         final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
 
-        // Format: [HeadersSize(varint)][HeadersBytes][Timestamp(8)][Value]
+        // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              DataOutputStream out = new DataOutputStream(baos)) {
 
-            ByteUtils.writeVarint(rawHeaders.length, out);  // headers_size
+            ByteUtils.writeVarint(rawHeaders.length, out);  // headersSize
             out.write(rawHeaders);                           // [count][header1][header2]...
             out.write(rawTimestamp);                         // [timestamp(8)]
             out.write(rawValue);                             // [value]
@@ -162,12 +162,12 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
 
     /**
      * Extracts the timestamp from a serialized record.
-     * Format: [headers_size][headers_bytes][timestamp(8)][value]
+     * Format: [headersSize][headersBytes][timestamp(8)][value]
      */
     private static long extractTimestamp(final byte[] bytes) {
         final ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
-        // Skip headers_size and headers_bytes
+        // Skip headersSize and headersBytes
         final int headersSize = ByteUtils.readVarint(buffer);
         buffer.position(buffer.position() + headersSize);
 
@@ -183,7 +183,7 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
         final ByteBuffer leftBuffer = ByteBuffer.wrap(left);
         final ByteBuffer rightBuffer = ByteBuffer.wrap(right);
 
-        // Read headers_size from both
+        // Read headersSize from both
         final int leftHeadersSize = ByteUtils.readVarint(leftBuffer);
         final int rightHeadersSize = ByteUtils.readVarint(rightBuffer);
 
@@ -191,7 +191,7 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
             return false;
         }
 
-        // Compare headers_bytes
+        // Compare headersBytes
         for (int i = 0; i < leftHeadersSize; i++) {
             if (leftBuffer.get() != rightBuffer.get()) {
                 return false;

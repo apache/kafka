@@ -23,7 +23,10 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  * This is the bytes-level implementation that stores headers serialized within the value bytes.
  *
  * The underlying {@link RocksDBTimestampedSegmentedBytesStoreWithHeaders} handles the serialization
- * format: [HeaderSize(2)][Headers][Timestamp(8)][Value]
+ * format: [headersSize(varint)][headersBytes][timestamp(8)][value]
+ *
+ * Where headersBytes follows the format: [count(varint)][header1][header2]...
+ * Each header is: [keyLength(varint)][keyBytes(UTF-8)][valueLength(varint)][valueBytes]
  *
  * This class extends {@link RocksDBTimestampedWindowStore} to inherit all
  * {@code WindowStore<Bytes, byte[]>} methods, and implements {@link HeadersBytesStore} as a marker

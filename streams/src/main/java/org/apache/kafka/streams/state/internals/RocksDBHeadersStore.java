@@ -48,7 +48,10 @@ import java.util.Optional;
  * <p>
  * This store extends RocksDBTimestampedStore to add header support using a dual column family approach.
  * The old column family contains timestamped values ([timestamp(8)][value]),
- * and the new column family contains values with headers ([headerSize(2)][headers][timestamp(8)][value]).
+ * and the new column family contains values with headers ([headersSize(varint)][headersBytes][timestamp(8)][value]).
+ * <p>
+ * Where headersBytes follows the format: [count(varint)][header1][header2]...
+ * Each header is: [keyLength(varint)][keyBytes(UTF-8)][valueLength(varint)][valueBytes]
  * <p>
  * This implementation supports lazy migration from timestamped stores to header-aware stores.
  */
@@ -74,7 +77,7 @@ public class RocksDBHeadersStore extends RocksDBTimestampedStore implements Head
         // Note: We open three column families:
         // 0. DEFAULT_COLUMN_FAMILY - required by RocksDB but not used by this store
         // 1. TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME (from parent) - contains [timestamp(8)][value]
-        // 2. HEADERS_COLUMN_FAMILY_NAME - contains [headerSize(2)][headers][timestamp(8)][value]
+        // 2. HEADERS_COLUMN_FAMILY_NAME - contains [headersSize(varint)][headersBytes][timestamp(8)][value]
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
@@ -181,7 +184,7 @@ public class RocksDBHeadersStore extends RocksDBTimestampedStore implements Head
                 ? accessor.get(oldColumnFamily, readOptions.get(), key)
                 : accessor.get(oldColumnFamily, key);
             if (timestampedValue != null) {
-                // Convert from [timestamp(8)][value] to [headerSize(2)][headers][timestamp(8)][value]
+                // Convert from [timestamp(8)][value] to [headersSize(varint)][headersBytes][timestamp(8)][value]
                 final byte[] valueWithEmptyHeaders = HeadersBytesStore.convertToHeaderFormat(key, timestampedValue);
                 // Migrate the data to the new column family
                 put(accessor, key, valueWithEmptyHeaders);
