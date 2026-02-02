@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.tools.reassign;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -178,6 +181,7 @@ public class ReassignPartitionsCommand {
                 opts.options.has(opts.additionalOpt),
                 Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
                 opts.options.valueOf(opts.interBrokerThrottleOpt),
+                opts.options.valueOf(opts.brokerListWithoutThrottleOpt),
                 opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt),
                 opts.options.valueOf(opts.timeoutOpt),
                 Time.SYSTEM,
@@ -752,21 +756,24 @@ public class ReassignPartitionsCommand {
     /**
      * The entry point for the --execute and --execute-additional commands.
      *
-     * @param adminClient                 The AdminClient to use.
-     * @param additional                  Whether --additional was passed.
-     * @param reassignmentJson            The JSON string to use for the topics to reassign.
-     * @param interBrokerThrottle         The inter-broker throttle to use, or a negative
-     *                                    number to skip using a throttle.
-     * @param logDirThrottle              The replica log directory throttle to use, or a
-     *                                    negative number to skip using a throttle.
-     * @param timeoutMs                   The maximum time in ms to wait for log directory
-     *                                    replica assignment to begin.
-     * @param time                        The Time object to use.
+     * @param adminClient                        The AdminClient to use.
+     * @param additional                         Whether --additional was passed.
+     * @param reassignmentJson                   The JSON string to use for the topics to reassign.
+     * @param interBrokerThrottle                The inter-broker throttle to use, or a negative
+     *                                           number to skip using a throttle.
+     * @param brokerListWithoutThrottleString    The brokerIds string to skip broker-level throttle
+     *                                           config updates for during reassignment.
+     * @param logDirThrottle                     The replica log directory throttle to use, or a
+     *                                           negative number to skip using a throttle.
+     * @param timeoutMs                          The maximum time in ms to wait for log directory
+     *                                           replica assignment to begin.
+     * @param time                               The Time object to use.
      */
     public static void executeAssignment(Admin adminClient,
                                          boolean additional,
                                          String reassignmentJson,
                                          long interBrokerThrottle,
+                                         String brokerListWithoutThrottleString,
                                          long logDirThrottle,
                                          long timeoutMs,
                                          Time time,
@@ -795,14 +802,19 @@ public class ReassignPartitionsCommand {
         if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
             System.out.println(YOU_MUST_RUN_VERIFY_PERIODICALLY_MESSAGE);
 
+            Set<Integer> brokerWithoutThrottleSet = new HashSet<>();
+            if (!brokerListWithoutThrottleString.isEmpty()) {
+                brokerWithoutThrottleSet = parseCommaSeparatedIntSet(brokerListWithoutThrottleString);
+            }
+
             if (interBrokerThrottle >= 0) {
                 Map<String, Map<Integer, PartitionMove>> moveMap = calculateProposedMoveMap(currentReassignments, proposedParts, currentParts);
-                modifyReassignmentThrottle(adminClient, moveMap, interBrokerThrottle);
+                modifyReassignmentThrottle(adminClient, moveMap, interBrokerThrottle, brokerWithoutThrottleSet);
             }
 
             if (logDirThrottle >= 0) {
                 Set<Integer> movingBrokers = calculateMovingBrokers(proposedReplicas.keySet());
-                modifyLogDirThrottle(adminClient, movingBrokers, logDirThrottle);
+                modifyLogDirThrottle(adminClient, movingBrokers, logDirThrottle, brokerWithoutThrottleSet);
             }
         }
 
@@ -825,6 +837,15 @@ public class ReassignPartitionsCommand {
         if (!proposedReplicas.isEmpty()) {
             executeMoves(adminClient, proposedReplicas, timeoutMs, time);
         }
+    }
+
+    private static Set<Integer> parseCommaSeparatedIntSet(String s) {
+        if (s == null || s.trim().isEmpty()) return Collections.emptySet();
+
+        return Arrays.stream(s.trim().split(","))
+                .filter(t -> !t.isEmpty())
+                .map(Integer::parseInt)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     /**
@@ -1078,15 +1099,19 @@ public class ReassignPartitionsCommand {
     /**
      * Calculate the leader throttle configurations to use.
      *
-     * @param moveMap   The movements.
-     * @return          A map from topic names to leader throttle configurations.
+     * @param moveMap                     The movements.
+     * @param brokerWithoutThrottleSet    The brokerIds set to skip broker-level throttle
+     *      *                             config updates for during reassignment.
+     * @return                            A map from topic names to leader throttle configurations.
      */
-    static Map<String, String> calculateLeaderThrottles(Map<String, Map<Integer, PartitionMove>> moveMap) {
+    static Map<String, String> calculateLeaderThrottles(Map<String, Map<Integer, PartitionMove>> moveMap,
+                                                        Set<Integer> brokerWithoutThrottleSet) {
         Map<String, String> results = new HashMap<>();
         moveMap.forEach((topicName, partMoveMap) -> {
             Set<String> components = new TreeSet<>();
             partMoveMap.forEach((partId, move) ->
-                move.sources.forEach(source -> components.add(String.format("%d:%d", partId, source))));
+                move.sources.stream().filter(source -> !brokerWithoutThrottleSet.contains(source))
+                        .forEach(source -> components.add(String.format("%d:%d", partId, source))));
             results.put(topicName, String.join(",", components));
         });
         return results;
@@ -1095,16 +1120,19 @@ public class ReassignPartitionsCommand {
     /**
      * Calculate the follower throttle configurations to use.
      *
-     * @param moveMap   The movements.
-     * @return          A map from topic names to follower throttle configurations.
+     * @param moveMap                       The movements.
+     * @param brokerWithoutThrottleSet      The brokerIds set to skip broker-level throttle
+     *                                      config updates for during reassignment.
+     * @return                              A map from topic names to follower throttle configurations.
      */
-    static Map<String, String> calculateFollowerThrottles(Map<String, Map<Integer, PartitionMove>> moveMap) {
+    static Map<String, String> calculateFollowerThrottles(Map<String, Map<Integer, PartitionMove>> moveMap,
+                                                          Set<Integer> brokerWithoutThrottleSet) {
         Map<String, String> results = new HashMap<>();
         moveMap.forEach((topicName, partMoveMap) -> {
             Set<String> components = new TreeSet<>();
             partMoveMap.forEach((partId, move) ->
                 move.destinations.forEach(destination -> {
-                    if (!move.sources.contains(destination)) {
+                    if (!move.sources.contains(destination) && !brokerWithoutThrottleSet.contains(destination)) {
                         components.add(String.format("%d:%d", partId, destination));
                     }
                 })
@@ -1118,15 +1146,19 @@ public class ReassignPartitionsCommand {
     /**
      * Calculate all the brokers which are involved in the given partition reassignments.
      *
-     * @param moveMap       The partition movements.
-     * @return              A set of all the brokers involved.
+     * @param moveMap                     The partition movements.
+     * @param brokerWithoutThrottleSet    The brokerIds set to skip broker-level throttle
+     *                                    config updates for during reassignment.
+     * @return                            A set of all the brokers involved.
      */
-    static Set<Integer> calculateReassigningBrokers(Map<String, Map<Integer, PartitionMove>> moveMap) {
+    static Set<Integer> calculateReassigningBrokers(Map<String, Map<Integer, PartitionMove>> moveMap,
+                                                    Set<Integer> brokerWithoutThrottleSet) {
         Set<Integer> reassigningBrokers = new TreeSet<>();
         moveMap.values().forEach(partMoveMap -> partMoveMap.values().forEach(partMove -> {
             reassigningBrokers.addAll(partMove.sources);
             reassigningBrokers.addAll(partMove.destinations);
         }));
+        reassigningBrokers.removeAll(brokerWithoutThrottleSet);
         return reassigningBrokers;
     }
 
@@ -1171,13 +1203,14 @@ public class ReassignPartitionsCommand {
     private static void modifyReassignmentThrottle(
         Admin admin,
         Map<String, Map<Integer, PartitionMove>> moveMap,
-        long interBrokerThrottle
+        long interBrokerThrottle,
+        Set<Integer> brokerWithoutThrottleSet
     ) throws ExecutionException, InterruptedException {
-        Map<String, String> leaderThrottles = calculateLeaderThrottles(moveMap);
-        Map<String, String> followerThrottles = calculateFollowerThrottles(moveMap);
+        Map<String, String> leaderThrottles = calculateLeaderThrottles(moveMap, brokerWithoutThrottleSet);
+        Map<String, String> followerThrottles = calculateFollowerThrottles(moveMap, brokerWithoutThrottleSet);
         modifyTopicThrottles(admin, leaderThrottles, followerThrottles);
 
-        Set<Integer> reassigningBrokers = calculateReassigningBrokers(moveMap);
+        Set<Integer> reassigningBrokers = calculateReassigningBrokers(moveMap, brokerWithoutThrottleSet);
         modifyInterBrokerThrottle(admin, reassigningBrokers, interBrokerThrottle);
     }
 
@@ -1215,7 +1248,8 @@ public class ReassignPartitionsCommand {
      */
     static void modifyLogDirThrottle(Admin admin,
                                      Set<Integer> movingBrokers,
-                                     long logDirThrottle) throws ExecutionException, InterruptedException {
+                                     long logDirThrottle,
+                                     Set<Integer> brokerWithoutThrottleSet) throws ExecutionException, InterruptedException {
         if (logDirThrottle >= 0) {
             Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             movingBrokers.forEach(brokerId -> {
@@ -1495,6 +1529,7 @@ public class ReassignPartitionsCommand {
             opts.bootstrapServerOpt,
             opts.commandConfigOpt,
             opts.interBrokerThrottleOpt,
+            opts.brokerListWithoutThrottleOpt,
             opts.replicaAlterLogDirsThrottleOpt,
             opts.timeoutOpt,
             opts.disallowReplicationFactorChangeOpt

@@ -35,6 +35,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<String> reassignmentJsonFileOpt;
     final OptionSpec<String> topicsToMoveJsonFileOpt;
     final OptionSpec<String> brokerListOpt;
+    final OptionSpec<String> brokerListWithoutThrottleOpt;
     final OptionSpec<String> bootstrapControllerOpt;
     final OptionSpec<?> disableRackAware;
     final OptionSpec<Long> interBrokerThrottleOpt;
@@ -84,6 +85,15 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
                 " in the form \"0,1,2\". This is required if --topics-to-move-json-file is used to generate reassignment configuration")
             .withRequiredArg()
             .describedAs("brokerlist")
+            .ofType(String.class);
+
+        brokerListWithoutThrottleOpt = parser.accepts("broker-list-without-throttle", "Optional. Comma-separated broker ID list (e.g. 1,2) that " +
+                        "should be excluded from broker-level throttle config updates during partition reassignment execution. " +
+                        "When --execute and --throttle are used, it normally applies throttle configs on all brokers involved in the reassignment. " +
+                        "If any of those brokers are known to be down or unreachable, adding them to --broker-list-without-throttle makes it " +
+                        "skip the throttle-setting step for those brokers, avoiding retries/timeouts, while still throttling the remaining reachable brokers.")
+            .withRequiredArg()
+            .describedAs("broker list without throttle")
             .ofType(String.class);
 
         bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The controller to use for reassignment. " +

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.reassign;
 
+import java.util.LinkedHashSet;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.PartitionReassignment;
@@ -566,16 +567,51 @@ public class ReassignPartitionsUnitTest {
         expLeaderThrottle.put("foo", "0:1,0:2,0:3,1:4,1:5,1:6,2:1,2:2,3:1,3:2,4:1,4:2,5:1,5:2");
         expLeaderThrottle.put("bar", "0:2,0:3,0:4");
 
-        assertEquals(expLeaderThrottle, calculateLeaderThrottles(moveMap));
+        assertEquals(expLeaderThrottle, calculateLeaderThrottles(moveMap, Collections.emptySet()));
+
+        // Exclude a subset of brokers(1,2)
+        expLeaderThrottle.put("foo", "0:3,1:4,1:5,1:6");
+        expLeaderThrottle.put("bar", "0:3,0:4");
+
+        Set<Integer> brokerWithoutThrottleSet = new LinkedHashSet<>(Arrays.asList(1, 2));
+        assertEquals(expLeaderThrottle, calculateLeaderThrottles(moveMap, brokerWithoutThrottleSet));
+
+        // Exclude a subset of brokers(2,3,4)
+        expLeaderThrottle.put("foo", "0:1,1:5,1:6,2:1,3:1,4:1,5:1");
+        expLeaderThrottle.put("bar", "");
+
+        brokerWithoutThrottleSet = new LinkedHashSet<>(Arrays.asList(2, 3, 4));
+        assertEquals(expLeaderThrottle, calculateLeaderThrottles(moveMap, brokerWithoutThrottleSet));
 
         Map<String, String> expFollowerThrottle = new HashMap<>();
 
         expFollowerThrottle.put("foo", "0:5,1:7,1:8,2:3,2:4,3:5,3:6,4:3,5:3,5:4,5:5,5:6");
         expFollowerThrottle.put("bar", "0:1");
 
-        assertEquals(expFollowerThrottle, calculateFollowerThrottles(moveMap));
+        assertEquals(expFollowerThrottle, calculateFollowerThrottles(moveMap, Collections.emptySet()));
 
-        assertEquals(Set.of(1, 2, 3, 4, 5, 6, 7, 8), calculateReassigningBrokers(moveMap));
+        // Exclude a subset of brokers(3,5)
+        expFollowerThrottle.put("foo", "1:7,1:8,2:4,3:6,5:4,5:6");
+        expFollowerThrottle.put("bar", "0:1");
+
+        brokerWithoutThrottleSet = new LinkedHashSet<>(Arrays.asList(3, 5));
+        assertEquals(expFollowerThrottle, calculateFollowerThrottles(moveMap, brokerWithoutThrottleSet));
+
+        // Exclude a subset of brokers(1)
+        expFollowerThrottle.put("foo", "0:5,1:7,1:8,2:3,2:4,3:5,3:6,4:3,5:3,5:4,5:5,5:6");
+        expFollowerThrottle.put("bar", "");
+
+        brokerWithoutThrottleSet = new LinkedHashSet<>(Collections.singletonList(1));
+        assertEquals(expFollowerThrottle, calculateFollowerThrottles(moveMap, brokerWithoutThrottleSet));
+
+        assertEquals(Set.of(1, 2, 3, 4, 5, 6, 7, 8), calculateReassigningBrokers(moveMap, Collections.emptySet()));
+        // Exclude a subset of brokers
+        assertEquals(Set.of(2, 3, 4, 5, 6, 7), calculateReassigningBrokers(moveMap, Set.of(1, 8)));
+        // Exclude all brokers (result should be empty)
+        assertEquals(Collections.emptySet(), calculateReassigningBrokers(moveMap, Set.of(1, 2, 3, 4, 5, 6, 7, 8)));
+        // Exclude a broker that doesn’t exist in the reassignment (no change)
+        assertEquals(Set.of(1, 2, 3, 4, 5, 6, 7, 8), calculateReassigningBrokers(moveMap, Set.of(999)));
+
         assertEquals(Set.of(0, 2), calculateMovingBrokers(Set.of(
             new TopicPartitionReplica("quux", 0, 0),
             new TopicPartitionReplica("quux", 1, 2))));
@@ -644,7 +680,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"quux\",\"partition\":0,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
+                        "]}", -1L, "", -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
         }
     }
 
@@ -657,7 +693,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent broker id to fail").getMessage());
+                        "]}", -1L, "", -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent broker id to fail").getMessage());
         }
     }
 
@@ -800,7 +836,7 @@ public class ReassignPartitionsUnitTest {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
             assertStartsWith("Unexpected character",
-                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM, false)).getMessage());
+                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, "", -1L, 10000L, Time.SYSTEM, false)).getMessage());
         }
     }
 

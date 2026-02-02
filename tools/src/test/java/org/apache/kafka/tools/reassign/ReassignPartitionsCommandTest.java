@@ -498,7 +498,7 @@ public class ReassignPartitionsCommandTest {
                             "bar-0: The replication factor is changed from 3 to 1\n" +
                             "foo-0: The replication factor is changed from 3 to 2\n" +
                             "foo-1: The replication factor is changed from 3 to 4",
-                    assertThrows(TerseException.class, () -> executeAssignment(admin, false, assignment, -1L, -1L, 10000L, Time.SYSTEM, true)).getMessage());
+                    assertThrows(TerseException.class, () -> executeAssignment(admin, false, assignment, -1L, "", -1L, 10000L, Time.SYSTEM, true)).getMessage());
         }
     }
 
@@ -757,7 +757,7 @@ public class ReassignPartitionsCommandTest {
                                       Long replicaAlterLogDirsThrottle) throws RuntimeException {
         try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             executeAssignment(admin, additional, reassignmentJson,
-                    interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM, false);
+                    interBrokerThrottle, "", replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM, false);
         } catch (ExecutionException | InterruptedException | JsonProcessingException | TerseException e) {
             throw new RuntimeException(e);
         }

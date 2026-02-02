@@ -249,7 +249,7 @@ public class ReplicationQuotasTestRig {
 
             ReassignPartitionsCommand.executeAssignment(adminClient, false,
                 ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.of()),
-                config.throttle, -1L, 10000L, Time.SYSTEM, false);
+                config.throttle, "", -1L, 10000L, Time.SYSTEM, false);
 
             //Await completion
             waitForReassignmentToComplete();
