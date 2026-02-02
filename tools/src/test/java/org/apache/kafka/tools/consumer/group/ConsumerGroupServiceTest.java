@@ -300,7 +300,7 @@ public class ConsumerGroupServiceTest {
                         topic,
                         false,
                         IntStream.range(0, NUM_PARTITIONS)
-                                .mapToObj(i -> new TopicPartitionInfo(i, Node.noNode(), List.of(), List.of()))
+                                .mapToObj(i -> new TopicPartitionInfo(i, new Node(0, "localhost", 9092), List.of(), List.of()))
                                 .toList())));
         return AdminClientTestUtils.describeTopicsResult(topicDescriptionMap);
     }
@@ -316,7 +316,7 @@ public class ConsumerGroupServiceTest {
     private DescribeTopicsResult describeTopicsResult(Collection<String> topics) {
         var topicDescriptions  = topics.stream().collect(Collectors.toMap(Function.identity(),
             topic -> new TopicDescription(topic, false, IntStream.range(0, NUM_PARTITIONS)
-                .mapToObj(i -> new TopicPartitionInfo(i, Node.noNode(), List.of(), List.of()))
+                .mapToObj(i -> new TopicPartitionInfo(i, new Node(0, "localhost", 9092), List.of(), List.of()))
                 .toList())));
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
     }

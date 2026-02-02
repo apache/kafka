@@ -173,12 +173,14 @@ public class DefaultStreamsRebalanceListenerTest {
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
             Set.of(new StreamsRebalanceData.TaskId("1", 0)),
             Set.of(new StreamsRebalanceData.TaskId("2", 0)),
-            Set.of(new StreamsRebalanceData.TaskId("3", 0))
+            Set.of(new StreamsRebalanceData.TaskId("3", 0)),
+            false
         );
 
         assertDoesNotThrow(() -> defaultStreamsRebalanceListener.onTasksAssigned(assignment));
 
         final InOrder inOrder = inOrder(taskManager, streamThread, streamsRebalanceData);
+        inOrder.verify(streamThread).setStreamsGroupReady(false);
         inOrder.verify(taskManager).handleAssignment(
             Map.of(new TaskId(1, 0), Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))),
             Map.of(
@@ -201,10 +203,11 @@ public class DefaultStreamsRebalanceListenerTest {
         createRebalanceListenerWithRebalanceData(streamsRebalanceData);
 
         final Exception actualException = assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of())
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false)
         ));
 
         assertEquals(exception, actualException);
+        verify(streamThread).setStreamsGroupReady(false);
         verify(taskManager).handleAssignment(any(), any());
         verify(streamThread, never()).setState(StreamThread.State.PARTITIONS_ASSIGNED);
         verify(taskManager, never()).handleRebalanceComplete();
@@ -302,11 +305,13 @@ public class DefaultStreamsRebalanceListenerTest {
             new StreamsRebalanceData.Assignment(
                 Set.of(new StreamsRebalanceData.TaskId("1", 0)),
                 Set.of(),
-                Set.of()
+                Set.of(),
+                true
             )
         );
 
         verify(tasksAssignedSensor).record(150L);
+        verify(streamThread).setStreamsGroupReady(true);
         verify(taskManager).handleAssignment(
             Map.of(new TaskId(1, 0), Set.of(new TopicPartition("source1", 0), new TopicPartition("repartition1", 0))),
             Map.of()
@@ -376,10 +381,11 @@ public class DefaultStreamsRebalanceListenerTest {
         createRebalanceListenerWithRebalanceData(new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of()));
 
         assertThrows(RuntimeException.class, () -> defaultStreamsRebalanceListener.onTasksAssigned(
-            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of())
+            new StreamsRebalanceData.Assignment(Set.of(), Set.of(), Set.of(), false)
         ));
 
         verify(tasksAssignedSensor).record(75L);
+        verify(streamThread).setStreamsGroupReady(false);
         verify(taskManager).handleAssignment(any(), any());
     }
 

@@ -1150,11 +1150,11 @@ public class ShareGroupCommandTest {
         when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
         Map<String, TopicDescription> descriptions = Map.of(
             topic1, new TopicDescription(topic1, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()),
-                new TopicPartitionInfo(1, Node.noNode(), List.of(), List.of()))
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()),
+                new TopicPartitionInfo(1, new Node(0, "localhost", 9092), List.of(), List.of()))
             ),
             topic2, new TopicDescription(topic2, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of())
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
         )));
         DescribeTopicsResult topicsResult = mock(DescribeTopicsResult.class);
         when(topicsResult.allTopicNames()).thenReturn(completedFuture(descriptions));
@@ -1188,8 +1188,8 @@ public class ShareGroupCommandTest {
         );
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()),
-                new TopicPartitionInfo(1, Node.noNode(), List.of(), List.of()))
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()),
+                new TopicPartitionInfo(1, new Node(0, "localhost", 9092), List.of(), List.of()))
         ));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
@@ -1259,14 +1259,14 @@ public class ShareGroupCommandTest {
         when(adminClient.listOffsets(any(), any(ListOffsetsOptions.class))).thenReturn(listOffsetsResult);
         Map<String, TopicDescription> descriptions = Map.of(
             topic1, new TopicDescription(topic1, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()),
-                new TopicPartitionInfo(1, Node.noNode(), List.of(), List.of())
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()),
+                new TopicPartitionInfo(1, new Node(0, "localhost", 9092), List.of(), List.of())
             )),
             topic2, new TopicDescription(topic2, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of())
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
             )),
             topic3, new TopicDescription(topic3, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of()
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()
             ))
         ));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
@@ -1319,7 +1319,7 @@ public class ShareGroupCommandTest {
         when(adminClient.alterShareGroupOffsets(any(), any())).thenReturn(alterShareGroupOffsetsResult);
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of())
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
         )));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
@@ -1452,7 +1452,7 @@ public class ShareGroupCommandTest {
         when(adminClient.describeShareGroups(any(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of())
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
         )));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
@@ -1496,7 +1496,7 @@ public class ShareGroupCommandTest {
         when(adminClient.describeShareGroups(any(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
         Map<String, TopicDescription> descriptions = Map.of(
             topic, new TopicDescription(topic, false, List.of(
-                new TopicPartitionInfo(0, Node.noNode(), List.of(), List.of())
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of())
             )));
         DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
         when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));

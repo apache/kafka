@@ -18,10 +18,10 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-import kafka.utils.{CoreUtils, Logging, Mx4jLoader}
+import kafka.utils.{Logging, Mx4jLoader}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.utils.{AppInfoParser, Time}
+import org.apache.kafka.common.utils.{AppInfoParser, Time, Utils}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
@@ -103,7 +103,7 @@ class KafkaRaftServer(
     // stops the raft client early on, which would disrupt broker shutdown.
     broker.foreach(_.shutdown())
     controller.foreach(_.shutdown())
-    CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)
+    Utils.swallow(this.logger.underlying, () => AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics))
   }
 
   override def awaitShutdown(): Unit = {

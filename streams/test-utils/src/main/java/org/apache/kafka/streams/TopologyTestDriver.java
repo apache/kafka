@@ -472,10 +472,8 @@ public class TopologyTestDriver implements Closeable {
                 StreamsConfig.EXACTLY_ONCE_V2.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
                 logContext,
                 stateDirectory,
-                new MockChangelogRegister(),
                 processorTopology.storeToChangelogTopic(),
-                new HashSet<>(partitionsByInputTopic.values()),
-                false);
+                new HashSet<>(partitionsByInputTopic.values()));
             final RecordCollector recordCollector = new RecordCollectorImpl(
                 logContext,
                 TASK_ID,

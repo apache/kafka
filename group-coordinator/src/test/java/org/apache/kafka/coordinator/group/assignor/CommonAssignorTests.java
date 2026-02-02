@@ -123,7 +123,9 @@ public class CommonAssignorTests {
         );
 
         for (String memberId : members.keySet()) {
-            assertSame(firstAssignment.members().get(memberId).partitions(), secondAssignment.members().get(memberId).partitions());
+            // The assignment map from the assignor must be the same as the immutable assignment map
+            // that went in.
+            assertSame(membersWithAssignment.get(memberId).partitions(), secondAssignment.members().get(memberId).partitions());
         }
     }
 

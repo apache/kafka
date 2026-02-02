@@ -29,9 +29,9 @@ import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
 import org.apache.kafka.snapshot.Snapshots.{BOOTSTRAP_SNAPSHOT_ID, snapshotPath}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.test.TestUtils
