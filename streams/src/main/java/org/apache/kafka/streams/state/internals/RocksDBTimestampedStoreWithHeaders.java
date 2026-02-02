@@ -57,8 +57,11 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
 
   private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStoreWithHeaders.class);
 
+  // Legacy column family name - must match RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME
+  private static final byte[] LEGACY_TIMESTAMPED_CF_NAME =
+      "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
+
   // New column family for header-aware timestamped values.
-  // You can rename this if you prefer a different CF name.
   private static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
       "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8);
 
@@ -76,19 +79,25 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
   @Override
   void openRocksDB(final DBOptions dbOptions,
                    final ColumnFamilyOptions columnFamilyOptions) {
-    // We open two CFs:
-    //  - DEFAULT_COLUMN_FAMILY: legacy (non-header) timestamped values
+    // We open three CFs:
+    //  - DEFAULT_COLUMN_FAMILY: required by RocksDB (not used)
+    //  - LEGACY_TIMESTAMPED_CF_NAME: legacy timestamped values (without headers)
     //  - TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME: new header-aware format
     //
     // On first open with no legacy data, we just use the new CF.
     final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
         dbOptions,
         new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+        new ColumnFamilyDescriptor(LEGACY_TIMESTAMPED_CF_NAME, columnFamilyOptions),
         new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions)
     );
 
-    final ColumnFamilyHandle legacyCf = columnFamilies.get(0);
-    final ColumnFamilyHandle headersCf = columnFamilies.get(1);
+    final ColumnFamilyHandle defaultCf = columnFamilies.get(0);
+    final ColumnFamilyHandle legacyCf = columnFamilies.get(1);
+    final ColumnFamilyHandle headersCf = columnFamilies.get(2);
+
+    // Close the default CF as we don't use it
+    defaultCf.close();
 
     final RocksIterator legacyIter = db.newIterator(legacyCf);
     legacyIter.seekToFirst();
@@ -104,8 +113,8 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
   }
 
   /**
-   * Accessor that supports dual-column-family upgrade: legacy CF (no headers)
-   * and new CF (header-aware format).
+   * Accessor that supports dual-column-family upgrade: legacy CF (timestamped without headers)
+   * and new CF (timestamped with headers).
    */
   private class DualColumnFamilyAccessor implements ColumnFamilyAccessor {
 

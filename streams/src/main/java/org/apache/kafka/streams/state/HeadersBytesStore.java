@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.utils.ByteUtils;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -39,7 +44,25 @@ public interface HeadersBytesStore {
    * @param value the legacy value bytes (for timestamped stores: [timestamp(8)][value])
    * @return the value in header-embedded format with empty headers
    */
-  static byte[] convertToHeaderFormat(final byte[] key, final byte[] value) {
-    return null;
-  }
+    static byte[] convertToHeaderFormat(final byte[] key, final byte[] value) {
+        if (value == null) {
+            return null;
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream out = new DataOutputStream(baos)) {
+
+            // Empty headers serialize to an empty byte array (per HeadersSerializer.serialize())
+            final byte[] emptyHeadersBytes = new byte[0];
+
+            // Write format: [headers_size(varint)][headers_bytes][payload]
+            ByteUtils.writeVarint(emptyHeadersBytes.length, out);  // headers_size = 0
+            // No headers_bytes to write (empty array)
+            out.write(value);                                       // payload: [timestamp(8)][value]
+
+            return baos.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to convert to header format", e);
+        }
+    }
 }

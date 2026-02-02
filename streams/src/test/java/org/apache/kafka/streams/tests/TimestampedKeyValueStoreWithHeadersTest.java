@@ -58,25 +58,44 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
       // 5. Create the incoming Record
       long now = System.currentTimeMillis();
-      final Record<String, String> record = new Record<>(
+      final Record<String, String> record1 = new Record<>(
           "user-123",
           "active-status",
           now
       );
-      record.headers().add("source", "unit-test".getBytes());
+      record1.headers().add("source", "unit-test".getBytes());
+
+      // store record with empty headers
+      final Record<String, String> record2 = new Record<>(
+          "user-321",
+          "passive-status",
+          now + 1000
+      );
 
       // 6. Store and Verify
       store.put(
-          record.key(),
-          ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers())
+          record1.key(),
+          ValueTimestampHeaders.make(record1.value(), record1.timestamp(), record1.headers())
+      );
+      store.put(
+          record2.key(),
+          ValueTimestampHeaders.make(record2.value(), record2.timestamp(), record2.headers())
       );
 
-      final ValueTimestampHeaders<String> result = store.get(record.key());
+      final ValueTimestampHeaders<String> result1 = store.get(record1.key());
 
-      assertNotNull(result);
-      assertEquals(record.value(), result.value());
-      assertEquals(record.timestamp(), result.timestamp());
-      assertEquals(record.headers(), result.headers());
+      assertNotNull(result1);
+      assertEquals(record1.value(), result1.value());
+      assertEquals(record1.timestamp(), result1.timestamp());
+      assertEquals(record1.headers(), result1.headers());
+
+      final ValueTimestampHeaders<String> result2 = store.get(record2.key());
+
+      assertNotNull(result1);
+      assertEquals(record2.value(), result2.value());
+      assertEquals(record2.timestamp(), result2.timestamp());
+      assertNotNull(result2.headers());
+      assertEquals(0, result2.headers().toArray().length);
     }
   }
 }

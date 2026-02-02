@@ -210,8 +210,10 @@ public class ValueTimestampHeadersSerializer<V>
   }
 
   private static int headersFiledLength(byte[] bytes) {
-    Integer offset = 0;
-    int headersLength =  readVarint(bytes, offset);
-    return headersLength + offset;
+    ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+    int headersLength = readVarint(bais, 0);
+    // bais.available() tells us how many bytes are left, so we can calculate how many were consumed
+    int varintSize = bytes.length - bais.available();
+    return varintSize + headersLength;
   }
 }

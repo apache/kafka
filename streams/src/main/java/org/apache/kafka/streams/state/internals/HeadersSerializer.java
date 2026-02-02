@@ -47,11 +47,13 @@ public final class HeadersSerializer implements Serializer<Headers> {
 
   @Override
   public byte[] serialize(final String topic, final Headers headers) {
-    if (headers == null || !headers.iterator().hasNext()) {
-      return new byte[0];
-    }
-
     final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+    if (headers == null || !headers.iterator().hasNext()) {
+      // Empty headers: return [varint(0)] instead of []
+      byte[] headersLength = getLengthAsVarint(new byte[0]);
+      return headersLength;
+    }
 
     // 1) header_count
     final int headerCount = count(headers);
