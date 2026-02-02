@@ -539,7 +539,13 @@ object ConfigCommand extends Logging {
       adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all().get()
     } catch {
       // 4.1 and later admin client connecting to an older broker will not be able to list group config resources (KIP-1142)
-      case _: UnsupportedVersionException => java.util.Set.of()
+      case e: ExecutionException =>
+        e.getCause match {
+          case _: UnsupportedVersionException =>
+            java.util.Set.of()
+          case _ => throw e
+        }
+      case e: Throwable => throw e
     }
   }
 
