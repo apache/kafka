@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,31 @@ public class RebalanceTaskClosureIntegrationTest {
         }
     }
 
+    /**
+     * The conditions that we need to meet:
+     * <p><ul>
+     * <li>There is a task with an open store in {@link org.apache.kafka.streams.processor.internals.TasksRegistry#pendingTasksToInit}</li>
+     * <li>StreamThread gets into PENDING_SHUTDOWN state, so that {@link StreamThread#isStartingRunningOrPartitionAssigned} return false
+     * before we call {@link StreamThread#checkStateUpdater} that would move the task to the StateUpdater </li>
+     * </ul><p>
+     * If all conditions are met, {@code TaskManager} needs to correctly close the open store during shutdown.
+     * <p>
+     * In order to have a task with an open store in the pending task list we first need to have an active task that gets converted
+     * to a standby one during rebalance(see {@link org.apache.kafka.streams.processor.internals.TaskManager#closeAndRecycleTasks}).
+     * <p>
+     * For that this test:
+     * <p><ul>
+     * <li>starts a KS app and waits for it to fully start</li>
+     * <li>starts another KS app which will trigger reassignment</li>
+     * <li>waits for {@link CachedStateStore#clearCache} to be called(it's called during task recycle) and locks on it</li>
+     * <li>shutdowns the first KS app and waits for the stream tread to get into PENDING_SHUTDOWN state</li>
+     * <li>releases the lock</li>
+     * </ul><p>
+     * At this point {@link org.apache.kafka.streams.processor.internals.TaskManager#shutdown} will be called,
+     * and we will have a pending task to init with an open store(because tasks keep their stores open during recycle).
+     * <p>
+     * This test verifies that the open store is closed during shutdown.
+     */
     @Test
     public void shouldClosePendingTasksToInitAfterRebalance() throws Exception {
         final CountDownLatch recycleLatch = new CountDownLatch(1);
@@ -124,12 +150,12 @@ public class RebalanceTaskClosureIntegrationTest {
         // That's exactly what we are waiting for
         recycleLatch.await();
 
-        // sending a message to disable retries in the consumer client. if there are no messages, it retries the whole sequence of actions,
-        // including the rebalance data. which we don't want, because we just staged the right condition
+        // sending a message to avoid retries in the consumer client. if there are no messages, it retries both poll for new messages and reassignment.
+        // which we don't want, because we just staged the right condition(see ClassicKafkaConsumer#poll()).
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC_NAME, List.of(new KeyValue<>(1L, "key")),
                 TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, StringSerializer.class, new Properties()), cluster.time);
         // Now we can close both apps. The StreamThreadStateListener will unblock the clearCache call, letting the rebalance finish.
-        // We don't want it to happen any sooner, because we want the stream thread to stop before it gets to moving messages from task registry to state updater.
+        // We don't want it to happen any sooner, because we want the stream thread to stop before it gets to moving tasks from task registry to state updater.
         streams1.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         streams2.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
 
@@ -141,7 +167,6 @@ public class RebalanceTaskClosureIntegrationTest {
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 1000);
         streamsConfiguration.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1000);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + "/" + storePathSuffix);
@@ -149,7 +174,6 @@ public class RebalanceTaskClosureIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
 
         return streamsConfiguration;
