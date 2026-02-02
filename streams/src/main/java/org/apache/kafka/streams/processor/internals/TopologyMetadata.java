@@ -505,11 +505,6 @@ public class TopologyMetadata {
         return builder.buildSubtopology(task.subtopology());
     }
 
-    public ProcessorTopology buildSubtopologyForStartup(final TaskId task) {
-        final InternalTopologyBuilder builder = lookupBuilderForTask(task);
-        return builder.buildSubtopology(task.subtopology());
-    }
-
     public ProcessorTopology globalTaskTopology() {
         if (hasNamedTopologies()) {
             throw new IllegalStateException("Global state stores are not supported with Named Topologies");

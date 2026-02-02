@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -245,14 +246,20 @@ public class StateDirectory implements AutoCloseable {
                         subTopology.storeToChangelogTopic(),
                         inputPartitions
                     );
-                    final StartupContext initContext = new StartupContext(id, config, stateManager, metricsImpl);
                     final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
-                    StateManagerUtil.registerStartupStateStores(log, threadLogPrefix, subTopology, stateManager, this, initContext);
-                    for (final StateStore stateStore : subTopology.stateStores()) {
-                        if (!stateStore.isOpen()) {
-                            throw new IllegalStateException("StateStore [" + stateStore.name() + "] is not open");
+                    final ThreadCache cache = new ThreadCache(new LogContext(threadLogPrefix), 0L, metricsImpl);
+                    final StartupContext initContext = new StartupContext(id, config, stateManager, metricsImpl, cache);
+                    try {
+                        StateManagerUtil.registerStartupStateStores(log, threadLogPrefix, subTopology, stateManager, this, initContext);
+                        for (final StateStore stateStore : subTopology.stateStores()) {
+                            if (!stateStore.isOpen()) {
+                                throw new IllegalStateException("StateStore [" + stateStore.name() + "] is not open");
+                            }
                         }
+                    } catch (final TaskCorruptedException tce) {
+                        log.warn("Failed to register startup state stores for task {}: {}", id, tce.getMessage());
                     }
+                    stateManager.close();
                     tasksForLocalState.put(id, new StartupState(id, subTopology, stateManager));
                 }
             }
@@ -840,8 +847,8 @@ public class StateDirectory implements AutoCloseable {
         private final StateManager stateManager;
         final StreamsMetricsImpl metricsImpl;
 
-        public StartupContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager, final StreamsMetricsImpl metricsImpl) {
-            super(taskId, config, null, null);
+        public StartupContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager, final StreamsMetricsImpl metricsImpl, ThreadCache cache) {
+            super(taskId, config, metricsImpl, cache);
             this.stateManager = stateManager;
             this.metricsImpl = metricsImpl;
         }
@@ -863,7 +870,6 @@ public class StateDirectory implements AutoCloseable {
 
         @Override
         public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) {
-            throw new IllegalStateException("Should not be called");
         }
 
         @Override
@@ -889,11 +895,6 @@ public class StateDirectory implements AutoCloseable {
         @Override
         public long currentStreamTimeMs() {
             throw new IllegalStateException("Should not be called");
-        }
-
-        @Override
-        public StreamsMetricsImpl metrics() {
-            return metricsImpl;
         }
 
         @Override

@@ -326,8 +326,7 @@ public class TaskManager {
                 if (localState != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
-                    localState.getStateMngr().assignToStreamThread(new LogContext(logPrefix), inputPartitions);
-                    final StandbyTask task = standbyTaskCreator.createStandbyTaskFromStartupLocalStore(taskId, inputPartitions, localState.getTopology(), localState.getStateMngr());
+                    final StandbyTask task = standbyTaskCreator.createStandbyTaskFromStartupLocalStore(taskId, inputPartitions, localState.getTopology());
                     updateInputPartitionsOfStandbyTaskIfTheyChanged(task, inputPartitions);
                     assignedTasks.put(task, inputPartitions);
                 }

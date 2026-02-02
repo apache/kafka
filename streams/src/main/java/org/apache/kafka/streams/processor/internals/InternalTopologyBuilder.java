@@ -1129,8 +1129,6 @@ public class InternalTopologyBuilder {
                 final StateStore store;
                 if (stateFactories.containsKey(stateStoreName)) {
                     final StoreFactory storeFactory = stateFactories.get(stateStoreName);
-                    storeFactory.configure(topologyConfigs.applicationConfigs);
-                    storeFactory.builder().withCachingDisabled().withLoggingDisabled().build();
 
                     // remember the changelog topic if this state store is change-logging enabled
                     if (storeFactory.loggingEnabled() && !storeToChangelogTopic.containsKey(stateStoreName)) {

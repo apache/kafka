@@ -159,8 +159,16 @@ class StandbyTaskCreator {
 
     StandbyTask createStandbyTaskFromStartupLocalStore(final TaskId taskId,
                                                        final Set<TopicPartition> inputPartitions,
-                                                       final ProcessorTopology topology,
-                                                       final ProcessorStateManager stateManager) {
+                                                       final ProcessorTopology topology) {
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+                taskId,
+                Task.TaskType.STANDBY,
+                eosEnabled(applicationConfig),
+                getLogContext(taskId),
+                stateDirectory,
+                topology.storeToChangelogTopic(),
+                inputPartitions);
+
         final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 taskId,
                 applicationConfig,

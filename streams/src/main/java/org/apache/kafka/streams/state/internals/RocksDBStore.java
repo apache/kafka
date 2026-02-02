@@ -80,7 +80,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
@@ -133,7 +132,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     protected StateStoreContext context;
     protected Position position;
     private OffsetCheckpoint positionCheckpoint;
-    private final AtomicBoolean initialized = new AtomicBoolean(false);
 
     public RocksDBStore(final String name,
                         final String metricsScope) {
@@ -159,13 +157,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
-        initialized.set(true);
         // open the DB dir
         metricsRecorder.init(metricsImpl(stateStoreContext), stateStoreContext.taskId());
-
         openDB(stateStoreContext.appConfigs(), stateStoreContext.stateDir());
-
-        addValueProvidersToMetricsRecorder();
 
         final File positionCheckpointFile = new File(stateStoreContext.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
@@ -186,7 +180,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @SuppressWarnings("unchecked")
-    protected void openDB(final Map<String, Object> configs, final File stateDir) {
+    void openDB(final Map<String, Object> configs, final File stateDir) {
         // initialize the default rocksdb options
 
         final DBOptions dbOptions = new DBOptions();
@@ -248,6 +242,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         open = true;
 
+        addValueProvidersToMetricsRecorder();
     }
 
     private void setupStatistics(final Map<String, Object> configs, final DBOptions dbOptions) {
@@ -682,9 +677,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             configSetter.close(name, userSpecifiedOptions);
             configSetter = null;
         }
-        if (initialized.get()) {
-            metricsRecorder.removeValueProviders(name);
-        }
+
+        metricsRecorder.removeValueProviders(name);
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions

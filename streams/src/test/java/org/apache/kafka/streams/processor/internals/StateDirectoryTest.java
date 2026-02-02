@@ -931,7 +931,7 @@ public class StateDirectoryTest {
         final StateStore store = initializeStartupTasks(new TaskId(0, 0), true);
 
         assertTrue(directory.hasStartupTasks());
-        assertTrue(store.isOpen());
+        assertFalse(store.isOpen());
 
         directory.close();
 
@@ -940,7 +940,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotCloseStartupTasksOnAutoCleanUp() {
+    public void shouldCloseStartupTasksOnAutoCleanUp() {
         // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
         // which can't be mocked
         time.setCurrentTimeMs(System.currentTimeMillis());
@@ -948,14 +948,14 @@ public class StateDirectoryTest {
         final StateStore store = initializeStartupTasks(new TaskId(0, 0), true);
 
         assertTrue(directory.hasStartupTasks());
-        assertTrue(store.isOpen());
+        assertFalse(store.isOpen());
 
         time.sleep(10000);
 
         directory.cleanRemovedTasks(1000);
 
         assertTrue(directory.hasStartupTasks());
-        assertTrue(store.isOpen());
+        assertFalse(store.isOpen());
     }
 
     private StateStore initializeStartupTasks(final TaskId taskId, final boolean createTaskDir) {

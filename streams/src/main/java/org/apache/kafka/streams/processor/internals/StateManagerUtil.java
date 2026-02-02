@@ -31,8 +31,10 @@ import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
@@ -121,7 +123,10 @@ final class StateManagerUtil {
                                     final ProcessorStateManager stateMgr,
                                     final StateDirectory stateDirectory,
                                     final InternalProcessorContext<?, ?> processorContext) {
-        if (topology.stateStores().isEmpty()) {
+        List<StateStore> storesToInitialize = topology.stateStores().stream()
+                .filter(StateStore::persistent)
+                .collect(Collectors.toList());
+        if (storesToInitialize.isEmpty()) {
             return;
         }
 
@@ -133,7 +138,7 @@ final class StateManagerUtil {
 
         final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
 
-        stateMgr.registerStartupStateStores(topology.stateStores(), processorContext);
+        stateMgr.registerStartupStateStores(storesToInitialize, processorContext);
         log.debug("Registered startup state stores");
 
         stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);

@@ -375,7 +375,6 @@ public class MeteredKeyValueStoreTest {
         assertThat(storeMetrics(), empty());
     }
 
-
     @Test
     public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
         setUp();

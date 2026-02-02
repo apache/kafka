@@ -414,12 +414,6 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldCloseOnPreInitPhase() {
-        doNothing().when(innerStoreMock).close();
-        store.close();
-    }
-
-    @Test
     public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
         doThrow(new RuntimeException("Oops!")).when(innerStoreMock).close();
         store.init(context, store);

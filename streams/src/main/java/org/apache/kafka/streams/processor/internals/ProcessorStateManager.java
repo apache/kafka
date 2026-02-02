@@ -178,7 +178,7 @@ public class ProcessorStateManager implements StateManager {
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
-    private final Map<String, StateStoreMetadata> startupStores = new HashMap<>();
+    private final Map<String, StateStoreMetadata> startupStores = new FixedOrderMap<>();
     private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
     private final File baseDir;
@@ -252,7 +252,6 @@ public class ProcessorStateManager implements StateManager {
         for (final StateStore store : allStores) {
             if (!stores.containsKey(store.name())) {
                 store.init(processorContext, store);
-                startupStores.remove(store.name());
             }
             log.trace("Registered state store {}", store.name());
         }
@@ -296,18 +295,6 @@ public class ProcessorStateManager implements StateManager {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 
             log.trace("Loaded offsets from the checkpoint file: {}", loadedCheckpoints);
-
-            // initialize
-            for (final StateStoreMetadata startupStore : startupStores.values()) {
-                final StateStore store = startupStore.stateStore;
-                if (store.persistent()) {
-                    if (loadedCheckpoints.containsKey(getStorePartition(store.name()))) {
-                        startupStore.setOffset(loadedCheckpoints.remove(getStorePartition(store.name())));
-                    } else {
-                        startupStore.corrupted = true;
-                    }
-                }
-            }
 
             for (final StateStoreMetadata store : stores.values()) {
                 if (store.corrupted) {
@@ -404,11 +391,6 @@ public class ProcessorStateManager implements StateManager {
                 commitCallback,
                 converterForStore(store)) :
             new StateStoreMetadata(store, commitCallback);
-
-        if (startupStores.containsKey(storeName)) {
-            final StateStoreMetadata removed = startupStores.remove(storeName);
-            storeMetadata.setOffset(removed.offset());
-        }
 
         // register the store first, so that if later an exception is thrown then eventually while we call `close`
         // on the state manager this state store would be closed as well
@@ -655,14 +637,10 @@ public class ProcessorStateManager implements StateManager {
             stores.clear();
         }
 
-        if (!startupStores.isEmpty()) {
-            for (final Map.Entry<String, StateStoreMetadata> entry : startupStores.entrySet()) {
-                final StateStore store = entry.getValue().stateStore;
-                store.close();
-            }
-            startupStores.clear();
+        for (final Map.Entry<String, StateStoreMetadata> entry : startupStores.entrySet()) {
+            final StateStore store = entry.getValue().stateStore;
+            store.close();
         }
-
 
         if (firstException != null) {
             throw firstException;

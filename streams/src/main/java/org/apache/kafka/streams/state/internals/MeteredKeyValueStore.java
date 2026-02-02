@@ -412,10 +412,7 @@ public class MeteredKeyValueStore<K, V>
         try {
             wrapped().close();
         } finally {
-            // Streams metrics is null before calling StateStore#init
-            if (streamsMetrics != null) {
-                streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
-            }
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
         }
     }
 

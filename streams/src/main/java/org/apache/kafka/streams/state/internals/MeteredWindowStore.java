@@ -369,9 +369,7 @@ public class MeteredWindowStore<K, V>
         try {
             wrapped().close();
         } finally {
-            if (streamsMetrics != null) {
-                streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
-            }
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId.toString(), name());
         }
     }
 
