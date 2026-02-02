@@ -367,7 +367,7 @@ object ConfigCommand extends Logging {
               return
             }
           case GroupType =>
-            if (adminClient.listGroups().all.get.stream.noneMatch(_.groupId() == name) && listGroupConfigResources(adminClient).forall(resources => resources.stream.noneMatch(_.name == name))) {
+            if (adminClient.listGroups().all.get.stream.noneMatch(_.groupId() == name) && listGroupConfigResources(adminClient).exists(resources => resources.stream.noneMatch(_.name == name))) {
               System.out.println(s"The ${entityType.dropRight(1)} '$name' doesn't exist and doesn't have dynamic config.")
               return
             }
