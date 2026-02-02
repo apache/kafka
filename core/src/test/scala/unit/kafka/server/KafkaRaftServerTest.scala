@@ -23,9 +23,10 @@ import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 
-import java.nio.file.Paths
+import java.nio.file.Path
 
 import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
+import org.apache.kafka.snapshot.Snapshots.{BOOTSTRAP_SNAPSHOT_ID, snapshotPath}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
@@ -39,12 +40,11 @@ import org.junit.jupiter.api.Test
 
 class KafkaRaftServerTest {
   private val clusterIdBase64 = "H3KKO4NTRPaCWtEmm3vW7A"
-  private val SNAPSHOT_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint"
 
   private def readBootstrapMetadata(directoryPath: String): BootstrapMetadata = {
-    val checkpointPath = Paths.get(directoryPath,
-      s"${CLUSTER_METADATA_TOPIC_PARTITION.topic()}-${CLUSTER_METADATA_TOPIC_PARTITION.partition()}",
-      SNAPSHOT_CHECKPOINT_FILENAME)
+    val metadataPartitionDir = Path.of(directoryPath,
+      s"${CLUSTER_METADATA_TOPIC_PARTITION.topic()}-${CLUSTER_METADATA_TOPIC_PARTITION.partition()}")
+    val checkpointPath = snapshotPath(metadataPartitionDir, BOOTSTRAP_SNAPSHOT_ID)
     new BootstrapDirectory(checkpointPath, true).read()
   }
 

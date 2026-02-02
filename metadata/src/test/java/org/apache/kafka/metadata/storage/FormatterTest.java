@@ -54,7 +54,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -63,6 +62,8 @@ import java.util.OptionalInt;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION;
+import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
+import static org.apache.kafka.snapshot.Snapshots.snapshotPath;
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALT;
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALTED_PASSWORD;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -140,18 +141,13 @@ public class FormatterTest {
         }
     }
 
-    private static final String SNAPSHOT_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint";
-
     /**
      * Reads bootstrap metadata from the snapshot checkpoint file in the given directory.
-     * This is used by tests to verify the contents of the formatted bootstrap metadata.
      */
     private static BootstrapMetadata readBootstrapMetadata(String directoryPath) {
-        Path checkpointPath = Paths.get(directoryPath,
-            String.format("%s-%d",
-                CLUSTER_METADATA_TOPIC_PARTITION.topic(),
-                CLUSTER_METADATA_TOPIC_PARTITION.partition()),
-            SNAPSHOT_CHECKPOINT_FILENAME);
+        Path metadataPartitionDir = Path.of(directoryPath,
+            CLUSTER_METADATA_TOPIC_PARTITION.topic() + "-" + CLUSTER_METADATA_TOPIC_PARTITION.partition());
+        Path checkpointPath = snapshotPath(metadataPartitionDir, BOOTSTRAP_SNAPSHOT_ID);
         return new BootstrapDirectory(checkpointPath, true).read();
     }
 
@@ -200,7 +196,7 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(1)) {
             new File(testEnv.directory(0)).setReadOnly();
             FormatterContext formatter1 = testEnv.newFormatter();
-            String expectedPrefix = "Error while writing 00000000000000000000-0000000000.checkpoint file";
+            String expectedPrefix = "Error while writing bootstrap checkpoint file";
             assertEquals(expectedPrefix,
                 assertThrows(FormatterException.class,
                     formatter1.formatter::run).

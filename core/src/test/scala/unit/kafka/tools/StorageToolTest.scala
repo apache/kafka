@@ -30,9 +30,10 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 
-import java.nio.file.Paths
+import java.nio.file.Path
 
 import org.apache.kafka.common.internals.Topic.CLUSTER_METADATA_TOPIC_PARTITION
+import org.apache.kafka.snapshot.Snapshots.{BOOTSTRAP_SNAPSHOT_ID, snapshotPath}
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
@@ -49,12 +50,10 @@ import scala.jdk.CollectionConverters._
 @Timeout(value = 40)
 class StorageToolTest {
 
-  private val SNAPSHOT_CHECKPOINT_FILENAME = "00000000000000000000-0000000000.checkpoint"
-
   private def readBootstrapMetadata(directoryPath: String) = {
-    val checkpointPath = Paths.get(directoryPath,
-      s"${CLUSTER_METADATA_TOPIC_PARTITION.topic()}-${CLUSTER_METADATA_TOPIC_PARTITION.partition()}",
-      SNAPSHOT_CHECKPOINT_FILENAME)
+    val metadataPartitionDir = Path.of(directoryPath,
+      s"${CLUSTER_METADATA_TOPIC_PARTITION.topic()}-${CLUSTER_METADATA_TOPIC_PARTITION.partition()}")
+    val checkpointPath = snapshotPath(metadataPartitionDir, BOOTSTRAP_SNAPSHOT_ID)
     new BootstrapDirectory(checkpointPath, true).read()
   }
 
