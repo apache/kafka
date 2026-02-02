@@ -246,7 +246,11 @@ public interface ClusterInstance {
 
     void start();
 
+    boolean started();
+
     void stop();
+
+    boolean stopped();
 
     void shutdownBroker(int brokerId);
 
