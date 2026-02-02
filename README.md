@@ -13,21 +13,21 @@
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 17 and 25. The `release` parameter in javac is set to `11` for the clients 
+We build and test Apache Kafka with Java versions 17 and 25. The `release` parameter in javac is set to `11` for the clients 
 and streams modules, and `17` for the rest, ensuring compatibility with their respective
 minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
 for the rest.
 
 Scala 2.13 is the only supported version in Apache Kafka.
 
-### Build a jar and run it
+### Build a JAR and run it
 ```bash
 ./gradlew jar
 ```
 
 Follow instructions in https://kafka.apache.org/quickstart
 
-### Build source jar
+### Build source JAR
 ```bash
 ./gradlew srcJar
 ```
@@ -67,7 +67,7 @@ Follow instructions in https://kafka.apache.org/quickstart
 ./gradlew streams:integration-tests:test --tests RestoreIntegrationTest
 ```
 
-### Repeatedly running a particular unit/integration test with specific times by setting N
+### Running a particular unit/integration test N times
 ```bash
 N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestResponseTest --rerun --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
 ```
@@ -80,7 +80,7 @@ N=500; I=0; while [ $I -lt $N ] && ./gradlew clients:test --tests RequestRespons
 ```
 
 ### Running a particular unit/integration test with log4j output
-By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
+By default, there will be only a small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
 
 For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j2.yaml#L35) in `clients/src/test/resources/log4j2.yaml` 
 to `level: INFO` and then run:
@@ -121,14 +121,14 @@ Core Module (:core): `core/build/reports/scoverageTest/index.html`
 
 Other Modules: `<module>/build/reports/jacoco/test/html/index.html`
 
-### Building a binary release gzipped tar ball
+### Building a binary release gzipped tarball
 ```bash
 ./gradlew clean releaseTarGz
 ```
 
 The release file can be found inside `./core/build/distributions/`.
 
-### Building auto generated messages
+### Building auto-generated messages
 Sometimes it is only necessary to rebuild the RPC auto-generated message data when switching between branches, as they could
 fail due to code changes. You can just run:
 
@@ -181,7 +181,7 @@ Streams has multiple sub-projects, but you can run all the tests:
 ```
 
 ### Building IDE project
-*Note Please ensure that JDK17 is used when developing Kafka.*
+*Note: Please ensure that JDK 17 is used when developing Kafka.*
 
 IntelliJ supports Gradle natively and it will automatically check Java syntax and compatibility for each module, even if
 the Java version shown in the `Structure > Project Settings > Modules` may not be the correct one.
@@ -239,42 +239,42 @@ Please note for this to work you should create/update user maven settings (typic
 ./gradlew -PskipSigning=true :streams:publishToMavenLocal
 ```
 
-### Building the test jar
+### Building the test JAR
 ```bash
 ./gradlew testJar
 ```
 
 ### Running code quality checks
-There are two code quality analysis tools that we regularly run, spotbugs and checkstyle.
+There are two code quality analysis tools that we regularly run, SpotBugs and Checkstyle.
 
 #### Checkstyle
 Checkstyle enforces a consistent coding style in Kafka.
-You can run checkstyle using:
+You can run Checkstyle using:
 
 ```bash
 ./gradlew checkstyleMain checkstyleTest spotlessCheck
 ```
 
-The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
+The Checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 For experiments (or regression testing purposes) add `-PcheckstyleVersion=X.y.z` switch (to override project-defined checkstyle version).
 
 #### Spotless
-The import order is a part of static check. please call `spotlessApply` to optimize the imports of Java codes before filing pull request.
+The import order is a part of static check. Please call `spotlessApply` to optimize Java imports before filing a pull request.
 
 ```bash
 ./gradlew spotlessApply
 ```
 
-#### Spotbugs
-Spotbugs uses static analysis to look for bugs in the code.
-You can run spotbugs using:
+#### SpotBugs
+SpotBugs uses static analysis to look for bugs in the code.
+You can run SpotBugs using:
 
 ```bash
 ./gradlew spotbugsMain spotbugsTest -x test
 ```
 
-The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
+The SpotBugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
 directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
 
 ### JMH microbenchmarks
@@ -294,7 +294,7 @@ Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterat
 ./gradlew allDepInsight --configuration runtimeClasspath --dependency com.fasterxml.jackson.core:jackson-databind
 ```
 
-These take the same arguments as the builtin variants.
+These take the same arguments as the built-in variants.
 
 ### Determining if any dependencies could be updated
 ```bash
@@ -311,21 +311,21 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `maxScalacThreads`: maximum number of worker threads for the scalac backend. Defaults to the lowest of `8` and the number of processors
 available to the JVM. The value must be between 1 and 16 (inclusive). 
 * `ignoreFailures`: ignore test failures from junit
-* `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
+* `showStandardStreams`: shows standard output and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
-* `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
+* `xmlSpotBugsReport`: enable XML reports for SpotBugs. This also disables HTML reports as only one can be enabled at a time.
 * `maxTestRetries`: maximum number of retries for a failing test case.
 * `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
 * `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
 coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
 varies, but 15-20% is a reasonable estimate).
-* `keepAliveMode`: configures the keep alive mode for the Gradle compilation daemon - reuse improves start-up time. The values should 
+* `keepAliveMode`: configures the keep-alive mode for the Gradle compilation daemon - reuse improves start-up time. The values should 
 be one of `daemon` or `session` (the default is `daemon`). `daemon` keeps the daemon alive until it's explicitly stopped while
 `session` keeps it alive until the end of the build session. This currently only affects the Scala compiler, see
 https://github.com/gradle/gradle/pull/21034 for a PR that attempts to do the same for the Java compiler.
-* `scalaOptimizerMode`: configures the optimizing behavior of the scala compiler, the value should be one of `none`, `method`, `inline-kafka` or
-`inline-scala` (the default is `inline-kafka`). `none` is the scala compiler default, which only eliminates unreachable code. `method` also
+* `scalaOptimizerMode`: configures the optimizing behavior of the Scala compiler, the value should be one of `none`, `method`, `inline-kafka` or
+`inline-scala` (the default is `inline-kafka`). `none` is the Scala compiler default, which only eliminates unreachable code. `method` also
 includes method-local optimizations. `inline-kafka` adds inlining of methods within the kafka packages. Finally, `inline-scala` also
 includes inlining of methods within the scala library (which avoids lambda allocations for methods like `Option.exists`). `inline-scala` is
 only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
