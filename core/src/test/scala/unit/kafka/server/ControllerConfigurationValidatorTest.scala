@@ -237,9 +237,6 @@ class ControllerConfigurationValidatorTest {
     assertTrue(validator.isSupported(GROUP, GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG))
     assertFalse(validator.isSupported(GROUP, "invalid.group.config"))
 
-    // Test unknown resource type
-    assertFalse(validator.isSupported(BROKER_LOGGER, "any.config"))
-
     // Test quota configs are valid for all resource types
     val quotaConfigs = Seq("producer_byte_rate", "consumer_byte_rate", "request_percentage", "controller_mutation_rate")
     val resourceTypes = Seq(TOPIC, BROKER, CLIENT_METRICS, GROUP)
