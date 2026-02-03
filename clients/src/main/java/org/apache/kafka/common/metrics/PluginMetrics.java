@@ -22,7 +22,7 @@ import java.util.LinkedHashMap;
 
 /**
  * This allows plugins to register metrics and sensors.
- * Any metrics registered by the plugin are automatically removed when the plugin  closed.
+ * Any metrics registered by the plugin are automatically removed when the plugin is closed.
  */
 public interface PluginMetrics {
 
