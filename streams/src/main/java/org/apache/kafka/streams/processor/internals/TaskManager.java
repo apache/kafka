@@ -519,8 +519,12 @@ public class TaskManager {
         for (final Task standbyTask : standbyTasks) {
             standbyTasksToCreate.remove(standbyTask.id());
         }
-        tasks.addPendingTasksToInit(activeTasks);
-        tasks.addPendingTasksToInit(standbyTasks);
+        if (!activeTasks.isEmpty()) {
+            tasks.addPendingTasksToInit(activeTasks);
+        }
+        if (!standbyTasks.isEmpty()) {
+            tasks.addPendingTasksToInit(standbyTasks);
+        }
     }
 
     private void handleRunningAndSuspendedTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
