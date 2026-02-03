@@ -19,30 +19,60 @@ package org.apache.kafka.server.common;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
-public record FinalizedFeatures(
-    Optional<MetadataVersion> metadataVersion,
-    Map<String, Short> finalizedFeatures,
-    long finalizedFeaturesEpoch
-) {
-    public static final FinalizedFeatures UNKNOWN_FINALIZED_FEATURES =
-        new FinalizedFeatures(Optional.empty(), Map.of(), -1);
+public final class FinalizedFeatures {
+    private static final FinalizedFeatures UNKNOWN = new FinalizedFeatures(null, Map.of(), -1);
 
-    public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
-        return new FinalizedFeatures(Optional.of(version), Map.of(), -1);
-    }
+    private final MetadataVersion metadataVersion;
+    private final Map<String, Short> finalizedFeatures;
+    private final long finalizedFeaturesEpoch;
 
-    public FinalizedFeatures(
-        Optional<MetadataVersion> metadataVersion,
+    private FinalizedFeatures(
+        MetadataVersion metadataVersion,
         Map<String, Short> finalizedFeatures,
         long finalizedFeaturesEpoch
     ) {
-        this.metadataVersion = Objects.requireNonNull(metadataVersion);
+        this.metadataVersion = metadataVersion;
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
-        metadataVersion.ifPresent(mv ->
-            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, mv.featureLevel()));
+        if (metadataVersion != null) {
+            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
+        }
+    }
+
+    // Factory methods
+    public static FinalizedFeatures unknown() {
+        return UNKNOWN;
+    }
+
+    public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
+        Objects.requireNonNull(version, "version cannot be null");
+        return new FinalizedFeatures(version, Map.of(), -1);
+    }
+
+    public static FinalizedFeatures of(MetadataVersion metadataVersion, Map<String, Short> finalizedFeatures, long epoch) {
+        Objects.requireNonNull(metadataVersion, "metadataVersion cannot be null");
+        Objects.requireNonNull(finalizedFeatures, "finalizedFeatures cannot be null");
+        return new FinalizedFeatures(metadataVersion, finalizedFeatures, epoch);
+    }
+
+    public boolean isMetadataKnown() {
+        return metadataVersion != null;
+    }
+
+    public MetadataVersion metadataVersionOrThrow() {
+        if (metadataVersion == null) {
+            throw new IllegalStateException("Metadata version is unknown");
+        }
+        return metadataVersion;
+    }
+
+    public Map<String, Short> finalizedFeatures() {
+        return finalizedFeatures;
+    }
+
+    public long finalizedFeaturesEpoch() {
+        return finalizedFeaturesEpoch;
     }
 
     public FinalizedFeatures setFinalizedLevel(String key, short level) {
@@ -65,5 +95,29 @@ public record FinalizedFeatures(
                 newFinalizedFeatures,
                 finalizedFeaturesEpoch);
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        FinalizedFeatures that = (FinalizedFeatures) o;
+        return finalizedFeaturesEpoch == that.finalizedFeaturesEpoch &&
+                Objects.equals(metadataVersion, that.metadataVersion) &&
+                Objects.equals(finalizedFeatures, that.finalizedFeatures);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(metadataVersion, finalizedFeatures, finalizedFeaturesEpoch);
+    }
+
+    @Override
+    public String toString() {
+        return "FinalizedFeatures(" +
+               "metadataVersion=" + metadataVersion +
+               ", finalizedFeatures=" + finalizedFeatures +
+               ", finalizedFeaturesEpoch=" + finalizedFeaturesEpoch +
+               ')';
     }
 }

@@ -1059,10 +1059,10 @@ class ControllerApis(
   def handleDescribeCluster(request: RequestChannel.Request): CompletableFuture[Unit] = {
     // Nearly all RPCs should check MetadataVersion inside the QuorumController. However, this
     // RPC is consulting a cache which lives outside the QC. So we check MetadataVersion here.
-    if (apiVersionManager.features.metadataVersion().isEmpty) {
+    if (!apiVersionManager.features.isMetadataKnown) {
       throw new UnsupportedVersionException("There is no finalized MetadataVersion, so " +
         "direct-to-controller communication is not supported.")
-    } else if (!apiVersionManager.features.metadataVersion().get.isControllerRegistrationSupported) {
+    } else if (!apiVersionManager.features.metadataVersionOrThrow.isControllerRegistrationSupported) {
       throw new UnsupportedVersionException("Direct-to-controller communication is not " +
         "supported with the current MetadataVersion.")
     }

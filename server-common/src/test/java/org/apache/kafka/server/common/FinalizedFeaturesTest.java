@@ -20,17 +20,61 @@ package org.apache.kafka.server.common;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FinalizedFeaturesTest {
+
+    // Tests for unknown()
+    @Test
+    public void testUnknownFeatures() {
+        FinalizedFeatures features = FinalizedFeatures.unknown();
+
+        assertFalse(features.isMetadataKnown());
+        assertTrue(features.finalizedFeatures().isEmpty());
+        assertEquals(-1, features.finalizedFeaturesEpoch());
+    }
+
+    @Test
+    public void testUnknownFeaturesMetadataVersionThrows() {
+        FinalizedFeatures features = FinalizedFeatures.unknown();
+
+        assertThrows(IllegalStateException.class, features::metadataVersionOrThrow);
+    }
+
+    @Test
+    public void testUnknownFeaturesIsSingleton() {
+        assertSame(FinalizedFeatures.unknown(), FinalizedFeatures.unknown());
+    }
+
+    // Tests for fromKRaftVersion()
+    @Test
+    public void testFromKRaftVersion() {
+        FinalizedFeatures features = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION);
+
+        assertTrue(features.isMetadataKnown());
+        assertEquals(MINIMUM_VERSION, features.metadataVersionOrThrow());
+        assertEquals(MINIMUM_VERSION.featureLevel(), features.finalizedFeatures().get(FEATURE_NAME));
+        assertEquals(1, features.finalizedFeatures().size());
+        assertEquals(-1, features.finalizedFeaturesEpoch());
+    }
+
+    @Test
+    public void testFromKRaftVersionNullThrows() {
+        assertThrows(NullPointerException.class, () -> FinalizedFeatures.fromKRaftVersion(null));
+    }
+
+    // Tests for of()
     @Test
     public void testKRaftModeFeatures() {
-        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(Optional.of(MINIMUM_VERSION),
+        FinalizedFeatures finalizedFeatures = FinalizedFeatures.of(MINIMUM_VERSION,
                 Map.of("foo", (short) 2), 123);
         assertEquals(MINIMUM_VERSION.featureLevel(),
                 finalizedFeatures.finalizedFeatures().get(FEATURE_NAME));
@@ -40,9 +84,22 @@ class FinalizedFeaturesTest {
     }
 
     @Test
+    public void testOfNullMetadataVersionThrows() {
+        assertThrows(NullPointerException.class,
+            () -> FinalizedFeatures.of(null, Map.of(), 0));
+    }
+
+    @Test
+    public void testOfNullFeaturesMapThrows() {
+        assertThrows(NullPointerException.class,
+            () -> FinalizedFeatures.of(MINIMUM_VERSION, null, 0));
+    }
+
+    // Tests for setFinalizedLevel
+    @Test
     public void testSetFinalizedLevel() {
-        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(
-            Optional.of(MINIMUM_VERSION),
+        FinalizedFeatures finalizedFeatures = FinalizedFeatures.of(
+            MINIMUM_VERSION,
             Map.of("foo", (short) 2),
             123
         );
@@ -54,5 +111,13 @@ class FinalizedFeaturesTest {
         // Override a missing finalized feature version to 0
         FinalizedFeatures sameFeatures = removedFeatures.setFinalizedLevel("foo", (short) 0);
         assertEquals(sameFeatures.finalizedFeatures(), removedFeatures.finalizedFeatures());
+    }
+
+    @Test
+    public void testSetFinalizedLevelAdd() {
+        FinalizedFeatures features = FinalizedFeatures.of(MINIMUM_VERSION, Map.of(), 123);
+
+        FinalizedFeatures updatedFeatures = features.setFinalizedLevel("bar", (short) 5);
+        assertEquals((short) 5, updatedFeatures.finalizedFeatures().get("bar"));
     }
 }
