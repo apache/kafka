@@ -116,12 +116,6 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 logContext
         );
 
-        NetworkClient.BootstrapConfiguration bootstrapConfiguration = new NetworkClient.BootstrapConfiguration(
-            config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
-            ClientDnsLookup.forConfig(config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)),
-            CommonClientConfigs.DEFAULT_BOOTSTRAP_RESOLVE_TIMEOUT_MS
-        );
-
         return new NetworkClient(
                 selector,
                 manualMetadataUpdater,
@@ -139,7 +133,7 @@ public class NodeToControllerChannelManagerImpl implements NodeToControllerChann
                 apiVersions,
                 logContext,
                 MetadataRecoveryStrategy.NONE,
-                bootstrapConfiguration
+                NetworkClient.BootstrapConfiguration.disabled()
         );
     }
 
