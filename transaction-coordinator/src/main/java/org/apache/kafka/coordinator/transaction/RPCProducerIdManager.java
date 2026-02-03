@@ -60,6 +60,9 @@ public class RPCProducerIdManager implements ProducerIdManager {
     final AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
     final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
+    
+    // Setting the value of backoffDeadlineMs should be handled only in the response handler thread.
+    // Otherwise, consider using compareAndSet() instead of set().
     private final AtomicLong backoffDeadlineMs = new AtomicLong(NO_RETRY);
 
     public RPCProducerIdManager(int brokerId,
@@ -114,8 +117,6 @@ public class RPCProducerIdManager implements ProducerIdManager {
             if (nextProducerIdBlock.get() == null &&
                     requestInFlight.compareAndSet(false, true)) {
                 sendRequest();
-                // Reset backoff after a successful send.
-                backoffDeadlineMs.set(NO_RETRY);
             }
         }
     }
@@ -136,6 +137,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
             @Override
             public void onTimeout() {
                 log.warn("{} Timed out when requesting AllocateProducerIds from the controller.", logPrefix);
+                backoffDeadlineMs.set(NO_RETRY);
                 requestInFlight.set(false);
             }
         });
@@ -184,6 +186,8 @@ public class RPCProducerIdManager implements ProducerIdManager {
         }
         if (!successfulResponse) {
             handleUnsuccessfulResponse();
+        } else {
+            backoffDeadlineMs.set(NO_RETRY);
         }
     }
 
