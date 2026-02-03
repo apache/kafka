@@ -1426,6 +1426,7 @@ public class ConfigCommandTest {
         ListConfigResourcesResult listConfigResourcesResult = mock(ListConfigResourcesResult.class);
         when(listConfigResourcesResult.all()).thenReturn(future);
 
+        AtomicBoolean listedConfigResources = new AtomicBoolean(false);
         Node node = new Node(1, "localhost", 9092);
         MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
             @Override
@@ -1433,11 +1434,13 @@ public class ConfigCommandTest {
                 ConfigResource.Type type = configResourceTypes.iterator().next();
                 assertEquals(ConfigResource.Type.GROUP, type);
                 future.completeExceptionally(new UnsupportedVersionException("The v0 ListConfigResources only supports CLIENT_METRICS"));
+                listedConfigResources.set(true);
                 return listConfigResourcesResult;
             }
         };
 
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        assertTrue(listedConfigResources.get());
     }
 
     public static String[] toArray(String... first) {
