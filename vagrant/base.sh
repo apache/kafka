@@ -27,17 +27,29 @@ path_to_jdk_cache() {
 
 fetch_jdk_tgz() {
   jdk_version=$1
+  jdk_major=$2
+  jdk_arch=$3
 
   path=$(path_to_jdk_cache $jdk_version)
 
   if [ ! -e $path ]; then
     mkdir -p $(dirname $path)
-    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
+
+    # JDK 25+ uses new path structure with /jdk/ prefix and full version
+    if [ "$jdk_major" = "25" ]; then
+      s3_url="https://s3-us-west-2.amazonaws.com/kafka-packages/jdk/jdk-25.0.2-linux-${jdk_arch}.tar.gz"
+    else
+      s3_url="https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz"
+    fi
+
+    curl --retry 5 -s -L "$s3_url" -o $path
   fi
 }
 
 JDK_MAJOR="${JDK_MAJOR:-17}"
-JDK_FULL="${JDK_FULL:-17-linux-x64}"
+JDK_ARCH="${JDK_ARCH:-x64}"
+JDK_FULL="${JDK_FULL:-${JDK_MAJOR}-linux-${JDK_ARCH}}"
+export DEBIAN_FRONTEND=noninteractive
 
 if [ -z `which javac` ]; then
     apt-get -y update
@@ -50,7 +62,7 @@ if [ -z `which javac` ]; then
     rm -rf $JDK_MAJOR
     mkdir -p $JDK_MAJOR
     cd $JDK_MAJOR
-    fetch_jdk_tgz $JDK_FULL
+    fetch_jdk_tgz $JDK_FULL $JDK_MAJOR $JDK_ARCH
     tar x --strip-components=1 -zf $(path_to_jdk_cache $JDK_FULL)
     for bin in /opt/jdk/$JDK_MAJOR/bin/* ; do 
       name=$(basename $bin)
