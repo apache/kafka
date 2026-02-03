@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -64,7 +65,7 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         if (!(store instanceof HeadersBytesStore)) {
             throw new IllegalArgumentException(
                 "Store supplier must provide a HeaderBytesStore implementation. " +
-                "Use Stores.persistentTimestampedWindowStoreWithHeaders() to create the supplier."
+                    "Use Stores.persistentTimestampedWindowStoreWithHeaders() to create the supplier."
             );
         }
 
@@ -94,8 +95,13 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
             return inner;
         }
 
-        // For headers-aware stores, we can use the same caching wrappers
-        // TODO: Implement time-ordered check if needed
+        if (isTimeOrderedStore(inner)) {
+            return new TimeOrderedCachingWindowStore(
+                inner,
+                storeSupplier.windowSize(),
+                storeSupplier.segmentIntervalMs());
+        }
+
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
@@ -109,5 +115,15 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         // Use the headers-aware changelog wrapper for KIP-1271 stores
         // This correctly handles the ValueTimestampHeaders format: [headersSize(varint)][headersBytes][timestamp(8)][value]
         return new ChangeLoggingTimestampedWindowBytesStoreWithHeaders(inner, storeSupplier.retainDuplicates());
+    }
+
+    private boolean isTimeOrderedStore(final StateStore stateStore) {
+        if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
+            return true;
+        }
+        if (stateStore instanceof WrappedStateStore) {
+            return isTimeOrderedStore(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
+        }
+        return false;
     }
 }

@@ -294,6 +294,21 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAllWithHeaders(final long timeFrom, final long timeTo) {
             return ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).fetchAllWithHeaders(timeFrom, timeTo);
         }
+
+        @Override
+        public WindowStoreIterator<ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K key, final long timeFrom, final long timeTo) {
+            return ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).backwardFetchWithHeaders(key, timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K keyFrom, final K keyTo, final long timeFrom, final long timeTo) {
+            return ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).backwardFetchWithHeaders(keyFrom, keyTo, timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAllWithHeaders(final long timeFrom, final long timeTo) {
+            return ((TimestampedWindowStoreWithHeaders<K, V>) wrapped()).backwardFetchAllWithHeaders(timeFrom, timeTo);
+        }
     }
 
     static class SessionStoreReadWriteDecorator<K, AGG>
