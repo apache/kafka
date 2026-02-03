@@ -22,7 +22,7 @@ import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
-import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -220,7 +220,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
     val localLog = leaderBroker.replicaManager.localLogOrException(partition)
     val logDir = localLog.dir.getParentFile
-    CoreUtils.swallow(Utils.delete(logDir), this)
+    Utils.swallow(this.logger.underlying, () => Utils.delete(logDir))
     Files.createFile(logDir.toPath)
     assertTrue(logDir.isFile)
 

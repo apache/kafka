@@ -108,7 +108,7 @@ public class OffsetMetadataManagerTest {
     static class OffsetMetadataManagerTestContext {
         public static class Builder {
             private final MockTime time = new MockTime();
-            private final MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
+            private final MockCoordinatorTimer<CoordinatorRecord> timer = new MockCoordinatorTimer<>(time);
             private final MockCoordinatorExecutor<CoordinatorRecord> executor = new MockCoordinatorExecutor<>();
             private final LogContext logContext = new LogContext();
             private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
@@ -175,7 +175,7 @@ public class OffsetMetadataManagerTest {
         }
 
         final MockTime time;
-        final MockCoordinatorTimer<Void, CoordinatorRecord> timer;
+        final MockCoordinatorTimer<CoordinatorRecord> timer;
         final SnapshotRegistry snapshotRegistry;
         final GroupCoordinatorMetricsShard metrics;
         final GroupMetadataManager groupMetadataManager;
@@ -186,7 +186,7 @@ public class OffsetMetadataManagerTest {
 
         OffsetMetadataManagerTestContext(
             MockTime time,
-            MockCoordinatorTimer<Void, CoordinatorRecord> timer,
+            MockCoordinatorTimer<CoordinatorRecord> timer,
             SnapshotRegistry snapshotRegistry,
             GroupCoordinatorMetricsShard metrics,
             GroupMetadataManager groupMetadataManager,
@@ -384,9 +384,9 @@ public class OffsetMetadataManagerTest {
             return response.topics();
         }
 
-        public List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> sleep(long ms) {
+        public List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> sleep(long ms) {
             time.sleep(ms);
-            List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
+            List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts = timer.poll();
             timeouts.forEach(timeout -> {
                 if (timeout.result().replayRecords()) {
                     timeout.result().records().forEach(this::replay);
@@ -996,7 +996,7 @@ public class OffsetMetadataManagerTest {
 
         // Advance time by half of the session timeout again. The timeout should
         // expire and the member is removed from the group.
-        List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts =
+        List<MockCoordinatorTimer.ExpiredTimeout<CoordinatorRecord>> timeouts =
             context.sleep(5000 / 2);
         assertEquals(1, timeouts.size());
         assertFalse(group.hasMember(member.memberId()));

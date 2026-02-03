@@ -32,9 +32,9 @@ import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
 import org.apache.kafka.metadata.KRaftMetadataCache
-import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, ScramPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION
-import org.apache.kafka.server.common.{FinalizedFeatures, RequestLocal, ShareVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, ShareVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.storage.internals.log.{LogManager => JLogManager}
 
@@ -184,16 +184,6 @@ class BrokerMetadataPublisher(
           case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
             s"coordinator with local changes in $deltaName", t)
         }
-        try {
-          // Notify the share coordinator about deleted topics.
-          val deletedTopicIds = topicsDelta.deletedTopicIds()
-          if (!deletedTopicIds.isEmpty) {
-            shareCoordinator.onTopicsDeleted(topicsDelta.deletedTopicIds, RequestLocal.noCaching.bufferSupplier)
-          }
-        } catch {
-          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
-            s"coordinator with deleted partitions in $deltaName", t)
-        }
       }
 
       // Apply configuration deltas.
@@ -203,7 +193,7 @@ class BrokerMetadataPublisher(
       dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply topic or cluster quotas delta.
-      dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage)
+      dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage, manifest)
 
       // Apply SCRAM delta.
       scramPublisher.onMetadataUpdate(delta, newImage, manifest)

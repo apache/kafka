@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
@@ -122,8 +123,8 @@ class LocalLeaderEndPointTest extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
-    CoreUtils.swallow(quotaManager.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => replicaManager.shutdown(checkpointHW = false))
+    Utils.swallow(this.logger.underlying, () => quotaManager.shutdown())
   }
 
   @Test
