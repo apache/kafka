@@ -273,10 +273,6 @@ public class StateDirectory implements AutoCloseable {
         return !tasksForLocalState.isEmpty();
     }
 
-    public Map<TaskId, StartupState> getStartupTasks() {
-        return Collections.unmodifiableMap(tasksForLocalState);
-    }
-
     public boolean removeStartupState(final TaskId taskId) {
         final StartupState startupState = tasksForLocalState.remove(taskId);
         final boolean removed = startupState != null;
@@ -816,7 +812,7 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
-    public class StartupState {
+    private class StartupState {
         private final ProcessorTopology topology;
         private final ProcessorStateManager stateMngr;
         private final TaskId taskId;
