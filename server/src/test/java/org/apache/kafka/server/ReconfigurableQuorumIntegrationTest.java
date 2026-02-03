@@ -76,7 +76,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ).build()) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
                     checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_0.featureLevel());
                 });
@@ -94,7 +94,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ).setStandalone(true).build()) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
                     checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_1.featureLevel());
                 });
@@ -132,7 +132,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
@@ -167,7 +167,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002, 3003), voters.keySet());
@@ -206,7 +206,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
@@ -244,7 +244,7 @@ public class ReconfigurableQuorumIntegrationTest {
         ) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
@@ -275,7 +275,7 @@ public class ReconfigurableQuorumIntegrationTest {
         try (var cluster = new KafkaClusterTestKit.Builder(nodes).setInitialVoterSet(initialVoters).build()) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet());
@@ -327,7 +327,7 @@ public class ReconfigurableQuorumIntegrationTest {
         try (var cluster = new KafkaClusterTestKit.Builder(nodes).setInitialVoterSet(initialVoters).build()) {
             cluster.format();
             cluster.startup();
-            try (var admin = Admin.create(cluster.clientProperties())) {
+            try (var admin = cluster.admin()) {
                 Uuid dirId = cluster.nodes().controllerNodes().get(3000).metadataDirectoryId();
                 var removeFuture = admin.removeRaftVoter(
                     3000,

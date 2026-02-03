@@ -269,6 +269,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                             iteratorDurationSensor,
                             time,
                             StoreQueryUtils.deserializeValue(plainValueSerdes),
+                            numOpenIterators,
                             openIterators
                         );
                 final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =

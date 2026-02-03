@@ -58,6 +58,7 @@ public class MonitorableSinkIntegrationTest {
     private static final int NUM_TASKS = 1;
     private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    private static final long METRICS_CONVERGENCE_DURATION_MS = TimeUnit.SECONDS.toMillis(5);
 
     private EmbeddedConnectStandalone connect;
     private ConnectorHandle connectorHandle;
@@ -119,11 +120,19 @@ public class MonitorableSinkIntegrationTest {
 
         // check task metric
         metrics = connect.connectMetrics().metrics().metrics();
-        MetricName taskMetric = MonitorableSinkConnector.MonitorableSinkTask.metricsName;
-        assertTrue(metrics.containsKey(taskMetric));
-        assertEquals(CONNECTOR_NAME, taskMetric.tags().get("connector"));
-        assertEquals("0", taskMetric.tags().get("task"));
-        assertEquals((double) NUM_RECORDS_PRODUCED, metrics.get(taskMetric).metricValue());
+        MetricName taskMetricName = MonitorableSinkConnector.MonitorableSinkTask.metricsName;
+        assertTrue(metrics.containsKey(taskMetricName));
+        assertEquals(CONNECTOR_NAME, taskMetricName.tags().get("connector"));
+        assertEquals("0", taskMetricName.tags().get("task"));
+
+        KafkaMetric taskMetric = metrics.get(taskMetricName);
+        // The metric value may not be updated immediately after awaitRecords() returns,
+        // because MonitorableSinkTask.count is incremented after TestableSinkTask.put()
+        // which triggers the latch countdown. Use waitForCondition to handle this race condition.
+        waitForCondition(
+                () -> (double) NUM_RECORDS_PRODUCED == (double) taskMetric.metricValue(),
+                METRICS_CONVERGENCE_DURATION_MS,
+                "Task metric did not converge to expected value in time.");
 
         connect.deleteConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME,
@@ -132,7 +141,7 @@ public class MonitorableSinkIntegrationTest {
         // verify connector and task metrics have been deleted
         metrics = connect.connectMetrics().metrics().metrics();
         assertFalse(metrics.containsKey(connectorMetric));
-        assertFalse(metrics.containsKey(taskMetric));
+        assertFalse(metrics.containsKey(taskMetricName));
     }
 
     /**

@@ -268,7 +268,6 @@
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>
-    <allow pkg="org.apache.kafka.controller.util"/>
     <allow pkg="org.apache.kafka.queue"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.server.common" />
@@ -326,7 +325,6 @@
       <subpackage name="group">
         <allow pkg="kafka.api"/>
         <allow pkg="kafka.security"/>
-        <allow pkg="kafka.zk" />
         <allow pkg="scala"/>
         <allow pkg="com.google.re2j"/>
         <subpackage name="share">
@@ -447,6 +445,7 @@
     <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
     <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.feature" />
+    <allow pkg="org.apache.kafka.common.internals" />
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.metrics" />
@@ -459,7 +458,10 @@
     <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.fault"/>
     <allow pkg="org.apache.kafka.server.metrics" />
+    <allow pkg="org.apache.kafka.server.storage.log" />
     <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="org.apache.kafka.storage.internals.log" />
+    <allow pkg="org.apache.kafka.storage.log.metrics" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.jqwik"/>
@@ -485,7 +487,6 @@
     <!-- for testing -->
     <allow pkg="org.apache.kafka.coordinator.group" />
     <allow pkg="org.apache.kafka.network" />
-    <allow pkg="org.apache.log4j" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -538,6 +539,9 @@
       <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="org.apache.logging.log4j" />
       <allow pkg="kafka.server" />
+      <subpackage name="integration">
+        <allow pkg="org.apache.kafka.raft" />
+      </subpackage>
       <subpackage name="rest">
         <allow pkg="jakarta.ws.rs" />
         <allow pkg="jakarta.inject" />
@@ -604,7 +608,6 @@
         <allow pkg="kafka.cluster" />
         <allow pkg="kafka.server" />
         <allow pkg="org.apache.kafka.common.test" />
-        <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
         <allow class="jakarta.servlet.http.HttpServletResponse" />
         <allow class="jakarta.ws.rs.core.Response" />
@@ -622,6 +625,7 @@
       <allow pkg="org.apache.http"/>
       <allow pkg="org.eclipse.jetty.util"/>
       <!-- for tests -->
+      <allow pkg="org.apache.kafka.raft" />
       <allow pkg="org.apache.kafka.server.util" />
       <allow pkg="org.apache.kafka.server.config" />
       <allow pkg="kafka.server"/>

@@ -31,11 +31,13 @@ import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
+import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.network.{SocketServer => JSocketServer, SocketServerConfigs}
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{ClientTelemetryExporterPlugin, KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.telemetry.{ClientTelemetry, ClientTelemetryContext, ClientTelemetryExporter, ClientTelemetryExporterProvider, ClientTelemetryPayload, ClientTelemetryReceiver}
@@ -324,7 +326,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.removeReconfigurable(reconfigurable)
 
     val brokerReconfigurable = new BrokerReconfigurable {
-      override def reconfigurableConfigs: collection.Set[String] = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP)
+      override def reconfigurableConfigs: util.Set[String] = util.Set.of(CleanerConfig.LOG_CLEANER_THREADS_PROP)
       override def validateReconfiguration(newConfig: KafkaConfig): Unit = validateLogCleanerConfig(newConfig.originals)
       override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {}
     }
@@ -349,7 +351,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.addReconfigurable(createReconfigurable(validReconfigurableProps))
 
     def createBrokerReconfigurable(configs: Set[String]) = new BrokerReconfigurable {
-      override def reconfigurableConfigs: collection.Set[String] = configs
+      override def reconfigurableConfigs: util.Set[String] = configs.asJava
       override def validateReconfiguration(newConfig: KafkaConfig): Unit = {}
       override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {}
     }
@@ -508,7 +510,7 @@ class DynamicBrokerConfigTest {
     when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(kafkaServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
-    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
+    when(socketServer.reconfigurableConfigs).thenReturn(JSocketServer.RECONFIGURABLE_CONFIGS)
     when(kafkaServer.socketServer).thenReturn(socketServer)
     val logManager: LogManager = mock(classOf[LogManager])
     val producerStateManagerConfig: ProducerStateManagerConfig = mock(classOf[ProducerStateManagerConfig])
@@ -555,7 +557,7 @@ class DynamicBrokerConfigTest {
     when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
-    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
+    when(socketServer.reconfigurableConfigs).thenReturn(JSocketServer.RECONFIGURABLE_CONFIGS)
     when(controllerServer.socketServer).thenReturn(socketServer)
 
     val authorizer = new TestAuthorizer
@@ -601,7 +603,7 @@ class DynamicBrokerConfigTest {
     when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
-    when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
+    when(socketServer.reconfigurableConfigs).thenReturn(JSocketServer.RECONFIGURABLE_CONFIGS)
     when(controllerServer.socketServer).thenReturn(socketServer)
 
     val authorizer = new TestAuthorizer
@@ -612,18 +614,6 @@ class DynamicBrokerConfigTest {
     props.put("super.users", "User:admin")
     controllerServer.config.dynamicConfig.updateBrokerConfig(0, props)
     assertEquals("User:admin", authorizer.superUsers)
-  }
-
-  @Test
-  def testSynonyms(): Unit = {
-    assertEquals(List("listener.name.secure.ssl.keystore.type", "ssl.keystore.type"),
-      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.secure.ssl.keystore.type", matchListenerOverride = true))
-    assertEquals(List("listener.name.sasl_ssl.plain.sasl.jaas.config", "sasl.jaas.config"),
-      DynamicBrokerConfig.brokerConfigSynonyms("listener.name.sasl_ssl.plain.sasl.jaas.config", matchListenerOverride = true))
-    assertEquals(List("some.config"),
-      DynamicBrokerConfig.brokerConfigSynonyms("some.config", matchListenerOverride = true))
-    assertEquals(List(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG),
-      DynamicBrokerConfig.brokerConfigSynonyms(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, matchListenerOverride = true))
   }
 
   @Test
@@ -986,6 +976,31 @@ class DynamicBrokerConfigTest {
     verifyNoMoreInteractions(remoteLogManager)
   }
 
+  @Test
+  def testEnableFollowerFetchLastTieredOffset(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, port = 9092)
+    val config = KafkaConfig.fromProps(props)
+    val serverMock: KafkaBroker = mock(classOf[KafkaBroker])
+
+    Mockito.when(serverMock.config).thenReturn(config)
+
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicReplicationConfig(serverMock))
+
+    assertEquals(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_DEFAULT,
+      config.followerFetchLastTieredOffsetEnable)
+
+    // Update default config
+    props.put(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, "true")
+    config.dynamicConfig.updateDefaultConfig(props)
+    assertTrue(config.followerFetchLastTieredOffsetEnable)
+
+    // Update per broker config
+    props.put(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, "false")
+    config.dynamicConfig.updateBrokerConfig(0, props)
+    assertFalse(config.followerFetchLastTieredOffsetEnable)
+  }
+
   def verifyIncorrectLogLocalRetentionProps(logLocalRetentionMs: Long,
                                             retentionMs: Long,
                                             logLocalRetentionBytes: Long,
@@ -1105,12 +1120,29 @@ class DynamicBrokerConfigTest {
     updateReporter(classOf[MockMetricsReporter])
     verifyNoMoreInteractions(telemetryPlugin)
   }
+
+  @Test
+  def testCoordinatorCachedBufferMaxBytesUpdates(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    origProps.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "2097152")
+    origProps.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "3145728")
+    val ctx = new DynamicLogConfigContext(origProps)
+    assertEquals(2 * 1024 * 1024, ctx.config.groupCoordinatorConfig.cachedBufferMaxBytes())
+    assertEquals(3 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
+
+    val props = new Properties()
+    props.put(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "4194304")
+    props.put(ShareCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG, "5242880")
+    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    assertEquals(4 * 1024 * 1024, ctx.config.groupCoordinatorConfig.cachedBufferMaxBytes())
+    assertEquals(5 * 1024 * 1024, ctx.config.shareCoordinatorConfig.shareCoordinatorCachedBufferMaxBytes())
+  }
 }
 
 class TestDynamicThreadPool extends BrokerReconfigurable {
 
-  override def reconfigurableConfigs: Set[String] = {
-    DynamicThreadPool.RECONFIGURABLE_CONFIGS.asScala
+  override def reconfigurableConfigs: util.Set[String] = {
+    DynamicThreadPool.RECONFIGURABLE_CONFIGS
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {

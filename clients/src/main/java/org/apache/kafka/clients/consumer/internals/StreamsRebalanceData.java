@@ -157,18 +157,23 @@ public class StreamsRebalanceData {
 
         private final Set<TaskId> warmupTasks;
 
+        private final boolean isGroupReady;
+
         private Assignment() {
             this.activeTasks = Set.of();
             this.standbyTasks = Set.of();
             this.warmupTasks = Set.of();
+            this.isGroupReady = false;
         }
 
         public Assignment(final Set<TaskId> activeTasks,
                           final Set<TaskId> standbyTasks,
-                          final Set<TaskId> warmupTasks) {
+                          final Set<TaskId> warmupTasks,
+                          final boolean isGroupReady) {
             this.activeTasks = Set.copyOf(Objects.requireNonNull(activeTasks, "Active tasks cannot be null"));
             this.standbyTasks = Set.copyOf(Objects.requireNonNull(standbyTasks, "Standby tasks cannot be null"));
             this.warmupTasks = Set.copyOf(Objects.requireNonNull(warmupTasks, "Warmup tasks cannot be null"));
+            this.isGroupReady = isGroupReady;
         }
 
         public Set<TaskId> activeTasks() {
@@ -183,6 +188,10 @@ public class StreamsRebalanceData {
             return warmupTasks;
         }
 
+        public boolean isGroupReady() {
+            return isGroupReady;
+        }
+
         @Override
         public boolean equals(final Object o) {
             if (this == o) {
@@ -194,16 +203,17 @@ public class StreamsRebalanceData {
             final Assignment that = (Assignment) o;
             return Objects.equals(activeTasks, that.activeTasks)
                 && Objects.equals(standbyTasks, that.standbyTasks)
-                && Objects.equals(warmupTasks, that.warmupTasks);
+                && Objects.equals(warmupTasks, that.warmupTasks)
+                && isGroupReady == that.isGroupReady;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(activeTasks, standbyTasks, warmupTasks);
+            return Objects.hash(activeTasks, standbyTasks, warmupTasks, isGroupReady);
         }
 
         public Assignment copy() {
-            return new Assignment(activeTasks, standbyTasks, warmupTasks);
+            return new Assignment(activeTasks, standbyTasks, warmupTasks, isGroupReady);
         }
 
         @Override
@@ -212,6 +222,7 @@ public class StreamsRebalanceData {
                 "activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
                 ", warmupTasks=" + warmupTasks +
+                ", isGroupReady=" + isGroupReady +
                 '}';
         }
     }

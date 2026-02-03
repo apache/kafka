@@ -18,7 +18,6 @@
 package kafka.admin
 
 import joptsimple._
-import kafka.server.DynamicConfig
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListConfigResourcesOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
@@ -30,7 +29,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.group.GroupConfig
-import org.apache.kafka.server.config.{ConfigType, QuotaConfig}
+import org.apache.kafka.server.config.{ConfigType, DynamicConfig, QuotaConfig}
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -137,7 +136,8 @@ object ConfigCommand extends Logging {
 
   private def validatePropsKey(props: Properties): Unit = {
     props.keySet.forEach { propsKey =>
-      if (!propsKey.toString.matches("[a-zA-Z0-9._-]*")) {
+      // Allows the '$' symbol to support valid logger names for internal classes (e.g. org.apache.kafka.server.quota.ClientQuotaManager$ThrottledChannelReaper)
+      if (!propsKey.toString.matches("[$a-zA-Z0-9._-]*")) {
         throw new IllegalArgumentException(
           s"Invalid character found for config key: $propsKey"
         )

@@ -33,14 +33,11 @@ import java.util.concurrent.TimeoutException;
  * <p>
  * Properties passed to these methods are used to construct internal {@link Admin} and {@link Consumer} clients.
  * Sub-configs like "admin.xyz" are also supported. For example:
- * </p>
  * <pre>
  *     bootstrap.servers = host1:9092
  *     consumer.client.id = mm2-client
  * </pre>
- * <p>
  * @see MirrorClientConfig for additional properties used by the internal MirrorClient.
- * </p>
  */
 public final class RemoteClusterUtils {
 
