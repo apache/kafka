@@ -855,42 +855,41 @@ public class StateDirectoryTest {
     @Test
     public void shouldNotInitializeStandbyTasksWhenNoLocalState() {
         final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(new TaskId(0, 0), false);
+        initializeStartupStores(new TaskId(0, 0), false);
         assertFalse(directory.hasStartupTasks());
-        assertNull(directory.removeStartupTask(taskId));
+        assertFalse(directory.removeStartupState(taskId));
         assertFalse(directory.hasStartupTasks());
     }
 
     @Test
     public void shouldInitializeStandbyTasksForLocalState() {
         final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(new TaskId(0, 0), true);
+        initializeStartupStores(new TaskId(0, 0), true);
         assertTrue(directory.hasStartupTasks());
-        assertNotNull(directory.removeStartupTask(taskId));
+        assertTrue(directory.removeStartupState(taskId));
         assertFalse(directory.hasStartupTasks());
-        assertNull(directory.removeStartupTask(taskId));
+        assertFalse(directory.removeStartupState(taskId));
     }
 
     @Test
     public void shouldNotAssignStartupTasksWeDontHave() {
         final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(taskId, false);
-        final StateDirectory.StartupState task = directory.removeStartupTask(taskId);
-        assertNull(task);
+        initializeStartupStores(taskId, false);
+        assertFalse(directory.removeStartupState(taskId));
     }
 
     private class FakeStreamThread extends Thread {
         private final TaskId taskId;
-        private final AtomicReference<StateDirectory.StartupState> result;
+        private final AtomicBoolean result;
 
-        private FakeStreamThread(final TaskId taskId, final AtomicReference<StateDirectory.StartupState> result) {
+        private FakeStreamThread(final TaskId taskId, final AtomicBoolean result) {
             this.taskId = taskId;
             this.result = result;
         }
 
         @Override
         public void run() {
-            result.set(directory.removeStartupTask(taskId));
+            result.set(directory.removeStartupState(taskId));
         }
     }
 
@@ -898,19 +897,17 @@ public class StateDirectoryTest {
     public void shouldAssignStartupTaskToStreamThread() throws InterruptedException {
         final TaskId taskId = new TaskId(0, 0);
 
-        initializeStartupTasks(taskId, true);
+        initializeStartupStores(taskId, true);
 
         // main thread owns the newly initialized tasks
         assertThat(directory.lockOwner(taskId), is(Thread.currentThread()));
 
         // spawn off a "fake" StreamThread, so we can verify the lock was updated to the correct thread
-        final AtomicReference<StateDirectory.StartupState> result = new AtomicReference<>();
+        final AtomicBoolean result = new AtomicBoolean();
         final Thread streamThread = new FakeStreamThread(taskId, result);
         streamThread.start();
         streamThread.join();
-        final StateDirectory.StartupState localState = result.get();
-
-        assertNotNull(localState);
+        assertTrue(result.get());
 
         // verify the owner of the task directory lock has been shifted over to our assigned StreamThread
         assertThat(directory.lockOwner(taskId), is(instanceOf(FakeStreamThread.class)));
@@ -919,7 +916,7 @@ public class StateDirectoryTest {
     @Test
     public void shouldUnlockStartupTasksOnClose() {
         final TaskId taskId = new TaskId(0, 0);
-        initializeStartupTasks(taskId, true);
+        initializeStartupStores(taskId, true);
 
         assertEquals(Thread.currentThread(), directory.lockOwner(taskId));
         directory.closeStartupTasks();
@@ -928,7 +925,7 @@ public class StateDirectoryTest {
 
     @Test
     public void shouldCloseStartupTasksOnDirectoryClose() {
-        final StateStore store = initializeStartupTasks(new TaskId(0, 0), true);
+        final StateStore store = initializeStartupStores(new TaskId(0, 0), true);
 
         assertTrue(directory.hasStartupTasks());
         assertFalse(store.isOpen());
@@ -945,7 +942,7 @@ public class StateDirectoryTest {
         // which can't be mocked
         time.setCurrentTimeMs(System.currentTimeMillis());
 
-        final StateStore store = initializeStartupTasks(new TaskId(0, 0), true);
+        final StateStore store = initializeStartupStores(new TaskId(0, 0), true);
 
         assertTrue(directory.hasStartupTasks());
         assertFalse(store.isOpen());
@@ -958,7 +955,7 @@ public class StateDirectoryTest {
         assertFalse(store.isOpen());
     }
 
-    private StateStore initializeStartupTasks(final TaskId taskId, final boolean createTaskDir) {
+    private StateStore initializeStartupStores(final TaskId taskId, final boolean createTaskDir) {
         directory.initializeProcessId();
         final TopologyMetadata metadata = Mockito.mock(TopologyMetadata.class);
         final TopologyConfig topologyConfig = new TopologyConfig(config);
@@ -984,7 +981,7 @@ public class StateDirectoryTest {
         Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
         Mockito.when(metadata.taskConfig(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
 
-        directory.initializeStartupTasks(metadata, new LogContext("test"), null);
+        directory.initializeStartupStores(metadata, new LogContext("test"), null);
 
         return store;
     }

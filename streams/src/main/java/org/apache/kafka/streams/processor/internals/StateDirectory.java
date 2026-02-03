@@ -217,13 +217,14 @@ public class StateDirectory implements AutoCloseable {
         return stateDirLock != null;
     }
 
-    public void initializeStartupTasks(final TopologyMetadata topologyMetadata,
-                                       final LogContext logContext,
-                                       final StreamsMetricsImpl metricsImpl) {
+    public void initializeStartupStores(final TopologyMetadata topologyMetadata,
+                                        final LogContext logContext,
+                                        final StreamsMetricsImpl metricsImpl) {
         final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
 
+            // Initialize thread-specific resources needed to open stores in the state directory
             final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
             final ThreadCache cache = new ThreadCache(new LogContext(threadLogPrefix), 0L, metricsImpl);
 
@@ -235,13 +236,14 @@ public class StateDirectory implements AutoCloseable {
 
                 // we still check if the task's sub-topology is stateful, even though we know its directory contains state,
                 // because it's possible that the topology has changed since that data was written, and is now stateless
-                // this therefore prevents us from creating unnecessary Tasks just because of some left-over state
+                // this therefore prevents us from creating unnecessary stores just because of some left-over state
                 if (subTopology.hasStateWithChangelogs()) {
                     final Set<TopicPartition> inputPartitions = topologyMetadata.nodeToSourceTopics(id).values().stream()
                             .flatMap(Collection::stream)
                             .map(t -> new TopicPartition(t, id.partition()))
                             .collect(Collectors.toSet());
-                    final ProcessorStateManager stateManager = ProcessorStateManager.createStartupTaskStateManager(
+                    // Open a temporary state manager that will open the stores inside the subtopology
+                    final ProcessorStateManager temporaryStateManager = ProcessorStateManager.createStartupTaskStateManager(
                         id,
                         eosEnabled,
                         logContext,
@@ -250,16 +252,18 @@ public class StateDirectory implements AutoCloseable {
                         inputPartitions
                     );
 
-                    final StartupContext initContext = new StartupContext(id, config, stateManager, metricsImpl, cache);
+                    final StartupContext initContext = new StartupContext(id, config, temporaryStateManager, metricsImpl, cache);
                     try {
-                        StateManagerUtil.registerStateStores(log, threadLogPrefix, subTopology, stateManager, this, initContext);
+                        StateManagerUtil.registerStateStores(log, threadLogPrefix, subTopology, temporaryStateManager, this, initContext);
                     } catch (final TaskCorruptedException tce) {
                         log.warn("Failed to register startup state stores for task {}: {}", id, tce.getMessage());
                     } finally {
-                        stateManager.checkpoint();
-                        stateManager.close();
+                        // Make sure the state manager writes the local checkpoint file before closing the stores
+                        // This will be replaced in the future when removing the checkpoint file dependency.
+                        temporaryStateManager.checkpoint();
+                        temporaryStateManager.close();
                     }
-                    tasksForLocalState.put(id, new StartupState(id, subTopology, stateManager));
+                    tasksForLocalState.put(id, new StartupState(id, subTopology, temporaryStateManager));
                 }
             }
         }
@@ -273,12 +277,13 @@ public class StateDirectory implements AutoCloseable {
         return Collections.unmodifiableMap(tasksForLocalState);
     }
 
-    public StartupState removeStartupTask(final TaskId taskId) {
-        final StartupState task = tasksForLocalState.remove(taskId);
-        if (task != null) {
+    public boolean removeStartupState(final TaskId taskId) {
+        final StartupState startupState = tasksForLocalState.remove(taskId);
+        final boolean removed = startupState != null;
+        if (removed) {
             lockedTasksToOwner.replace(taskId, Thread.currentThread());
         }
-        return task;
+        return removed;
     }
 
     public void closeStartupTasks() {
@@ -290,7 +295,7 @@ public class StateDirectory implements AutoCloseable {
             // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
             final Set<StartupState> drainedTasks = new HashSet<>(tasksForLocalState.size());
             for (final Map.Entry<TaskId, StartupState> entry : tasksForLocalState.entrySet()) {
-                if (predicate.test(entry.getValue()) && removeStartupTask(entry.getKey()) != null) {
+                if (predicate.test(entry.getValue()) && removeStartupState(entry.getKey())) {
                     // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
                     // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
                     drainedTasks.add(entry.getValue());

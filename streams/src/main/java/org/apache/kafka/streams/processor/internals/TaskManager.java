@@ -322,8 +322,7 @@ public class TaskManager {
             final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
-                final StateDirectory.StartupState localState = stateDirectory.removeStartupTask(taskId);
-                if (localState != null) {
+                if (stateDirectory.removeStartupState(taskId)) {
                     assignedTasks.put(taskId, entry.getValue());
                 }
             }
@@ -338,8 +337,7 @@ public class TaskManager {
             final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
-                final StateDirectory.StartupState localState = stateDirectory.removeStartupTask(taskId);
-                if (localState != null) {
+                if (stateDirectory.removeStartupState(taskId)) {
                     final Set<TopicPartition> inputPartitions = entry.getValue();
                     assignedTasks.put(taskId, inputPartitions);
                 }

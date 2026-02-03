@@ -4857,12 +4857,10 @@ public class TaskManagerTest {
     public void shouldCreateActiveTaskFromStartupStateStore() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry);
-        final StateDirectory.StartupState startupState = mock(StateDirectory.StartupState.class);
-
         final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions).build();
         when(activeTaskCreator.createTasks(consumer, taskId00Assignment)).thenReturn(singletonList(activeTask));
         when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupState, (StateDirectory.StartupState) null);
+        when(stateDirectory.removeStartupState(taskId00)).thenReturn(true, false);
 
         assertFalse(taskRegistry.hasPendingTasksToInit());
 
@@ -4894,13 +4892,12 @@ public class TaskManagerTest {
     public void shouldCreateStandbyTaskFromStartupStateStore() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry);
-        final StateDirectory.StartupState startupState = mock(StateDirectory.StartupState.class);
         final StandbyTask standbyTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
         when(standbyTaskCreator.createTasks(eq(Map.of(taskId00, taskId00Partitions)))).thenReturn(Set.of(standbyTask));
 
 
         when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupState, (StateDirectory.StartupState) null);
+        when(stateDirectory.removeStartupState(taskId00)).thenReturn(true, false);
 
         assertFalse(taskRegistry.hasPendingTasksToInit());
 
