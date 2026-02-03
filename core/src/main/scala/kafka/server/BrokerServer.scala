@@ -43,6 +43,7 @@ import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPubl
 import org.apache.kafka.metadata.{BrokerState, KRaftMetadataCache, ListenerInfo, MetadataCache, MetadataVersionConfigValidator}
 import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, ScramPublisher}
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
+import org.apache.kafka.server.FetchSession.FetchSessionCache
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
 import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
@@ -54,7 +55,7 @@ import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpState
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
-import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
+import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -422,13 +423,15 @@ class BrokerServer(
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
       // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
       val sessionIdRange = Int.MaxValue / NumFetchSessionCacheShards
-      val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
-        .map(shardNum => new FetchSessionCacheShard(
+      val fetchSessionCacheShards: util.List[FetchSessionCacheShard] = new util.ArrayList()
+      for (shardNum <- 0 until NumFetchSessionCacheShards) {
+        fetchSessionCacheShards.add(new FetchSessionCacheShard(
           config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
           KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
           sessionIdRange,
           shardNum
         ))
+      }
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       sharePartitionManager = new SharePartitionManager(

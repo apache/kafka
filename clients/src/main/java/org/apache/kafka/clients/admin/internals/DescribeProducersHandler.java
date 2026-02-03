@@ -68,7 +68,7 @@ public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicParti
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<PartitionProducerState> newFuture(
         Collection<TopicPartition> topicPartitions,
-        Map<TopicPartition, Integer> partitionLeaderCache
+        PartitionLeaderCache partitionLeaderCache
     ) {
         return new PartitionLeaderStrategy.PartitionLeaderFuture<>(new HashSet<>(topicPartitions), partitionLeaderCache);
     }

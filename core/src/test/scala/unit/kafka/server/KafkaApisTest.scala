@@ -87,7 +87,8 @@ import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
+import org.apache.kafka.server.FetchContext.FullFetchContext
+import org.apache.kafka.server.{ClientMetricsManager, FetchManager, FetchSessionCacheShard, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -4435,9 +4436,7 @@ class KafkaApisTest extends Logging {
       Optional.empty()))
     val fetchDataBuilder = util.Map.of(tp, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
       Optional.empty()))
-    val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
-      fetchMetadata, fetchData, false, false)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100, Int.MaxValue, 0), fetchData, false, false)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
@@ -4488,8 +4487,7 @@ class KafkaApisTest extends Logging {
     val fetchDataBuilder = util.Map.of(foo.topicPartition, new FetchRequest.PartitionData(foo.topicId, 0, 0, 1000,
       Optional.empty()))
     val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
-      fetchMetadata, fetchData, true, replicaId >= 0)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100, Int.MaxValue, 0), fetchData, true, replicaId >= 0)
     // We expect to have the resolved partition, but we will simulate an unknown one with the fetchContext we return.
     when(fetchManager.newContext(
       ApiKeys.FETCH.latestVersion,
@@ -4558,9 +4556,7 @@ class KafkaApisTest extends Logging {
       Optional.empty()))
     val fetchDataBuilder = util.Map.of(tp, new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty()))
-    val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
-      fetchMetadata, fetchData, true, false)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100, Int.MaxValue, 0), fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
@@ -9803,9 +9799,7 @@ class KafkaApisTest extends Logging {
         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), isReassigning)))
     })
 
-    val fetchMetadata = new JFetchMetadata(0, 0)
-    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100),
-      fetchMetadata, fetchData, true, true)
+    val fetchContext = new FullFetchContext(time, new FetchSessionCacheShard(1000, 100, Int.MaxValue, 0), fetchData, true, true)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
@@ -14015,7 +14009,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
-    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection();
+    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection()
     topicCollection.addAll(util.List.of(
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName1)
@@ -14060,7 +14054,7 @@ class KafkaApisTest extends Logging {
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
-    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection();
+    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection()
     topicCollection.addAll(util.List.of(
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName1)
@@ -14148,7 +14142,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
-    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection();
+    val topicCollection = new AlterShareGroupOffsetsRequestTopicCollection()
     topicCollection.addAll(util.List.of(
       new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
         .setTopicName(topicName1)
