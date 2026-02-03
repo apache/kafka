@@ -3677,7 +3677,8 @@ public class TaskManagerTest {
                 .inState(State.RUNNING)
                 .withInputPartitions(taskId00Partitions).build();
 
-        when(tasks.pendingTasksToInit()).thenReturn(Set.of(standbyTask00, activeTask01));
+        when(tasks.drainPendingStandbyTasksToInit()).thenReturn(Set.of(standbyTask00));
+        when(tasks.drainPendingActiveTasksToInit()).thenReturn(Set.of(activeTask01));
 
         taskManager.shutdown(true);
 

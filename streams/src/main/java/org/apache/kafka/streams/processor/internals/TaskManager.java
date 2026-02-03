@@ -1416,13 +1416,13 @@ public class TaskManager {
         activeTasks.addAll(tasks.activeTasks());
         final Set<Task> standbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
         standbyTasks.addAll(tasks.standbyTasks());
-        for (Task pendingTask : tasks.pendingTasksToInit()) {
-            if (pendingTask.isActive()) {
-                activeTasks.add(pendingTask);
-            } else {
-                standbyTasks.add(pendingTask);
-            }
-        }
+
+        Set<Task> pendingActiveTasks = tasks.drainPendingActiveTasksToInit();
+        activeTasks.addAll(pendingActiveTasks);
+        tasks.addPendingTasksToClose(pendingActiveTasks);
+        Set<Task> pendingStandbyTasks = tasks.drainPendingStandbyTasksToInit();
+        standbyTasks.addAll(pendingStandbyTasks);
+        tasks.addPendingTasksToClose(pendingStandbyTasks);
 
         executeAndMaybeSwallow(
             clean,
