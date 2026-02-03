@@ -31,10 +31,8 @@ import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
@@ -110,39 +108,6 @@ final class StateManagerUtil {
         // See https://issues.apache.org/jira/browse/KAFKA-8574
         stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
         log.debug("Initialized state stores");
-    }
-
-    /**
-     * Registers and pre-initialize any existing state store discovered during startup.
-     *
-     * @throws LockException if the state directory cannot be locked for the specified task
-     */
-    static void registerStartupStateStores(final Logger log,
-                                    final String logPrefix,
-                                    final ProcessorTopology topology,
-                                    final ProcessorStateManager stateMgr,
-                                    final StateDirectory stateDirectory,
-                                    final InternalProcessorContext<?, ?> processorContext) {
-        List<StateStore> storesToInitialize = topology.stateStores().stream()
-                .filter(StateStore::persistent)
-                .collect(Collectors.toList());
-        if (storesToInitialize.isEmpty()) {
-            return;
-        }
-
-        final TaskId id = stateMgr.taskId();
-        if (!stateDirectory.lock(id)) {
-            throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
-        }
-        log.debug("Acquired state directory lock");
-
-        final boolean storeDirsEmpty = stateDirectory.directoryForTaskIsEmpty(id);
-
-        stateMgr.registerStartupStateStores(storesToInitialize, processorContext);
-        log.debug("Registered startup state stores");
-
-        stateMgr.initializeStoreOffsetsFromCheckpoint(storeDirsEmpty);
-        log.debug("pre-initialized state stores");
     }
 
     /**

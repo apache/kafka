@@ -224,6 +224,9 @@ public class StateDirectory implements AutoCloseable {
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
 
+            final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
+            final ThreadCache cache = new ThreadCache(new LogContext(threadLogPrefix), 0L, metricsImpl);
+
             // discover all non-empty task directories in StateDirectory
             for (final TaskDirectory taskDirectory : nonEmptyTaskDirectories) {
                 final String dirName = taskDirectory.file().getName();
@@ -246,20 +249,16 @@ public class StateDirectory implements AutoCloseable {
                         subTopology.storeToChangelogTopic(),
                         inputPartitions
                     );
-                    final String threadLogPrefix = String.format("[%s]", Thread.currentThread().getName());
-                    final ThreadCache cache = new ThreadCache(new LogContext(threadLogPrefix), 0L, metricsImpl);
+
                     final StartupContext initContext = new StartupContext(id, config, stateManager, metricsImpl, cache);
                     try {
-                        StateManagerUtil.registerStartupStateStores(log, threadLogPrefix, subTopology, stateManager, this, initContext);
-                        for (final StateStore stateStore : subTopology.stateStores()) {
-                            if (!stateStore.isOpen()) {
-                                throw new IllegalStateException("StateStore [" + stateStore.name() + "] is not open");
-                            }
-                        }
+                        StateManagerUtil.registerStateStores(log, threadLogPrefix, subTopology, stateManager, this, initContext);
                     } catch (final TaskCorruptedException tce) {
                         log.warn("Failed to register startup state stores for task {}: {}", id, tce.getMessage());
+                    } finally {
+                        stateManager.checkpoint();
+                        stateManager.close();
                     }
-                    stateManager.close();
                     tasksForLocalState.put(id, new StartupState(id, subTopology, stateManager));
                 }
             }
@@ -268,6 +267,10 @@ public class StateDirectory implements AutoCloseable {
 
     public boolean hasStartupTasks() {
         return !tasksForLocalState.isEmpty();
+    }
+
+    public Map<TaskId, StartupState> getStartupTasks() {
+        return Collections.unmodifiableMap(tasksForLocalState);
     }
 
     public StartupState removeStartupTask(final TaskId taskId) {

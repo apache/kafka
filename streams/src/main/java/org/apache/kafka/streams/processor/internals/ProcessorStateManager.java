@@ -103,10 +103,6 @@ public class ProcessorStateManager implements StateManager {
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
 
-        private StateStoreMetadata(final StateStore stateStore) {
-            this(stateStore, null);
-        }
-
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -178,7 +174,6 @@ public class ProcessorStateManager implements StateManager {
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
-    private final Map<String, StateStoreMetadata> startupStores = new FixedOrderMap<>();
     private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
     private final File baseDir;
@@ -254,26 +249,6 @@ public class ProcessorStateManager implements StateManager {
                 store.init(processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
-        }
-    }
-
-    /**
-     * Registers a list of state stores as startup state stores.
-     * Each state store is initialized and added to the startup store registry. If a state store
-     * with the same name is already registered, an exception is thrown.
-     *
-     * @param allStores         the list of state stores to be registered
-     * @param processorContext  the processor context in which the stores will operate
-     * @throws IllegalStateException if a state store with the same name is already registered
-     */
-    void registerStartupStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
-        for (final StateStore store : allStores) {
-            if (!startupStores.containsKey(store.name())) {
-                store.init(processorContext, store);
-                startupStores.put(store.name(), new StateStoreMetadata(store));
-            } else {
-                throw new IllegalStateException("State store " + store.name() + " is already registered as startup store");
-            }
         }
     }
 
@@ -633,13 +608,7 @@ public class ProcessorStateManager implements StateManager {
                 }
             }
 
-
             stores.clear();
-        }
-
-        for (final Map.Entry<String, StateStoreMetadata> entry : startupStores.entrySet()) {
-            final StateStore store = entry.getValue().stateStore;
-            store.close();
         }
 
         if (firstException != null) {

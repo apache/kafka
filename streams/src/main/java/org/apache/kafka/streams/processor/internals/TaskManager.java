@@ -317,23 +317,36 @@ public class TaskManager {
         }
     }
 
-    private Map<Task, Set<TopicPartition>> assignStartupTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign) {
+    private Collection<Task> assignActiveTaskFromStartupState(final Map<TaskId, Set<TopicPartition>> tasksToAssign) {
         if (stateDirectory.hasStartupTasks()) {
-            final Map<Task, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
+            final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
                 final TaskId taskId = entry.getKey();
                 final StateDirectory.StartupState localState = stateDirectory.removeStartupTask(taskId);
                 if (localState != null) {
-                    // replace our dummy values with the real ones, now we know our thread and assignment
-                    final Set<TopicPartition> inputPartitions = entry.getValue();
-                    final StandbyTask task = standbyTaskCreator.createStandbyTaskFromStartupLocalStore(taskId, inputPartitions, localState.getTopology());
-                    updateInputPartitionsOfStandbyTaskIfTheyChanged(task, inputPartitions);
-                    assignedTasks.put(task, inputPartitions);
+                    assignedTasks.put(taskId, entry.getValue());
                 }
             }
-            return assignedTasks;
+            return activeTaskCreator.createTasks(mainConsumer, assignedTasks);
         } else {
-            return Collections.emptyMap();
+            return Collections.emptySet();
+        }
+    }
+
+    private Collection<Task> assignStartupTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign) {
+        if (stateDirectory.hasStartupTasks()) {
+            final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
+            for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
+                final TaskId taskId = entry.getKey();
+                final StateDirectory.StartupState localState = stateDirectory.removeStartupTask(taskId);
+                if (localState != null) {
+                    final Set<TopicPartition> inputPartitions = entry.getValue();
+                    assignedTasks.put(taskId, inputPartitions);
+                }
+            }
+            return standbyTaskCreator.createTasks(assignedTasks);
+        } else {
+            return Collections.emptySet();
         }
     }
 
@@ -480,7 +493,7 @@ public class TaskManager {
                              final Set<Task> tasksToCloseClean,
                              final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
-        handleStartupTaskReuse(activeTasksToCreate, standbyTasksToCreate, failedTasks);
+        handleExistingStateForTasks(activeTasksToCreate, standbyTasksToCreate);
         handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
     }
@@ -498,32 +511,18 @@ public class TaskManager {
         }
     }
 
-    private void handleStartupTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                        final Map<TaskId, RuntimeException> failedTasks) {
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate);
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate);
-
-        // recycle the startup standbys to active, and remove them from the set of actives that need to be created
-        if (!startupStandbyTasksToRecycle.isEmpty()) {
-            final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
-            for (final Map.Entry<Task, Set<TopicPartition>> entry : startupStandbyTasksToRecycle.entrySet()) {
-                final Task task = entry.getKey();
-                recycleTaskFromStateUpdater(task, entry.getValue(), tasksToCloseDirty, failedTasks);
-                activeTasksToCreate.remove(task.id());
-            }
-
-            // if any standby tasks failed to recycle, close them dirty
-            tasksToCloseDirty.forEach(task ->
-                closeTaskDirty(task, false)
-            );
+    private void handleExistingStateForTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                             final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
+        final Collection<Task> activeTasks = assignActiveTaskFromStartupState(activeTasksToCreate);
+        for (final Task activeTask : activeTasks) {
+            activeTasksToCreate.remove(activeTask.id());
         }
-
-        // use startup Standbys as real Standby tasks
-        if (!startupStandbyTasksToUse.isEmpty()) {
-            tasks.addPendingTasksToInit(startupStandbyTasksToUse.keySet());
-            startupStandbyTasksToUse.keySet().forEach(task -> standbyTasksToCreate.remove(task.id()));
+        final Collection<Task> standbyTasks = assignStartupTasks(standbyTasksToCreate);
+        for (final Task standbyTask : standbyTasks) {
+            standbyTasksToCreate.remove(standbyTask.id());
         }
+        tasks.addPendingTasksToInit(activeTasks);
+        tasks.addPendingTasksToInit(standbyTasks);
     }
 
     private void handleRunningAndSuspendedTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
