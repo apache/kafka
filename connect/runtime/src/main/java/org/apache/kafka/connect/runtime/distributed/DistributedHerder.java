@@ -557,6 +557,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
 
+        // KAFKA-17676: Check for and auto-regenerate configs for inconsistent connectors
+        // This handles the case where task configs were lost due to topic compaction
+        if (isLeader()) {
+            processInconsistentConnectors();
+        }
+
         // Let the group take any actions it needs to
         try {
             long nextRequestTimeoutMs = scheduledTick != null ? Math.max(scheduledTick - time.milliseconds(), 0L) : Long.MAX_VALUE;
@@ -706,6 +712,33 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 + "and there are no connector config, task config, or target state changes pending");
         }
         return retValue;
+    }
+
+    /**
+     * KAFKA-17676: Check for connectors with inconsistent task configurations
+     * (due to topic compaction or partial writes) and automatically trigger reconfiguration.
+     * This is called by the leader on each tick to ensure inconsistent connectors are recovered.
+     */
+    private void processInconsistentConnectors() {
+        Set<String> inconsistent = configState.inconsistentConnectors();
+        if (inconsistent.isEmpty()) {
+            return;
+        }
+        
+        for (String connectorName : inconsistent) {
+            // Only reconfigure if the connector config exists and connector is supposed to be started
+            if (configState.connectorConfig(connectorName) != null 
+                    && configState.targetState(connectorName) == TargetState.STARTED) {
+                log.warn("Connector '{}' has inconsistent task configurations (KAFKA-17676). " +
+                        "Triggering automatic reconfiguration to regenerate task configs.", connectorName);
+                try {
+                    reconfigureConnectorTasksWithRetry(time.milliseconds(), connectorName);
+                } catch (Exception e) {
+                    log.error("Failed to trigger reconfiguration for inconsistent connector '{}'. " +
+                            "Manual intervention may be required.", connectorName, e);
+                }
+            }
+        }
     }
 
     private void processConnectorConfigUpdates(Set<String> connectorConfigUpdates) {
@@ -2001,27 +2034,48 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private boolean startTask(ConnectorTaskId taskId) {
         log.info("Starting task {}", taskId);
-        Map<String, String> connProps = configState.connectorConfig(taskId.connector());
+        String connectorName = taskId.connector();
+        Map<String, String> connProps = configState.connectorConfig(connectorName);
+        
+        // KAFKA-17676: Check if task config exists before trying to start task
+        // Task configs can be lost due to topic compaction
+        Map<String, String> taskConfig = configState.taskConfig(taskId);
+        if (taskConfig == null) {
+            if (worker.isRunning(connectorName)) {
+                log.warn("Task configuration for {} is missing (possibly due to config topic compaction). "
+                        + "Requesting reconfiguration to regenerate task configs.", taskId);
+                requestTaskReconfiguration(connectorName);
+                throw new ConnectException("Task configuration for " + taskId + " is missing. "
+                        + "Reconfiguration requested - task will be retried.");
+            } else {
+                // Connector not running - task will fail and be retried when connector starts
+                log.warn("Task configuration for {} is missing and connector {} is not running. "
+                        + "Task will be retried when connector starts.", taskId, connectorName);
+                throw new ConnectException("Task configuration for " + taskId + " is missing. "
+                        + "Waiting for connector " + connectorName + " to start.");
+            }
+        }
+        
         switch (connectorType(connProps)) {
             case SINK:
                 return worker.startSinkTask(
                         taskId,
                         configState,
                         connProps,
-                        configState.taskConfig(taskId),
+                        taskConfig,
                         this,
-                        configState.targetState(taskId.connector())
+                        configState.targetState(connectorName)
                 );
             case SOURCE:
                 if (config.exactlyOnceSourceEnabled()) {
-                    int taskGeneration = configState.taskConfigGeneration(taskId.connector());
+                    int taskGeneration = configState.taskConfigGeneration(connectorName);
                     return worker.startExactlyOnceSourceTask(
                             taskId,
                             configState,
                             connProps,
-                            configState.taskConfig(taskId),
+                            taskConfig,
                             this,
-                            configState.targetState(taskId.connector()),
+                            configState.targetState(connectorName),
                             () -> {
                                 FutureCallback<Void> preflightFencing = new FutureCallback<>();
                                 fenceZombieSourceTasks(taskId, preflightFencing);
@@ -2041,9 +2095,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             taskId,
                             configState,
                             connProps,
-                            configState.taskConfig(taskId),
+                            taskConfig,
                             this,
-                            configState.targetState(taskId.connector())
+                            configState.targetState(connectorName)
                     );
                 }
             default:
