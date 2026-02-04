@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -68,6 +69,11 @@ public class MirrorClient implements AutoCloseable {
         this.adminClient = adminClient;
         this.replicationPolicy = replicationPolicy;
         this.consumerConfig = consumerConfig;
+    }
+
+    // for testing
+    Consumer<byte[], byte[]> consumer() {
+        return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     /**
@@ -147,6 +153,55 @@ public class MirrorClient implements AutoCloseable {
     }
 
     /**
+     * Translates remote consumer groups' offsets into corresponding local offsets. Topics are automatically
+     * renamed according to the ReplicationPolicy.
+     * @param consumerGroupPattern The regex pattern specifying the consumer groups to translate offsets for
+     * @param remoteClusterAlias The alias of remote cluster
+     * @param timeout The maximum time to block when consuming from the checkpoints topic
+     * @throws IllegalArgumentException If any of the arguments are null
+     */
+    public Map<String, Map<TopicPartition, OffsetAndMetadata>> remoteConsumerOffsets(Pattern consumerGroupPattern,
+             String remoteClusterAlias, Duration timeout) {
+        if (consumerGroupPattern == null) {
+            throw new IllegalArgumentException("`consumerGroupPattern` must not be null");
+        }
+        if (remoteClusterAlias == null) {
+            throw new IllegalArgumentException("`remoteClusterAlias` must not be null");
+        }
+        if (timeout == null) {
+            throw new IllegalArgumentException("`timeout` must not be null");
+        }
+        long deadline = System.currentTimeMillis() + timeout.toMillis();
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets = new HashMap<>();
+
+        try (Consumer<byte[], byte[]> consumer = consumer()) {
+            // checkpoint topics are not "remote topics", as they are not replicated. So we don't need
+            // to use ReplicationPolicy to create the checkpoint topic here.
+            String checkpointTopic = replicationPolicy.checkpointsTopic(remoteClusterAlias);
+            List<TopicPartition> checkpointAssignment = List.of(new TopicPartition(checkpointTopic, 0));
+            consumer.assign(checkpointAssignment);
+            consumer.seekToBeginning(checkpointAssignment);
+            while (System.currentTimeMillis() < deadline && !endOfStream(consumer, checkpointAssignment)) {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    try {
+                        Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                        String consumerGroupId = checkpoint.consumerGroupId();
+                        if (consumerGroupPattern.matcher(consumerGroupId).matches()) {
+                            offsets.computeIfAbsent(consumerGroupId, k -> new HashMap<>())
+                                    .put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
+                        }
+                    } catch (SchemaException e) {
+                        log.info("Could not deserialize record. Skipping.", e);
+                    }
+                }
+            }
+            log.info("Consumed {} checkpoint records from {}.", offsets.size(), checkpointTopic);
+        }
+        return offsets;
+    }
+
+    /**
      * Translates a remote consumer group's offsets into corresponding local offsets. Topics are automatically
      * renamed according to the ReplicationPolicy.
      * @param consumerGroupId The group ID of remote consumer group
@@ -155,35 +210,9 @@ public class MirrorClient implements AutoCloseable {
      */
     public Map<TopicPartition, OffsetAndMetadata> remoteConsumerOffsets(String consumerGroupId,
             String remoteClusterAlias, Duration timeout) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-
-        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfig,
-                new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
-            // checkpoint topics are not "remote topics", as they are not replicated. So we don't need
-            // to use ReplicationPolicy to create the checkpoint topic here.
-            String checkpointTopic = replicationPolicy.checkpointsTopic(remoteClusterAlias);
-            List<TopicPartition> checkpointAssignment =
-                List.of(new TopicPartition(checkpointTopic, 0));
-            consumer.assign(checkpointAssignment);
-            consumer.seekToBeginning(checkpointAssignment);
-            while (System.currentTimeMillis() < deadline && !endOfStream(consumer, checkpointAssignment)) {
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
-                for (ConsumerRecord<byte[], byte[]> record : records) {
-                    try {
-                        Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
-                        if (checkpoint.consumerGroupId().equals(consumerGroupId)) {
-                            offsets.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
-                        }
-                    } catch (SchemaException e) {
-                        log.info("Could not deserialize record. Skipping.", e);
-                    }
-                }
-            }
-            log.info("Consumed {} checkpoint records for {} from {}.", offsets.size(),
-                consumerGroupId, checkpointTopic);
-        }
-        return offsets;
+        Pattern consumerGroupPattern = Pattern.compile(Pattern.quote(consumerGroupId));
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> offsets = remoteConsumerOffsets(consumerGroupPattern, remoteClusterAlias, timeout);
+        return offsets.getOrDefault(consumerGroupId, new HashMap<>());
     }
 
     Set<String> listTopics() throws InterruptedException {
