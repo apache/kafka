@@ -29,21 +29,16 @@ public class SimpleApiVersionManagerTest {
 
     @Test
     public void testUnknownFeaturesHasNoMetadataVersion() {
-        // When no quorum exists, featuresProvider returns unknown()
-        // which has no metadata version and empty finalized features
         SimpleApiVersionManager apiVersionManager = new SimpleApiVersionManager(
             ApiMessageType.ListenerType.CONTROLLER,
             true,
             FinalizedFeatures::unknown
         );
-
         ApiVersionsResponse response = apiVersionManager.apiVersionResponse(0, false);
 
-        // Verify that finalized features is empty
         assertTrue(response.data().finalizedFeatures().isEmpty(),
             "Finalized features should be empty when no quorum exists");
 
-        // Verify epoch is -1 (unknown)
         assertEquals(-1, response.data().finalizedFeaturesEpoch(),
             "Finalized features epoch should be -1 when no quorum exists");
     }

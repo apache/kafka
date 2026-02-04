@@ -32,7 +32,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FinalizedFeaturesTest {
 
-    // Tests for unknown()
     @Test
     public void testUnknownFeatures() {
         FinalizedFeatures features = FinalizedFeatures.unknown();
@@ -54,7 +53,6 @@ class FinalizedFeaturesTest {
         assertSame(FinalizedFeatures.unknown(), FinalizedFeatures.unknown());
     }
 
-    // Tests for fromKRaftVersion()
     @Test
     public void testFromKRaftVersion() {
         FinalizedFeatures features = FinalizedFeatures.fromKRaftVersion(MINIMUM_VERSION);
@@ -71,7 +69,6 @@ class FinalizedFeaturesTest {
         assertThrows(NullPointerException.class, () -> FinalizedFeatures.fromKRaftVersion(null));
     }
 
-    // Tests for of()
     @Test
     public void testKRaftModeFeatures() {
         FinalizedFeatures finalizedFeatures = FinalizedFeatures.of(MINIMUM_VERSION,
@@ -95,7 +92,6 @@ class FinalizedFeaturesTest {
             () -> FinalizedFeatures.of(MINIMUM_VERSION, null, 0));
     }
 
-    // Tests for setFinalizedLevel
     @Test
     public void testSetFinalizedLevel() {
         FinalizedFeatures finalizedFeatures = FinalizedFeatures.of(
@@ -104,11 +100,9 @@ class FinalizedFeaturesTest {
             123
         );
 
-        // Override an existing finalized feature version to 0
         FinalizedFeatures removedFeatures = finalizedFeatures.setFinalizedLevel("foo", (short) 0);
         assertNull(removedFeatures.finalizedFeatures().get("foo"));
 
-        // Override a missing finalized feature version to 0
         FinalizedFeatures sameFeatures = removedFeatures.setFinalizedLevel("foo", (short) 0);
         assertEquals(sameFeatures.finalizedFeatures(), removedFeatures.finalizedFeatures());
     }

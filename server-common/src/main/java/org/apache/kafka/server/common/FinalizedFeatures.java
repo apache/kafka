@@ -40,7 +40,6 @@ public final class FinalizedFeatures {
         }
     }
 
-    // Factory methods
     public static FinalizedFeatures unknown() {
         return UNKNOWN;
     }
