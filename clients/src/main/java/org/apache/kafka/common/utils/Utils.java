@@ -901,13 +901,6 @@ public final class Utils {
         });
     }
 
-   /**
-    * Get the ClassLoader which loaded Kafka.
-    */
-    private static ClassLoader getKafkaClassLoader() {
-        return Utils.class.getClassLoader();
-    }
-
     /**
      * Get the Context ClassLoader on this thread or, if not present, the ClassLoader that
      * loaded Kafka.
@@ -917,7 +910,7 @@ public final class Utils {
     public static ClassLoader getContextOrKafkaClassLoader() {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null)
-            return getKafkaClassLoader();
+            return Utils.class.getClassLoader();
         else
             return cl;
     }
