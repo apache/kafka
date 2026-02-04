@@ -673,11 +673,14 @@ public class ReplicationControlManagerTest {
             setIsr(new int[] {1, 2, 0}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build(),
             replicationControl.getPartition(
                 ((TopicRecord) result3.records().get(0).message()).topicId(), 0));
+        Uuid fooId = ((TopicRecord) result3.records().get(0).message()).topicId();
         ControllerResult<CreateTopicsResponseData> result4 =
                 replicationControl.createTopics(requestContext, request, Set.of("foo"));
         CreateTopicsResponseData expectedResponse4 = new CreateTopicsResponseData();
-        expectedResponse4.topics().add(new CreatableTopicResult().setName("foo").
-                setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
+        expectedResponse4.topics().add(new CreatableTopicResult()
+                .setName("foo")
+                .setTopicId(fooId)
+                .setErrorCode(Errors.TOPIC_ALREADY_EXISTS.code()).
                 setErrorMessage("Topic 'foo' already exists."));
         assertEquals(expectedResponse4, result4.response());
     }
