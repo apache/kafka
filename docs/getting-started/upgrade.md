@@ -35,7 +35,7 @@ type: docs
   * Support dynamically changing configs for dynamic quorum controllers. Previously only brokers and static quorum controllers were supported. For further details, please refer to [KAFKA-18928](https://issues.apache.org/jira/browse/KAFKA-18928). 
   * Two new configs have been introduced: `group.coordinator.cached.buffer.max.bytes` and `share.coordinator.cached.buffer.max.bytes`. They allow the respective coordinators to set the maximum buffer size retained for reuse. For further details, please refer to [KIP-1196](https://cwiki.apache.org/confluence/x/hA5JFg). 
   * The new config have been introduced: `remote.log.metadata.topic.min.isr` with 2 as default value. You can correct the min.insync.replicas for the existed __remote_log_metadata topic via kafka-configs.sh if needed. For further details, please refer to [KIP-1235](https://cwiki.apache.org/confluence/x/yommFw).
-
+  * The new config prefix `remote.log.metadata.admin.` has been introduced. It allows independent configuration of the admin client used by `TopicBasedRemoteLogMetadataManager`. For further details, please refer to [KIP-1208](https://cwiki.apache.org/confluence/x/vYqhFg).
 
 ## Upgrading to 4.2.0
 
@@ -45,6 +45,7 @@ type: docs
 
   * The `--max-partition-memory-bytes` option in `kafka-console-producer` is deprecated and will be removed in Kafka 5.0. Please use `--batch-size` instead. 
   * Queues for Kafka ([KIP-932](https://cwiki.apache.org/confluence/x/4hA0Dw)) is production-ready in Apache Kafka 4.2. This feature introduces a new kind of group called share groups, as an alternative to consumer groups. Consumers in a share group cooperatively consume records from topics, without assigning each partition to just one consumer. Share groups also introduce per-record acknowledgement and counting of delivery attempts. Use share groups in cases where records are processed one at a time, rather than as part of an ordered stream. 
+  * The Streams Rebalance Protocol ([KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol)) is now production-ready for its core feature set. This broker-driven rebalancing system designed specifically for Kafka Streams applications provides faster, more stable rebalances and better observability. For more information about the supported feature set, usage, and migration, please refer to the [Streams developer guide](/{version}/documentation/streams/developer-guide/streams-rebalance-protocol.html).
   * The `org.apache.kafka.common.header.internals.RecordHeader` class has been updated to be read thread-safe. See [KIP-1205](https://cwiki.apache.org/confluence/x/nYmhFg) for details. In other words, each individual `Header` object within a `ConsumerRecord`'s `headers` can now be safely read from multiple threads concurrently. 
   * The `org.apache.kafka.disallowed.login.modules` config was deprecated. Please use the `org.apache.kafka.allowed.login.modules` instead. 
   * The `remote.log.manager.thread.pool.size` config was deprecated. Please use the `remote.log.manager.follower.thread.pool.size` instead. 
@@ -80,7 +81,7 @@ type: docs
     * `cleanup.policy` now supports empty values, which means infinite retention. This is equivalent to setting `retention.ms=-1` and `retention.bytes=-1`   
 If `cleanup.policy` is empty and `remote.storage.enable` is set to true, the local log segments will be cleaned based on the values of `log.local.retention.bytes` and `log.local.retention.ms`.   
 If `cleanup.policy` is empty and `remote.storage.enable` is set to false, local log segments will not be deleted automatically. However, records can still be deleted explicitly through `deleteRecords` API calls, which will advance the log start offset and remove the corresponding log segments. 
-  * The `controller.quorum.auto.join.enable` has been added to `QuorumConfig`, enabling KRaft controllers to automatically join the cluster's voter set, and defaults to false. For further details, please refer to [KIP-853](https://cwiki.apache.org/confluence/x/nyH1D). 
+  * The `controller.quorum.auto.join.enable` has been added to `QuorumConfig`, enabling KRaft controllers to automatically join the cluster's voter set, and defaults to false. If the configuration is set to true the controller must be shutdown before removing the controller from the voter set to avoid the removed controller to automatically join again. For further details, please refer to [KIP-853](https://cwiki.apache.org/confluence/x/nyH1D). 
   * The AppInfo metrics will deprecate the following metric names, which will be removed in Kafka 5.0: 
     * `[name=start-time-ms, group=app-info, description=Metric indicating start-time-ms, tags={}]`
     * `[name=commit-id, group=app-info, description=Metric indicating commit-id, tags={}]`
@@ -95,8 +96,7 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
   * Deprecated `org.apache.kafka.streams.KafkaStreams$CloseOptions` and its related methods, such as `KafkaStreams#close(org.apache.kafka.streams.KafkaStreams$CloseOptions)`. As a replacement, please use `org.apache.kafka.streams.CloseOptions` and `KafkaStreams#close(org.apache.kafka.streams.CloseOptions)`. For further details, please refer to [KIP-1153](https://cwiki.apache.org/confluence/x/QAq9F). 
   * A new implementation of `ConnectorClientConfigOverridePolicy`, `AllowlistConnectorClientConfigOverridePolicy`, has been added. This enables specifying the configurations that connectors can override via `connector.client.config.override.allowlist`. From Kafka 5.0.0, this will be the default [connector.client.config.override.policy](documentation/#connectconfigs_connector.client.config.override.policy) policy. The `PrincipalConnectorClientConfigOverridePolicy` policy is now deprecated and will be removed in Kafka 5.0.0. For further details, please refer to [KIP-1188](https://cwiki.apache.org/confluence/x/2IkvFg). 
   * It is now possible to specify the start time for a Kafka Streams punctuation, instead of relying on the non-deterministic time when you register it. For further details, please refer to [KIP-1146](https://cwiki.apache.org/confluence/x/9QqWF). 
-  * Added an optional `--node-id` flag to the `FeatureCommand` command. It specifies the node to describe. If not provided, an arbitrary node is used. 
-
+  * Added an optional `--node-id` flag to the `FeatureCommand` command. It specifies the node to describe. If not provided, an arbitrary node is used.
 
 
 ## Upgrading to 4.1.0
@@ -121,7 +121,10 @@ For further details, please refer to [KIP-1120](https://cwiki.apache.org/conflue
   * **Admin**
     * The `listConsumerGroups()` and `listConsumerGroups(ListConsumerGroupsOptions)` methods in `Admin` are deprecated, and will be removed in the next major version. Use `Admin.listGroups(ListGroupsOptions.forConsumerGroups())` instead. 
   * **Kafka Streams**
-    * The `window.size.ms` and `window.inner.serde.class` in `StreamsConfig` are deprecated. Use the corresponding string constants defined in `TimeWindowedSerializer`, `TimeWindowedDeserializer`, `SessionWindowedSerializer` and `SessionWindowedDeserializer` instead. 
+    * Early Access for the Streams rebalance protocol. Following KIP-848, [KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol) adds broker side task assignment for Kafka Streams applications.
+      This feature is in Early Access, disabled by default, and not for production use-cases.
+      We encourage users to try out the new "streams" group feature in lower environments using "throw away" broker cluster,
+      and provide early feedback.
 
 
 

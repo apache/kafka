@@ -197,7 +197,10 @@ public class CurrentAssignmentBuilder {
                         member.assignedPartitions()
                     );
                 } else if (hasSubscriptionChanged) {
-                    return updateCurrentAssignment(member.assignedPartitions());
+                    return updateCurrentAssignment(
+                        member.memberEpoch(),
+                        member.assignedPartitions()
+                    );
                 } else {
                     return member;
                 }
@@ -214,7 +217,10 @@ public class CurrentAssignmentBuilder {
                 // owns any of the revoked partitions. If it does, we cannot progress.
                 if (ownsRevokedPartitions(member.partitionsPendingRevocation())) {
                     if (hasSubscriptionChanged) {
-                        return updateCurrentAssignment(member.assignedPartitions());
+                        return updateCurrentAssignment(
+                            member.memberEpoch(),
+                            member.assignedPartitions()
+                        );
                     } else {
                         return member;
                     }
@@ -284,10 +290,12 @@ public class CurrentAssignmentBuilder {
      * Updates the current assignment, removing any partitions that are not part of the subscribed topics.
      * This method is a lot faster than running the full reconciliation logic in computeNextAssignment.
      *
+     * @param memberEpoch               The epoch of the member to use.
      * @param memberAssignedPartitions  The assigned partitions of the member to use.
      * @return A new ConsumerGroupMember.
      */
     private ConsumerGroupMember updateCurrentAssignment(
+        int memberEpoch,
         Map<Uuid, Set<Integer>> memberAssignedPartitions
     ) {
         Set<Uuid> subscribedTopicIds = subscribedTopicIds();
@@ -329,6 +337,7 @@ public class CurrentAssignmentBuilder {
         if (!newPartitionsPendingRevocation.isEmpty() && ownsRevokedPartitions(newPartitionsPendingRevocation)) {
             return new ConsumerGroupMember.Builder(member)
                 .setState(MemberState.UNREVOKED_PARTITIONS)
+                .updateMemberEpoch(memberEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .setPartitionsPendingRevocation(newPartitionsPendingRevocation)
                 .build();
@@ -340,6 +349,7 @@ public class CurrentAssignmentBuilder {
             // reconciliation logic should handle the case where the member has revoked all its
             // partitions pending revocation.
             return new ConsumerGroupMember.Builder(member)
+                .updateMemberEpoch(memberEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
                 .build();
         }

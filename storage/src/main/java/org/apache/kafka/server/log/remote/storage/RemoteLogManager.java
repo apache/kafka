@@ -1207,7 +1207,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 if (retentionTimeData.isEmpty()) {
                     return shouldDeleteSegment;
                 }
-                shouldDeleteSegment = metadata.maxTimestampMs() <= retentionTimeData.get().cleanupUntilMs;
+                shouldDeleteSegment = metadata.maxTimestampMs() < retentionTimeData.get().cleanupUntilMs;
                 if (shouldDeleteSegment) {
                     remainingBreachedSize = Math.max(0, remainingBreachedSize - metadata.segmentSizeInBytes());
                     // It is fine to have logStartOffset as `metadata.endOffset() + 1` as the segment offset intervals

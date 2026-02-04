@@ -24,7 +24,7 @@ import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
-import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -32,7 +32,7 @@ import org.apache.kafka.common.errors.{InvalidConfigurationException, TimeoutExc
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry, FeatureUpdate, UpdateFeaturesOptions}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry, FeatureUpdate}
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -42,9 +42,12 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.LeaderConstants
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.logging.log4j.core.config.Configurator
+
+import java.io.File
 
 class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
@@ -89,7 +92,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     brokers.foreach(broker => shutdownBroker(broker))
-    brokers.foreach(broker => CoreUtils.delete(broker.config.logDirs))
+    brokers.foreach(broker => broker.config.logDirs.forEach(f => Utils.delete(new File(f))))
 
     // restore log levels
     Configurator.setLevel(kafkaApisLogger.getName, Level.ERROR)
@@ -124,8 +127,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   private def disableEligibleLeaderReplicas(): Unit = {
     if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_1_IV0)) {
       admin.updateFeatures(
-        util.Map.of("eligible.leader.replicas.version", new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)),
-        new UpdateFeaturesOptions()).all().get()
+        util.Map.of("eligible.leader.replicas.version", new FeatureUpdate(0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE))).all().get()
     }
   }
 
