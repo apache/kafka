@@ -44,6 +44,7 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 
 import org.apache.commons.validator.routines.InetAddressValidator;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -184,6 +185,21 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
             throw new IllegalArgumentException(
                     String.format("Error parsing configuration property '%s': %s", propName, e.getMessage()));
         }
+    }
+
+    /**
+     * Copy a configuration map, populating some keys that we want to treat as synonyms.
+     */
+    public static Map<Object, Object> populateSynonyms(Map<?, ?> input) {
+        Map<Object, Object> output = new HashMap<>(input);
+        Object brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG);
+        Object nodeId = output.get(KRaftConfigs.NODE_ID_CONFIG);
+        if (brokerId == null && nodeId != null) {
+            output.put(ServerConfigs.BROKER_ID_CONFIG, nodeId);
+        } else if (brokerId != null && nodeId == null) {
+            output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId);
+        }
+        return output;
     }
 
     public static List<Endpoint> listenerListToEndPoints(List<String> listeners, Map<ListenerName, SecurityProtocol> securityProtocolMap) {

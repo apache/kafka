@@ -1575,31 +1575,6 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testPopulateSynonymsOnEmptyMap(): Unit = {
-    assertEquals(Collections.emptyMap(), KafkaConfig.populateSynonyms(Collections.emptyMap()))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutNodeId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutBrokerId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
-  }
-
-  @Test
   def testNodeIdMustNotBeDifferentThanBrokerId(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
