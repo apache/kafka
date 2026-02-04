@@ -901,22 +901,10 @@ public final class Utils {
         });
     }
 
-    /**
-     * Returns an empty list if the provided list is null, otherwise returns the list itself.
-     * <p>
-     * This method is useful for avoiding {@code NullPointerException} when working with potentially null lists.
-     *
-     * @param other the list to check for null
-     * @return an empty list if the provided list is null, otherwise the original list
-     */
-    public static <T> List<T> safe(List<T> other) {
-        return other == null ? Collections.emptyList() : other;
-    }
-
    /**
     * Get the ClassLoader which loaded Kafka.
     */
-    public static ClassLoader getKafkaClassLoader() {
+    private static ClassLoader getKafkaClassLoader() {
         return Utils.class.getClassLoader();
     }
 
