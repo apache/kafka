@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.io.ByteArrayOutputStream;
@@ -42,7 +43,7 @@ import java.nio.charset.StandardCharsets;
  * <p>
  * This is used by KIP-1271 to serialize headers for storage in state stores.
  */
-public class HeadersSerializer {
+public class HeadersSerializer implements Serializer<Headers> {
 
     /**
      * Serializes headers into a byte array using varint encoding per KIP-1271.
@@ -50,10 +51,12 @@ public class HeadersSerializer {
      * The output format is [count][header1][header2]... without a size prefix.
      * The size prefix is added by the outer serializer that uses this.
      *
+     * @param topic topic associated with data
      * @param headers the headers to serialize (can be null)
      * @return the serialized byte array
      */
-    public byte[] serialize(final Headers headers) {
+    @Override
+    public byte[] serialize(final String topic, final Headers headers) {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
 

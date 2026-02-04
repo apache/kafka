@@ -35,7 +35,7 @@ public class HeadersSerializerTest {
 
     @Test
     public void shouldSerializeNullHeaders() {
-        final byte[] serialized = serializer.serialize(null);
+        final byte[] serialized = serializer.serialize("", null);
 
         assertNotNull(serialized);
         assertEquals(1, serialized.length, "Null headers should have 1 byte to indicate headers count is 0");
@@ -45,7 +45,7 @@ public class HeadersSerializerTest {
     @Test
     public void shouldSerializeEmptyHeaders() {
         final Headers headers = new RecordHeaders();
-        final byte[] serialized = serializer.serialize(headers);
+        final byte[] serialized = serializer.serialize("", headers);
 
         assertNotNull(serialized);
         assertEquals(1, serialized.length, "Empty headers should have 1 byte to indicate headers count is 0");
@@ -56,12 +56,12 @@ public class HeadersSerializerTest {
     public void shouldSerializeSingleHeader() {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());
-        final byte[] serialized = serializer.serialize(headers);
+        final byte[] serialized = serializer.serialize("", headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
 
-        final Headers deserialized = deserializer.deserialize(serialized);
+        final Headers deserialized = deserializer.deserialize("", serialized);
         assertNotNull(deserialized);
         assertEquals(1, deserialized.toArray().length);
 
@@ -77,12 +77,12 @@ public class HeadersSerializerTest {
             .add("key0", "value0".getBytes())
             .add("key1", "value1".getBytes())
             .add("key2", "value2".getBytes());
-        final byte[] serialized = serializer.serialize(headers);
+        final byte[] serialized = serializer.serialize("", headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
 
-        final Headers deserialized = deserializer.deserialize(serialized);
+        final Headers deserialized = deserializer.deserialize("", serialized);
         assertNotNull(deserialized);
         assertEquals(3, deserialized.toArray().length);
 
@@ -98,12 +98,12 @@ public class HeadersSerializerTest {
     public void shouldSerializeHeaderWithNullValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", null);
-        final byte[] serialized = serializer.serialize(headers);
+        final byte[] serialized = serializer.serialize("", headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
 
-        final Headers deserialized = deserializer.deserialize(serialized);
+        final Headers deserialized = deserializer.deserialize("", serialized);
         assertNotNull(deserialized);
         assertEquals(1, deserialized.toArray().length);
 
@@ -117,12 +117,12 @@ public class HeadersSerializerTest {
     public void shouldSerializeHeadersWithEmptyValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", new byte[0]);
-        final byte[] serialized = serializer.serialize(headers);
+        final byte[] serialized = serializer.serialize("", headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
 
-        final Headers deserialized = deserializer.deserialize(serialized);
+        final Headers deserialized = deserializer.deserialize("", serialized);
         assertNotNull(deserialized);
         assertEquals(1, deserialized.toArray().length);
 
@@ -138,12 +138,12 @@ public class HeadersSerializerTest {
             .add("key-with-dash", "value".getBytes())
             .add("key.with.dots", "value".getBytes())
             .add("key_with_underscores", "value".getBytes());
-        final byte[] serialized = serializer.serialize(headers);
+        final byte[] serialized = serializer.serialize("", headers);
 
         assertNotNull(serialized);
         assertTrue(serialized.length > 0);
 
-        final Headers deserialized = deserializer.deserialize(serialized);
+        final Headers deserialized = deserializer.deserialize("", serialized);
         assertNotNull(deserialized);
         assertEquals(3, deserialized.toArray().length);
 
