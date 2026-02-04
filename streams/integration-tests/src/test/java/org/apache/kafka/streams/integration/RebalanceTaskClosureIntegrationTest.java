@@ -150,8 +150,9 @@ public class RebalanceTaskClosureIntegrationTest {
         // That's exactly what we are waiting for
         recycleLatch.await();
 
-        // sending a message to avoid retries in the consumer client. if there are no messages, it retries both poll for new messages and reassignment.
-        // which we don't want, because we just staged the right condition(see ClassicKafkaConsumer#poll()).
+        // sending a message to avoid retries in the consumer client. if there are no messages, it retries both poll for new messages and reassignment(see ClassicKafkaConsumer#poll()).
+        // during reassignment we close pending tasks to init(see TaskManager#handleTasksPendingInitialization()).
+        // hence during first attempt we will put the task into the pending to init list, and during next attempt we will delete it from the list and close it
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC_NAME, List.of(new KeyValue<>(1L, "key")),
                 TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, StringSerializer.class, new Properties()), cluster.time);
         // Now we can close both apps. The StreamThreadStateListener will unblock the clearCache call, letting the rebalance finish.
