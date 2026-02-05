@@ -75,6 +75,9 @@ public final class FinalizedFeatures {
     }
 
     public FinalizedFeatures setFinalizedLevel(String key, short level) {
+        if (metadataVersion == null) {
+            throw new IllegalStateException("Cannot set finalized level on unknown FinalizedFeatures");
+        }
         if (level == (short) 0) {
             if (finalizedFeatures.containsKey(key)) {
                 Map<String, Short> newFinalizedFeatures = new HashMap<>(finalizedFeatures);

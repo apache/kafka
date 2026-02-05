@@ -114,4 +114,10 @@ class FinalizedFeaturesTest {
         FinalizedFeatures updatedFeatures = features.setFinalizedLevel("bar", (short) 5);
         assertEquals((short) 5, updatedFeatures.finalizedFeatures().get("bar"));
     }
+
+    @Test
+    public void testSetFinalizedLevelOnUnknownThrows() {
+        assertThrows(IllegalStateException.class,
+            () -> FinalizedFeatures.unknown().setFinalizedLevel("foo", (short) 1));
+    }
 }
