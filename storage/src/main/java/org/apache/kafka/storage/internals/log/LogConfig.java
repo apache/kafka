@@ -94,8 +94,6 @@ public class LogConfig extends AbstractConfig {
                     "remoteStorageEnable=" + remoteStorageEnable +
                     ", remoteLogCopyDisable=" + remoteLogCopyDisable +
                     ", remoteLogLatestEnable=" + remoteLogLatestEnable +
-                    ", remoteLogCopyLagMs=" + remoteLogCopyLagMs +
-                    ", remoteLogCopyLagBytes=" + remoteLogCopyLagBytes +
                     ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
@@ -148,7 +146,6 @@ public class LogConfig extends AbstractConfig {
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
     public static final boolean DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG = false;
-    public static final boolean DEFAULT_REMOTE_LOG_LATEST_ENABLE_CONFIG = true;
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
@@ -262,7 +259,6 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
-                .define(TopicConfig.REMOTE_LOG_LATEST_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_LOG_LATEST_ENABLE_CONFIG, MEDIUM, TopicConfig.REMOTE_LOG_LATEST_ENABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_LOG_COPY_LAG_MS, atLeast(-1), MEDIUM, TopicConfig.REMOTE_LOG_COPY_LAG_MS_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_LOG_COPY_LAG_BYTES, atLeast(-1), MEDIUM, TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
@@ -417,9 +413,6 @@ public class LogConfig extends AbstractConfig {
         return remoteLogConfig.remoteLogCopyDisable;
     }
 
-    public Boolean remoteLogLatestEnable() {
-        return remoteLogConfig.remoteLogLatestEnable;
-    }
 
     /**
      * Effective remote copy lag in ms: 0 = upload immediately, -1 resolves to local retention time, &gt;0 = segment must be at least this old (ms) to be eligible.
