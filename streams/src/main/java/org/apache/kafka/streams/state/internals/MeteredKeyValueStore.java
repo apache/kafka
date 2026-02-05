@@ -73,6 +73,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K>
  * @param <V>
  */
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
     implements KeyValueStore<K, V>, MeteredStateStore {
