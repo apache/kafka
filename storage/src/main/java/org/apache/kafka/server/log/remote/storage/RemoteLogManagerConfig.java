@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.TopicConfig;
 
 import java.util.Collections;
 import java.util.Map;
@@ -167,6 +168,14 @@ public final class RemoteLogManagerConfig {
             "Default value is -2, it represents <code>log.retention.bytes</code> value to be used. The effective value should always be " +
             "less than or equal to <code>log.retention.bytes</code> value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
+
+    public static final String LOG_REMOTE_LOG_COPY_LAG_MS_PROP = "log.remote.log.copy.lag.ms";
+    public static final String LOG_REMOTE_LOG_COPY_LAG_MS_DOC = "Broker default for " + TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG + ". " + TopicConfig.REMOTE_LOG_COPY_LAG_MS_DOC;
+    public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_MS = 0L;
+
+    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP = "log.remote.log.copy.lag.bytes";
+    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC = "Broker default for " + TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG + ". " + TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_DOC;
+    public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_BYTES = 0L;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be copied from local storage to remote storage per second. " +
@@ -347,6 +356,18 @@ public final class RemoteLogManagerConfig {
                         atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
                         MEDIUM,
                         LOG_LOCAL_RETENTION_BYTES_DOC)
+                .define(LOG_REMOTE_LOG_COPY_LAG_MS_PROP,
+                        LONG,
+                        DEFAULT_LOG_REMOTE_LOG_COPY_LAG_MS,
+                        atLeast(-1),
+                        MEDIUM,
+                        LOG_REMOTE_LOG_COPY_LAG_MS_DOC)
+                .define(LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP,
+                        LONG,
+                        DEFAULT_LOG_REMOTE_LOG_COPY_LAG_BYTES,
+                        atLeast(-1),
+                        MEDIUM,
+                        LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC)
                 .define(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
                         LONG,
                         DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND,
@@ -562,6 +583,14 @@ public final class RemoteLogManagerConfig {
 
     public long logLocalRetentionMs() {
         return config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
+    }
+
+    public long logRemoteLogCopyLagMs() {
+        return config.getLong(LOG_REMOTE_LOG_COPY_LAG_MS_PROP);
+    }
+
+    public long logRemoteLogCopyLagBytes() {
+        return config.getLong(LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP);
     }
 
     public long remoteListOffsetsRequestTimeoutMs() {

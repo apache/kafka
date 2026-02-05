@@ -101,11 +101,6 @@ public class TopicConfig {
             "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
             "(i.e. retention.ms/bytes).";
 
-    public static final String REMOTE_COPY_LAZY_ENABLE_CONFIG = "remote.copy.lazy.enable";
-    public static final String REMOTE_COPY_LAZY_ENABLE_DOC = "Determines whether to delay uploading segments to remote storage. " +
-            "When set to false (default), all non-active segments will be uploaded immediately without checking local retention constraints. " +
-            "When set to true, segments within local retention will not be uploaded, the upload is delayed until they expire.";
-
     public static final String REMOTE_LOG_COPY_LAG_MS_CONFIG = "remote.log.copy.lag.ms";
     public static final String REMOTE_LOG_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
             "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay). " +

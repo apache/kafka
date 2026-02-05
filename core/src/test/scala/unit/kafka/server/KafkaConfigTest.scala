@@ -1165,8 +1165,11 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, 10015L, () => config.remoteLogManagerConfig.logLocalRetentionMs)
         case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 10016L, () => config.remoteLogManagerConfig.logLocalRetentionBytes)
+        case TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG =>
+          assertDynamic(kafkaConfigProp, 10017L, () => config.remoteLogManagerConfig.logRemoteLogCopyLagMs)
+        case TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG =>
+          assertDynamic(kafkaConfigProp, 10018L, () => config.remoteLogManagerConfig.logRemoteLogCopyLagBytes)
         // not dynamically updatable
-        case TopicConfig.REMOTE_COPY_LAZY_ENABLE_CONFIG =>
         case QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
         // topic only config
         case QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG =>
