@@ -152,20 +152,6 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
     aws.iam_instance_profile_name = ec2_iam_instance_profile_name
 
-    # Default tags for SCP compliance
-    aws.tags = {
-      'Owner' => 'ce-kafka',
-      'Service' => 'ce-kafka',
-      'Type' => 'Base',
-      'role' => 'ce-kafka',
-      'CreatedBy' => 'kafka-system-test',
-      'cflt_environment' => 'devel',
-      'cflt_partition' => 'commercial',
-      'cflt_managed_by' => 'iac',
-      'cflt_managed_id' => 'ce-kafka',
-      'cflt_service' => 'kafka-system-test'
-    }
-
     # Exclude some directories that can grow very large from syncing
     override.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: ['.git', 'core/data/', 'logs/', 'tests/results/', 'results/']
   end
@@ -176,10 +162,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       aws.tags = {
         'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
         'JenkinsBuildUrl' => ENV['BUILD_URL'],
-        'Owner' => 'ce-kafka',
-        'Service' => 'ce-kafka',
+        'Owner' => 'kafka',
+        'Service' => 'kafka',
         'Type' => 'Base',
-        'role' => 'ce-kafka',
+        'role' => 'kafka',
         'CreatedBy' => 'kafka-system-test',
         'cflt_environment' => 'devel',
         'cflt_partition' => 'commercial',
