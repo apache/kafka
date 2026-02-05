@@ -72,19 +72,13 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(valueTimestampHeaders);
-        final int headerSize = ByteUtils.readVarint(buffer);
+        final int headersSize = ByteUtils.readVarint(buffer);
 
-        final byte[] rawHeaders = new byte[headerSize];
-        buffer.get(rawHeaders);
-
-        final byte[] rawTimestamp = new byte[Long.BYTES];
-        buffer.get(rawTimestamp);
-
+        final byte[] rawHeaders = readBytes(buffer, headersSize);
+        final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp);
 
-        final byte[] rawValue = new byte[buffer.remaining()];
-        buffer.get(rawValue);
-
+        final byte[] rawValue = readBytes(buffer, buffer.remaining());
         final V value = valueDeserializer.deserialize(topic, rawValue);
 
         return ValueTimestampHeaders.makeWithRawHeaders(value, timestamp, rawHeaders);
@@ -105,6 +99,26 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
     }
 
     /**
+     * Reads the specified number of bytes from the buffer with validation.
+     *
+     * @param buffer the ByteBuffer to read from
+     * @param length the number of bytes to read
+     * @return the byte array containing the read bytes
+     * @throws IllegalArgumentException if buffer doesn't have enough bytes
+     */
+    private static byte[] readBytes(final ByteBuffer buffer, final int length) {
+        if (buffer.remaining() < length) {
+            throw new IllegalArgumentException(
+                "Invalid ValueTimestampHeaders format: expected " + length +
+                " bytes but only " + buffer.remaining() + " bytes remaining"
+            );
+        }
+        final byte[] bytes = new byte[length];
+        buffer.get(bytes);
+        return bytes;
+    }
+
+    /**
      * Extract raw value bytes from serialized ValueTimestampHeaders.
      */
     static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
@@ -113,30 +127,21 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headerSize = ByteUtils.readVarint(buffer);
-        buffer.position(buffer.position() + headerSize + Long.BYTES);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        buffer.position(buffer.position() + headersSize + Long.BYTES);
 
-        final byte[] rawValue = new byte[buffer.remaining()];
-        buffer.get(rawValue);
-
-        return rawValue;
+        return readBytes(buffer, buffer.remaining());
     }
 
     /**
      * Extract timestamp from serialized ValueTimestampHeaders.
      */
     static long timestamp(final byte[] rawValueTimestampHeaders) {
-        if (rawValueTimestampHeaders == null) {
-            throw new IllegalArgumentException("Cannot extract timestamp from null data");
-        }
-
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headerSize = ByteUtils.readVarint(buffer);
-        buffer.position(buffer.position() + headerSize);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        buffer.position(buffer.position() + headersSize);
 
-        final byte[] rawTimestamp = new byte[Long.BYTES];
-        buffer.get(rawTimestamp);
-
+        final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
         return LONG_DESERIALIZER.deserialize(null, rawTimestamp);
     }
 
@@ -145,13 +150,12 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
      */
     static Headers headers(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders == null) {
-            throw new IllegalArgumentException("Cannot extract headers from null data");
+            return null;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
-        final int headerSize = ByteUtils.readVarint(buffer);
-        final byte[] rawHeaders = new byte[headerSize];
-        buffer.get(rawHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        final byte[] rawHeaders = readBytes(buffer, headersSize);
 
         return HeadersDeserializer.deserialize(rawHeaders);
     }

@@ -175,6 +175,24 @@ public class ValueTimestampHeadersTest {
     }
 
     @Test
+    public void shouldDeserializeHeaderLazily() {
+        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
+        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
+
+        final ValueTimestampHeaders<String> valueTimestampHeaders =
+            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
+
+        assertNotNull(valueTimestampHeaders);
+        assertEquals(VALUE, valueTimestampHeaders.value());
+        assertEquals(TIMESTAMP, valueTimestampHeaders.timestamp());
+        assertNull(valueTimestampHeaders.headers, "should be null before invocation of headers()");
+        valueTimestampHeaders.headers();
+        assertNotNull(valueTimestampHeaders.headers, "should be deserialize after invocation of headers()");
+        assertEquals(headers, valueTimestampHeaders.headers);
+        assertEquals(headers, valueTimestampHeaders.headers());
+    }
+
+    @Test
     public void shouldReturnNullWhenValueIsNullWithMakeWithRawHeaders() {
         final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
         final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);

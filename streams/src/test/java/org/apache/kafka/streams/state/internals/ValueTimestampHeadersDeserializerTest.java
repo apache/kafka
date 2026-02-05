@@ -222,7 +222,8 @@ public class ValueTimestampHeadersDeserializerTest {
 
     @Test
     public void shouldThrowExceptionWhenExtractingTimestampFromNull() {
-        assertThrows(IllegalArgumentException.class, () ->
+        // ByteBuffer.wrap() throws NullPointerException for null input
+        assertThrows(NullPointerException.class, () ->
             ValueTimestampHeadersDeserializer.timestamp(null)
         );
     }
@@ -258,9 +259,33 @@ public class ValueTimestampHeadersDeserializerTest {
     }
 
     @Test
-    public void shouldThrowExceptionWhenExtractingHeadersFromNull() {
+    public void shouldReturnNullWhenExtractingHeadersFromNull() {
+        final Headers headers = ValueTimestampHeadersDeserializer.headers(null);
+        assertNull(headers);
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenDataIsTooShort() {
+        // Create malformed data: only headersSize varint, no actual headers or timestamp
+        final byte[] malformedData = new byte[] {0x02};  // headersSize = 1 but no data follows
+
         assertThrows(IllegalArgumentException.class, () ->
-            ValueTimestampHeadersDeserializer.headers(null)
+            deserializer.deserialize(TOPIC, malformedData),
+            "Should throw IllegalArgumentException for malformed data"
+        );
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenHeadersSizeIsInconsistent() {
+        // Create data with headersSize = 10 but not enough actual data
+        final byte[] malformedData = new byte[] {
+            0x14,  // headersSize = 10 (ZigZag encoding)
+            0x00, 0x00  // Only 2 bytes when 10 + 8 (timestamp) are expected
+        };
+
+        assertThrows(IllegalArgumentException.class, () ->
+            deserializer.deserialize(TOPIC, malformedData),
+            "Should throw IllegalArgumentException when buffer doesn't have enough data"
         );
     }
 }

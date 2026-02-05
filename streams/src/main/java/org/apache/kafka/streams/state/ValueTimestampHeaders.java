@@ -31,7 +31,8 @@ public final class ValueTimestampHeaders<V> {
 
     private final V value;
     private final long timestamp;
-    private Headers headers;
+    //visible for test
+    volatile Headers headers;
     private final byte[] rawHeaders;
 
     private ValueTimestampHeaders(final V value, final long timestamp, final Headers headers) {
@@ -130,10 +131,18 @@ public final class ValueTimestampHeaders<V> {
     }
 
     public Headers headers() {
-        if (headers == null && rawHeaders != null) {
-            headers = HeadersDeserializer.deserialize(rawHeaders);
+        if (headers == null) {
+            synchronized (this) {
+                if (headers == null) {
+                    if (rawHeaders != null) {
+                        headers = HeadersDeserializer.deserialize(rawHeaders);
+                    } else {
+                        headers = new RecordHeaders();
+                    }
+                }
+            }
         }
-        return headers != null ? headers : new RecordHeaders();
+        return headers;
     }
 
     @Override

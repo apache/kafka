@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -103,7 +104,7 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
 
             return baos.toByteArray();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to serialize ValueTimestampHeaders", e);
+            throw new SerializationException("Failed to serialize ValueTimestampHeaders", e);
         }
     }
 
