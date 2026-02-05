@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.TopicConfig;
 
 import java.util.Collections;
 import java.util.Map;
@@ -170,11 +169,15 @@ public final class RemoteLogManagerConfig {
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
     public static final String LOG_REMOTE_LOG_COPY_LAG_MS_PROP = "log.remote.log.copy.lag.ms";
-    public static final String LOG_REMOTE_LOG_COPY_LAG_MS_DOC = "Broker default for " + TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG + ". " + TopicConfig.REMOTE_LOG_COPY_LAG_MS_DOC;
+    public static final String LOG_REMOTE_LOG_COPY_LAG_MS_DOC = "The minimum age in milliseconds a segment must reach before being eligible for upload to remote storage. " +
+            "When set to 0 (default), segments are uploaded as soon as they are eligible. When set to -1, resolves to local retention time. " +
+            "The value should not exceed <code>log.local.retention.ms</code>.";
     public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_MS = 0L;
 
     public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP = "log.remote.log.copy.lag.bytes";
-    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC = "Broker default for " + TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG + ". " + TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_DOC;
+    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC = "The cumulative log size in bytes from the copy range that must be reached before a segment is eligible for upload to remote storage. " +
+            "When set to 0 (default), no size-based constraint. When set to -1, resolves to local retention bytes. " +
+            "The value should not exceed <code>log.local.retention.bytes</code>.";
     public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_BYTES = 0L;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
