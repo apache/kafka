@@ -49,6 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.apache.kafka.coordinator.transaction.RPCProducerIdManager.RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -257,6 +258,27 @@ public class ProducerIdManagerTest {
         assertThrows(CoordinatorLoadInProgressException.class, manager::generateProducerId);
         time.sleep(RETRY_BACKOFF_MS);
         verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0);
+    }
+
+    @Test
+    public void testSanityCheckProhibitsOverlappingBlocks() throws Exception {
+        var time = new MockTime();
+        var manager = new MockProducerIdManager(0, 0, 1, new ConcurrentLinkedQueue<>(), false, time, false, false, false);
+        long firstId = 100;
+        int length = 100;
+        manager.currentProducerIdBlock.set(new ProducerIdsBlock(0, firstId, length));
+
+        AllocateProducerIdsResponseData staleData = new AllocateProducerIdsResponseData()
+                .setProducerIdStart(199)
+                .setProducerIdLen(100)
+                .setErrorCode((Errors.NONE.code()));
+        AllocateProducerIdsResponse staleResponse = new AllocateProducerIdsResponse(staleData);
+        ClientResponse clientResponse = new ClientResponse(null, null, null,
+                time.milliseconds(), time.milliseconds(), false, null, null, staleResponse);
+
+        manager.handleAllocateProducerIdsResponse(clientResponse);
+
+        assertNull(manager.nextProducerIdBlock.get(), "The manager should have rejected the overlapping block.");
     }
 
     private Queue<Errors> queue(Errors... errors) {

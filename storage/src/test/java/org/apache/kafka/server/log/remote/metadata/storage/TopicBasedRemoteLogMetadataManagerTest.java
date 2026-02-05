@@ -17,6 +17,9 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -24,6 +27,8 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -49,6 +54,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -368,6 +374,56 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         } finally {
             // Restore default exit procedure
             Exit.resetExitProcedure();
+        }
+    }
+
+    @ClusterTest
+    public void testRemoteLogMetadataTopicWithDefaultMinIsr() throws ExecutionException, InterruptedException {
+        // Initialize the manager which will create the __remote_log_metadata topic
+        TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = topicBasedRlmm();
+        verifyRemoteLogMetadataTopicWithMinIsr(topicBasedRemoteLogMetadataManager,
+                                               TopicBasedRemoteLogMetadataManagerConfig.DEFAULT_REMOTE_LOG_METADATA_TOPIC_MIN_ISR,
+                                               "default value");
+    }
+
+    @ClusterTest
+    public void testRemoteLogMetadataTopicWithCustomMinIsr() throws ExecutionException, InterruptedException, IOException {
+        // Create a manager with custom min.isr value
+        short customMinIsr = 3;
+        Map<String, Object> overrideProps = Map.of(
+            TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_MIN_ISR_PROP, customMinIsr
+        );
+        try (TopicBasedRemoteLogMetadataManager customRlmm = RemoteLogMetadataManagerTestUtils.builder()
+                .bootstrapServers(clusterInstance.bootstrapServers())
+                .overrideRemoteLogMetadataManagerProps(overrideProps)
+                .build()) {
+            verifyRemoteLogMetadataTopicWithMinIsr(customRlmm, customMinIsr, "custom value");
+        }
+    }
+
+    private void verifyRemoteLogMetadataTopicWithMinIsr(TopicBasedRemoteLogMetadataManager rlmm,
+                                                        short expectedMinIsr,
+                                                        String valueDescription)
+                                                        throws ExecutionException, InterruptedException {
+        try (Admin admin = clusterInstance.admin()) {
+            String metadataTopic = TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
+            
+            // Wait for the topic to be created
+            clusterInstance.waitTopicCreation(metadataTopic, RemoteLogMetadataManagerTestUtils.METADATA_TOPIC_PARTITIONS_COUNT);
+            
+            // Verify the topic exists
+            assertTrue(rlmm.doesTopicExist(admin, metadataTopic));
+            
+            // Describe the topic configs to verify min.insync.replicas
+            ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, metadataTopic);
+            DescribeConfigsResult describeResult = admin.describeConfigs(List.of(topicResource));
+            Config config = describeResult.all().get().get(topicResource);
+
+            assertNotNull(config, "Topic config should not be null");
+            ConfigEntry minIsrEntry = config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
+            assertNotNull(minIsrEntry, "min.insync.replicas config should exist");
+            assertEquals(String.valueOf(expectedMinIsr), minIsrEntry.value(), 
+                "min.insync.replicas should be " + expectedMinIsr + " (" + valueDescription + ")");
         }
     }
 }

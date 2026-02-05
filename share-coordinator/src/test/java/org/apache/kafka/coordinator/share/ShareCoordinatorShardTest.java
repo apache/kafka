@@ -1036,7 +1036,7 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testDeleteStateUnintializedRecord() {
+    public void testDeleteStateUninitializedRecord() {
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
             .setTopics(List.of(new DeleteShareGroupStateRequestData.DeleteStateData()

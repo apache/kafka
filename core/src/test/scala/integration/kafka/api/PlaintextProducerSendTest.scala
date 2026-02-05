@@ -170,6 +170,19 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     assertEquals("Partition 10 of topic topic with partition count 4 is not present in metadata after 500 ms.", exception.getCause.getMessage)
   }
 
+  /**
+   * Test error message received when partitionsFor fails waiting on metadata for a topic that does not exist.
+   * No need to run this for both rebalance protocols.
+   */
+  @ParameterizedTest(name = "groupProtocol={0}.autoCreateTopicsEnabled={1}")
+  @MethodSource(Array("protocolAndAutoCreateTopicProviders"))
+  def testPartitionsForTimeoutErrorWhenTopicDoesNotExist(groupProtocol: String, autoCreateTopicsEnabled: String): Unit = {
+    val producer = createProducer(maxBlockMs = 500)
+
+    val exception = assertThrows(classOf[TimeoutException], () => producer.partitionsFor("unexisting-topic"))
+    assertEquals("Topic unexisting-topic not present in metadata after 500 ms.", exception.getMessage)
+  }
+
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("timestampConfigProvider"))
   def testSendWithInvalidBeforeAndAfterTimestamp(groupProtocol: String, messageTimeStampConfig: String, recordTimestamp: Long): Unit = {

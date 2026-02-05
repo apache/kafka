@@ -18,7 +18,6 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.PartitionStates
@@ -29,16 +28,12 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests._
-
 import org.apache.kafka.common.{ClientIdAndBroker, InvalidRecordException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
-import org.apache.kafka.server.LeaderEndPoint
-import org.apache.kafka.server.ResultWithPartitions
-import org.apache.kafka.server.ReplicaState
-import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState, ReplicaState, ResultWithPartitions}
 import org.apache.kafka.server.log.remote.storage.RetriableRemoteStorageException
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.util.{LockUtils, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
@@ -105,9 +100,7 @@ abstract class AbstractFetcherThread(name: String,
 
   override def shutdown(): Unit = {
     initiateShutdown()
-    inLock(partitionMapLock) {
-      partitionMapCond.signalAll()
-    }
+    LockUtils.inLock[Exception](partitionMapLock, () => partitionMapCond.signalAll())
     awaitShutdown()
 
     // we don't need the lock since the thread has finished shutdown and metric removal is safe
@@ -121,7 +114,7 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   private def maybeFetch(): Unit = {
-    val fetchRequestOpt = inLock(partitionMapLock) {
+    val fetchRequestOpt = LockUtils.inLock(partitionMapLock, () => {
       val result = leader.buildFetch(partitionStates.partitionStateMap)
       val fetchRequestOpt = result.result
       val partitionsWithError = result.partitionsWithError
@@ -134,7 +127,7 @@ abstract class AbstractFetcherThread(name: String,
       }
 
       fetchRequestOpt
-    }
+    })
 
     fetchRequestOpt.ifPresent(replicaFetch =>
       processFetchRequest(replicaFetch.partitionData, replicaFetch.fetchRequest)
@@ -153,7 +146,8 @@ abstract class AbstractFetcherThread(name: String,
    * Builds offset for leader epoch requests for partitions that are in the truncating phase based
    * on latest epochs of the future replicas (the one that is fetching)
    */
-  private def fetchTruncatingPartitions(): (Map[TopicPartition, EpochData], Set[TopicPartition]) = inLock(partitionMapLock) {
+  private def fetchTruncatingPartitions(): (Map[TopicPartition, EpochData], Set[TopicPartition]) =
+    LockUtils.inLock(partitionMapLock, () => {
     val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
     val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
 
@@ -172,7 +166,7 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     (partitionsWithEpochs, partitionsWithoutEpochs)
-  }
+  })
 
   private def maybeTruncate(): Unit = {
     val (partitionsWithEpochs, partitionsWithoutEpochs) = fetchTruncatingPartitions()
@@ -215,7 +209,7 @@ abstract class AbstractFetcherThread(name: String,
     val endOffsets = leader.fetchEpochEndOffsets(latestEpochsForPartitions.asJava)
     // Ensure we hold a lock during truncation
 
-    inLock(partitionMapLock) {
+    LockUtils.inLock[Exception](partitionMapLock, () => {
       //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
 
       val epochEndOffsets = endOffsets.asScala.filter { case (tp, _) =>
@@ -231,20 +225,21 @@ abstract class AbstractFetcherThread(name: String,
       val result = maybeTruncateToEpochEndOffsets(epochEndOffsets, latestEpochsForPartitions)
       handlePartitionsWithErrors(result.partitionsWithError.asScala, "truncateToEpochEndOffsets")
       updateFetchOffsetAndMaybeMarkTruncationComplete(result.result)
-    }
+    })
   }
 
   // Visibility for unit tests
   protected[server] def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
-    inLock(partitionMapLock) {
+    LockUtils.inLock[Exception](partitionMapLock, () => {
       val result = maybeTruncateToEpochEndOffsets(epochEndOffsets, Map.empty)
       handlePartitionsWithErrors(result.partitionsWithError.asScala, "truncateOnFetchResponse")
       updateFetchOffsetAndMaybeMarkTruncationComplete(result.result)
-    }
+    })
   }
 
   // Visible for testing
-  private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
+  private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit =
+    LockUtils.inLock[Exception](partitionMapLock, () => {
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
 
     for (tp <- partitions) {
@@ -260,7 +255,7 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
-  }
+  })
 
   private def maybeTruncateToEpochEndOffsets(fetchedEpochs: Map[TopicPartition, EpochEndOffset],
                                              latestEpochsForPartitions: Map[TopicPartition, EpochData]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
@@ -302,7 +297,8 @@ abstract class AbstractFetcherThread(name: String,
    *
    * @return true if the epoch in this thread is updated. otherwise, false
    */
-  private def onPartitionFenced(tp: TopicPartition, requestEpoch: Optional[Integer]): Boolean = inLock(partitionMapLock) {
+  private def onPartitionFenced(tp: TopicPartition, requestEpoch: Optional[Integer]): Boolean =
+    LockUtils.inLock(partitionMapLock, () => {
     Option(partitionStates.stateValue(tp)).exists { currentFetchState =>
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       if (requestEpoch.isPresent && requestEpoch.get == currentLeaderEpoch) {
@@ -315,7 +311,7 @@ abstract class AbstractFetcherThread(name: String,
         true
       }
     }
-  }
+  })
 
   // visible for testing
   private[server] def processFetchRequest(sessionPartitions: util.Map[TopicPartition, FetchRequest.PartitionData],
@@ -331,16 +327,16 @@ abstract class AbstractFetcherThread(name: String,
       case t: Throwable =>
         if (isRunning) {
           warn(s"Error in response for fetch request $fetchRequest", t)
-          inLock(partitionMapLock) {
+          LockUtils.inLock(partitionMapLock, () => {
             partitionsWithError ++= partitionStates.partitionSet.asScala
-          }
+          })
         }
     }
     fetcherStats.requestRate.mark()
 
     if (responseData.nonEmpty) {
       // process fetched data
-      inLock(partitionMapLock) {
+      LockUtils.inLock[Exception](partitionMapLock, () => {
         responseData.foreachEntry { (topicPartition, partitionData) =>
           Option(partitionStates.stateValue(topicPartition)).foreach { currentFetchState =>
             // It's possible that a partition is removed and re-added or truncated when there is a pending fetch request.
@@ -467,7 +463,7 @@ abstract class AbstractFetcherThread(name: String,
             }
           }
         }
-      }
+      })
     }
 
     if (divergingEndOffsets.nonEmpty)
@@ -604,8 +600,8 @@ abstract class AbstractFetcherThread(name: String,
    * @param tp                Topic partition
    * @param leaderEpochOffset Epoch end offset received from the leader for this topic partition
    */
-  private def getOffsetTruncationState(tp: TopicPartition,
-                                       leaderEpochOffset: EpochEndOffset): OffsetTruncationState = inLock(partitionMapLock) {
+  private def getOffsetTruncationState(tp: TopicPartition, leaderEpochOffset: EpochEndOffset): OffsetTruncationState =
+    LockUtils.inLock(partitionMapLock , () => {
     if (leaderEpochOffset.endOffset == UNDEFINED_EPOCH_OFFSET) {
       // truncate to initial offset which is the high watermark for follower replica. For
       // future replica, it is either high watermark of the future replica or current
@@ -655,7 +651,7 @@ abstract class AbstractFetcherThread(name: String,
         OffsetTruncationState(min(leaderEpochOffset.endOffset, replicaEndOffset), truncationCompleted = true)
       }
     }
-  }
+  })
 
   /**
    * Handle a partition whose offset is out of range and return a new fetch offset.
@@ -868,9 +864,10 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   // Visible for testing
-  private[server] def fetchState(topicPartition: TopicPartition): Option[PartitionFetchState] = inLock(partitionMapLock) {
+  private[server] def fetchState(topicPartition: TopicPartition): Option[PartitionFetchState] =
+    LockUtils.inLock(partitionMapLock, () => {
     Option(partitionStates.stateValue(topicPartition))
-  }
+  })
 
   protected def toMemoryRecords(records: Records): MemoryRecords = {
     (records: @unchecked) match {
