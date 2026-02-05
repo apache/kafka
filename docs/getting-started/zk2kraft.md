@@ -30,7 +30,7 @@ type: docs
 
 # Removed ZooKeeper Features
 
-This section documents differences in behavior between KRaft mode and ZooKeeper mode. Specifically, several configurations, metrics and features have changed or are no longer required in KRaft mode. To migrate an existing cluster from ZooKeeper mode to KRaft mode, please refer to the [ZooKeeper to KRaft Migration](/39/documentation.html#kraft_zk_migration) section. 
+This section documents differences in behavior between KRaft mode and ZooKeeper mode. Specifically, several configurations, metrics and features have changed or are no longer required in KRaft mode. To migrate an existing cluster from ZooKeeper mode to KRaft mode, please refer to the [ZooKeeper to KRaft Migration](/39/operations/kraft/#zookeeper-to-kraft-migration) section. 
 
 ## Configurations
 
@@ -153,7 +153,7 @@ Note that the entity-type must be specified as `broker-loggers`, even though we 
                         
 
   
-It is not currently possible to apply a dynamic configuration on only a single controller. 
+Prior to version 4.3, dynamic configuration updates were not supported unless a static quorum was used. 
 
 
 

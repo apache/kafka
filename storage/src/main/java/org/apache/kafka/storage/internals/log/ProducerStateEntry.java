@@ -42,20 +42,16 @@ public class ProducerStateEntry {
     private OptionalLong currentTxnFirstOffset;
 
     static ProducerStateEntry empty(long producerId) {
-        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty(), Optional.empty());
+        return new ProducerStateEntry(producerId, RecordBatch.NO_PRODUCER_EPOCH, -1, RecordBatch.NO_TIMESTAMP, OptionalLong.empty());
     }
 
     public ProducerStateEntry(long producerId, short producerEpoch, int coordinatorEpoch, long lastTimestamp,
-                              OptionalLong currentTxnFirstOffset, Optional<BatchMetadata> firstBatchMetadata) {
+                              OptionalLong currentTxnFirstOffset) {
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
         this.coordinatorEpoch = coordinatorEpoch;
         this.lastTimestamp = lastTimestamp;
         this.currentTxnFirstOffset = currentTxnFirstOffset;
-        firstBatchMetadata.ifPresent(batch -> {
-            batchMetadata.add(batch);
-            this.lastTimestamp = batch.timestamp();
-        });
     }
 
     int firstSeq() {
@@ -86,7 +82,7 @@ public class ProducerStateEntry {
      * Returns a new instance with the provided producer ID and the values from the current instance.
      */
     ProducerStateEntry withProducerId(long producerId) {
-        return new ProducerStateEntry(producerId, producerEpoch(), coordinatorEpoch, lastTimestamp, currentTxnFirstOffset, Optional.empty());
+        return new ProducerStateEntry(producerId, producerEpoch(), coordinatorEpoch, lastTimestamp, currentTxnFirstOffset);
     }
 
     void addBatch(short producerEpoch, int lastSeq, long lastOffset, int offsetDelta, long timestamp) {

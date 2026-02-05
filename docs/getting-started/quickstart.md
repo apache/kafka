@@ -135,7 +135,7 @@ You probably have lots of data in existing systems like relational databases or 
 
 In this quickstart we'll see how to run Kafka Connect with simple connectors that import data from a file to a Kafka topic and export data from a Kafka topic to a file. 
 
-First, make sure to add `connect-file-4.3.0.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](/documentation/#connectconfigs_plugin.path) for a detailed description of how to set this config. 
+First, make sure to add `connect-file-4.3.0.jar` to the `plugin.path` property in the Connect worker's configuration. For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory. However, it's worth noting that for production deployments using absolute paths is always preferable. See [plugin.path](../../configuration/kafka-connect-configs/#connectconfigs_plugin.path) for a detailed description of how to set this config. 
 
 Edit the `config/connect-standalone.properties` file, add or change the `plugin.path` configuration property match the following, and save the file: 
     

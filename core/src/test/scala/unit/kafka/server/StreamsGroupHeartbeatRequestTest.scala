@@ -1003,6 +1003,92 @@ class StreamsGroupHeartbeatRequestTest(cluster: ClusterInstance) extends GroupCo
     }
   }
 
+  @ClusterTest
+  def testFencedMemberCanRejoinWithEpochZero(): Unit = {
+    val admin = cluster.admin()
+    val memberId = "test-fenced-rejoin-member"
+    val groupId = "test-fenced-rejoin-group"
+    val topicName = "test-fenced-topic"
+
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Create topic first.
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq,
+        topic = topicName,
+        numPartitions = 3
+      )
+
+      val topology = createMockTopology(topicName)
+
+      // Join the group.
+      var streamsGroupHeartbeatResponse: StreamsGroupHeartbeatResponseData = null
+      TestUtils.waitUntilTrue(() => {
+        streamsGroupHeartbeatResponse = streamsGroupHeartbeat(
+          groupId = groupId,
+          memberId = memberId,
+          rebalanceTimeoutMs = 1000,
+          activeTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.activeTasks()))
+            .getOrElse(List.empty),
+          standbyTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.standbyTasks()))
+            .getOrElse(List.empty),
+          warmupTasks = Option(streamsGroupHeartbeatResponse)
+            .map(r => convertTaskIds(r.warmupTasks()))
+            .getOrElse(List.empty),
+          topology = topology
+        )
+        streamsGroupHeartbeatResponse.errorCode == Errors.NONE.code() &&
+          streamsGroupHeartbeatResponse.activeTasks() != null &&
+          !streamsGroupHeartbeatResponse.activeTasks().isEmpty
+      }, "Could not join the group successfully.")
+
+      // Verify initial join success with assignment.
+      assertEquals(2, streamsGroupHeartbeatResponse.memberEpoch())
+
+      // Expected assignment.
+      val expectedActiveTasks = List(new StreamsGroupHeartbeatResponseData.TaskIds()
+        .setSubtopologyId(streamsGroupHeartbeatResponse.activeTasks().get(0).subtopologyId())
+        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava
+
+      // Simulate a fenced member attempting to rejoin with epoch=0.
+      val rejoinResponse = streamsGroupHeartbeat(
+        groupId = groupId,
+        memberId = memberId,
+        memberEpoch = 0,
+        rebalanceTimeoutMs = 1000,
+        activeTasks = List.empty,
+        standbyTasks = List.empty,
+        warmupTasks = List.empty,
+        topology = topology
+      )
+
+      // Verify the full response.
+      // Since the topology hasn't changed, the member should get their current
+      // state back with the same epoch (2) and assignment.
+      val expectedRejoinResponse = new StreamsGroupHeartbeatResponseData()
+        .setErrorCode(Errors.NONE.code())
+        .setMemberId(memberId)
+        .setMemberEpoch(2)
+        .setHeartbeatIntervalMs(rejoinResponse.heartbeatIntervalMs())
+        .setActiveTasks(expectedActiveTasks)
+        .setStandbyTasks(List.empty.asJava)
+        .setWarmupTasks(List.empty.asJava)
+
+      assertEquals(expectedRejoinResponse, rejoinResponse)
+    } finally {
+      admin.close()
+    }
+  }
+
   private def convertTaskIds(responseTasks: java.util.List[StreamsGroupHeartbeatResponseData.TaskIds]): List[StreamsGroupHeartbeatRequestData.TaskIds] = {
     if (responseTasks == null) {
       List()
