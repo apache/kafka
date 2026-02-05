@@ -86,4 +86,10 @@ public class HeadersDeserializer implements Deserializer<Headers> {
 
         return headers;
     }
+
+    public static Headers deserialize(final byte[] data) {
+        try (HeadersDeserializer deserializer = new HeadersDeserializer()) {
+            return deserializer.deserialize("", data);
+        }
+    }
 }
