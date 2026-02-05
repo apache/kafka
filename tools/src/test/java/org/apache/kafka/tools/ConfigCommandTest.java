@@ -38,6 +38,7 @@ import org.apache.kafka.clients.admin.ListConfigResourcesResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -1440,6 +1441,33 @@ public class ConfigCommandTest {
         };
 
         ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        assertTrue(listedConfigResources.get());
+    }
+
+    @Test
+    public void testDescribeGroupConfigOldBrokerNotAuthorized() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--describe"));
+
+        KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        ListConfigResourcesResult listConfigResourcesResult = mock(ListConfigResourcesResult.class);
+        when(listConfigResourcesResult.all()).thenReturn(future);
+
+        AtomicBoolean listedConfigResources = new AtomicBoolean(false);
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+                ConfigResource.Type type = configResourceTypes.iterator().next();
+                assertEquals(ConfigResource.Type.GROUP, type);
+                future.completeExceptionally(new ClusterAuthorizationException("Not authorized to the cluster"));
+                listedConfigResources.set(true);
+                return listConfigResourcesResult;
+            }
+        };
+
+        assertThrows(ClusterAuthorizationException.class, () -> ConfigCommand.describeConfig(mockAdminClient, describeOpts));
         assertTrue(listedConfigResources.get());
     }
 

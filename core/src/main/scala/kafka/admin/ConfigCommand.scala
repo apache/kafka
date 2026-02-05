@@ -386,7 +386,7 @@ object ConfigCommand extends Logging {
         case ClientMetricsType =>
           adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.CLIENT_METRICS), new ListConfigResourcesOptions).all().get().asScala.map(_.name).toSeq
         case GroupType =>
-          adminClient.listGroups().all.get.asScala.map(_.groupId).toSet ++ listGroupConfigResources(adminClient).map(resources => resources.asScala.map(_.name).toSet).getOrElse(Set() ++ entityName)
+          adminClient.listGroups().all.get.asScala.map(_.groupId).toSet ++ listGroupConfigResources(adminClient).map(resources => resources.asScala.map(_.name).toSet).getOrElse(Set.empty)
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
@@ -538,12 +538,12 @@ object ConfigCommand extends Logging {
     try {
       Some(adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all.get)
     } catch {
-      // (KIP-1142) 4.1 and later admin client connecting to an older broker will not be able to list group config resources
+      // (KIP-1142) 4.1+ admin client vs older broker: treat UnsupportedVersionException as None
       case e: ExecutionException =>
         e.getCause match {
           case _: UnsupportedVersionException =>
             Option.empty
-          case _ => throw e
+          case cause => throw cause
         }
       case e: Throwable => throw e
     }
