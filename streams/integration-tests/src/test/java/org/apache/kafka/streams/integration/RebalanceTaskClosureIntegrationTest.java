@@ -90,7 +90,7 @@ public class RebalanceTaskClosureIntegrationTest {
      * The conditions that we need to meet:
      * <p><ul>
      * <li>There is a task with an open store in {@link org.apache.kafka.streams.processor.internals.TasksRegistry#pendingTasksToInit}</li>
-     * <li>StreamThread gets into PENDING_SHUTDOWN state, so that {@link StreamThread#isStartingRunningOrPartitionAssigned} return false
+     * <li>StreamThread gets into PENDING_SHUTDOWN state, so that {@link StreamThread#isStartingRunningOrPartitionAssigned} returns false
      * before we call {@link StreamThread#checkStateUpdater} that would move the task to the StateUpdater </li>
      * </ul><p>
      * If all conditions are met, {@code TaskManager} needs to correctly close the open store during shutdown.
