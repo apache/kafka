@@ -227,7 +227,7 @@ public class QuotaConfig {
         return BROKER_QUOTA_CONFIG_DEF;
     }
 
-    public static final Set<String> BROKER_QUOTA_CONFIGS = Set.copyOf(brokerQuotaConfigs().names()); 
+    public static final Set<String> BROKER_QUOTA_CONFIGS = Set.copyOf(brokerQuotaConfigs().names());
 
     public static ConfigDef userAndClientQuotaConfigs() {
         ConfigDef configDef = new ConfigDef();

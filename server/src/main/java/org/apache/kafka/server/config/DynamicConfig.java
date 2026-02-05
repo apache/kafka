@@ -33,7 +33,7 @@ public class DynamicConfig {
 
         private static final ConfigDef BROKER_CONFIGS;
         static {
-            ConfigDef configs = QuotaConfig.brokerQuotaConfigs();
+            ConfigDef configs = new ConfigDef();
             // Filter and define all dynamic configurations
             AbstractKafkaConfig.CONFIG_DEF.configKeys().forEach((name, value) -> {
                 if (DynamicBrokerConfig.ALL_DYNAMIC_CONFIGS.contains(name)) {
