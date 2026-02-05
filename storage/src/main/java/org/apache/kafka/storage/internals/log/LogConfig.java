@@ -67,7 +67,6 @@ public class LogConfig extends AbstractConfig {
         private final boolean remoteStorageEnable;
         private final boolean remoteLogDeleteOnDisable;
         private final boolean remoteLogCopyDisable;
-        /** Effective copy lag: 0 = upload immediately, -1 = delay until local retention boundary, >0 = min segment age in ms. */
         private final long remoteLogCopyLagMs;
         private final long remoteLogCopyLagBytes;
         private final long localRetentionMs;
@@ -410,20 +409,12 @@ public class LogConfig extends AbstractConfig {
     }
 
 
-    /**
-     * Effective remote copy lag in ms: 0 = upload immediately, -1 resolves to local retention time, &gt;0 = segment must be at least this old (ms) to be eligible.
-     */
     public long remoteLogCopyLagMs() {
-        long raw = remoteLogConfig.remoteLogCopyLagMs;
-        return raw == -1 ? localRetentionMs() : raw;
+        return remoteLogConfig.remoteLogCopyLagMs == -1 ? localRetentionMs() : remoteLogConfig.remoteLogCopyLagMs;
     }
 
-    /**
-     * Effective remote copy lag in bytes: 0 = no size constraint, -1 resolves to local retention bytes, &gt;0 = size-based eligibility.
-     */
     public long remoteLogCopyLagBytes() {
-        long raw = remoteLogConfig.remoteLogCopyLagBytes;
-        return raw == -1 ? localRetentionBytes() : raw;
+        return remoteLogConfig.remoteLogCopyLagBytes == -1 ? localRetentionBytes() : remoteLogConfig.remoteLogCopyLagBytes;
     }
 
     public long localRetentionMs() {
