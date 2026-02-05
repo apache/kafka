@@ -42,7 +42,7 @@ ec2_region = "us-east-1"
 ec2_az = nil # Uses set by AWS
 ec2_ami = "ami-29ebb519"
 ec2_instance_type = "m3.medium"
-ec2_spot_instance = false
+ec2_spot_instance = ENV['SPOT_INSTANCE'] ? ENV['SPOT_INSTANCE'] == 'true' : true
 ec2_spot_max_price = "0.113"  # On-demand price for instance type
 ec2_user = "ubuntu"
 ec2_instance_name_prefix = "kafka-vagrant"
@@ -161,14 +161,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     node.vm.provider :aws do |aws|
       aws.tags = {
         'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
-        'role' => 'ce-kafka',
-        'Owner' => 'ce-kafka',
-        'JenkinsBuildUrl' => ENV['BUILD_URL'],
-        'cflt_environment' => 'devel',
-        'cflt_partition' => 'commercial',
-        'cflt_managed_by' => 'iac',
-        'cflt_managed_id' => 'kafka',
-        'cflt_service' => 'kafka'
+        'JenkinsBuildUrl' => ENV['BUILD_URL']
       }
     end
   end
