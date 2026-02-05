@@ -175,7 +175,7 @@ public final class RemoteLogManagerConfig {
     public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_MS = 0L;
 
     public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP = "log.remote.log.copy.lag.bytes";
-    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC = "The cumulative log size in bytes from the copy range that must be reached before a segment is eligible for upload to remote storage. " +
+    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC = "The minimum number of bytes of log data that must exist after a segment (newer data) before the segment is eligible for upload to remote storage. " +
             "When set to 0 (default), no size-based constraint. When set to -1, resolves to local retention bytes. " +
             "The value should not exceed <code>log.local.retention.bytes</code>.";
     public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_BYTES = 0L;

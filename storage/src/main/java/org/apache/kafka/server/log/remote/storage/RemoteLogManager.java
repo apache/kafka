@@ -910,16 +910,31 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         private boolean hasExceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
             try {
                 long ts = segment.largestTimestamp();
-                if (ts >= 0) return (currentTimeMs - ts) >= copyLagMs;
+                if (ts >= 0) {
+                    long segmentAgeMs = currentTimeMs - ts;
+                    boolean exceeded = segmentAgeMs >= copyLagMs;
+                    if (!exceeded) {
+                        logger.debug("Segment {} not eligible for upload: segment age {} ms < copy lag {} ms",
+                                segment.baseOffset(), segmentAgeMs, copyLagMs);
+                    }
+                    return exceeded;
+                }
             } catch (IOException e) {
                 logger.warn("Failed to get largest timestamp for segment {}, will not skip based on time", segment, e);
             }
+            logger.debug("Segment {} not eligible for upload: cannot determine segment age (invalid timestamp)", segment.baseOffset());
             return false;
         }
 
 
         private boolean hasExceededCopyLagSize(long totalLogSize, long cumulativeSize, long copyLagBytes) {
-            return totalLogSize - cumulativeSize >= copyLagBytes;
+            long sizeLagBytes = totalLogSize - cumulativeSize;
+            boolean exceeded = sizeLagBytes >= copyLagBytes;
+            if (!exceeded) {
+                logger.debug("Segment not eligible for upload: size lag {} bytes < copy lag {} bytes (totalLogSize={}, cumulativeSize={})",
+                        sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
+            }
+            return exceeded;
         }
 
         /**
