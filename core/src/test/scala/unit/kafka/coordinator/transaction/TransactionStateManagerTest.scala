@@ -917,7 +917,7 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).asInstanceOf[String]
+          val transactionalId = TransactionLog.read(record.key, record.value()).asInstanceOf[TransactionLog.TxnTombstone].transactionId()
           assertNull(record.value)
           expiredTransactionalIds += transactionalId
           assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
