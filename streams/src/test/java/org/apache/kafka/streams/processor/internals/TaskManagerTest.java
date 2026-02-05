@@ -3664,7 +3664,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldShutDownPendingTasksToInit() {
+    public void shouldClosePendingTasksToInitDuringShutdown() {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
 
