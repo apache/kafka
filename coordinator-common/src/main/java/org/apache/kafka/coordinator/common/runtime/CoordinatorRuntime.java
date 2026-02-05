@@ -755,7 +755,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             executor.cancelAll();
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
             // There is no need to free the current batch, as we will be closing all related resources anyway.
-            failCurrentBatch(Errors.NOT_COORDINATOR.exception(), false);
+            failCurrentBatchWithoutRelease(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
                 try {
                     coordinator.onUnloaded();
@@ -880,12 +880,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         }
 
-        /**
-         * Convenience method to fail the current batch.
-         * See {@link #failCurrentBatch(Throwable, boolean)} for details.
-         */
         private void failCurrentBatch(Throwable t) {
             failCurrentBatch(t, true);
+        }
+
+        private void failCurrentBatchWithoutRelease(Throwable t) {
+            failCurrentBatch(t, false);
         }
 
         /**
