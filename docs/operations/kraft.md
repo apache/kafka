@@ -201,7 +201,7 @@ If the dynamic controller cluster already exists, it can be shrunk using the `bi
 When using controller endpoints use the --bootstrap-controller flag: 
     
     
-    $ bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9092 remove-controller --controller-id <id> --controller-directory-id <directory-id>
+    $ bin/kafka-metadata-quorum.sh --bootstrap-controller localhost:9093 remove-controller --controller-id <id> --controller-directory-id <directory-id>
 
 ## Debugging
 

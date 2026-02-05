@@ -34,7 +34,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.SupportedVersionRange;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaFuture;
@@ -1142,8 +1141,7 @@ public class KRaftClusterTest {
             try (Admin admin = cluster.admin()) {
                 admin.updateFeatures(
                     Map.of(MetadataVersion.FEATURE_NAME,
-                        new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
-                    new UpdateFeaturesOptions()
+                        new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE))
                 );
                 assertEquals(new SupportedVersionRange((short) 0, (short) 1), admin.describeFeatures().featureMetadata().get()
                     .supportedFeatures().get(KRaftVersion.FEATURE_NAME));

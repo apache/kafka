@@ -23,7 +23,6 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.server.{KafkaConfig, KafkaRaftServer}
-import kafka.utils.threadsafe
 import kafka.utils.Logging
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
@@ -57,8 +56,9 @@ import java.util.stream.Collectors
  * size or I/O rate.
  *
  * A background thread handles log retention by periodically truncating excess log segments.
+ *
+ * This class is thread-safe.
  */
-@threadsafe
 class LogManager(logDirs: Seq[File],
                  initialOfflineDirs: Seq[File],
                  configRepository: ConfigRepository,
@@ -1247,9 +1247,13 @@ class LogManager(logDirs: Seq[File],
     try {
       sourceLog.foreach { srcLog =>
         srcLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), true)
-        // Now that replica in source log directory has been successfully renamed for deletion.
-        // Close the log, update checkpoint files, and enqueue this log to be deleted.
-        srcLog.close()
+        // Now that replica in source log directory has been successfully renamed for deletion,
+        // update checkpoint files and enqueue this log to be deleted.
+        // Note: We intentionally do NOT close the log here to avoid race conditions where concurrent
+        // operations (e.g., log flusher, fetch requests) might encounter ClosedChannelException.
+        // The log will be deleted asynchronously by the background delete-logs thread.
+        // File handles are intentionally left open; Unix semantics allow the renamed files
+        // to remain accessible until all handles are closed.
         val logDir = srcLog.parentDirFile
         val logsToCheckpoint = logsInDir(logDir)
         checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)

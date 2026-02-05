@@ -22,8 +22,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * An interface to schedule and cancel operations.
+ *
+ * @param <U> The record type.
  */
-public interface CoordinatorTimer<T, U> {
+public interface CoordinatorTimer<U> {
     /**
      * Generates the records needed to implement this timeout write operation. In general,
      * this operation should not modify the hard state of the coordinator. That modifications
@@ -33,10 +35,10 @@ public interface CoordinatorTimer<T, U> {
      * A typical example of timeout operation is the session timeout used by the consumer
      * group rebalance protocol.
      *
-     * @param <T> The record type.
+     * @param <U> The record type.
      */
-    interface TimeoutOperation<T, U> {
-        CoordinatorResult<T, U> generateRecords() throws KafkaException;
+    interface TimeoutOperation<U> {
+        CoordinatorResult<Void, U> generateRecords() throws KafkaException;
     }
 
     /**
@@ -50,7 +52,7 @@ public interface CoordinatorTimer<T, U> {
      *                    be retried on failure.
      * @param operation   The operation to perform upon expiration.
      */
-    void schedule(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<T, U> operation);
+    void schedule(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<U> operation);
 
     /**
      * Add an operation to the timer. If an operation with the same key
@@ -64,7 +66,7 @@ public interface CoordinatorTimer<T, U> {
      * @param retryBackoff  The delay when rescheduled on retry. The same unit is used.
      * @param operation     The operation to perform upon expiration.
      */
-    void schedule(String key, long delay, TimeUnit unit, boolean retry, long retryBackoff, TimeoutOperation<T, U> operation);
+    void schedule(String key, long delay, TimeUnit unit, boolean retry, long retryBackoff, TimeoutOperation<U> operation);
 
     /**
      * Add an operation to the timer if there's no operation with the same key.
@@ -76,7 +78,7 @@ public interface CoordinatorTimer<T, U> {
      *                    be retried on failure.
      * @param operation   The operation to perform upon expiration.
      */
-    void scheduleIfAbsent(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<T, U> operation);
+    void scheduleIfAbsent(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<U> operation);
 
     /**
      * Remove an operation corresponding to a given key.

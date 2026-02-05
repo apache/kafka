@@ -8845,8 +8845,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             assertThrows(
                 IllegalArgumentException.class,
-                () -> env.adminClient().updateFeatures(
-                    new HashMap<>(), new UpdateFeaturesOptions()));
+                () -> env.adminClient().updateFeatures(new HashMap<>()));
         }
     }
 
@@ -8857,8 +8856,7 @@ public class KafkaAdminClientTest {
                 IllegalArgumentException.class,
                 () -> env.adminClient().updateFeatures(
                     Utils.mkMap(Utils.mkEntry("feature", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-                                Utils.mkEntry("", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE))),
-                    new UpdateFeaturesOptions()));
+                                Utils.mkEntry("", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)))));
         }
     }
 
