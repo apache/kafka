@@ -59,6 +59,7 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.KRaftConfigs
+import org.apache.kafka.server.LogAppendResult.LogAppendSummary
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition, TransactionVersion}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
@@ -6036,13 +6037,13 @@ class ReplicaManagerTest {
 
       val fooResult = result(foo)
       assertEquals(Errors.NONE, fooResult.error)
-      assertEquals(0, fooResult.info.logStartOffset)
-      assertEquals(0, fooResult.info.firstOffset)
-      assertEquals(0, fooResult.info.lastOffset)
+      assertEquals(0, fooResult.logAppendSummary.logStartOffset)
+      assertEquals(0, fooResult.logAppendSummary.firstOffset)
+      assertEquals(0, fooResult.logAppendSummary.lastOffset)
 
       val barResult = result(bar)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, barResult.error)
-      assertEquals(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, barResult.info)
+      assertEquals(LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO), barResult.logAppendSummary)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
