@@ -297,12 +297,12 @@ hk2-utils-2.6.1
 osgi-resource-locator-1.0.3
 aopalliance-repackaged-2.6.1
 jakarta.inject-2.6.1
-jersey-client-2.39.1
-jersey-common-2.39.1
-jersey-container-servlet-2.39.1
-jersey-container-servlet-core-2.39.1
-jersey-hk2-2.39.1
-jersey-server-2.39.1
+jersey-client-2.47
+jersey-common-2.47
+jersey-container-servlet-2.47
+jersey-container-servlet-core-2.47
+jersey-hk2-2.47
+jersey-server-2.47
 
 ---------------------------------------
 CDDL 1.1 + GPLv2 with classpath exception

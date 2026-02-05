@@ -101,7 +101,7 @@ versions += [
   jacoco: "0.8.10",
   javassist: "3.29.2-GA",
   jetty: "9.4.57.v20241219",
-  jersey: "2.39.1",
+  jersey: "2.47",
   jline: "3.25.1",
   jmh: "1.37",
   hamcrest: "2.2",
