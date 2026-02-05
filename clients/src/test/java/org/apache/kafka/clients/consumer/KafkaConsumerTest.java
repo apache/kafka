@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -149,6 +150,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -2727,6 +2729,61 @@ public class KafkaConsumerTest {
 
         // correct lag result
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    public void testCurrentLagFailureDoesntUpdateSubscriptions(GroupProtocol groupProtocol) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            Class<?> clazzLogger = groupProtocol == GroupProtocol.CLASSIC ? ClassicKafkaConsumer.class : ApplicationEventProcessor.class;
+            appender.setClassLogger(clazzLogger, Level.INFO);
+            final ConsumerMetadata metadata = createMetadata(subscription);
+            final MockClient client = new MockClient(time, metadata);
+
+            initMetadata(client, Collections.singletonMap(topic, 1));
+
+            consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false,
+                null, groupInstanceId, false);
+            consumer.assign(Collections.singleton(tp0));
+
+            ListOffsetsResponse listOffsetsResponse = listOffsetsResponse(
+                Collections.emptyMap(),
+                Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+            );
+
+            client.prepareResponse(request -> request instanceof ListOffsetsRequest, listOffsetsResponse);
+
+            assertFalse(subscription.partitionEndOffsetRequested(tp0));
+            assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+            assertTrue(subscription.partitionEndOffsetRequested(tp0));
+            assertTrue(
+                wasLogMessageEmitted(
+                    appender,
+                    "^Requesting the log end offset for " + tp0 + " in order to compute lag$"
+                )
+            );
+
+            assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
+            assertTrue(subscription.partitionEndOffsetRequested(tp0));
+            assertTrue(
+                wasLogMessageEmitted(
+                    appender,
+                    "^Not requesting the log end offset for " + tp0 + " to compute lag as an outstanding request already exists"
+                )
+            );
+        }
+    }
+
+    private boolean wasLogMessageEmitted(LogCaptureAppender appender, String messagePattern) {
+        Pattern pattern = Pattern.compile(messagePattern);
+
+        for (String message : appender.getMessages()) {
+            Matcher matcher = pattern.matcher(message);
+            if (matcher.find())
+                return true;
+        }
+
+        return false;
     }
 
     @ParameterizedTest

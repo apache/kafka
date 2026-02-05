@@ -277,7 +277,27 @@ class OffsetFetcherUtils {
                     log.trace("Updating high watermark for partition {} to {}", partition, offset);
                     subscriptionState.updateHighWatermark(partition, offset);
                 }
+            } else {
+                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                    log.warn("Not updating last stable offset for partition {} as it is no longer assigned", partition);
+                } else {
+                    log.warn("Not updating high watermark for partition {} as it is no longer assigned", partition);
+                }
             }
+        }
+    }
+
+    /**
+     * If any of the given partitions are assigned, this will clear the partition's 'end offset requested' flag so
+     * that the next attempt to look up the lag will properly issue another <code>LIST_OFFSETS</code> request. This
+     * is only intended to be called when <code>LIST_OFFSETS</code> fails. Successful <code>LIST_OFFSETS</code> calls
+     * should use {@link #updateSubscriptionState(Map, IsolationLevel)}.
+     *
+     * @param partitions Partitions for which the 'end offset requested' flag should be cleared (if still assigned)
+     */
+    void clearPartitionEndOffsetRequests(Collection<TopicPartition> partitions) {
+        for (final TopicPartition partition : partitions) {
+            subscriptionState.tryClearingPartitionEndOffsetRequested(partition);
         }
     }
 

@@ -1057,11 +1057,14 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // we may get the answer; we do not need to wait for the return value
             // since we would not try to poll the network client synchronously
             if (lag == null) {
-                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
-                        !subscriptions.partitionEndOffsetRequested(topicPartition)) {
-                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                    subscriptions.requestPartitionEndOffset(topicPartition);
-                    offsetFetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
+                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
+                    if (subscriptions.partitionEndOffsetRequested(topicPartition)) {
+                        log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", topicPartition);
+                    } else {
+                        log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
+                        subscriptions.requestPartitionEndOffset(topicPartition);
+                        offsetFetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
+                    }
                 }
 
                 return OptionalLong.empty();
