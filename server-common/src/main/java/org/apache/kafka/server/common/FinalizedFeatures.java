@@ -20,6 +20,16 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Represents the finalized feature levels for a Kafka cluster.
+ * <p>
+ * This class can be in one of three states:
+ * <ul>
+ *   <li>Unknown - metadata version is not yet known (use {@link #unknown()})</li>
+ *   <li>KRaft version only - only metadata version is known (use {@link #fromKRaftVersion(MetadataVersion)})</li>
+ *   <li>Full features - metadata version, features map, and epoch are all known (use {@link #of(MetadataVersion, Map, long)})</li>
+ * </ul>
+ */
 public final class FinalizedFeatures {
     private static final FinalizedFeatures UNKNOWN = new FinalizedFeatures(null, Map.of(), -1);
 
@@ -40,25 +50,57 @@ public final class FinalizedFeatures {
         }
     }
 
+    /**
+     * Returns a sentinel value representing unknown finalized features.
+     *
+     * @return the unknown finalized features instance
+     */
     public static FinalizedFeatures unknown() {
         return UNKNOWN;
     }
 
+    /**
+     * Creates a new instance from the given KRaft metadata version.
+     *
+     * @param version the metadata version
+     * @return a new FinalizedFeatures instance
+     * @throws NullPointerException if version is null
+     */
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
         Objects.requireNonNull(version, "version cannot be null");
         return new FinalizedFeatures(version, Map.of(), -1);
     }
 
+    /**
+     * Creates a new instance with the given metadata version, features map, and epoch.
+     *
+     * @param metadataVersion the metadata version
+     * @param finalizedFeatures the map of feature names to their finalized levels
+     * @param epoch the epoch of the finalized features
+     * @return a new FinalizedFeatures instance
+     * @throws NullPointerException if metadataVersion or finalizedFeatures is null
+     */
     public static FinalizedFeatures of(MetadataVersion metadataVersion, Map<String, Short> finalizedFeatures, long epoch) {
         Objects.requireNonNull(metadataVersion, "metadataVersion cannot be null");
         Objects.requireNonNull(finalizedFeatures, "finalizedFeatures cannot be null");
         return new FinalizedFeatures(metadataVersion, finalizedFeatures, epoch);
     }
 
+    /**
+     * Returns whether the metadata version is known.
+     *
+     * @return true if the metadata version is known, false otherwise
+     */
     public boolean isMetadataKnown() {
         return metadataVersion != null;
     }
 
+    /**
+     * Returns the metadata version, throwing an exception if unknown.
+     *
+     * @return the metadata version
+     * @throws IllegalStateException if the metadata version is unknown
+     */
     public MetadataVersion metadataVersionOrThrow() {
         if (metadataVersion == null) {
             throw new IllegalStateException("Metadata version is unknown");
@@ -66,14 +108,33 @@ public final class FinalizedFeatures {
         return metadataVersion;
     }
 
+    /**
+     * Returns the map of feature names to their finalized levels.
+     *
+     * @return the finalized features map
+     */
     public Map<String, Short> finalizedFeatures() {
         return finalizedFeatures;
     }
 
+    /**
+     * Returns the epoch of the finalized features.
+     *
+     * @return the finalized features epoch
+     */
     public long finalizedFeaturesEpoch() {
         return finalizedFeaturesEpoch;
     }
 
+    /**
+     * Creates a new instance with the specified feature level set or removed.
+     * If level is 0, the feature is removed. Otherwise, the feature is set to the given level.
+     *
+     * @param key the feature name
+     * @param level the feature level (0 to remove)
+     * @return a new FinalizedFeatures instance with the updated feature level
+     * @throws IllegalStateException if this is the unknown instance
+     */
     public FinalizedFeatures setFinalizedLevel(String key, short level) {
         if (metadataVersion == null) {
             throw new IllegalStateException("Cannot set finalized level on unknown FinalizedFeatures");
