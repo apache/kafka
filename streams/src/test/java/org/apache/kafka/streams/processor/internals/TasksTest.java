@@ -175,6 +175,7 @@ public class TasksTest {
         tasks.addPendingTasksToInit(Set.of(activeTask1, activeTask2, standbyTask1, standbyTask2));
 
         final Set<Task> standbyTasksToInit = tasks.drainPendingStandbyTasksToInit();
+
         assertEquals(2, standbyTasksToInit.size());
         assertTrue(standbyTasksToInit.containsAll(Set.of(standbyTask1, standbyTask2)));
         assertFalse(standbyTasksToInit.containsAll(Set.of(activeTask1, activeTask2)));
