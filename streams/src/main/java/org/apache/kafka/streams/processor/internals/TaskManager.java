@@ -1414,13 +1414,14 @@ public class TaskManager {
         // TODO: change type to `StreamTask`
         final Set<Task> activeTasks = new TreeSet<>(Comparator.comparing(Task::id));
         activeTasks.addAll(tasks.activeTasks());
+        // TODO: change type to `StandbyTask`
         final Set<Task> standbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
         standbyTasks.addAll(tasks.standbyTasks());
 
-        Set<Task> pendingActiveTasks = tasks.drainPendingActiveTasksToInit();
+        final Set<Task> pendingActiveTasks = tasks.drainPendingActiveTasksToInit();
         activeTasks.addAll(pendingActiveTasks);
         tasks.addPendingTasksToClose(pendingActiveTasks);
-        Set<Task> pendingStandbyTasks = tasks.drainPendingStandbyTasksToInit();
+        final Set<Task> pendingStandbyTasks = tasks.drainPendingStandbyTasksToInit();
         standbyTasks.addAll(pendingStandbyTasks);
         tasks.addPendingTasksToClose(pendingStandbyTasks);
 
@@ -1590,7 +1591,7 @@ public class TaskManager {
                 }
             }
 
-            for (final Task task : activeTaskIterable()) {
+            for (final Task task : activeTasksToClose) {
                 try {
                     task.postCommit(true);
                 } catch (final RuntimeException e) {

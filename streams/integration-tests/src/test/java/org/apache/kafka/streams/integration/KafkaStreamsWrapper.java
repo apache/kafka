@@ -48,7 +48,7 @@ public class KafkaStreamsWrapper extends KafkaStreams {
     public void setStreamThreadStateListener(final StreamThread.StateListener listener) {
         if (state == State.CREATED) {
             for (final StreamThread thread : threads) {
-                StreamThread.StateListener originalListener = thread.getStateListener();
+                final StreamThread.StateListener originalListener = thread.getStateListener();
                 thread.setStateListener((t, newState, oldState) -> {
                     originalListener.onChange(t, newState, oldState);
                     listener.onChange(t, newState, oldState);

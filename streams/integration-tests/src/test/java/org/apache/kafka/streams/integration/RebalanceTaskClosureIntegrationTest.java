@@ -97,12 +97,14 @@ public class RebalanceTaskClosureIntegrationTest {
      * <p>
      * In order to have a task with an open store in the pending task list we first need to have an active task that gets converted
      * to a standby one during rebalance(see {@link org.apache.kafka.streams.processor.internals.TaskManager#closeAndRecycleTasks}).
+     * Second, we need to avoid the second rebalance.
      * <p>
      * For that this test:
      * <p><ul>
      * <li>starts a KS app and waits for it to fully start</li>
      * <li>starts another KS app which will trigger reassignment</li>
      * <li>waits for {@link CachedStateStore#clearCache} to be called(it's called during task recycle) and locks on it</li>
+     * <li>sends a message with wrong types to crash the stream thread</li>
      * <li>shutdowns the first KS app and waits for the stream tread to get into PENDING_SHUTDOWN state</li>
      * <li>releases the lock</li>
      * </ul><p>
@@ -150,11 +152,9 @@ public class RebalanceTaskClosureIntegrationTest {
         // That's exactly what we are waiting for
         recycleLatch.await();
 
-        // sending a message to avoid retries in the consumer client. if there are no messages, it retries both poll for new messages and reassignment(see ClassicKafkaConsumer#poll()).
-        // during reassignment we close pending tasks to init(see TaskManager#handleTasksPendingInitialization()).
-        // hence during first attempt we will put the task into the pending to init list, and during next attempt we will delete it from the list and close it
-        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC_NAME, List.of(new KeyValue<>(1L, "key")),
-                TestUtils.producerConfig(cluster.bootstrapServers(), LongSerializer.class, StringSerializer.class, new Properties()), cluster.time);
+        // sending a message with wrong key and value types to trigger a stream thread failure and avoid the second rebalance
+        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC_NAME, List.of(new KeyValue<>("key", 1L)),
+                TestUtils.producerConfig(cluster.bootstrapServers(), StringSerializer.class, LongSerializer.class, new Properties()), cluster.time);
         // Now we can close both apps. The StreamThreadStateListener will unblock the clearCache call, letting the rebalance finish.
         // We don't want it to happen any sooner, because we want the stream thread to stop before it gets to moving tasks from task registry to state updater.
         streams1.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));

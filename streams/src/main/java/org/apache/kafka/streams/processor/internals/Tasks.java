@@ -160,7 +160,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addPendingTasksToClose(Collection<Task> tasks) {
+    public void addPendingTasksToClose(final Collection<Task> tasks) {
         pendingTasksToClose.addAll(tasks);
     }
 

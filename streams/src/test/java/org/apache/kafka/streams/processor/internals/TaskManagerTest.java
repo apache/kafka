@@ -3669,12 +3669,12 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
 
         final StandbyTask standbyTask00 = standbyTask(taskId00, taskId00ChangelogPartitions)
-                .inState(State.RUNNING)
+                .inState(State.CREATED)
                 .withInputPartitions(taskId00Partitions)
                 .build();
 
         final StreamTask activeTask01 = statefulTask(taskId01, taskId00ChangelogPartitions)
-                .inState(State.RUNNING)
+                .inState(State.CREATED)
                 .withInputPartitions(taskId00Partitions).build();
 
         when(tasks.drainPendingStandbyTasksToInit()).thenReturn(Set.of(standbyTask00));
@@ -3688,6 +3688,7 @@ public class TaskManagerTest {
         verify(standbyTask00).closeClean();
 
         verify(activeTask01).prepareCommit(true);
+        verify(activeTask01).postCommit(true);
         verify(activeTask01).suspend();
         verify(activeTask01).closeClean();
     }

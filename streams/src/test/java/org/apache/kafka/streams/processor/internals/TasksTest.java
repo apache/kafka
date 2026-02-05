@@ -256,12 +256,10 @@ public class TasksTest {
         final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0))
                 .inState(State.SUSPENDED).build();
         tasks.addPendingTasksToClose(List.of(activeTask1));
+        assertTrue(tasks.pendingTasksToClose().contains(activeTask1));
 
         tasks.removeTask(activeTask1);
         assertFalse(tasks.pendingTasksToInit().contains(activeTask1));
         assertFalse(tasks.allTasks().contains(activeTask1));
-
-        tasks.addPendingTasksToClose(List.of(activeTask1));
-        assertTrue(tasks.pendingTasksToClose().contains(activeTask1));
     }
 }
