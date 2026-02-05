@@ -105,13 +105,15 @@ public class TopicConfig {
     public static final String REMOTE_LOG_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
             "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay). " +
             "When set to -1, segments are uploaded only when close to or beyond local retention (maximum delay). " +
-            "When set to a positive value (ms), a segment is eligible for upload only after it has been closed for at least this many milliseconds.";
+            "When set to a positive value (ms), a segment is eligible for upload only after it has been closed for at least this many milliseconds. " +
+            "The value should not exceed <code>local.retention.ms</code> (local retention time).";
 
     public static final String REMOTE_LOG_COPY_LAG_BYTES_CONFIG = "remote.log.copy.lag.bytes";
     public static final String REMOTE_LOG_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
             "When set to 0 (default), no size-based constraint. " +
             "When set to -1, resolves to local retention bytes. " +
-            "When set to a positive value (bytes), a segment is eligible for upload only when remaining local size after uploading would be at or below (local.retention.bytes - this value).";
+            "When set to a positive value (bytes), a segment is eligible for upload only when cumulative log size from the copy range has reached this value. " +
+            "The value should not exceed <code>local.retention.bytes</code> (local retention size).";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
