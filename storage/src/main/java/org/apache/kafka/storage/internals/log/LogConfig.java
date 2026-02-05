@@ -68,6 +68,9 @@ public class LogConfig extends AbstractConfig {
         private final boolean remoteLogDeleteOnDisable;
         private final boolean remoteLogCopyDisable;
         private final boolean remoteLogLatestEnable;
+        /** Effective copy lag: 0 = upload immediately, -1 = delay until local retention boundary, >0 = min segment age in ms. */
+        private final long remoteLogCopyLagMs;
+        private final long remoteLogCopyLagBytes;
         private final long localRetentionMs;
         private final long localRetentionBytes;
 
@@ -78,6 +81,11 @@ public class LogConfig extends AbstractConfig {
             this.remoteLogDeleteOnDisable = config.getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
+            // Use remote.log.copy.lag.ms if explicitly set, else derive from remote.log.latest.enable for backward compatibility
+            this.remoteLogCopyLagMs = config.overriddenConfigs.contains(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG)
+                    ? config.getLong(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG)
+                    : (config.getBoolean(TopicConfig.REMOTE_LOG_LATEST_ENABLE_CONFIG) ? 0L : -1L);
+            this.remoteLogCopyLagBytes = config.getLong(TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG);
         }
 
         @Override
@@ -86,6 +94,8 @@ public class LogConfig extends AbstractConfig {
                     "remoteStorageEnable=" + remoteStorageEnable +
                     ", remoteLogCopyDisable=" + remoteLogCopyDisable +
                     ", remoteLogLatestEnable=" + remoteLogLatestEnable +
+                    ", remoteLogCopyLagMs=" + remoteLogCopyLagMs +
+                    ", remoteLogCopyLagBytes=" + remoteLogCopyLagBytes +
                     ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
@@ -142,6 +152,8 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
+    public static final long DEFAULT_REMOTE_LOG_COPY_LAG_MS = 0L;
+    public static final long DEFAULT_REMOTE_LOG_COPY_LAG_BYTES = 0L;
 
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
     public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
@@ -251,6 +263,8 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_LATEST_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_LOG_LATEST_ENABLE_CONFIG, MEDIUM, TopicConfig.REMOTE_LOG_LATEST_ENABLE_DOC)
+                .define(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_LOG_COPY_LAG_MS, atLeast(-1), MEDIUM, TopicConfig.REMOTE_LOG_COPY_LAG_MS_DOC)
+                .define(TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_LOG_COPY_LAG_BYTES, atLeast(-1), MEDIUM, TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
@@ -405,6 +419,22 @@ public class LogConfig extends AbstractConfig {
 
     public Boolean remoteLogLatestEnable() {
         return remoteLogConfig.remoteLogLatestEnable;
+    }
+
+    /**
+     * Effective remote copy lag in ms: 0 = upload immediately, -1 resolves to local retention time, &gt;0 = segment must be at least this old (ms) to be eligible.
+     */
+    public long remoteLogCopyLagMs() {
+        long raw = remoteLogConfig.remoteLogCopyLagMs;
+        return raw == -1 ? localRetentionMs() : raw;
+    }
+
+    /**
+     * Effective remote copy lag in bytes: 0 = no size constraint, -1 resolves to local retention bytes, &gt;0 = size-based eligibility.
+     */
+    public long remoteLogCopyLagBytes() {
+        long raw = remoteLogConfig.remoteLogCopyLagBytes;
+        return raw == -1 ? localRetentionBytes() : raw;
     }
 
     public long localRetentionMs() {

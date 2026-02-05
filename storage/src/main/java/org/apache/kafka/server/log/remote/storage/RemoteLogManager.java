@@ -907,28 +907,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
         }
 
-        /**
-         * Check if segment is still within local retention time.
-         * @param segment The log segment to check
-         * @param localRetentionMs Local retention time in milliseconds;
-         * @param currentTimeMs Current time in milliseconds
-         * @return true if segment is still within local retention time, false otherwise
-         */
-        private boolean isWithinLocalRetentionTime(LogSegment segment, long localRetentionMs, long currentTimeMs) {
-            if (localRetentionMs <= 0) {
-                return false;
-            }
-            
+        private boolean hasExceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
+            if (copyLagMs <= 0) return true;
             try {
-                long segmentLargestTimestamp = segment.largestTimestamp();
-                if (segmentLargestTimestamp >= 0) {
-                    long segmentAge = currentTimeMs - segmentLargestTimestamp;
-                    if (segmentAge < localRetentionMs) {
-                        logger.info("Segment {} is still within local retention time. Segment age: {} ms, local retention: {} ms, skipping upload",
-                                segment, segmentAge, localRetentionMs);
-                        return true;
-                    }
-                }
+                long ts = segment.largestTimestamp();
+                if (ts >= 0) return (currentTimeMs - ts) >= copyLagMs;
             } catch (IOException e) {
                 logger.warn("Failed to get largest timestamp for segment {}, will not skip based on time", segment, e);
             }
@@ -936,27 +919,13 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         /**
-         * Check if local log size is still within local retention size after uploading the segment to remote.
-         * @param localLogSize Current local log size
-         * @param segment The segment to check
-         * @param accumulatedUploadedSize Total size of segments already decided to upload to remote
-         * @param localRetentionBytes Local retention size in bytes
-         * @return true if local log size after uploading this segment to remote would still be within local retention size, false otherwise
+         * Check if segment has exceeded the copy lag by size.
+         * @param cumulativeLogSize Cumulative size in bytes of segments from the start of the copy range up to and including the current segment
+         * @param copyLagBytes Copy lag in bytes (segment is eligible when cumulative log size &gt;= this value)
+         * @return true if cumulativeLogSize &gt;= copyLagBytes (exceeded, eligible for upload), false otherwise
          */
-        private boolean isWithinLocalRetentionSize(long localLogSize, LogSegment segment, long accumulatedUploadedSize, long localRetentionBytes) {
-            if (localRetentionBytes <= 0) {
-                return false;
-            }
-            
-            int segmentSize = segment.size();
-            long sizeAfterUploading = localLogSize - accumulatedUploadedSize - segmentSize;
-            
-            if (sizeAfterUploading < localRetentionBytes) {
-                logger.info("Segment {}: size after planing to upload to remote {} bytes < retention {} bytes, skipping upload",
-                        segment, sizeAfterUploading, localRetentionBytes);
-                return true;
-            }
-            return false;
+        private boolean hasExceededCopyLagSize(long cumulativeLogSize, long copyLagBytes) {
+            return copyLagBytes <= 0 || cumulativeLogSize >= copyLagBytes;
         }
 
         /**
@@ -964,8 +933,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          *  1) Segment is not the active segment and
          *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
          *     committed/acked messages
-         *  3) When remote.log.latest.enable is true (default): All segments are eligible including the latest ones within local retention
-         *     When remote.log.latest.enable is false: Segment is not within local retention time or size (close to expiration or already expired)
+         *  3) Segment has exceeded copy lag by time and size when configured (remote.log.copy.lag.ms, remote.log.copy.lag.bytes)
          * @param log The log from which the segments are to be copied
          * @param fromOffset The offset from which the segments are to be copied
          * @param lastStableOffset The last stable offset of the log
@@ -975,33 +943,21 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             List<EnrichedLogSegment> candidateLogSegments = new ArrayList<>();
             List<LogSegment> segments = log.logSegments(fromOffset, Long.MAX_VALUE);
             if (!segments.isEmpty()) {
-                long localLogSize = log.size();
-                long accumulatedUploadedSize = 0;
                 long currentTimeMs = time.milliseconds();
-                // Use default value true (original behavior) if config is null
-                boolean remoteLogLatestEnable = log.config() != null ? log.config().remoteLogLatestEnable() : true;
+                long copyLagMs = log.config() != null ? log.config().remoteLogCopyLagMs() : 0L;
+                long copyLagBytes = log.config() != null ? log.config().remoteLogCopyLagBytes() : 0L;
+                long cumulativeLogSize = 0;
 
                 for (int idx = 1; idx < segments.size(); idx++) {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
-                        if (!remoteLogLatestEnable && log.config() != null) {
-                            // Check time-based retention
-                            long localRetentionMs = log.config().localRetentionMs();
-                            if (isWithinLocalRetentionTime(previousSeg, localRetentionMs, currentTimeMs)) {
-                                break;
-                            }
-                            
-                            // Check size-based retention
-                            long localRetentionBytes = log.config().localRetentionBytes();
-                            if (isWithinLocalRetentionSize(localLogSize, previousSeg, accumulatedUploadedSize, localRetentionBytes)) {
-                                break;
-                            }
-                        }
-                        
-                        // Segment is eligible for upload
+                        cumulativeLogSize += previousSeg.size();
+                        if (copyLagMs != 0 && !hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs))
+                            break;
+                        if (copyLagBytes != 0 && !hasExceededCopyLagSize(cumulativeLogSize, copyLagBytes))
+                            break;
                         candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
-                        accumulatedUploadedSize += previousSeg.size();
                     }
                 }
                 // Discard the last active segment
