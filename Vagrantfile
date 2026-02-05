@@ -168,7 +168,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         'cflt_partition' => 'commercial',
         'cflt_managed_by' => 'iac',
         'cflt_managed_id' => 'kafka',
-        'cflt_service' => 'kafka-system-test'
+        'cflt_service' => 'kafka'
       }
     end
   end
