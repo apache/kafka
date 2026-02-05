@@ -67,7 +67,6 @@ public class LogConfig extends AbstractConfig {
         private final boolean remoteStorageEnable;
         private final boolean remoteLogDeleteOnDisable;
         private final boolean remoteLogCopyDisable;
-        private final boolean remoteLogLatestEnable;
         /** Effective copy lag: 0 = upload immediately, -1 = delay until local retention boundary, >0 = min segment age in ms. */
         private final long remoteLogCopyLagMs;
         private final long remoteLogCopyLagBytes;
@@ -77,14 +76,10 @@ public class LogConfig extends AbstractConfig {
         private RemoteLogConfig(LogConfig config) {
             this.remoteStorageEnable = config.getBoolean(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
             this.remoteLogCopyDisable = config.getBoolean(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG);
-            this.remoteLogLatestEnable = config.getBoolean(TopicConfig.REMOTE_LOG_LATEST_ENABLE_CONFIG);
             this.remoteLogDeleteOnDisable = config.getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-            // Use remote.log.copy.lag.ms if explicitly set, else derive from remote.log.latest.enable for backward compatibility
-            this.remoteLogCopyLagMs = config.overriddenConfigs.contains(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG)
-                    ? config.getLong(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG)
-                    : (config.getBoolean(TopicConfig.REMOTE_LOG_LATEST_ENABLE_CONFIG) ? 0L : -1L);
+            this.remoteLogCopyLagMs = config.getLong(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG);
             this.remoteLogCopyLagBytes = config.getLong(TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG);
         }
 
@@ -93,8 +88,9 @@ public class LogConfig extends AbstractConfig {
             return "RemoteLogConfig{" +
                     "remoteStorageEnable=" + remoteStorageEnable +
                     ", remoteLogCopyDisable=" + remoteLogCopyDisable +
-                    ", remoteLogLatestEnable=" + remoteLogLatestEnable +
                     ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
+                    ", remoteLogCopyLagMs=" + remoteLogCopyLagMs +
+                    ", remoteLogCopyLagBytes=" + remoteLogCopyLagBytes +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
                     '}';
