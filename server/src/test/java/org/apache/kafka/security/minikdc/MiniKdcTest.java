@@ -17,6 +17,7 @@
 package org.apache.kafka.security.minikdc;
 
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
