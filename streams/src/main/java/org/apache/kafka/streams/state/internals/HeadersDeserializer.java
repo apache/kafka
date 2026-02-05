@@ -58,15 +58,15 @@ public class HeadersDeserializer implements Deserializer<Headers> {
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(data);
-        final int headerCount = ByteUtils.readVarint(buffer);
+        final int headersCount = ByteUtils.readVarint(buffer);
 
-        if (headerCount == 0) {
+        if (headersCount == 0) {
             return new RecordHeaders();
         }
 
         final RecordHeaders headers = new RecordHeaders();
 
-        for (int i = 0; i < headerCount; i++) {
+        for (int i = 0; i < headersCount; i++) {
             final int keyLength = ByteUtils.readVarint(buffer);
             final byte[] keyBytes = new byte[keyLength];
             buffer.get(keyBytes);
