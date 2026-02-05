@@ -539,13 +539,8 @@ object ConfigCommand extends Logging {
       Some(adminClient.listConfigResources(java.util.Set.of(ConfigResource.Type.GROUP), new ListConfigResourcesOptions).all.get)
     } catch {
       // (KIP-1142) 4.1+ admin client vs older broker: treat UnsupportedVersionException as None
-      case e: ExecutionException =>
-        e.getCause match {
-          case _: UnsupportedVersionException =>
-            Option.empty
-          case cause => throw cause
-        }
-      case e: Throwable => throw e
+      case e: ExecutionException if e.getCause.isInstanceOf[UnsupportedVersionException] => None
+      case e: ExecutionException => throw e.getCause
     }
   }
 
