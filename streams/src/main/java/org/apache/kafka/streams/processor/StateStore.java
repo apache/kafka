@@ -88,7 +88,7 @@ public interface StateStore {
     /**
      * Commit all written records to this StateStore.
      * <p>
-     * This method <b>CANNOT<b> be called by users from {@link org.apache.kafka.streams.processor.api.Processor
+     * This method <b>CANNOT</b> be called by users from {@link org.apache.kafka.streams.processor.api.Processor
      * processors}. Doing so will throw an {@link java.lang.UnsupportedOperationException}.
      * <p>
      * Instead, users should call {@link org.apache.kafka.streams.processor.api.ProcessingContext#commit()
