@@ -97,7 +97,7 @@ public class RebalanceTaskClosureIntegrationTest {
      * <p>
      * In order to have a task with an open store in the pending task list we first need to have an active task that gets converted
      * to a standby one during rebalance(see {@link org.apache.kafka.streams.processor.internals.TaskManager#closeAndRecycleTasks}).
-     * Second, we need to avoid the second rebalance.
+     * Second, we need to avoid the second rebalance, to avoid that the pending tasks is closed during such a rebalance, ie, before we enter the shutdown phase.
      * <p>
      * For that this test:
      * <p><ul>
