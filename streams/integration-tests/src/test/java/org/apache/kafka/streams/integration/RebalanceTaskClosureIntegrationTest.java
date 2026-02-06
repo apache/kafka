@@ -104,7 +104,7 @@ public class RebalanceTaskClosureIntegrationTest {
      * <li>starts a KS app and waits for it to fully start</li>
      * <li>starts another KS app which will trigger reassignment</li>
      * <li>waits for {@link CachedStateStore#clearCache} to be called(it's called during task recycle) and locks on it</li>
-     * <li>sends a message with wrong types to crash the stream thread</li>
+     * <li>sends a message with wrong types to crash the stream thread (this avoids a second rebalance, and enters shutdown directly)</li>
      * <li>shutdowns the first KS app and waits for the stream tread to get into PENDING_SHUTDOWN state</li>
      * <li>releases the lock</li>
      * </ul><p>
