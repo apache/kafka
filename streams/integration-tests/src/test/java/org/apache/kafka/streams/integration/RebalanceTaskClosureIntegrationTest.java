@@ -222,6 +222,10 @@ public class RebalanceTaskClosureIntegrationTest {
             // Clear cache is called during recycle, so we use it as a hook
             recycleLatch.countDown();
             try {
+                // after we signaled via recycleLatch, that the task was converted into a "pending task",
+                // we block the rebalance to complete, until we get the shutdown signal,
+                // to avoid that the "pending task" get fully initialized
+                // (otherwise, we don't have a pending task when the shutdown happens)
                 pendingShutdownLatch.await();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
