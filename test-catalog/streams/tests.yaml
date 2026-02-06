@@ -4182,6 +4182,22 @@ org.apache.kafka.streams.state.internals.GlobalStateStoreProviderTest:
 - shouldReturnTimestampedWindowStoreAsWindowStore
 - shouldReturnWindowStore
 - shouldThrowExceptionIfStoreIsntOpen
+org.apache.kafka.streams.state.internals.HeadersDeserializerTest:
+- shouldDeserializeEmptyData
+- shouldDeserializeNullData
+- shouldRoundTripEmptyHeaders
+- shouldRoundTripHeaderWithEmptyValue
+- shouldRoundTripHeaderWithNullValue
+- shouldRoundTripMultipleHeaders
+- shouldRoundTripSingleHeader
+org.apache.kafka.streams.state.internals.HeadersSerializerTest:
+- shouldSerializeEmptyHeaders
+- shouldSerializeHeaderWithNullValue
+- shouldSerializeHeadersWithEmptyValue
+- shouldSerializeHeadersWithSpecialCharacters
+- shouldSerializeMultipleHeaders
+- shouldSerializeNullHeaders
+- shouldSerializeSingleHeader
 org.apache.kafka.streams.state.internals.InMemoryKeyValueLoggedStoreTest:
 - prefixScanShouldNotThrowConcurrentModificationException
 - shouldDeleteFromStore
