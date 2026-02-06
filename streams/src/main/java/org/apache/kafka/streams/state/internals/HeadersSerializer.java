@@ -63,18 +63,18 @@ public class HeadersSerializer implements Serializer<Headers> {
      */
     @Override
     public byte[] serialize(final String topic, final Headers headers) {
-        final Header[] headerArray = (headers == null) ? new Header[0] : headers.toArray();
+        final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
 
-        if (headerArray.length == 0) {
+        if (headersArray.length == 0) {
             return new byte[0];
         }
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
 
-            ByteUtils.writeVarint(headerArray.length, out);
+            ByteUtils.writeVarint(headersArray.length, out);
 
-            for (final Header header : headerArray) {
+            for (final Header header : headersArray) {
                 final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
                 final byte[] valueBytes = header.value();
 
