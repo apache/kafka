@@ -1467,7 +1467,34 @@ public class ConfigCommandTest {
             }
         };
 
-        assertThrows(ClusterAuthorizationException.class, () -> ConfigCommand.describeConfig(mockAdminClient, describeOpts));
+        ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        assertTrue(listedConfigResources.get());
+    }
+
+    @Test
+    public void testDescribeGroupConfigOldBrokerUnexpectedException() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "groups",
+            "--describe"));
+
+        KafkaFutureImpl<Collection<ConfigResource>> future = new KafkaFutureImpl<>();
+        ListConfigResourcesResult listConfigResourcesResult = mock(ListConfigResourcesResult.class);
+        when(listConfigResourcesResult.all()).thenReturn(future);
+
+        AtomicBoolean listedConfigResources = new AtomicBoolean(false);
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(List.of(node), node) {
+            @Override
+            public ListConfigResourcesResult listConfigResources(Set<ConfigResource.Type> configResourceTypes, ListConfigResourcesOptions options) {
+                ConfigResource.Type type = configResourceTypes.iterator().next();
+                assertEquals(ConfigResource.Type.GROUP, type);
+                future.completeExceptionally(new InvalidConfigurationException("That was unexpected"));
+                listedConfigResources.set(true);
+                return listConfigResourcesResult;
+            }
+        };
+
+        assertThrows(InvalidConfigurationException.class, () -> ConfigCommand.describeConfig(mockAdminClient, describeOpts));
         assertTrue(listedConfigResources.get());
     }
 
