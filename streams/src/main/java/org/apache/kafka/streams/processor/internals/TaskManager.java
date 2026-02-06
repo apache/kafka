@@ -1471,10 +1471,20 @@ public class TaskManager {
         // TODO: change type to `StreamTask`
         final Set<Task> activeTasks = new TreeSet<>(Comparator.comparing(Task::id));
         activeTasks.addAll(tasks.activeTasks());
+        // TODO: change type to `StandbyTask`
+        final Set<Task> standbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
+        standbyTasks.addAll(tasks.standbyTasks());
+
+        final Set<Task> pendingActiveTasks = tasks.drainPendingActiveTasksToInit();
+        activeTasks.addAll(pendingActiveTasks);
+        tasks.addPendingTasksToClose(pendingActiveTasks);
+        final Set<Task> pendingStandbyTasks = tasks.drainPendingStandbyTasksToInit();
+        standbyTasks.addAll(pendingStandbyTasks);
+        tasks.addPendingTasksToClose(pendingStandbyTasks);
 
         executeAndMaybeSwallow(
             clean,
-            () -> closeAndCleanUpTasks(activeTasks, standbyTaskIterable(), clean),
+            () -> closeAndCleanUpTasks(activeTasks, standbyTasks, clean),
             e -> firstException.compareAndSet(null, e),
             e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
@@ -1569,7 +1579,7 @@ public class TaskManager {
                                                       final boolean clean,
                                                       final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
-            return activeTaskIterable();
+            return activeTasksToClose;
         }
         final Comparator<Task> byId = Comparator.comparing(Task::id);
         final Set<Task> tasksToCommit = new TreeSet<>(byId);
@@ -1627,7 +1637,7 @@ public class TaskManager {
                 }
             }
 
-            for (final Task task : activeTaskIterable()) {
+            for (final Task task : activeTasksToClose) {
                 try {
                     task.postCommit(true);
                 } catch (final RuntimeException e) {
@@ -1662,7 +1672,7 @@ public class TaskManager {
                                                        final boolean clean,
                                                        final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
-            return standbyTaskIterable();
+            return standbyTasksToClose;
         }
         final Set<Task> tasksToCloseDirty = new HashSet<>();
 
