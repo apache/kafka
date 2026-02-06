@@ -159,7 +159,7 @@ public class RebalanceTaskClosureIntegrationTest {
         // Now we can close both apps. The StreamThreadStateListener will unblock the clearCache call, letting the rebalance finish.
         // After the rebalance finished, the "poison pill" record gets picked up crashing the thread,
         // and starting the shutdown directly
-        // We don't want it to happen any sooner, because we want the stream thread to stop before it gets to moving tasks from task registry to state updater.
+        // We don't want to let the rebalance finish before we trigger the shutdown, because we want the stream thread to stop before it gets to moving pending tasks from task registry to state updater.
         streams1.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
         streams2.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
 
