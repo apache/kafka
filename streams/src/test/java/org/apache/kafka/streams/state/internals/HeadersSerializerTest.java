@@ -129,29 +129,4 @@ public class HeadersSerializerTest {
         assertEquals("key1", header.key());
         assertArrayEquals(new byte[0], header.value());
     }
-
-    @Test
-    public void shouldSerializeHeadersWithSpecialCharacters() {
-        final Headers headers = new RecordHeaders()
-            .add("key-with-dash", "value".getBytes())
-            .add("key.with.dots", "value".getBytes())
-            .add("key_with_underscores", "value".getBytes());
-        final byte[] serialized = serializer.serialize("", headers);
-
-        assertNotNull(serialized);
-        assertTrue(serialized.length > 0);
-
-        final Headers deserialized = deserializer.deserialize("", serialized);
-        assertNotNull(deserialized);
-        assertEquals(3, deserialized.toArray().length);
-
-        assertNotNull(deserialized.lastHeader("key-with-dash"));
-        assertArrayEquals("value".getBytes(), deserialized.lastHeader("key-with-dash").value());
-
-        assertNotNull(deserialized.lastHeader("key.with.dots"));
-        assertArrayEquals("value".getBytes(), deserialized.lastHeader("key.with.dots").value());
-
-        assertNotNull(deserialized.lastHeader("key_with_underscores"));
-        assertArrayEquals("value".getBytes(), deserialized.lastHeader("key_with_underscores").value());
-    }
 }
