@@ -131,7 +131,6 @@ public class ValueTimestampHeadersDeserializerTest {
 
     @Test
     public void shouldReturnNullWhenSerializingNullValue() {
-        // When value is null, serializer returns null (by design)
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());
         final ValueTimestampHeaders<String> original =
