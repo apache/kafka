@@ -484,7 +484,7 @@ public class ProcessorStateManager implements StateManager {
 
     /**
      * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
-     * @throws StreamsException fatal error when commmitting the state store, for example sending changelog records failed
+     * @throws StreamsException fatal error when committing the state store, for example sending changelog records failed
      *                          or committing state store get IO errors; such error should cause the thread to die
      */
     @Override
