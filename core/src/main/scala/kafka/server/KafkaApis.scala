@@ -4240,9 +4240,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ =>
           throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
       }
-      request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
+      request.messageConversionsTimeNanos += conversionStats.conversionTimeNanos
     }
-    request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
+    request.temporaryMemoryBytes += conversionStats.temporaryMemoryBytes
   }
 
   def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Boolean = {
