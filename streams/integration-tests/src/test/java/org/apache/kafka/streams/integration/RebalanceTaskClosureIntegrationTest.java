@@ -153,6 +153,7 @@ public class RebalanceTaskClosureIntegrationTest {
         recycleLatch.await();
 
         // sending a message with wrong key and value types to trigger a stream thread failure and avoid the second rebalance
+        // note that writing this message does not trigger the crash right away -- the thread is still blocked inside `poll()` waiting for the shutdown latch to unlock to complete the previous, still ongoing rebalance
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC_NAME, List.of(new KeyValue<>("key", 1L)),
                 TestUtils.producerConfig(cluster.bootstrapServers(), StringSerializer.class, LongSerializer.class, new Properties()), cluster.time);
         // Now we can close both apps. The StreamThreadStateListener will unblock the clearCache call, letting the rebalance finish.
