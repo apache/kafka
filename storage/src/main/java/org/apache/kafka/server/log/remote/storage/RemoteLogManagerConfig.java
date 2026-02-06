@@ -169,11 +169,11 @@ public final class RemoteLogManagerConfig {
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
     public static final String LOG_REMOTE_COPY_LAG_MS_PROP = "log.remote.copy.lag.ms";
-    public static final String LOG_REMOTE_COPY_LAG_MS_DOC = "Time-based delay before uploading segments. 0 = no delay, -1 = <code>log.local.retention.ms</code>, positive = min segment age (ms). Must not exceed <code>log.local.retention.ms</code>.";
+    public static final String LOG_REMOTE_COPY_LAG_MS_DOC = "Time-based delay before uploading segments. 0 = no delay, -1 = <code>log.local.retention.ms</code> (max delay), positive = min segment age (ms). Must not exceed <code>log.local.retention.ms</code>.";
     public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_MS = 0L;
 
     public static final String LOG_REMOTE_COPY_LAG_BYTES_PROP = "log.remote.copy.lag.bytes";
-    public static final String LOG_REMOTE_COPY_LAG_BYTES_DOC = "Size-based delay before uploading segments. 0 = no delay, -1 = <code>log.local.retention.bytes</code>, positive = min bytes after segment. Must not exceed <code>log.local.retention.bytes</code>.";
+    public static final String LOG_REMOTE_COPY_LAG_BYTES_DOC = "Size-based delay before uploading segments. 0 = no delay, -1 = <code>log.local.retention.bytes</code> (max delay), positive = min bytes after segment. Must not exceed <code>log.local.retention.bytes</code>.";
     public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_BYTES = 0L;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
