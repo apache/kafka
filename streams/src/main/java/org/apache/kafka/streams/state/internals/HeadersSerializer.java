@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
@@ -64,18 +63,18 @@ public class HeadersSerializer implements Serializer<Headers> {
      */
     @Override
     public byte[] serialize(final String topic, final Headers headers) {
-        final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
+        final Header[] headerArray = (headers == null) ? new Header[0] : headers.toArray();
 
-        if (headersArray.length == 0) {
+        if (headerArray.length == 0) {
             return new byte[0];
         }
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
 
-            ByteUtils.writeVarint(headersArray.length, out);
+            ByteUtils.writeVarint(headerArray.length, out);
 
-            for (final Header header : headersArray) {
+            for (final Header header : headerArray) {
                 final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
                 final byte[] valueBytes = header.value();
 
@@ -94,7 +93,7 @@ public class HeadersSerializer implements Serializer<Headers> {
 
             return baos.toByteArray();
         } catch (IOException e) {
-            throw new SerializationException("Failed to serialize headers", e);
+            throw new RuntimeException("Failed to serialize headers", e);
         }
     }
 }
