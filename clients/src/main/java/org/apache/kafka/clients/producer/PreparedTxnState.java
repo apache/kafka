@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
 /**
  * Class containing the state of a transaction after it has been prepared for a two-phase commit.
