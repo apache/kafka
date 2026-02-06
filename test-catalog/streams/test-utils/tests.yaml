@@ -1,7 +1,7 @@
 org.apache.kafka.streams.KeyValueStoreFacadeTest:
 - shouldDeleteAndReturnPlainValue
 - shouldForwardClose
-- shouldForwardFlush
+- shouldForwardCommit
 - shouldForwardInit
 - shouldPutAllWithUnknownTimestamp
 - shouldPutIfAbsentWithUnknownTimestamp
@@ -141,7 +141,7 @@ org.apache.kafka.streams.TopologyTestDriverEosTest:
 - shouldUseSourceSpecificDeserializers
 org.apache.kafka.streams.WindowStoreFacadeTest:
 - shouldForwardClose
-- shouldForwardFlush
+- shouldForwardCommit
 - shouldForwardInit
 - shouldPutWindowStartTimestampWithUnknownTimestamp
 - shouldReturnIsOpen

@@ -1891,7 +1891,7 @@ org.apache.kafka.streams.processor.internals.GlobalStateManagerImplTest:
 - shouldThrowIllegalArgumentExceptionIfCallbackIsNull
 - shouldThrowIllegalArgumentIfTryingToRegisterStoreThatIsNotGlobal
 - shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed
-- shouldThrowProcessorStateStoreExceptionIfStoreFlushFailed
+- shouldThrowProcessorStateStoreExceptionIfStoreCommitFailed
 - shouldThrowStreamsExceptionForOldTopicPartitions
 - shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets
 - shouldThrowStreamsExceptionIfNoPartitionsFoundForStore
@@ -2239,10 +2239,10 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldClearStoreCache
 - shouldCloseAllStoresEvenIfStoreThrowsException
 - shouldCloseStateStoresOnStateManagerClose
+- shouldCommitGoodStoresEvenSomeThrowsException
 - shouldDeleteCheckPointFileIfEosEnabled
 - shouldFindSingleStoreForChangelog
 - shouldFlushCheckpointAndClose
-- shouldFlushGoodStoresEvenSomeThrowsException
 - shouldGetChangelogPartitionForRegisteredStore
 - shouldGetRegisteredStore
 - shouldInitializeOffsetsFromCheckpointFile
@@ -2256,7 +2256,7 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldNotWriteCheckpointForStoresWithoutChangelogTopic
 - shouldOverrideOffsetsWhenRestoreAndProcess
 - shouldPreserveStreamsExceptionOnCloseIfStoreThrows
-- shouldPreserveStreamsExceptionOnFlushIfStoreThrows
+- shouldPreserveStreamsExceptionOnCommitIfStoreThrows
 - shouldRecycleAndReinitializeStore
 - shouldRegisterNonPersistentStore
 - shouldRegisterPersistentStores
@@ -2279,9 +2279,9 @@ org.apache.kafka.streams.processor.internals.ProcessorStateManagerTest:
 - shouldThrowOnFailureToWritePositionCheckpointFile
 - shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAFailedProcessingException
 - shouldThrowProcessorStateExceptionOnCloseIfStoreThrowsAnException
+- shouldThrowProcessorStateExceptionOnCommitIfStoreThrowsAFailedProcessingException
+- shouldThrowProcessorStateExceptionOnCommitIfStoreThrowsAnException
 - shouldThrowProcessorStateExceptionOnFlushCacheIfStoreThrowsAFailedProcessingException
-- shouldThrowProcessorStateExceptionOnFlushIfStoreThrowsAFailedProcessingException
-- shouldThrowProcessorStateExceptionOnFlushIfStoreThrowsAnException
 - shouldThrowTaskCorruptedWithoutPersistentStoreCheckpointAndNonEmptyDir
 - shouldWriteCheckpointForPersistentStore
 - shouldWritePositionCheckpointFile
@@ -4011,6 +4011,7 @@ org.apache.kafka.streams.state.internals.ChangeLoggingKeyValueBytesStoreTest:
 - shouldWriteToInnerOnPutIfAbsentNoPreviousValue
 org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStoreTest:
 - shouldCloseUnderlyingStore
+- shouldCommitUnderlyingStore
 - shouldDelegateInit
 - shouldDelegateToUnderlyingStoreWhenBackwardFetching
 - shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange
@@ -4020,7 +4021,6 @@ org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStoreTest:
 - shouldDelegateToUnderlyingStoreWhenFetchingRange
 - shouldDelegateToUnderlyingStoreWhenFindingSessionRange
 - shouldDelegateToUnderlyingStoreWhenFindingSessions
-- shouldFlushUnderlyingStore
 - shouldLogPuts
 - shouldLogPutsWithPosition
 - shouldLogRemoves
@@ -4446,8 +4446,8 @@ org.apache.kafka.streams.state.internals.KeyValueStoreBuilderTest:
 org.apache.kafka.streams.state.internals.KeyValueStoreWrapperTest:
 - shouldCloseTimestampedStore
 - shouldCloseVersionedStore
-- shouldFlushTimestampedStore
-- shouldFlushVersionedStore
+- shouldCommitTimestampedStore
+- shouldCommitVersionedStore
 - shouldGetFromTimestampedStore
 - shouldGetFromVersionedStore
 - shouldGetNameForTimestampedStore
@@ -4571,7 +4571,7 @@ org.apache.kafka.streams.state.internals.MergedSortedCacheWrappedWindowStoreKeyV
 org.apache.kafka.streams.state.internals.MeteredKeyValueStoreTest:
 - shouldDelegateInit
 - shouldDeleteFromInnerStoreAndRecordDeleteMetric
-- shouldFlushInnerWhenFlushTimeRecords
+- shouldFlushInnerWhenCommitTimeRecords
 - shouldGetAllFromInnerStoreAndRecordAllMetric
 - shouldGetBytesFromInnerStoreAndReturnGetMetric
 - shouldGetRangeFromInnerStoreAndRecordRangeMetric
@@ -4649,9 +4649,9 @@ org.apache.kafka.streams.state.internals.MeteredSessionStoreTest:
 - shouldWriteBytesToInnerStoreAndRecordPutMetric
 - testMetrics
 org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreTest:
+- shouldCommitInnerWhenCommitTimeRecords
 - shouldDelegateInit
 - shouldDeleteFromInnerStoreAndRecordDeleteMetric
-- shouldFlushInnerWhenFlushTimeRecords
 - shouldGetAllFromInnerStoreAndRecordAllMetric
 - shouldGetBytesFromInnerStoreAndReturnGetMetric
 - shouldGetRangeFromInnerStoreAndRecordRangeMetric
@@ -4681,8 +4681,8 @@ org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreTest:
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
 org.apache.kafka.streams.state.internals.MeteredVersionedKeyValueStoreTest:
 - shouldDelegateAndAddExecutionInfoOnCustomQuery
+- shouldDelegateAndRecordMetricsOnCommit
 - shouldDelegateAndRecordMetricsOnDelete
-- shouldDelegateAndRecordMetricsOnFlush
 - shouldDelegateAndRecordMetricsOnGet
 - shouldDelegateAndRecordMetricsOnGetWithTimestamp
 - shouldDelegateAndRecordMetricsOnPut
@@ -4720,7 +4720,7 @@ org.apache.kafka.streams.state.internals.MeteredWindowStoreTest:
 - shouldPassChangelogTopicNameToStateStoreSerde
 - shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
 - shouldPutToInnerStoreAndRecordPutMetrics
-- shouldRecordFlushLatency
+- shouldRecordCommitLatency
 - shouldRecordRestoreLatencyOnRecordRestoreTime
 - shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose
 - shouldRemoveMetricsOnClose
@@ -5539,7 +5539,7 @@ org.apache.kafka.streams.state.internals.TimeOrderedCachingPersistentWindowStore
 - shouldFetchAndIterateOverKeyRange
 - shouldFlushEvictedItemsIntoUnderlyingStore
 - shouldForwardDirtyItemToListenerWhenEvicted
-- shouldForwardDirtyItemsWhenFlushCalled
+- shouldForwardDirtyItemsWhenCommitCalled
 - shouldForwardOldValuesWhenEnabled
 - shouldGetAllBackwardFromCache
 - shouldGetAllFromCache
@@ -5577,8 +5577,8 @@ org.apache.kafka.streams.state.internals.TimeOrderedCachingPersistentWindowStore
 - shouldThrowNullPointerExceptionOnPutNullKey
 org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest:
 - shouldAcceptData
+- shouldCommit
 - shouldEvictOldestAndUpdateSizeAndCountAndMinTimestamp
-- shouldFlush
 - shouldInit
 - shouldNotRestoreUnrecognizedVersionRecord
 - shouldRejectNullValues
@@ -5608,7 +5608,7 @@ org.apache.kafka.streams.state.internals.TimeOrderedWindowStoreTest:
 - shouldFetchAndIterateOverKeyRange
 - shouldFlushEvictedItemsIntoUnderlyingStore
 - shouldForwardDirtyItemToListenerWhenEvicted
-- shouldForwardDirtyItemsWhenFlushCalled
+- shouldForwardDirtyItemsWhenCommitCalled
 - shouldForwardOldValuesWhenDisabled
 - shouldForwardOldValuesWhenEnabled
 - shouldGetAllBackwardFromCache
