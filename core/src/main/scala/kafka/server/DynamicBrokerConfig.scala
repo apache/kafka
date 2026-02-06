@@ -669,7 +669,7 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
     // validation, no additional validation is performed.
 
     def validateLogLocalRetentionMs(): Unit = {
-      val logRetentionMs = newConfig.logRetentionTimeMillis
+      val logRetentionMs: Long = newConfig.logRetentionTimeMillis
       val logLocalRetentionMs: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionMs
       if (logRetentionMs != -1L && logLocalRetentionMs != -2L) {
         if (logLocalRetentionMs == -1L) {
@@ -684,10 +684,10 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
     }
 
     def validateLogLocalRetentionBytes(): Unit = {
-      val logRetentionBytes = newConfig.logRetentionBytes
+      val logRetentionBytes: Long = newConfig.logRetentionBytes
       val logLocalRetentionBytes: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionBytes
-      if (logRetentionBytes > -1 && logLocalRetentionBytes != -2) {
-        if (logLocalRetentionBytes == -1) {
+      if (logRetentionBytes > -1L && logLocalRetentionBytes != -2L) {
+        if (logLocalRetentionBytes == -1L) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
             s"Value must not be -1 as ${ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG} value is set as $logRetentionBytes.")
         }
@@ -704,7 +704,7 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
     }
 
     def validateRemoteCopyLagMsNotExceedingLocalRetention(): Unit = {
-      val logRetentionMs = newConfig.logRetentionTimeMillis
+      val logRetentionMs: Long = newConfig.logRetentionTimeMillis
       val logLocalRetentionMs = newConfig.remoteLogManagerConfig.logLocalRetentionMs
       val effectiveLocalRetentionMs = if (logLocalRetentionMs == -2L) logRetentionMs else logLocalRetentionMs
       val logRemoteCopyLagMs = newConfig.remoteLogManagerConfig.logRemoteCopyLagMs
@@ -715,7 +715,7 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
     }
 
     def validateRemoteCopyLagBytesNotExceedingLocalRetention(): Unit = {
-      val logRetentionBytes = newConfig.logRetentionBytes
+      val logRetentionBytes: Long = newConfig.logRetentionBytes
       val logLocalRetentionBytes = newConfig.remoteLogManagerConfig.logLocalRetentionBytes
       val effectiveLocalRetentionBytes = if (logLocalRetentionBytes == -2L) logRetentionBytes else logLocalRetentionBytes
       val logRemoteCopyLagBytes = newConfig.remoteLogManagerConfig.logRemoteCopyLagBytes
