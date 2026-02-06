@@ -38,8 +38,7 @@ public class HeadersSerializerTest {
         final byte[] serialized = serializer.serialize("", null);
 
         assertNotNull(serialized);
-        assertEquals(1, serialized.length, "Null headers should have 1 byte to indicate headers count is 0");
-        assertEquals(0, serialized[0], "The byte should be 0 (varint encoding of 0)");
+        assertEquals(0, serialized.length, "Null headers should serialize to empty byte array (0 bytes)");
     }
 
     @Test
@@ -48,8 +47,7 @@ public class HeadersSerializerTest {
         final byte[] serialized = serializer.serialize("", headers);
 
         assertNotNull(serialized);
-        assertEquals(1, serialized.length, "Empty headers should have 1 byte to indicate headers count is 0");
-        assertEquals(0, serialized[0], "The byte should be 0 (varint encoding of 0)");
+        assertEquals(0, serialized.length, "Empty headers should serialize to empty byte array (0 bytes)");
     }
 
     @Test

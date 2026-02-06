@@ -30,7 +30,10 @@ import java.nio.charset.StandardCharsets;
  * Serializer for Kafka Headers.
  * <p>
  * Serialization format (per KIP-1271):
- * [NumHeaders(varint)][Header1][Header2]...
+ * <ul>
+ * <li>For null or empty headers: empty byte array (0 bytes)</li>
+ * <li>For non-empty headers: [NumHeaders(varint)][Header1][Header2]...</li>
+ * </ul>
  * <p>
  * Each header:
  * [KeyLength(varint)][KeyBytes(UTF-8)][ValueLength(varint)][ValueBytes]
@@ -50,17 +53,25 @@ public class HeadersSerializer implements Serializer<Headers> {
      * <p>
      * The output format is [count][header1][header2]... without a size prefix.
      * The size prefix is added by the outer serializer that uses this.
+     * <p>
+     * For null or empty headers, returns an empty byte array (0 bytes)
+     * instead of encoding headerCount=0 (1 byte).
      *
      * @param topic topic associated with data
      * @param headers the headers to serialize (can be null)
-     * @return the serialized byte array
+     * @return the serialized byte array (empty array if headers are null or empty)
      */
     @Override
     public byte[] serialize(final String topic, final Headers headers) {
+        final Header[] headerArray = (headers == null) ? new Header[0] : headers.toArray();
+
+        if (headerArray.length == 0) {
+            return new byte[0];
+        }
+
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
 
-            final Header[] headerArray = (headers == null) ? new Header[0] : headers.toArray();
             ByteUtils.writeVarint(headerArray.length, out);
 
             for (final Header header : headerArray) {
