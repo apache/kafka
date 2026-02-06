@@ -67,8 +67,8 @@ public class LogConfig extends AbstractConfig {
         private final boolean remoteStorageEnable;
         private final boolean remoteLogDeleteOnDisable;
         private final boolean remoteLogCopyDisable;
-        private final long remoteLogCopyLagMs;
-        private final long remoteLogCopyLagBytes;
+        private final long remoteCopyLagMs;
+        private final long remoteCopyLagBytes;
         private final long localRetentionMs;
         private final long localRetentionBytes;
 
@@ -78,8 +78,8 @@ public class LogConfig extends AbstractConfig {
             this.remoteLogDeleteOnDisable = config.getBoolean(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG);
             this.localRetentionMs = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
             this.localRetentionBytes = config.getLong(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
-            this.remoteLogCopyLagMs = config.getLong(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG);
-            this.remoteLogCopyLagBytes = config.getLong(TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG);
+            this.remoteCopyLagMs = config.getLong(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG);
+            this.remoteCopyLagBytes = config.getLong(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG);
         }
 
         @Override
@@ -88,8 +88,8 @@ public class LogConfig extends AbstractConfig {
                     "remoteStorageEnable=" + remoteStorageEnable +
                     ", remoteLogCopyDisable=" + remoteLogCopyDisable +
                     ", remoteLogDeleteOnDisable=" + remoteLogDeleteOnDisable +
-                    ", remoteLogCopyLagMs=" + remoteLogCopyLagMs +
-                    ", remoteLogCopyLagBytes=" + remoteLogCopyLagBytes +
+                    ", remoteCopyLagMs=" + remoteCopyLagMs +
+                    ", remoteCopyLagBytes=" + remoteCopyLagBytes +
                     ", localRetentionMs=" + localRetentionMs +
                     ", localRetentionBytes=" + localRetentionBytes +
                     '}';
@@ -144,8 +144,8 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
-    public static final long DEFAULT_REMOTE_LOG_COPY_LAG_MS = 0L;
-    public static final long DEFAULT_REMOTE_LOG_COPY_LAG_BYTES = 0L;
+    public static final long DEFAULT_REMOTE_COPY_LAG_MS = 0L;
+    public static final long DEFAULT_REMOTE_COPY_LAG_BYTES = 0L;
 
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
     public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
@@ -254,8 +254,8 @@ public class LogConfig extends AbstractConfig {
                 .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
-                .define(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_LOG_COPY_LAG_MS, atLeast(-1), MEDIUM, TopicConfig.REMOTE_LOG_COPY_LAG_MS_DOC)
-                .define(TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_LOG_COPY_LAG_BYTES, atLeast(-1), MEDIUM, TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_DOC)
+                .define(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_MS, atLeast(-1), MEDIUM, TopicConfig.REMOTE_COPY_LAG_MS_DOC)
+                .define(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, LONG, DEFAULT_REMOTE_COPY_LAG_BYTES, atLeast(-1), MEDIUM, TopicConfig.REMOTE_COPY_LAG_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
                 .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, INTERNAL_SEGMENT_BYTES_DOC);
     }
@@ -409,12 +409,12 @@ public class LogConfig extends AbstractConfig {
     }
 
 
-    public long remoteLogCopyLagMs() {
-        return remoteLogConfig.remoteLogCopyLagMs == -1 ? localRetentionMs() : remoteLogConfig.remoteLogCopyLagMs;
+    public long remoteCopyLagMs() {
+        return remoteLogConfig.remoteCopyLagMs == -1 ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs;
     }
 
-    public long remoteLogCopyLagBytes() {
-        return remoteLogConfig.remoteLogCopyLagBytes == -1 ? localRetentionBytes() : remoteLogConfig.remoteLogCopyLagBytes;
+    public long remoteCopyLagBytes() {
+        return remoteLogConfig.remoteCopyLagBytes == -1 ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes;
     }
 
     public long localRetentionMs() {

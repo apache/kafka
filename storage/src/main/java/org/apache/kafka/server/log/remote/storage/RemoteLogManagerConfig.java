@@ -168,17 +168,17 @@ public final class RemoteLogManagerConfig {
             "less than or equal to <code>log.retention.bytes</code> value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
-    public static final String LOG_REMOTE_LOG_COPY_LAG_MS_PROP = "log.remote.log.copy.lag.ms";
-    public static final String LOG_REMOTE_LOG_COPY_LAG_MS_DOC = "The minimum age in milliseconds a segment must reach before being eligible for upload to remote storage. " +
+    public static final String LOG_REMOTE_COPY_LAG_MS_PROP = "log.remote.copy.lag.ms";
+    public static final String LOG_REMOTE_COPY_LAG_MS_DOC = "The minimum age in milliseconds a segment must reach before being eligible for upload to remote storage. " +
             "When set to 0 (default), segments are uploaded as soon as they are eligible. When set to -1, resolves to local retention time. " +
             "The value should not exceed <code>log.local.retention.ms</code>.";
-    public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_MS = 0L;
+    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_MS = 0L;
 
-    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP = "log.remote.log.copy.lag.bytes";
-    public static final String LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC = "The minimum number of bytes of log data that must exist after a segment (newer data) before the segment is eligible for upload to remote storage. " +
+    public static final String LOG_REMOTE_COPY_LAG_BYTES_PROP = "log.remote.copy.lag.bytes";
+    public static final String LOG_REMOTE_COPY_LAG_BYTES_DOC = "The minimum number of bytes of log data that must exist after a segment (newer data) before the segment is eligible for upload to remote storage. " +
             "When set to 0 (default), no size-based constraint. When set to -1, resolves to local retention bytes. " +
             "The value should not exceed <code>log.local.retention.bytes</code>.";
-    public static final Long DEFAULT_LOG_REMOTE_LOG_COPY_LAG_BYTES = 0L;
+    public static final Long DEFAULT_LOG_REMOTE_COPY_LAG_BYTES = 0L;
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be copied from local storage to remote storage per second. " +
@@ -359,18 +359,18 @@ public final class RemoteLogManagerConfig {
                         atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
                         MEDIUM,
                         LOG_LOCAL_RETENTION_BYTES_DOC)
-                .define(LOG_REMOTE_LOG_COPY_LAG_MS_PROP,
+                .define(LOG_REMOTE_COPY_LAG_MS_PROP,
                         LONG,
-                        DEFAULT_LOG_REMOTE_LOG_COPY_LAG_MS,
+                        DEFAULT_LOG_REMOTE_COPY_LAG_MS,
                         atLeast(-1),
                         MEDIUM,
-                        LOG_REMOTE_LOG_COPY_LAG_MS_DOC)
-                .define(LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP,
+                        LOG_REMOTE_COPY_LAG_MS_DOC)
+                .define(LOG_REMOTE_COPY_LAG_BYTES_PROP,
                         LONG,
-                        DEFAULT_LOG_REMOTE_LOG_COPY_LAG_BYTES,
+                        DEFAULT_LOG_REMOTE_COPY_LAG_BYTES,
                         atLeast(-1),
                         MEDIUM,
-                        LOG_REMOTE_LOG_COPY_LAG_BYTES_DOC)
+                        LOG_REMOTE_COPY_LAG_BYTES_DOC)
                 .define(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
                         LONG,
                         DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND,
@@ -588,12 +588,12 @@ public final class RemoteLogManagerConfig {
         return config.getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP);
     }
 
-    public long logRemoteLogCopyLagMs() {
-        return config.getLong(LOG_REMOTE_LOG_COPY_LAG_MS_PROP);
+    public long logRemoteCopyLagMs() {
+        return config.getLong(LOG_REMOTE_COPY_LAG_MS_PROP);
     }
 
-    public long logRemoteLogCopyLagBytes() {
-        return config.getLong(LOG_REMOTE_LOG_COPY_LAG_BYTES_PROP);
+    public long logRemoteCopyLagBytes() {
+        return config.getLong(LOG_REMOTE_COPY_LAG_BYTES_PROP);
     }
 
     public long remoteListOffsetsRequestTimeoutMs() {

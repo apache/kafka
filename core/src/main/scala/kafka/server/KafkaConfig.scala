@@ -691,8 +691,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     logProps.put(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, logMessageTimestampAfterMaxMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, remoteLogManagerConfig.logLocalRetentionMs: java.lang.Long)
     logProps.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, remoteLogManagerConfig.logLocalRetentionBytes: java.lang.Long)
-    logProps.put(TopicConfig.REMOTE_LOG_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteLogCopyLagMs: java.lang.Long)
-    logProps.put(TopicConfig.REMOTE_LOG_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteLogCopyLagBytes: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG, remoteLogManagerConfig.logRemoteCopyLagMs: java.lang.Long)
+    logProps.put(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG, remoteLogManagerConfig.logRemoteCopyLagBytes: java.lang.Long)
     logProps
   }
 }

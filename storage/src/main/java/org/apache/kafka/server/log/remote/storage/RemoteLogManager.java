@@ -942,7 +942,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          *  1) Segment is not the active segment and
          *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
          *     committed/acked messages
-         *  3) Segment has exceeded copy lag by time and size when configured (remote.log.copy.lag.ms, remote.log.copy.lag.bytes)
+         *  3) Segment has exceeded copy lag by time and size when configured (remote.copy.lag.ms, remote.copy.lag.bytes)
          * @param log The log from which the segments are to be copied
          * @param fromOffset The offset from which the segments are to be copied
          * @param lastStableOffset The last stable offset of the log
@@ -953,8 +953,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             List<LogSegment> segments = log.logSegments(fromOffset, Long.MAX_VALUE);
             if (!segments.isEmpty()) {
                 long currentTimeMs = time.milliseconds();
-                long copyLagMs = log.config() != null ? log.config().remoteLogCopyLagMs() : 0L;
-                long copyLagBytes = log.config() != null ? log.config().remoteLogCopyLagBytes() : 0L;
+                long copyLagMs = log.config() != null ? log.config().remoteCopyLagMs() : 0L;
+                long copyLagBytes = log.config() != null ? log.config().remoteCopyLagBytes() : 0L;
                 long totalLogSize = log.size();
                 long cumulativeSize = 0;
 
