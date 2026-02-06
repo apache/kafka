@@ -305,11 +305,9 @@ public class StateDirectory implements AutoCloseable {
     }
 
     public void updateTaskOffsets(final TaskId taskId, final Map<TopicPartition, Long> changelogOffsets) {
-        if (changelogOffsets.isEmpty()) {
-            return;
+        if (!changelogOffsets.isEmpty()) {
+            taskOffsetSums.put(taskId, sumOfChangelogOffsets(taskId, changelogOffsets));
         }
-
-        taskOffsetSums.put(taskId, sumOfChangelogOffsets(taskId, changelogOffsets));
     }
 
     public void removeTaskOffsets(final TaskId taskId) {
