@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -79,6 +80,7 @@ public class TasksTest {
         assertEquals(standbyTask, tasks.task(standbyTask.id()));
 
         assertEquals(Set.of(statefulTask, statelessTask), new HashSet<>(tasks.activeTasks()));
+        assertEquals(Set.of(standbyTask), new HashSet<>(tasks.standbyTasks()));
         assertEquals(Set.of(statefulTask, statelessTask, standbyTask), tasks.allTasks());
         assertEquals(Set.of(statefulTask, standbyTask), tasks.tasks(Set.of(statefulTask.id(), standbyTask.id())));
         assertEquals(Set.of(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allTaskIds());
@@ -165,6 +167,24 @@ public class TasksTest {
     }
 
     @Test
+    public void shouldVerifyIfPendingStandbyTaskToInitAreDrained() {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0)).build();
+        final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_1)).build();
+        final StandbyTask standbyTask1 = standbyTask(TASK_1_0, Set.of(TOPIC_PARTITION_A_0)).build();
+        final StandbyTask standbyTask2 = standbyTask(TASK_1_1, Set.of(TOPIC_PARTITION_A_1)).build();
+        tasks.addPendingTasksToInit(Set.of(activeTask1, activeTask2, standbyTask1, standbyTask2));
+
+        final Set<Task> standbyTasksToInit = tasks.drainPendingStandbyTasksToInit();
+
+        assertEquals(2, standbyTasksToInit.size());
+        assertTrue(standbyTasksToInit.containsAll(Set.of(standbyTask1, standbyTask2)));
+        assertFalse(standbyTasksToInit.containsAll(Set.of(activeTask1, activeTask2)));
+        assertEquals(2, tasks.pendingTasksToInit().size());
+        assertTrue(tasks.hasPendingTasksToInit());
+        assertTrue(tasks.pendingTasksToInit().containsAll(Set.of(activeTask1, activeTask2)));
+    }
+
+    @Test
     public void shouldAddFailedTask() {
         final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0)).build();
         final StreamTask activeTask2 = statefulTask(TASK_0_1, Set.of(TOPIC_PARTITION_B_1)).build();
@@ -229,5 +249,17 @@ public class TasksTest {
         assertTrue(tasks.pendingTasksToInit().isEmpty());
         assertTrue(tasks.pendingActiveTasksToCreate().isEmpty());
         assertTrue(tasks.pendingStandbyTasksToCreate().isEmpty());
+    }
+
+    @Test
+    public void shouldRemovePendingTaskToClose() {
+        final StreamTask activeTask1 = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_B_0))
+                .inState(State.SUSPENDED).build();
+        tasks.addPendingTasksToClose(List.of(activeTask1));
+        assertTrue(tasks.pendingTasksToClose().contains(activeTask1));
+
+        tasks.removeTask(activeTask1);
+        assertFalse(tasks.pendingTasksToInit().contains(activeTask1));
+        assertFalse(tasks.allTasks().contains(activeTask1));
     }
 }

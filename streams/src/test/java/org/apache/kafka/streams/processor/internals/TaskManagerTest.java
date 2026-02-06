@@ -375,12 +375,8 @@ public class TaskManagerTest {
         final StreamTask activeTask1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
-        final StreamTask activeTask2 = statefulTask(taskId01, taskId01ChangelogPartitions)
-            .inState(State.RUNNING)
-            .withInputPartitions(taskId01Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true, true);
-        when(tasks.allTasks()).thenReturn(Set.of(activeTask1, activeTask2));
         final KafkaFuture<Void> mockFuture = KafkaFuture.completedFuture(null);
         when(schedulingTaskManager.lockTasks(any())).thenReturn(mockFuture);
 
@@ -3436,7 +3432,7 @@ public class TaskManagerTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseTasksIfStateUpdaterTimesOutOnRemove() throws Exception {
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, null, true);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, mock(TasksRegistry.class), true);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
                 mkEntry(taskId00, taskId00Partitions)
         );
@@ -3717,6 +3713,36 @@ public class TaskManagerTest {
         verify(removedFailedStandbyTaskDuringRemoval).prepareCommit(false);
         verify(removedFailedStandbyTaskDuringRemoval).suspend();
         verify(removedFailedStandbyTaskDuringRemoval).closeDirty();
+    }
+
+    @Test
+    public void shouldClosePendingTasksToInitDuringShutdown() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        final StandbyTask standbyTask00 = standbyTask(taskId00, taskId00ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId00Partitions)
+                .build();
+
+        final StreamTask activeTask01 = statefulTask(taskId01, taskId00ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId00Partitions).build();
+
+        when(tasks.drainPendingStandbyTasksToInit()).thenReturn(Set.of(standbyTask00));
+        when(tasks.drainPendingActiveTasksToInit()).thenReturn(Set.of(activeTask01));
+
+        taskManager.shutdown(true);
+
+        verify(standbyTask00).prepareCommit(true);
+        verify(standbyTask00).postCommit(true);
+        verify(standbyTask00).suspend();
+        verify(standbyTask00).closeClean();
+
+        verify(activeTask01).prepareCommit(true);
+        verify(activeTask01).postCommit(true);
+        verify(activeTask01).suspend();
+        verify(activeTask01).closeClean();
     }
 
     @Test
