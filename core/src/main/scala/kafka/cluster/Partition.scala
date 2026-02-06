@@ -20,7 +20,6 @@ import java.lang.{Long => JLong}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, CopyOnWriteArrayList}
-import kafka.log._
 import kafka.server._
 import kafka.server.share.DelayedShareFetch
 import kafka.utils._
@@ -41,7 +40,7 @@ import org.apache.kafka.server.LogDeleteRecordsResult
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
-import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogManager, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.partition.{AlterPartitionListener, AssignmentState, CommittedPartitionState, OngoingReassignmentState, PartitionListener, PartitionState, PendingExpandIsr, PendingPartitionChange, PendingShrinkIsr, SimpleAssignmentState}
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, TopicPartitionOperationKey}
@@ -352,11 +351,11 @@ class Partition(val topicPartition: TopicPartition,
     }
 
     logManager.initializingLog(topicPartition)
-    var maybeLog: Option[UnifiedLog] = None
+    var maybeLog: Optional[UnifiedLog] = Optional.empty
     try {
-      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId.toJava, targetLogDirectoryId)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId.toJava, targetLogDirectoryId.toJava)
       if (!isFutureReplica) log.setLogOffsetsListener(logOffsetsListener)
-      maybeLog = Some(log)
+      maybeLog = Optional.of(log)
       updateHighWatermark(log)
       log
     } finally {
@@ -453,7 +452,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   def topicId: Option[Uuid] = {
     if (_topicId.isEmpty || _topicId.contains(Uuid.ZERO_UUID)) {
-      _topicId = this.log.orElse(logManager.getLog(topicPartition)).flatMap(_.topicId.toScala)
+      _topicId = this.log.orElse(logManager.getLog(topicPartition).toScala).flatMap(_.topicId.toScala)
     }
     _topicId
   }
@@ -472,7 +471,7 @@ class Partition(val topicPartition: TopicPartition,
     inWriteLock[Exception](leaderIsrUpdateLock, () => {
       futureLog = None
       if (deleteFromLogDir)
-        logManager.asyncDelete(topicPartition, isFuture = true)
+        logManager.asyncDelete(topicPartition, true, true, false)
     })
   }
 
@@ -524,8 +523,8 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def futureReplicaDirectoryId(): Option[Uuid] = futureLog.flatMap(log => logManager.directoryId(log.dir.getParent))
-  def logDirectoryId(): Option[Uuid] = log.flatMap(log => logManager.directoryId(log.dir.getParent))
+  def futureReplicaDirectoryId(): Option[Uuid] = futureLog.flatMap(log => logManager.directoryId(log.dir.getParent).toScala)
+  def logDirectoryId(): Option[Uuid] = log.flatMap(log => logManager.directoryId(log.dir.getParent).toScala)
   /**
    * Delete the partition. Note that deleting the partition does not delete the underlying logs.
    * The logs are deleted by the ReplicaManager after having deleted the partition.
@@ -1462,7 +1461,7 @@ class Partition(val topicPartition: TopicPartition,
     def getOffsetByTimestamp: OffsetResultHolder = {
       logManager.getLog(topicPartition)
         .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager.asInstanceOf[Option[AsyncOffsetReader]].toJava))
-        .getOrElse(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()))
+        .orElse(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()))
     }
 
     // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
@@ -1548,7 +1547,7 @@ class Partition(val topicPartition: TopicPartition,
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
     inReadLock[Exception](leaderIsrUpdateLock, () => {
-      logManager.truncateTo(Map(topicPartition -> offset), isFuture = isFuture)
+      logManager.truncateTo(util.Map.of(topicPartition, offset), isFuture)
     })
   }
 
@@ -1565,7 +1564,7 @@ class Partition(val topicPartition: TopicPartition,
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
     inReadLock[Exception](leaderIsrUpdateLock, () => {
-      logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture = isFuture, logStartOffsetOpt)
+      logManager.truncateFullyAndStartAt(topicPartition, newOffset, isFuture, logStartOffsetOpt)
     })
   }
 

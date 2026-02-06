@@ -19,7 +19,6 @@ package org.apache.kafka.jmh.partition;
 
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
-import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.builders.LogManagerBuilder;
 
@@ -38,6 +37,7 @@ import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -56,6 +56,7 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -85,7 +86,7 @@ public class UpdateFollowerFetchStateBenchmark {
     private Replica replica2;
 
     @Setup(Level.Trial)
-    public void setUp() {
+    public void setUp() throws IOException {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
         logManager = new LogManagerBuilder().
@@ -145,7 +146,7 @@ public class UpdateFollowerFetchStateBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() throws InterruptedException {
+    public void tearDown() throws Exception {
         logManager.shutdown(-1L);
         scheduler.shutdown();
     }
