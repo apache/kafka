@@ -37,27 +37,25 @@ public interface HeadersBytesStore {
      * <p>
      * This method adds empty headers to the existing timestamped value format.
      * <p>
-     * The headersBytes format per KIP-1271 is: [count(varint)][header1][header2]...
-     * For empty headers, this is simply a single varint encoding 0.
+     * Empty headers are represented as 0 bytes (headersSize=0, no headersBytes),
      *
-     * @param valueAndTimestamp the legacy timestamped value bytes (ValueAndTimestamp format: [timestamp(8)][value])
+     * @param plainValue the legacy timestamped value bytes
      * @return the value in header-embedded format with empty headers
      */
-    static byte[] convertToHeaderFormat(final byte[] valueAndTimestamp) {
-        if (valueAndTimestamp == null) {
+    static byte[] convertToHeaderFormat(final byte[] plainValue) {
+        if (plainValue == null) {
             return null;
         }
 
         // Format: [headersSize(varint)][headersBytes][payload]
         // For empty headers:
-        //   headersSize = varint(1) = [0x02] (ZigZag varint)
-        //   headersBytes = [count(varint) = 0] = [0x00]
-        // Result: [0x02][0x00][payload]
+        //   headersSize = varint(0) = [0x00]
+        //   headersBytes = [] (empty, 0 bytes)
+        // Result: [0x00][payload]
         return ByteBuffer
-            .allocate(2 + valueAndTimestamp.length)
-            .put((byte) 0x02)
+            .allocate(1 + plainValue.length)
             .put((byte) 0x00)
-            .put(valueAndTimestamp)
+            .put(plainValue)
             .array();
     }
 }

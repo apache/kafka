@@ -65,16 +65,7 @@ public class HeadersBytesStoreTest {
         final ByteBuffer buffer = ByteBuffer.wrap(converted);
 
         final int headersSize = ByteUtils.readVarint(buffer);
-        assertTrue(headersSize > 0);
-        assertEquals(1, headersSize, "Empty header should have 1 byte to indicate headers count is 0");
-
-        final byte[] headersBytes = new byte[headersSize];
-        buffer.get(headersBytes);
-
-        final ByteBuffer headersBuffer = ByteBuffer.wrap(headersBytes);
-        final int headerCount = ByteUtils.readVarint(headersBuffer);
-        assertEquals(0, headerCount, "should be empty headers: [count=0]");
-
+        assertEquals(0, headersSize, "Empty headers should have headersSize = 0");
         final byte[] payload = new byte[buffer.remaining()];
         buffer.get(payload);
         assertArrayEquals(legacyValue, payload, "should keep original payload");
@@ -91,11 +82,8 @@ public class HeadersBytesStoreTest {
 
         final ByteBuffer buffer = ByteBuffer.wrap(converted);
         final int headersSize = ByteUtils.readVarint(buffer);
-        assertTrue(headersSize > 0);
-        assertEquals(1, headersSize, "Empty header should have 1 byte to indicate headers count is 0");
-
-        buffer.position(buffer.position() + headersSize);
-        assertEquals(0, buffer.remaining());
+        assertEquals(0, headersSize, "Empty headers should have headersSize = 0");
+        assertEquals(0, buffer.remaining(), "No payload bytes for empty value");
     }
 
     @Test
