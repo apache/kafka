@@ -2506,6 +2506,7 @@ project(':storage') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
+    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation testFixtures(project(':server-common'))
     testImplementation testFixtures(project(':metadata'))
