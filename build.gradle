@@ -1038,6 +1038,11 @@ project(':server') {
   }
 
   apply plugin: 'java-test-fixtures'
+  configurations {
+    // To prevent a UniqueResourceException due the same resource existing in both
+    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+    testImplementation.exclude module: 'api-ldap-schema-data'
+  }
 
   dependencies {
     implementation libs.commonsValidator
@@ -1156,9 +1161,6 @@ project(':core') {
     implementation.exclude module: 'jmxri'
     implementation.exclude module: 'jmxtools'
     implementation.exclude module: 'mail'
-    // To prevent a UniqueResourceException due the same resource existing in both
-    // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
-    testImplementation.exclude module: 'api-ldap-schema-data'
     releaseOnly
   }
 
@@ -1235,7 +1237,22 @@ project(':core') {
     testImplementation testLog4j2Libs
     testImplementation libs.mockOAuth2Server
 
-    testRuntimeOnly libs.apachedsProtocolShared
+    configurations {
+      // To prevent a UniqueResourceException due the same resource existing in both
+      // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
+      testRuntimeOnly.exclude module: 'api-ldap-schema-data'
+    }
+
+    testRuntimeOnly(libs.apacheda) {
+      exclude group: 'xml-apis', module: 'xml-apis'
+      // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
+      // It is safer to use from `apacheds` since that is the implementation.
+      exclude module: 'mina-core'
+    }
+    testRuntimeOnly libs.apachedsInterceptorKerberos
+    testRuntimeOnly libs.apachedsProtocolKerberos
+    testRuntimeOnly libs.apachedsProtocolLdap
+    testRuntimeOnly libs.apachedsLdifPartition
     testRuntimeOnly runtimeTestLibs
   }
 
