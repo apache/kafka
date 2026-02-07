@@ -669,7 +669,7 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
     // validation, no additional validation is performed.
 
     def validateLogLocalRetentionMs(): Unit = {
-      val logRetentionMs: Long = newConfig.logRetentionTimeMillis
+      val logRetentionMs = newConfig.logRetentionTimeMillis
       val logLocalRetentionMs: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionMs
       if (logRetentionMs != -1L && logLocalRetentionMs != -2L) {
         if (logLocalRetentionMs == -1L) {
@@ -684,10 +684,10 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
     }
 
     def validateLogLocalRetentionBytes(): Unit = {
-      val logRetentionBytes: Long = newConfig.logRetentionBytes
+      val logRetentionBytes = newConfig.logRetentionBytes
       val logLocalRetentionBytes: java.lang.Long = newConfig.remoteLogManagerConfig.logLocalRetentionBytes
-      if (logRetentionBytes > -1L && logLocalRetentionBytes != -2L) {
-        if (logLocalRetentionBytes == -1L) {
+      if (logRetentionBytes > -1 && logLocalRetentionBytes != -2) {
+        if (logLocalRetentionBytes == -1) {
           throw new ConfigException(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes,
             s"Value must not be -1 as ${ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG} value is set as $logRetentionBytes.")
         }
