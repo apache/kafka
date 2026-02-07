@@ -37,12 +37,12 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.group.GroupCoordinatorService;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Assertions;
+
+import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collection;
@@ -52,9 +52,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import javax.management.AttributeNotFoundException;
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanException;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.management.ReflectionException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -343,7 +349,6 @@ public class ConsumerIntegrationTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @ClusterTest(
         brokers = 2,
         types = {Type.KRAFT},
@@ -352,7 +357,8 @@ public class ConsumerIntegrationTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, value = "3000")
         }
     )
-    public void testSingleCoordinatorOwnershipAfterPartitionReassignment(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException, TimeoutException {
+    public void testSingleCoordinatorOwnershipAfterPartitionReassignment(ClusterInstance clusterInstance)
+        throws InterruptedException, ExecutionException, TimeoutException, MalformedObjectNameException, ReflectionException, AttributeNotFoundException, InstanceNotFoundException, MBeanException {
         try (var producer = clusterInstance.<byte[], byte[]>producer()) {
             producer.send(new ProducerRecord<>("topic", "value".getBytes(StandardCharsets.UTF_8)));
         }
@@ -368,23 +374,41 @@ public class ConsumerIntegrationTest {
             // append records to coordinator
             consumer.commitSync();
 
+            var numActivePartitions = (Long) ManagementFactory.getPlatformMBeanServer().getAttribute(
+                new ObjectName("kafka.server:type=group-coordinator-metrics,state=active"), "num-partitions");
+            // The num-partitions metric uses the same name for all brokers and is
+            // registered in the same JVM. Therefore, we infer the owning broker
+            // based on the number of active partitions.
+            // - activePartitions == 1 means metric belongs to broker 0 (partition 0 assigned)
+            // - activePartitions == 0 means metric belongs to broker 1
+            AtomicBoolean isMetricBelongsToFirstBroker = new AtomicBoolean();
+            if (numActivePartitions == 1L) {
+                isMetricBelongsToFirstBroker.set(true);
+            } else if (numActivePartitions == 0L) {
+                isMetricBelongsToFirstBroker.set(false);
+            } else {
+                Assertions.fail("Unexpected number of active partitions: " + numActivePartitions);
+            }
+
             // unload the coordinator by changing leader (0 -> 1)
             admin.alterPartitionReassignments(Map.of(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0),
-                Optional.of(new NewPartitionReassignment(List.of(1))))).all().get();
+                Optional.of(new NewPartitionReassignment(List.of(1))))
+            ).all().get();
+
+            // Wait for the coordinator metrics to update after leadership change
+            TestUtils.waitForCondition(() -> {
+                // Since the partition leader has moved to broker 1:
+                // - If the metric belongs to broker 0, the active num-partitions value should be 0.
+                // - If the metric belongs to broker 1, the active num-partitions value should be 1.
+                var numPartitions = (Long) ManagementFactory.getPlatformMBeanServer().getAttribute(
+                    new ObjectName("kafka.server:type=group-coordinator-metrics,state=active"), "num-partitions");
+                if (isMetricBelongsToFirstBroker.get()) {
+                    return 0L == numPartitions;
+                } else {
+                    return 1L == numPartitions;
+                }
+            }, "incorrect num-partitions value after partition leader change");
         }
-
-        Function<GroupCoordinator, List<TopicPartition>> partitionsInGroupMetrics = service -> assertDoesNotThrow(() -> {
-            var f0 = GroupCoordinatorService.class.getDeclaredField("groupCoordinatorMetrics");
-            f0.setAccessible(true);
-            var f1 = GroupCoordinatorMetrics.class.getDeclaredField("shards");
-            f1.setAccessible(true);
-            return List.copyOf(((Map<TopicPartition, ?>) f1.get(f0.get(service))).keySet());
-        });
-
-        // the offset partition should NOT be hosted by multiple coordinators
-        var tps = clusterInstance.brokers().values().stream()
-            .flatMap(b -> partitionsInGroupMetrics.apply(b.groupCoordinator()).stream()).toList();
-        assertEquals(1, tps.size());
     }
 
     private void sendMsg(ClusterInstance clusterInstance, String topic, int sendMsgNum) {

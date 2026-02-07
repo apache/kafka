@@ -754,8 +754,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             timer.cancelAll();
             executor.cancelAll();
             deferredEventQueue.failAll(Errors.NOT_COORDINATOR.exception());
-            // There is no need to free the current batch, as we will be closing all related resources anyway.
-            failCurrentBatchWithoutRelease(Errors.NOT_COORDINATOR.exception());
+            failCurrentBatch(Errors.NOT_COORDINATOR.exception());
             if (coordinator != null) {
                 try {
                     coordinator.onUnloaded();
@@ -774,7 +773,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
             // Release the buffer only if it is not larger than the maxBatchSize.
-            int maxBatchSize = partitionWriter.config(tp).maxMessageSize();
+            int maxBatchSize = currentBatch.maxBatchSize;
 
             if (currentBatch.builder.buffer().capacity() <= maxBatchSize) {
                 bufferSupplier.release(currentBatch.builder.buffer());
@@ -880,23 +879,15 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         }
 
-        private void failCurrentBatch(Throwable t) {
-            failCurrentBatch(t, true);
-        }
-
-        private void failCurrentBatchWithoutRelease(Throwable t) {
-            failCurrentBatch(t, false);
-        }
-
         /**
          * Fails the current batch, reverts to the snapshot to the base/start offset of the
          * batch, fails all the associated events.
          */
-        private void failCurrentBatch(Throwable t, boolean freeCurrentBatch) {
+        private void failCurrentBatch(Throwable t) {
             if (currentBatch != null) {
                 coordinator.revertLastWrittenOffset(currentBatch.baseOffset);
                 currentBatch.deferredEvents.complete(t);
-                if (freeCurrentBatch) freeCurrentBatch();
+                freeCurrentBatch();
             }
         }
 

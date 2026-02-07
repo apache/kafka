@@ -20,6 +20,7 @@
 
 <import-control pkg="org.apache.kafka">
     <allow pkg="java"/>
+    <allow pkg="javax.management"/>
     <allow pkg="org.junit"/>
 
     <!-- These are tests, allow whatever -->
