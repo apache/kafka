@@ -3038,6 +3038,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldCloseCleanWhenRemoveAllActiveTasksFromStateUpdaterOnPartitionLost
 - shouldCloseDirtyActiveUnassignedTasksWhenErrorCleanClosingTask
 - shouldCloseDirtyWhenRemoveFailedActiveTasksFromStateUpdaterOnPartitionLost
+- shouldClosePendingTasksToInitDuringShutdown
 - shouldCloseStandbyTasksOnShutdown
 - shouldCloseStandbyUnassignedTasksWhenCreatingNewTasks
 - shouldCloseTasksIfStateUpdaterTimesOutOnRemove
@@ -3188,7 +3189,9 @@ org.apache.kafka.streams.processor.internals.TasksTest:
 - shouldDrainPendingTasksToCreate
 - shouldKeepAddedTasks
 - shouldRemoveFailedTask
+- shouldRemovePendingTaskToClose
 - shouldVerifyIfPendingActiveTaskToInitAreDrained
+- shouldVerifyIfPendingStandbyTaskToInitAreDrained
 - shouldVerifyIfPendingTaskToInitExist
 org.apache.kafka.streams.processor.internals.ThreadMetadataImplTest:
 - shouldBeEqualIfSameObject
