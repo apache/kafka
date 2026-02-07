@@ -719,20 +719,20 @@ public class CoordinatorRuntimeTest {
         MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
-                new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
-                        .withTime(timer.time())
-                        .withTimer(timer)
-                        .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
-                        .withLoader(new MockCoordinatorLoader())
-                        .withEventProcessor(new DirectEventProcessor())
-                        .withPartitionWriter(writer)
-                        .withCoordinatorShardBuilderSupplier(supplier)
-                        .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
-                        .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
-                        .withSerializer(new StringSerializer())
-                        .withAppendLingerMs(OptionalInt.of(10))
-                        .withExecutorService(mock(ExecutorService.class))
-                        .build();
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(supplier)
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withAppendLingerMs(OptionalInt.of(10))
+                .withExecutorService(mock(ExecutorService.class))
+                .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
         when(builder.withLogContext(any())).thenReturn(builder);
@@ -746,8 +746,8 @@ public class CoordinatorRuntimeTest {
 
         // Configure the partition writer with a normal config initially.
         LogConfig initialLogConfig = new LogConfig(
-                Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024) // 1MB
-                ));
+            Map.of(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, String.valueOf(1024 * 1024)) // 1MB
+        );
         when(writer.config(TP)).thenReturn(initialLogConfig);
         when(writer.append(eq(TP), any(), any(), anyShort())).thenReturn(1L);
 
@@ -757,7 +757,7 @@ public class CoordinatorRuntimeTest {
 
         // Schedule a write operation to create a pending batch.
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
-                state -> new CoordinatorResult<>(List.of("record1"), "response1")
+            state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
 
         // Verify that the write is not committed yet and a batch exists.
@@ -782,8 +782,8 @@ public class CoordinatorRuntimeTest {
 
         // Verify that the listener is deregistered.
         verify(writer, times(1)).deregisterListener(
-                eq(TP),
-                any(PartitionWriter.Listener.class)
+            eq(TP),
+            any(PartitionWriter.Listener.class)
         );
 
         // Getting the coordinator context fails because it no longer exists.
