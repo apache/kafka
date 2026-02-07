@@ -2141,6 +2141,7 @@ kafka.server.KafkaApisTest:
 - testReadUncommittedConsumerListOffsetLatest
 - testReassignmentAndReplicationBytesOutRateWhenNotReassigning
 - testReassignmentAndReplicationBytesOutRateWhenReassigning
+- testRecordConversionStatsAccumulatedAcrossMultiplePartitions
 - testShareFetchRequestWithInvalidMemberId
 - testShareGroupDescribeFilterUnauthorizedTopics
 - testShareGroupDescribeRequestAuthorizationFailed
