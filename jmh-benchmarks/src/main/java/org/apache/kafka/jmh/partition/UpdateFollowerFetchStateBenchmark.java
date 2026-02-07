@@ -20,7 +20,6 @@ package org.apache.kafka.jmh.partition;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
-import kafka.server.AlterPartitionManager;
 import kafka.server.builders.LogManagerBuilder;
 
 import org.apache.kafka.common.DirectoryId;
@@ -32,6 +31,7 @@ import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.partition.AlterPartitionListener;
+import org.apache.kafka.server.partition.AlterPartitionManager;
 import org.apache.kafka.server.replica.Replica;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;

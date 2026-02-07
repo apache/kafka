@@ -15,24 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server;
+package org.apache.kafka.server.partition;
 
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.metadata.LeaderAndIsr;
+import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Handles updating the ISR by sending AlterPartition requests to the controller. Updating the ISR is an asynchronous
- * operation, so partitions will learn about the result of their request through a callback.
- * <p>
- * Note that ISR state changes can still be initiated by the controller and sent to the partitions via LeaderAndIsr
- * requests.
- */
-public interface AlterPartitionManger {
-    void start();
-
-    void shutdown();
-
-    CompletableFuture<LeaderAndIsr> submit(TopicIdPartition topicIdPartition, LeaderAndIsr leaderAndIsr);
+public record AlterPartitionItem(TopicIdPartition topicIdPartition, LeaderAndIsr leaderAndIsr,
+                                 CompletableFuture<LeaderAndIsr> future) {
 }

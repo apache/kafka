@@ -31,13 +31,13 @@ import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.ResourcePattern
@@ -51,7 +51,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, TopicIdPartition}
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
@@ -1002,52 +1002,6 @@ object TestUtils extends Logging {
       spyLogManager
     } else
       logManager
-  }
-
-  class MockAlterPartitionManager extends AlterPartitionManager {
-    val isrUpdates: mutable.Queue[AlterPartitionItem] = new mutable.Queue[AlterPartitionItem]()
-    val inFlight: AtomicBoolean = new AtomicBoolean(false)
-
-
-    override def submit(
-      topicPartition: TopicIdPartition,
-      leaderAndIsr: LeaderAndIsr,
-    ): CompletableFuture[LeaderAndIsr]= {
-      val future = new CompletableFuture[LeaderAndIsr]()
-      if (inFlight.compareAndSet(false, true)) {
-        isrUpdates += AlterPartitionItem(
-          topicPartition,
-          leaderAndIsr,
-          future
-        )
-      } else {
-        future.completeExceptionally(new OperationNotAttemptedException(
-          s"Failed to enqueue AlterIsr request for $topicPartition since there is already an inflight request"))
-      }
-      future
-    }
-
-    def completeIsrUpdate(newPartitionEpoch: Int): Unit = {
-      if (inFlight.compareAndSet(true, false)) {
-        val item = isrUpdates.dequeue()
-        item.future.complete(item.leaderAndIsr.withPartitionEpoch(newPartitionEpoch))
-      } else {
-        fail("Expected an in-flight ISR update, but there was none")
-      }
-    }
-
-    def failIsrUpdate(error: Errors): Unit = {
-      if (inFlight.compareAndSet(true, false)) {
-        val item = isrUpdates.dequeue()
-        item.future.completeExceptionally(error.exception)
-      } else {
-        fail("Expected an in-flight ISR update, but there was none")
-      }
-    }
-  }
-
-  def createAlterIsrManager(): MockAlterPartitionManager = {
-    new MockAlterPartitionManager()
   }
 
   def generateAndProduceMessages[B <: KafkaBroker](

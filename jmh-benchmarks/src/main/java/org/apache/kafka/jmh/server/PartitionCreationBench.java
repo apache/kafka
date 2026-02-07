@@ -18,7 +18,6 @@ package org.apache.kafka.jmh.server;
 
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
-import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -37,7 +36,9 @@ import org.apache.kafka.metadata.KRaftMetadataCache;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.server.partition.AlterPartitionManager;
 import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.MockAlterPartitionManager;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -141,7 +142,7 @@ public class PartitionCreationBench {
             build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "", "");
-        this.alterPartitionManager = TestUtils.createAlterIsrManager();
+        this.alterPartitionManager = new MockAlterPartitionManager();
         this.replicaManager = new ReplicaManagerBuilder().
             setConfig(brokerProperties).
             setMetrics(metrics).
