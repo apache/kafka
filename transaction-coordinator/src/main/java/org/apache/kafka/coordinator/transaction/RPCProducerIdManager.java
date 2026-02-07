@@ -58,8 +58,11 @@ public class RPCProducerIdManager implements ProducerIdManager {
 
     // Visible for testing
     final AtomicReference<ProducerIdsBlock> nextProducerIdBlock = new AtomicReference<>(null);
-    private final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
+    final AtomicReference<ProducerIdsBlock> currentProducerIdBlock = new AtomicReference<>(ProducerIdsBlock.EMPTY);
     private final AtomicBoolean requestInFlight = new AtomicBoolean(false);
+    
+    // Setting the value of backoffDeadlineMs should be handled only in the response handler thread.
+    // Otherwise, consider using compareAndSet() instead of set().
     private final AtomicLong backoffDeadlineMs = new AtomicLong(NO_RETRY);
 
     public RPCProducerIdManager(int brokerId,
@@ -114,8 +117,6 @@ public class RPCProducerIdManager implements ProducerIdManager {
             if (nextProducerIdBlock.get() == null &&
                     requestInFlight.compareAndSet(false, true)) {
                 sendRequest();
-                // Reset backoff after a successful send.
-                backoffDeadlineMs.set(NO_RETRY);
             }
         }
     }
@@ -136,6 +137,7 @@ public class RPCProducerIdManager implements ProducerIdManager {
             @Override
             public void onTimeout() {
                 log.warn("{} Timed out when requesting AllocateProducerIds from the controller.", logPrefix);
+                backoffDeadlineMs.set(NO_RETRY);
                 requestInFlight.set(false);
             }
         });
@@ -184,11 +186,13 @@ public class RPCProducerIdManager implements ProducerIdManager {
         }
         if (!successfulResponse) {
             handleUnsuccessfulResponse();
+        } else {
+            backoffDeadlineMs.set(NO_RETRY);
         }
     }
 
     private boolean sanityCheckResponse(AllocateProducerIdsResponseData data) {
-        if (data.producerIdStart() < currentProducerIdBlock.get().lastProducerId()) {
+        if (data.producerIdStart() <= currentProducerIdBlock.get().lastProducerId()) {
             log.error("{} Producer ID block is not monotonic with current block: current={} response={}", logPrefix, currentProducerIdBlock.get(), data);
         } else if (data.producerIdStart() < 0 || data.producerIdLen() < 0 || data.producerIdStart() > Long.MAX_VALUE - data.producerIdLen()) {
             log.error("{} Producer ID block includes invalid ID range: {}", logPrefix, data);

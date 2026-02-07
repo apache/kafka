@@ -136,7 +136,7 @@ For interoperability with 0.9.0.x clients, the first packet received by the serv
 
 The protocol is built out of the following primitive types.
 
-{{< include-html file="/static/43/generated/protocol_types.html" >}} 
+{{< include-html file="/static/{version}/generated/protocol_types.html" >}} 
 
 ### Notes on reading the request format grammars
 
@@ -184,13 +184,13 @@ A description of the record batch format can be found [here](/documentation/#rec
 
 We use numeric codes to indicate what problem occurred on the server. These can be translated by the client into exceptions or whatever the appropriate error handling mechanism in the client language. Here is a table of the error codes currently in use:
 
-{{< include-html file="/static/43/generated/protocol_errors.html" >}} 
+{{< include-html file="/static/{version}/generated/protocol_errors.html" >}} 
 
 ### Api Keys
 
 The following are the numeric codes that the stable ApiKey in the request can take for each of the below request types.
 
-{{< include-html file="/static/43/generated/protocol_api_keys.html" >}} 
+{{< include-html file="/static/{version}/generated/protocol_api_keys.html" >}} 
 
 ## The Messages
 
@@ -204,7 +204,7 @@ The message consists of the header and body:
 
 `RequestOrResponseHeader` is the versioned request or response header. `Body` is the message-specific body.
 
-{{< include-html file="/static/43/generated/protocol_messages.html" >}} 
+{{< include-html file="/static/{version}/generated/protocol_messages.html" >}} 
 
 ## Some Common Philosophical Questions
 

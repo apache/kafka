@@ -31,15 +31,22 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.common.ControllerRequestCompletionHandler
+import org.apache.kafka.server.ControllerInformation
+import org.apache.kafka.server.NodeToControllerRequestThread
+import org.apache.kafka.server.NodeToControllerQueueItem
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
+
+import java.util.Optional
+import java.util.function.Supplier
+import scala.jdk.OptionConverters.RichOption
 
 
 class NodeToControllerRequestThreadTest {
 
   private def controllerInfo(node: Option[Node]): ControllerInformation = {
-    ControllerInformation(node, new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
+    new ControllerInformation(node.toJava, new ListenerName(""), SecurityProtocol.PLAINTEXT, "")
   }
 
   private def emptyControllerInfo: ControllerInformation = {
@@ -52,18 +59,18 @@ class NodeToControllerRequestThreadTest {
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1))
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
+    when(controllerNodeProvider.get()).thenReturn(emptyControllerInfo)
 
     val retryTimeoutMs = 30000
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,  new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs)
-    testRequestThread.started = true
+    testRequestThread.setStarted(true)
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -89,20 +96,20 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(2, java.util.Map.of("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,  new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
-    testRequestThread.started = true
+      controllerNodeProvider, config, time, "", Long.MaxValue)
+    testRequestThread.setStarted(true)
     mockClient.prepareResponse(expectedResponse)
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -131,21 +138,21 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val oldController = new Node(oldControllerId, "host1", 1234)
     val newController = new Node(newControllerId, "host2", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(
+    when(controllerNodeProvider.get()).thenReturn(
       controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, java.util.Map.of("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient, new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
-    testRequestThread.started = true
+      controllerNodeProvider, config, time, "", Long.MaxValue)
+    testRequestThread.setStarted(true)
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler,
@@ -179,12 +186,12 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val port = 1234
     val oldController = new Node(oldControllerId, "host1", port)
     val newController = new Node(newControllerId, "host2", port)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(
+    when(controllerNodeProvider.get()).thenReturn(
       controllerInfo(Some(oldController)), controllerInfo(Some(newController)))
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
@@ -193,11 +200,11 @@ class NodeToControllerRequestThreadTest {
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, java.util.Map.of("a", 2))
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient, new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
-    testRequestThread.started = true
+      controllerNodeProvider, config, time, "", Long.MaxValue)
+    testRequestThread.setStarted(true)
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
@@ -208,7 +215,7 @@ class NodeToControllerRequestThreadTest {
     testRequestThread.doWork()
 
     val oldBrokerNode = new Node(oldControllerId, "host1", port)
-    assertEquals(Some(oldBrokerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(oldBrokerNode).toJava, testRequestThread.activeControllerAddress())
 
     // send and process the request
     mockClient.prepareResponse((body: AbstractRequest) => {
@@ -216,7 +223,7 @@ class NodeToControllerRequestThreadTest {
       body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
     }, responseWithNotControllerError)
     testRequestThread.doWork()
-    assertEquals(None, testRequestThread.activeControllerAddress())
+    assertEquals(Optional.empty(), testRequestThread.activeControllerAddress())
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
@@ -224,7 +231,7 @@ class NodeToControllerRequestThreadTest {
     testRequestThread.doWork()
 
     val newControllerNode = new Node(newControllerId, "host2", port)
-    assertEquals(Some(newControllerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(newControllerNode).toJava, testRequestThread.activeControllerAddress())
 
     assertTrue(completionHandler.completed.get())
   }
@@ -241,12 +248,12 @@ class NodeToControllerRequestThreadTest {
     // enable envelope API
     mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.ENVELOPE.id, 0.toShort, 0.toShort))
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val port = 1234
     val oldController = new Node(oldControllerId, "host1", port)
     val newController = new Node(newControllerId, "host2", port)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(
+    when(controllerNodeProvider.get()).thenReturn(
       controllerInfo(Some(oldController)),
       controllerInfo(Some(newController))
     )
@@ -260,8 +267,8 @@ class NodeToControllerRequestThreadTest {
 
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,  new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
-    testRequestThread.started = true
+      controllerNodeProvider, config, time, "", Long.MaxValue)
+    testRequestThread.setStarted(true)
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "principal", true)
@@ -271,7 +278,7 @@ class NodeToControllerRequestThreadTest {
     val envelopeRequestBuilder = new EnvelopeRequest.Builder(ByteBuffer.allocate(0),
       kafkaPrincipalBuilder.serialize(kafkaPrincipal), "client-address".getBytes)
 
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       envelopeRequestBuilder,
       completionHandler
@@ -282,7 +289,7 @@ class NodeToControllerRequestThreadTest {
     testRequestThread.doWork()
 
     val oldBrokerNode = new Node(oldControllerId, "host1", port)
-    assertEquals(Some(oldBrokerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(oldBrokerNode).toJava, testRequestThread.activeControllerAddress())
 
     // send and process the envelope request
     mockClient.prepareResponse((body: AbstractRequest) => {
@@ -290,7 +297,7 @@ class NodeToControllerRequestThreadTest {
     }, envelopeResponseWithNotControllerError)
     testRequestThread.doWork()
     // expect to reset the activeControllerAddress after finding the NOT_CONTROLLER error
-    assertEquals(None, testRequestThread.activeControllerAddress())
+    assertEquals(Optional.empty(), testRequestThread.activeControllerAddress())
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
@@ -298,7 +305,7 @@ class NodeToControllerRequestThreadTest {
     testRequestThread.doWork()
 
     val newControllerNode = new Node(newControllerId, "host2", port)
-    assertEquals(Some(newControllerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(newControllerNode).toJava, testRequestThread.activeControllerAddress())
 
     assertTrue(completionHandler.completed.get())
   }
@@ -312,10 +319,10 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val controller = new Node(controllerId, "host1", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(controller)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(controller)))
 
     val retryTimeoutMs = 30000
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
@@ -324,10 +331,10 @@ class NodeToControllerRequestThreadTest {
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient, new ManualMetadataUpdater(),
       controllerNodeProvider, config, time, "", retryTimeoutMs)
-    testRequestThread.started = true
+    testRequestThread.setStarted(true)
 
     val completionHandler = new TestControllerRequestCompletionHandler()
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
@@ -361,10 +368,10 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
 
     val callbackResponse = new AtomicReference[ClientResponse]()
     val completionHandler = new ControllerRequestCompletionHandler {
@@ -372,7 +379,7 @@ class NodeToControllerRequestThreadTest {
       override def onComplete(response: ClientResponse): Unit = callbackResponse.set(response)
     }
 
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -382,8 +389,8 @@ class NodeToControllerRequestThreadTest {
 
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,   new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
-    testRequestThread.started = true
+      controllerNodeProvider, config, time, "", Long.MaxValue)
+    testRequestThread.setStarted(true)
 
     testRequestThread.enqueue(queueItem)
     pollUntil(testRequestThread, () => callbackResponse.get != null)
@@ -399,10 +406,10 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo(Some(activeController)))
+    when(controllerNodeProvider.get()).thenReturn(controllerInfo(Some(activeController)))
 
     val callbackResponse = new AtomicReference[ClientResponse]()
     val completionHandler = new ControllerRequestCompletionHandler {
@@ -410,7 +417,7 @@ class NodeToControllerRequestThreadTest {
       override def onComplete(response: ClientResponse): Unit = callbackResponse.set(response)
     }
 
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler
@@ -420,13 +427,13 @@ class NodeToControllerRequestThreadTest {
 
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,  new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
-    testRequestThread.started = true
+      controllerNodeProvider, config, time, "", Long.MaxValue)
+    testRequestThread.setStarted(true)
 
     testRequestThread.enqueue(queueItem)
     pollUntil(testRequestThread, () => callbackResponse.get != null)
     assertNotNull(callbackResponse.get.authenticationException)
-    assertEquals(None, testRequestThread.activeControllerAddress())
+    assertEquals(Optional.empty(), testRequestThread.activeControllerAddress())
   }
 
   @Test
@@ -438,15 +445,15 @@ class NodeToControllerRequestThreadTest {
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
-    when(controllerNodeProvider.getControllerInfo()).thenReturn(emptyControllerInfo)
+    val controllerNodeProvider = mock(classOf[Supplier[ControllerInformation]])
+    when(controllerNodeProvider.get()).thenReturn(emptyControllerInfo)
 
     val testRequestThread = new NodeToControllerRequestThread(
       mockClient,   new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
+      controllerNodeProvider, config, time, "", Long.MaxValue)
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
-    val queueItem = NodeToControllerQueueItem(
+    val queueItem = new NodeToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
       completionHandler

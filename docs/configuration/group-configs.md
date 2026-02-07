@@ -26,4 +26,4 @@ type: docs
 -->
 
 
-Below is the group configuration: {{< include-html file="/static/43/generated/group_config.html" >}} 
+Below is the group configuration: {{< include-html file="/static/{version}/generated/group_config.html" >}} 

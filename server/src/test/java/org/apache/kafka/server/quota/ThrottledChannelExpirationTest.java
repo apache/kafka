@@ -14,28 +14,71 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.server.quota;
 
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.concurrent.DelayQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ThrottledChannelTest {
-
+public class ThrottledChannelExpirationTest {
     private final MockTime time = new MockTime();
+    private final Metrics metrics = new Metrics(new MetricConfig(), List.of(), time);
+    private int numCallbacksForStartThrottling = 0;
+    private int numCallbacksForEndThrottling = 0;
     private final ThrottleCallback callback = new ThrottleCallback() {
         @Override
         public void startThrottling() {
+            numCallbacksForStartThrottling++;
         }
 
         @Override
         public void endThrottling() {
+            numCallbacksForEndThrottling++;
         }
     };
+
+    @Test
+    public void testCallbackInvocationAfterExpiration() {
+        ClientQuotaManager clientMetrics = new ClientQuotaManager(new ClientQuotaManagerConfig(), metrics, QuotaType.PRODUCE, time, "");
+
+        DelayQueue<ThrottledChannel> delayQueue = new DelayQueue<>();
+        var reaper = clientMetrics.new ThrottledChannelReaper(delayQueue, "");
+        try {
+            // Add 4 elements to the queue out of order. Add 2 elements with the same expire timestamp.
+            ThrottledChannel channel1 = new ThrottledChannel(time, 10, callback);
+            ThrottledChannel channel2 = new ThrottledChannel(time, 30, callback);
+            ThrottledChannel channel3 = new ThrottledChannel(time, 30, callback);
+            ThrottledChannel channel4 = new ThrottledChannel(time, 20, callback);
+            delayQueue.add(channel1);
+            delayQueue.add(channel2);
+            delayQueue.add(channel3);
+            delayQueue.add(channel4);
+            assertEquals(4, numCallbacksForStartThrottling);
+
+            for (int i = 1; i <= 3; i++) {
+                time.sleep(10);
+                reaper.doWork();
+                assertEquals(i, numCallbacksForEndThrottling);
+            }
+            reaper.doWork();
+            assertEquals(4, numCallbacksForEndThrottling);
+            assertEquals(0, delayQueue.size());
+            reaper.doWork();
+            assertEquals(4, numCallbacksForEndThrottling);
+        } finally {
+            clientMetrics.shutdown();
+        }
+    }
 
     @Test
     public void testThrottledChannelDelay() {

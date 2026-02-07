@@ -14,20 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.metrics;
 
-import org.apache.kafka.controller.metrics.ControllerMetadataMetrics;
-import org.apache.kafka.raft.ExternalKRaftMetrics;
+package org.apache.kafka.server;
 
-import java.util.Optional;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 
-public record DefaultExternalKRaftMetrics(
-        Optional<BrokerServerMetrics> brokerServerMetrics,
-        Optional<ControllerMetadataMetrics> controllerMetadataMetrics) implements ExternalKRaftMetrics {
-
-    @Override
-    public void setIgnoredStaticVoters(boolean ignoredStaticVoters) {
-        brokerServerMetrics.ifPresent(metrics -> metrics.setIgnoredStaticVoters(ignoredStaticVoters));
-        controllerMetadataMetrics.ifPresent(metrics -> metrics.setIgnoredStaticVoters(ignoredStaticVoters));
-    }
+/**
+ * Represents a queued request to be sent to the controller.
+ * Used for timeout tracking and asynchronous completion handling.
+ *
+ * @param createdTimeMs timestamp when this request was created, used for timeout detection
+ * @param request the request to send to the controller
+ * @param callback handler invoked when the request completes, fails, or times out
+ */
+public record NodeToControllerQueueItem(Long createdTimeMs,
+                                        AbstractRequest.Builder<? extends AbstractRequest> request,
+                                        ControllerRequestCompletionHandler callback) {
 }
