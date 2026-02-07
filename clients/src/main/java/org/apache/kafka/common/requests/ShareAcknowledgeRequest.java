@@ -38,7 +38,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public static ShareAcknowledgeRequest.Builder forConsumer(String groupId, ShareRequestMetadata metadata,
+        public static ShareAcknowledgeRequest.Builder forConsumer(String groupId, ShareRequestMetadata metadata, boolean isRenewAck,
                                                                   Map<TopicIdPartition, List<ShareAcknowledgeRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareAcknowledgeRequestData data = new ShareAcknowledgeRequestData();
             data.setGroupId(groupId);
@@ -46,6 +46,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
                 data.setMemberId(metadata.memberId().toString());
                 data.setShareSessionEpoch(metadata.epoch());
             }
+            data.setIsRenewAck(isRenewAck);
 
             ShareAcknowledgeRequestData.AcknowledgeTopicCollection ackTopics = new ShareAcknowledgeRequestData.AcknowledgeTopicCollection();
             for (Map.Entry<TopicIdPartition, List<ShareAcknowledgeRequestData.AcknowledgementBatch>> acknowledgeEntry : acknowledgementsMap.entrySet()) {

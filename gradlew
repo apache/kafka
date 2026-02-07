@@ -201,10 +201,10 @@ fi
 
 
 # Loop in case we encounter an error.
-REQUIRED_WRAPPER_JAR_CHECKSUM="76805e32c009c0cf0dd5d206bddc9fb22ea42e84db904b764f3047de095493f3"
+REQUIRED_WRAPPER_JAR_CHECKSUM="423cb469ccc0ecc31f0e4e1c309976198ccb734cdcbb7029d4bda0f18f57e8d9"
 for attempt in 1 2 3; do
   if [ ! -e "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" ]; then
-    if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v9.1.0/gradle/wrapper/gradle-wrapper.jar"; then
+    if ! curl -s -S --retry 3 -L -o "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "https://raw.githubusercontent.com/gradle/gradle/v9.2.1/gradle/wrapper/gradle-wrapper.jar"; then
       rm -f "$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
       # Pause for a bit before looping in case the server throttled us.
       sleep 5

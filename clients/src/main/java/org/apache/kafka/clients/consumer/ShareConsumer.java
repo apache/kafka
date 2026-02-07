@@ -21,7 +21,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
@@ -37,7 +36,6 @@ import java.util.Set;
  * @see KafkaShareConsumer
  * @see MockShareConsumer
  */
-@InterfaceStability.Evolving
 public interface ShareConsumer<K, V> extends Closeable {
 
     /**
@@ -134,5 +132,4 @@ public interface ShareConsumer<K, V> extends Closeable {
      * @see KafkaShareConsumer#wakeup()
      */
     void wakeup();
-
 }

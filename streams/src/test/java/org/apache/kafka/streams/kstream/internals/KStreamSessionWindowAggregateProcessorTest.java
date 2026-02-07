@@ -57,6 +57,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
@@ -80,7 +81,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics();
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", "processId", "applicationId", time);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", time);
     private final String threadId = Thread.currentThread().getName();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
@@ -244,7 +245,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(new Record<>(sessionId, "third", now));
         processor.process(new Record<>(sessionId, "third", now));
 
-        sessionStore.flush();
+        sessionStore.commit(Map.of());
 
         if (emitFinal) {
             assertEquals(
@@ -318,7 +319,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(new Record<>("a", "3", GAP_MS + 1 + GAP_MS / 2));
         processor.process(new Record<>("c", "3", GAP_MS + 1 + GAP_MS / 2));
 
-        sessionStore.flush();
+        sessionStore.commit(Map.of());
 
         if (emitFinal) {
             assertEquals(Arrays.asList(

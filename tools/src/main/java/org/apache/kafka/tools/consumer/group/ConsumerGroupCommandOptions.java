@@ -249,9 +249,9 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
 
             if (!options.has(dryRunOpt) && !options.has(executeOpt)) {
                 System.err.println("WARN: No action will be performed as the --execute option is missing. " +
-                    "In a future major release, the default behavior of this command will be to prompt the user before " +
-                    "executing the reset rather than doing a dry run. You should add the --dry-run option explicitly " +
-                    "if you are scripting this command and want to keep the current default behavior without prompting.");
+                        "In version 5.0, this command will require either --dry-run or --execute to be specified. " +
+                        "You should add the --dry-run option explicitly if you are scripting this command and want to " +
+                        "keep the current default behavior without prompting.");
             }
 
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))

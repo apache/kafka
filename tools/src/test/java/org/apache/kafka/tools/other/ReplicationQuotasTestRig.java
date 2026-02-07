@@ -182,7 +182,7 @@ public class ReplicationQuotasTestRig {
                 throw new RuntimeException("Failed to start test Kafka cluster", e);
             }
 
-            adminClient = Admin.create(cluster.clientProperties());
+            adminClient = cluster.admin();
         }
 
         public void tearDown() {

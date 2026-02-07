@@ -29,16 +29,16 @@ notifications:
 # Read more here: https://github.com/apache/infrastructure-asfyaml
 github:
   collaborators:
+    - brandboat
+    - chirag-wadhwa5
+    - DL1231
     - m1a2st
+    - mingyen066
+    - Rancho-7
+    - sjhajharia
     - smjn
     - TaiJuWu
-    - brandboat
     - Yunyung
-    - xijiu
-    - chirag-wadhwa5
-    - mingyen066
-    - ShivsundarR
-    - Rancho-7
   enabled_merge_buttons:
     squash: true
     squash_commit_message: PR_TITLE_AND_DESC

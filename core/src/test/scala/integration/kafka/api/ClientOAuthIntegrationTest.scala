@@ -26,10 +26,11 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import java.util.{Base64, Collections, Properties}
 import no.nav.security.mock.oauth2.{MockOAuth2Server, OAuth2Config}
 import no.nav.security.mock.oauth2.token.{KeyProvider, OAuth2TokenProvider}
-import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.oauthbearer.{OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
+import org.apache.kafka.common.security.oauthbearer.{JwtRetriever, OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertThrows}
@@ -244,6 +245,27 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     assertThrows(classOf[ConfigException], () => createAdminClient(configOverrides = configs))
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAuthenticationErrorOnTamperedJwt(groupProtocol: String): Unit = {
+    val className = classOf[TamperedJwtRetriever].getName
+
+    val configs = defaultOAuthConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, className)
+
+    val tp = new TopicPartition("test-topic", 0)
+
+    val admin = createAdminClient(configOverrides = configs)
+    TestUtils.assertFutureThrows(classOf[SaslAuthenticationException], admin.describeCluster().clusterId())
+
+    val producer = createProducer(configOverrides = configs)
+    assertThrows(classOf[SaslAuthenticationException], () => producer.partitionsFor(tp.topic()))
+
+    val consumer = createConsumer(configOverrides = configs)
+    consumer.assign(Collections.singleton(tp))
+    assertThrows(classOf[SaslAuthenticationException], () => consumer.position(tp))
+  }
+
   def generatePrivateKeyFile(): File = {
     val file = File.createTempFile("private-", ".key")
     val bytes = Base64.getEncoder.encode(privateKey.getEncoded)
@@ -257,5 +279,12 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     }
 
     file
+  }
+}
+
+class TamperedJwtRetriever extends JwtRetriever {
+
+  override def retrieve(): String = {
+    "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJzdWIiOiAiMTIzNDU2Nzg5MCIsICJuYW1lIjogIkpvaG4gRG9lIiwgInJvbGUiOiAiYWRtaW4iLCAiaWF0IjogMTUxNjIzOTAyMiwgImV4cCI6IDE5MTYyMzkwMjJ9.vVT5ylQCGvb0B-wv1YXHjmlMd-DZKCThUt5-enry_sA"
   }
 }

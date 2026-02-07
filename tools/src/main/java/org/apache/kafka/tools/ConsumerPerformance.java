@@ -301,7 +301,7 @@ public class ConsumerPerformance {
                 .describedAs("gid")
                 .defaultsTo("perf-consumer-" + RND.nextInt(100_000))
                 .ofType(String.class);
-            fetchSizeOpt = parser.accepts("fetch-size", "The amount of data to fetch in a single request.")
+            fetchSizeOpt = parser.accepts("fetch-size", "The maximum amount of data to fetch from a single partition per request.")
                 .withRequiredArg()
                 .describedAs("size")
                 .ofType(Integer.class)

@@ -114,6 +114,12 @@ public enum MetadataVersion {
     // Send FETCH version 18 in the replica fetcher (KIP-1166)
     IBP_4_1_IV1(27, "4.1", "IV1", false),
 
+    // Enables share groups by default for new clusters (KIP-932).
+    IBP_4_2_IV0(28, "4.2", "IV0", false),
+
+    // Enables "streams" groups by default for new clusters (KIP-1071).
+    IBP_4_2_IV1(29, "4.2", "IV1", false),
+
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error unless
@@ -121,11 +127,8 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Enables share groups by default for new clusters (KIP-932).
-    IBP_4_2_IV0(28, "4.2", "IV0", false),
-
-    // Enables "streams" groups by default for new clusters (KIP-1071).
-    IBP_4_2_IV1(29, "4.2", "IV1", false);
+    // New version for the Kafka 4.3.0 release.
+    IBP_4_3_IV0(30, "4.3", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -145,7 +148,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_1_IV1;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_2_IV1;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 

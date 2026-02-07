@@ -14,12 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -27,7 +25,6 @@ import java.util.Optional;
 /**
  * A listing of a group in the cluster.
  */
-@InterfaceStability.Evolving
 public class GroupListing {
     private final String groupId;
     private final Optional<GroupType> type;

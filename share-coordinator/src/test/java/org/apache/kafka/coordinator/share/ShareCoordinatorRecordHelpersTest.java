@@ -48,6 +48,7 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(1)
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
+                .setDeliveryCompleteCount(10)
                 .setCreateTimestamp(timestamp)
                 .setWriteTimestamp(timestamp)
                 .setStateBatches(List.of(batch))
@@ -65,6 +66,7 @@ public class ShareCoordinatorRecordHelpersTest {
                     .setStateEpoch(1)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(10)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
                     .setStateBatches(List.of(
@@ -93,6 +95,7 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(-1)  // ignored for share update
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
+                .setDeliveryCompleteCount(10)
                 .setStateBatches(List.of(batch))
                 .build()
         );
@@ -107,6 +110,7 @@ public class ShareCoordinatorRecordHelpersTest {
                     .setSnapshotEpoch(0)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(10)
                     .setStateBatches(List.of(
                         new ShareUpdateValue.StateBatch()
                             .setFirstOffset(1L)

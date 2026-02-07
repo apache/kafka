@@ -40,8 +40,8 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.telemetry.ClientTelemetry;
-import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporter;
+import org.apache.kafka.server.telemetry.ClientTelemetryExporterProvider;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -67,10 +67,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClientTelemetryTest {
 
     @ClusterTest(
-            types = Type.KRAFT, 
+            types = Type.KRAFT,
             brokers = 3,
             serverProperties = {
-                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$GetIdClientTelemetry"),
+                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$TelemetryExporter"),
             })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
@@ -156,14 +156,8 @@ public class ClientTelemetryTest {
         return lists.stream().flatMap(List::stream).toArray(String[]::new);
     }
 
-    /**
-     * We should add a ClientTelemetry into plugins to test the clientInstanceId method Otherwise the
-     * {@link org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS} command will not be supported
-     * by the server
-     **/
     @SuppressWarnings("unused")
-    public static class GetIdClientTelemetry implements ClientTelemetry, MetricsReporter {
-
+    public static class TelemetryExporter implements ClientTelemetryExporterProvider, MetricsReporter {
 
         @Override
         public void init(List<KafkaMetric> metrics) {
@@ -186,7 +180,7 @@ public class ClientTelemetryTest {
         }
 
         @Override
-        public ClientTelemetryReceiver clientReceiver() {
+        public ClientTelemetryExporter clientTelemetryExporter() {
             return (context, payload) -> {
             };
         }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.publisher.QuotaConfigChangeListener;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
@@ -66,6 +67,15 @@ public class QuotaFactory {
             request.shutdown();
             controllerMutation.shutdown();
             clientQuotaCallbackPlugin.ifPresent(plugin -> Utils.closeQuietly(plugin, "client quota callback plugin"));
+        }
+
+        public QuotaConfigChangeListener quotaConfigChangeListener() {
+            return () -> {
+                fetch.updateQuotaMetricConfigs();
+                produce.updateQuotaMetricConfigs();
+                request.updateQuotaMetricConfigs();
+                controllerMutation.updateQuotaMetricConfigs();
+            };
         }
     }
 

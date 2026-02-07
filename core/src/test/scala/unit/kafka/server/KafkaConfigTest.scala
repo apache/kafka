@@ -21,7 +21,7 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
@@ -34,10 +34,11 @@ import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
+import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -210,6 +211,10 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
     assertBadConfigContainingMessage(props, "Each listener must have a different port")
 
+    // listeners with duplicate port but different hostnames
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://host1:9092,SSL://host2:9092")
+    assertBadConfigContainingMessage(props, "Each listener must have a different port")
+
     // listeners with duplicate name
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
     assertBadConfigContainingMessage(props, "Each listener must have a different name")
@@ -220,10 +225,6 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "HOST://localhost:9091,LB://localhost:9092")
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "HOST://localhost:9091,LB://localhost:9091")
     KafkaConfig.fromProps(props)
-
-    // but not duplicate names
-    props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "HOST://localhost:9091,HOST://localhost:9091")
-    assertBadConfigContainingMessage(props, "Configuration 'advertised.listeners' values must not be duplicated.")
   }
 
   @Test
@@ -246,10 +247,6 @@ class KafkaConfigTest {
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://[::1]:9096,PLAINTEXT://127.0.0.1:9096,SASL_SSL://:9096")
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("If you have two listeners on the same port then one needs to be IPv4 and the other IPv6"))
-
-    props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,PLAINTEXT://127.0.0.1:9092")
-    val exception = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
-    assertTrue(exception.getMessage.contains("values must not be duplicated."))
 
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9092,SASL_SSL://127.0.0.1:9092")
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
@@ -301,7 +298,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
-    assertBadConfigContainingMessage(props, 
+    assertBadConfigContainingMessage(props,
       "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -322,7 +319,7 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
 
     assertFalse(isValidKafkaConfig(props))
-    assertBadConfigContainingMessage(props, 
+    assertBadConfigContainingMessage(props,
       "Missing required configuration \"controller.listener.names\" which has no default value.")
 
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
@@ -611,7 +608,7 @@ class KafkaConfigTest {
 
   private def listenerListToEndPoints(listenerList: java.util.List[String],
                               securityProtocolMap: util.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO) =
-    CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
+    AbstractKafkaConfig.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
   def testListenerDefaults(): Unit = {
@@ -623,9 +620,9 @@ class KafkaConfigTest {
 
     // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")), conf.listeners)
+    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")).asScala, conf.listeners)
     assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-    assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")))
+    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")).asScala, conf.effectiveAdvertisedBrokerListeners)
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -1023,6 +1020,7 @@ class KafkaConfigTest {
         case RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP => // ignore string
         case RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP => // ignore string
         case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", -2)
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1, -2)
@@ -1038,6 +1036,8 @@ class KafkaConfigTest {
 
         /** New group coordinator configs */
         case GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
+        case GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -2, -0.5)
+        case GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1, 512 * 1024 - 1)
 
         /** Consumer groups configs */
         case GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
@@ -1076,6 +1076,9 @@ class KafkaConfigTest {
         case GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", 0, -1)
         case GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
         case GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -1)
+
+        /** Share coordinator configs */
+        case ShareCoordinatorConfig.APPEND_LINGER_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", -2, -0.5)
 
         case _ => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1")
       }
@@ -1569,31 +1572,6 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
-  }
-
-  @Test
-  def testPopulateSynonymsOnEmptyMap(): Unit = {
-    assertEquals(Collections.emptyMap(), KafkaConfig.populateSynonyms(Collections.emptyMap()))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutNodeId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutBrokerId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
   }
 
   @Test

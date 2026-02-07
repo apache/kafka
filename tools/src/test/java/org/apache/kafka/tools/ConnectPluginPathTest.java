@@ -333,6 +333,63 @@ public class ConnectPluginPathTest {
         assertBadPackagingPluginsStatus(table, false);
     }
 
+    @Test
+    public void testListEmptyPluginPathArg() {
+        CommandResult res = runCommand(
+                "list",
+                "--plugin-path",
+                ""
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'--plugin-path' must not be empty.\n", res.err);
+    }
+
+    @Test
+    public void testListEmptyPluginPathElementArg() {
+        CommandResult res = runCommand(
+                "list",
+                "--plugin-path",
+                "location-a,,location-b"
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'--plugin-path' values must not be empty.\n", res.err);
+    }
+
+    @Test
+    public void testListEmptyPluginPathInWorkerConfig() {
+        Path configPath = workspace.resolve("worker-empty.properties");
+        try {
+            Files.writeString(configPath, "plugin.path=", StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            fail("Failed to create test worker config: " + e.getMessage());
+        }
+
+        CommandResult res = runCommand(
+                "list",
+                "--worker-config",
+                configPath.toString()
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'plugin.path' must not be empty.\n", res.err);
+    }
+
+    @Test
+    public void testListEmptyPluginPathElementInWorkerConfig() {
+        Path configPath = workspace.resolve("worker-empty-element.properties");
+        try {
+            Files.writeString(configPath, "plugin.path=location-a,,location-b", StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            fail("Failed to create test worker config: " + e.getMessage());
+        }
+
+        CommandResult res = runCommand(
+                "list",
+                "--worker-config",
+                configPath.toString()
+        );
+        assertNotEquals(0, res.returnCode);
+        assertEquals("'plugin.path' values must not be empty.\n", res.err);
+    }
 
     private static Map<String, List<String[]>> assertListSuccess(CommandResult result) {
         assertEquals(0, result.returnCode);

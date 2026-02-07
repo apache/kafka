@@ -572,7 +572,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close() {
-        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+        close(CloseOptions.timeout(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS)));
     }
 
     @Deprecated

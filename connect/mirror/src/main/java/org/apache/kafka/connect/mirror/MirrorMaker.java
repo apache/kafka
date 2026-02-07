@@ -233,13 +233,15 @@ public class MirrorMaker {
     private void addHerder(SourceAndTarget sourceAndTarget) {
         log.info("creating herder for {}", sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
-        DistributedConfig distributedConfig = new DistributedConfig(workerProps);
         String encodedSource = encodePath(sourceAndTarget.source());
         String encodedTarget = encodePath(sourceAndTarget.target());
         List<String> restNamespace = List.of(encodedSource, encodedTarget);
         String workerId = generateWorkerId(sourceAndTarget);
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
+        // create DistributedConfig only after compareAndSwapWithDelegatingLoader to
+        // ensure plugin classes on plugin.path are loadable
+        DistributedConfig distributedConfig = new DistributedConfig(workerProps);
         String kafkaClusterId = distributedConfig.kafkaClusterId();
         String clientIdBase = ConnectUtils.clientIdBase(distributedConfig);
         // Create the admin client to be shared by all backing stores for this herder

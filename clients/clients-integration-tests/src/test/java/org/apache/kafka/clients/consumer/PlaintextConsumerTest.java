@@ -87,6 +87,7 @@ import static org.apache.kafka.clients.CommonClientConfigs.METADATA_MAX_AGE_CONF
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -109,6 +110,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -179,6 +181,63 @@ public class PlaintextConsumerTest {
             MAX_POLL_INTERVAL_MS_CONFIG, 15000
         );
         testCoordinatorFailover(cluster, config);
+    }
+
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1")
+        }
+    )
+    public void testClassicConsumerCloseOnBrokerShutdown() {
+        Map<String, Object> config = Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        );
+        testConsumerCloseOnBrokerShutdown(config);
+    }
+
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1")
+        }
+    )
+    public void testAsyncConsumerCloseOnBrokerShutdown() {
+        Map<String, Object> config = Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
+            ENABLE_AUTO_COMMIT_CONFIG, false
+        );
+        // Disabling auto commit so that commitSync() does not block the close timeout.
+        testConsumerCloseOnBrokerShutdown(config);
+    }
+
+    private void testConsumerCloseOnBrokerShutdown(Map<String, Object> consumerConfig) {
+        try (Consumer<byte[], byte[]> consumer = cluster.consumer(consumerConfig)) {
+            consumer.subscribe(List.of(TOPIC));
+
+            // Force consumer to discover coordinator by doing a poll
+            // This ensures coordinator is discovered before we shutdown the broker
+            consumer.poll(Duration.ofMillis(100));
+
+            // Now shutdown broker.
+            assertEquals(1, cluster.brokers().size());
+            KafkaBroker broker = cluster.brokers().get(0);
+            cluster.shutdownBroker(0);
+            broker.awaitShutdown();
+
+            // Do another poll to force the consumer to retry finding the coordinator.
+            consumer.poll(Duration.ofMillis(100));
+
+            // Close should not hang waiting for retries when broker is already down
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> consumer.close(),
+                    "Consumer close should not wait for full timeout when broker is already shutdown");
+        }
     }
 
     @ClusterTest

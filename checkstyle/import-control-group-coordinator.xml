@@ -52,7 +52,7 @@
     <subpackage name="coordinator">
         <subpackage name="group">
             <allow pkg="net.jpountz.xxhash" />
-            <allow pkg="org.apache.kafka.clients.consumer" />
+            <allow pkg="org.apache.kafka.clients" />
             <allow pkg="org.apache.kafka.common.annotation" />
             <allow pkg="org.apache.kafka.common.config" />
             <allow pkg="org.apache.kafka.common.compress" />

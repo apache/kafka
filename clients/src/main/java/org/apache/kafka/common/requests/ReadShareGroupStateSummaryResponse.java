@@ -99,6 +99,7 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
         Uuid topicId,
         int partition,
         long startOffset,
+        int deliveryCompleteCount,
         int leaderEpoch,
         int stateEpoch
     ) {
@@ -110,6 +111,7 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
                         new ReadShareGroupStateSummaryResponseData.PartitionResult()
                             .setPartition(partition)
                             .setStartOffset(startOffset)
+                            .setDeliveryCompleteCount(deliveryCompleteCount)
                             .setLeaderEpoch(leaderEpoch)
                             .setStateEpoch(stateEpoch)
                     ))

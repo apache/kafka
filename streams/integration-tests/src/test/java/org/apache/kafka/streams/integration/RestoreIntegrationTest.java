@@ -160,6 +160,7 @@ public class RestoreIntegrationTest {
         appId = safeUniqueTestName(testInfo);
         inputStream = appId + "-input-stream";
         CLUSTER.createTopic(inputStream, 2, 1);
+        CLUSTER.setGroupStreamsInitialRebalanceDelay(appId, 0);
     }
 
     private Properties props() {

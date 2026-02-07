@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -58,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ShareFetchBufferTest {
 
+    private static final Optional<Integer> DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS = Optional.of(30000);
     private final Time time = new MockTime(0, 0, 0);
     private final TopicIdPartition topicAPartition0 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-a");
     private final TopicIdPartition topicAPartition1 = new TopicIdPartition(Uuid.randomUuid(), 1, "topic-a");
@@ -170,6 +172,7 @@ public class ShareFetchBufferTest {
                 0,
                 tp,
                 partitionData,
+                DEFAULT_ACQUISITION_LOCK_TIMEOUT_MS,
                 shareFetchMetricsAggregator,
                 ApiKeys.SHARE_FETCH.latestVersion());
     }

@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -315,7 +316,7 @@ public class SubscriptionState {
         if (!this.hasAutoAssignedPartitions())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
-        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new HashMap<>(assignments.size());
+        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new LinkedHashMap<>(assignments.size());
         for (TopicPartition tp : assignments) {
             TopicPartitionState state = this.assignment.stateValue(tp);
             if (state == null)
@@ -878,8 +879,26 @@ public class SubscriptionState {
         return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs));
     }
 
-    public synchronized Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
-        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs));
+    public synchronized Map<TopicPartition, FetchPosition> partitionsNeedingValidation(long nowMs) {
+        Map<TopicPartition, FetchPosition> result = new HashMap<>();
+
+        assignment.forEach((tp, tps) -> {
+            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
+                result.put(tp, tps.position);
+            }
+        });
+
+        return result;
+    }
+
+    public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
+        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
+            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public synchronized boolean isAssigned(TopicPartition tp) {
@@ -1201,14 +1220,16 @@ public class SubscriptionState {
         }
 
         /**
-         * True if the partition is in {@link FetchStates#INITIALIZING} state. While in this
-         * state, a position for the partition can be retrieved (based on committed offsets or
+         * Check if we need to retrieve a fetch position for the given partition.
+         * True if the partition state is {@link FetchStates#INITIALIZING}, and the partition is not being revoked.
+         * <p/>
+         * While in this state, a position for the partition will be retrieved (based on committed offsets or
          * partitions offsets).
          * Note that retrieving a position does not mean that we can start fetching from the
          * partition (see {@link #isFetchable()})
          */
         private boolean shouldInitialize() {
-            return fetchState.equals(FetchStates.INITIALIZING);
+            return fetchState.equals(FetchStates.INITIALIZING) && !pendingRevocation;
         }
 
         private boolean isFetchable() {

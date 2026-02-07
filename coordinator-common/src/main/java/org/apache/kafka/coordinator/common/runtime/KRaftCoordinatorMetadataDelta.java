@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.MetadataDelta;
 
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -30,12 +31,12 @@ public class KRaftCoordinatorMetadataDelta implements CoordinatorMetadataDelta {
     final MetadataDelta metadataDelta;
 
     public KRaftCoordinatorMetadataDelta(MetadataDelta metadataDelta) {
-        this.metadataDelta = metadataDelta;
+        this.metadataDelta = Objects.requireNonNull(metadataDelta, "metadataDelta must be provided");
     }
 
     @Override
     public Collection<Uuid> createdTopicIds() {
-        if (metadataDelta == null || metadataDelta.topicsDelta() == null) {
+        if (metadataDelta.topicsDelta() == null) {
             return Set.of();
         }
         return metadataDelta.topicsDelta().createdTopicIds();
@@ -43,7 +44,7 @@ public class KRaftCoordinatorMetadataDelta implements CoordinatorMetadataDelta {
 
     @Override
     public Collection<Uuid> changedTopicIds() {
-        if (metadataDelta == null || metadataDelta.topicsDelta() == null) {
+        if (metadataDelta.topicsDelta() == null) {
             return Set.of();
         }
         return metadataDelta.topicsDelta().changedTopics().keySet();
@@ -51,7 +52,7 @@ public class KRaftCoordinatorMetadataDelta implements CoordinatorMetadataDelta {
 
     @Override
     public Set<Uuid> deletedTopicIds() {
-        if (metadataDelta == null || metadataDelta.topicsDelta() == null) {
+        if (metadataDelta.topicsDelta() == null) {
             return Set.of();
         }
         return metadataDelta.topicsDelta().deletedTopicIds();

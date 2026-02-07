@@ -266,6 +266,7 @@ public class DescribeConsumerGroupsHandlerTest {
         assertCompleted(result, expected);
     }
 
+    @SuppressWarnings({"deprecation", "removal"})
     @Test
     public void testSuccessfulHandleClassicGroupResponse() {
         Collection<MemberDescription> members = singletonList(new MemberDescription(
@@ -346,7 +347,7 @@ public class DescribeConsumerGroupsHandlerTest {
                             new DescribedGroup()
                                 .setErrorCode(error.code())
                                 .setGroupId(groupId1)
-                                .setGroupState(ConsumerGroupState.STABLE.toString())
+                                .setGroupState(GroupState.STABLE.toString())
                                 .setProtocolType(protocolType)
                                 .setProtocolData("assignor")
                                 .setAuthorizedOperations(Utils.to32BitField(emptySet()))

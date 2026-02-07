@@ -40,7 +40,14 @@ public class AllowlistConnectorClientConfigOverridePolicy extends AbstractConnec
     private static final String ALLOWLIST_CONFIG_DOC = "List of client configurations that can be overridden by " +
             "connectors. If empty, connectors can't override any client configurations.";
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(ALLOWLIST_CONFIG, ConfigDef.Type.LIST, ALLOWLIST_CONFIG_DEFAULT, ConfigDef.Importance.MEDIUM, ALLOWLIST_CONFIG_DOC);
+            .define(
+                ALLOWLIST_CONFIG,
+                ConfigDef.Type.LIST,
+                ALLOWLIST_CONFIG_DEFAULT,
+                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                ConfigDef.Importance.MEDIUM,
+                ALLOWLIST_CONFIG_DOC
+            );
 
     private List<String> allowlist = ALLOWLIST_CONFIG_DEFAULT;
 

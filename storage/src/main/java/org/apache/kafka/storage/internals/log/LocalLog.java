@@ -373,9 +373,9 @@ public class LocalLog {
     /**
      * This method deletes the given log segments by doing the following for each of them:
      * <ul>
-     *  <li>It removes the segment from the segment map so that it will no longer be used for reads.
-     *  <li>It renames the index and log files by appending .deleted to the respective file name
-     *  <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously
+     *  <li>It removes the segment from the segment map so that it will no longer be used for reads.</li>
+     *  <li>It renames the index and log files by appending .deleted to the respective file name.</li>
+     *  <li>It can either schedule an asynchronous delete operation to occur in the future or perform the deletion synchronously.</li>
      * </ul>
      * Asynchronous deletion allows reads to happen concurrently without synchronization and without the possibility of
      * physically deleting a file while it is being read.
@@ -883,13 +883,13 @@ public class LocalLog {
      * resulting segments will contain the exact same messages that are present in the input segment. On successful
      * completion of this method, the input segment will be deleted and will be replaced by the resulting new segments.
      * See replaceSegments for recovery logic, in case the broker dies in the middle of this operation.
-     * <br/>
+     * <p>
      * Note that this method assumes we have already determined that the segment passed in contains records that cause
      * offset overflow.
-     * <br/>
+     * <p>
      * The split logic overloads the use of .clean files that LogCleaner typically uses to make the process of replacing
      * the input segment with multiple new segments atomic and recoverable in the event of a crash. See replaceSegments
-     * and completeSwapOperations for the implementation to make this operation recoverable on crashes.</p>
+     * and completeSwapOperations for the implementation to make this operation recoverable on crashes.
      *
      * @param segment Segment to split
      * @param existingSegments The existing segments of the log
@@ -966,20 +966,25 @@ public class LocalLog {
      * <li>Cleaner creates one or more new segments with suffix .cleaned and invokes replaceSegments() on
      *   the Log instance. If broker crashes at this point, the clean-and-swap operation is aborted and
      *   the .cleaned files are deleted on recovery in LogLoader.
+     * </li>
      * <li>New segments are renamed .swap. If the broker crashes before all segments were renamed to .swap, the
      *   clean-and-swap operation is aborted - .cleaned as well as .swap files are deleted on recovery in
      *   LogLoader. We detect this situation by maintaining a specific order in which files are renamed
      *   from .cleaned to .swap. Basically, files are renamed in descending order of offsets. On recovery,
      *   all .swap files whose offset is greater than the minimum-offset .clean file are deleted.
+     * </li>
      * <li>If the broker crashes after all new segments were renamed to .swap, the operation is completed,
      *   the swap operation is resumed on recovery as described in the next step.
+     * </li>
      * <li>Old segment files are renamed to .deleted and asynchronous delete is scheduled. If the broker
      *   crashes, any .deleted files left behind are deleted on recovery in LogLoader.
      *   replaceSegments() is then invoked to complete the swap with newSegment recreated from the
      *   .swap file and oldSegments containing segments which were not renamed before the crash.
+     * </li>
      * <li>Swap segment(s) are renamed to replace the existing segments, completing this operation.
      *   If the broker crashes, any .deleted files which may be left behind are deleted
      *   on recovery in LogLoader.
+     * </li>
      * </ol>
      *
      * @param existingSegments The existing segments of the log

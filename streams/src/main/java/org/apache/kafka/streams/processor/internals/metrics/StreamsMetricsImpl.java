@@ -89,8 +89,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
     private final Map<Sensor, Sensor> parentSensors;
     private final String clientId;
-    private final String processId;
-    private final String applicationId;
 
     private final Version version;
     private final Deque<MetricName> clientLevelMetrics = new LinkedList<>();
@@ -152,12 +150,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String OPERATIONS = " operations";
     public static final String TOTAL_DESCRIPTION = "The total number of ";
     public static final String RATE_DESCRIPTION = "The average per-second number of ";
-    public static final String RATIO_DESCRIPTION = "The fraction of time the thread spent on ";
     public static final String AVG_LATENCY_DESCRIPTION = "The average latency of ";
     public static final String MAX_LATENCY_DESCRIPTION = "The maximum latency of ";
     public static final String LATENCY_DESCRIPTION_SUFFIX = " in milliseconds";
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
+    public static final String WINDOWED_RATIO_DESCRIPTION_PREFIX = "The ratio, over a rolling measurement window, ";
+    public static final String THREAD_TIME_UNIT_DESCRIPTION = "of the time this thread spent ";
 
     public static final String RECORD_E2E_LATENCY = "record-e2e-latency";
     public static final String RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX =
@@ -169,14 +168,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public StreamsMetricsImpl(final Metrics metrics,
                               final String clientId,
-                              final String processId,
-                              final String applicationId,
                               final Time time) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         this.metrics = metrics;
         this.clientId = clientId;
-        this.processId = processId;
-        this.applicationId = applicationId;
         version = Version.LATEST;
         rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
@@ -199,7 +194,20 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                   final String description,
                                                   final RecordingLevel recordingLevel,
                                                   final T value) {
-        final MetricName metricName = metrics.metricName(name, CLIENT_LEVEL_GROUP, description, clientLevelTagMap());
+        addClientLevelImmutableMetric(name, description, Collections.emptyMap(), recordingLevel, value);
+    }
+
+    public <T> void addClientLevelImmutableMetric(final String name,
+                                                  final String description,
+                                                  final Map<String, String> additionalTags,
+                                                  final RecordingLevel recordingLevel,
+                                                  final T value) {
+        final MetricName metricName = metrics.metricName(
+            name,
+            CLIENT_LEVEL_GROUP,
+            description,
+            clientLevelTagMap(additionalTags)
+        );
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
         synchronized (clientLevelMetrics) {
             metrics.addMetric(metricName, metricConfig, new ImmutableMetricValue<>(value));
@@ -211,7 +219,20 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String description,
                                                 final RecordingLevel recordingLevel,
                                                 final Gauge<T> valueProvider) {
-        final MetricName metricName = metrics.metricName(name, CLIENT_LEVEL_GROUP, description, clientLevelTagMap());
+        addClientLevelMutableMetric(name, description, Collections.emptyMap(), recordingLevel, valueProvider);
+    }
+
+    public <T> void addClientLevelMutableMetric(final String name,
+                                                final String description,
+                                                final Map<String, String> additionalTags,
+                                                final RecordingLevel recordingLevel,
+                                                final Gauge<T> valueProvider) {
+        final MetricName metricName = metrics.metricName(
+            name,
+            CLIENT_LEVEL_GROUP,
+            description,
+            clientLevelTagMap(additionalTags)
+        );
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
         synchronized (clientLevelMetrics) {
             metrics.addMetric(metricName, metricConfig, valueProvider);
@@ -285,10 +306,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
     public Map<String, String> clientLevelTagMap() {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        return clientLevelTagMap(Collections.emptyMap());
+    }
+
+    public Map<String, String> clientLevelTagMap(final Map<String, String> additionalTags) {
+        final Map<String, String> tagMap = new LinkedHashMap<>(additionalTags);
         tagMap.put(CLIENT_ID_TAG, clientId);
-        tagMap.put(PROCESS_ID_TAG, processId);
-        tagMap.put(APPLICATION_ID_TAG, applicationId);
         return tagMap;
     }
 

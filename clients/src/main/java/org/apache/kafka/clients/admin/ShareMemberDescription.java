@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
@@ -25,7 +23,6 @@ import java.util.Optional;
 /**
  * A detailed description of a single share group member in the cluster.
  */
-@InterfaceStability.Evolving
 public class ShareMemberDescription {
     private final String memberId;
     private final Optional<String> rackId;

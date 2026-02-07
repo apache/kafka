@@ -45,6 +45,11 @@ import java.util.Optional;
  * states. It is the responsibility of the user to ensure that multi-threaded access is properly synchronized.
  *
  * <p>
+ * However, each individual {@link org.apache.kafka.common.header.Header} instance
+ * is <b>read thread-safe</b>; that is, it is safe for multiple threads to read the same header's key or value concurrently
+ * as long as no thread modifies it.
+ *
+ * <p>
  * Refer to the {@link KafkaConsumer} documentation for more details on multi-threaded consumption and processing strategies.
  */
 public class ConsumerRecord<K, V> {

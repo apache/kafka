@@ -14,18 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.admin;
-
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 
 /**
- * Options for the {@link Admin#deleteShareGroups(Collection, DeleteShareGroupsOptions)} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
+ * Options for {@link Admin#deleteShareGroups(Collection, DeleteShareGroupsOptions)}.
  */
-@InterfaceStability.Evolving
 public class DeleteShareGroupsOptions extends AbstractOptions<DeleteShareGroupsOptions> {
 }

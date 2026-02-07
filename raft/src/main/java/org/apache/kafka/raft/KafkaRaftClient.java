@@ -185,7 +185,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private final Endpoints localListeners;
     private final SupportedVersionRange localSupportedKRaftVersion;
     private final NetworkChannel channel;
-    private final ReplicatedLog log;
+    private final RaftLog log;
     private final Random random;
     private final FuturePurgatory<Long> appendPurgatory;
     private final FuturePurgatory<Long> fetchPurgatory;
@@ -236,7 +236,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Uuid nodeDirectoryId,
         RecordSerde<T> serde,
         NetworkChannel channel,
-        ReplicatedLog log,
+        RaftLog log,
         Time time,
         ExpirationService expirationService,
         LogContext logContext,
@@ -275,7 +275,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         RecordSerde<T> serde,
         NetworkChannel channel,
         RaftMessageQueue messageQueue,
-        ReplicatedLog log,
+        RaftLog log,
         MemoryPool memoryPool,
         Time time,
         ExpirationService expirationService,

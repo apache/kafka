@@ -464,16 +464,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     @Override
     public void flush() {
-        log.debug("Flushing all global globalStores registered in the state manager");
+        log.debug("Committing all global globalStores registered in the state manager");
         for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
             if (entry.getValue().isPresent()) {
                 final StateStore store = entry.getValue().get();
                 try {
-                    log.trace("Flushing global store={}", store.name());
-                    store.flush();
+                    log.trace("Committing global store={}", store.name());
+                    store.commit(Map.of());
                 } catch (final RuntimeException e) {
                     throw new ProcessorStateException(
-                        String.format("Failed to flush global state store %s", store.name()),
+                        String.format("Failed to commit global state store %s", store.name()),
                         e
                     );
                 }

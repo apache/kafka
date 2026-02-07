@@ -26,7 +26,7 @@
   //
   // Version 4 adds the support for new error code PRODUCER_FENCED.
   //
-  // Verison 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
+  // Version 5 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   //
   // Version 6 adds support for 2PC (KIP-939).
   "latestVersionUnstable": true,

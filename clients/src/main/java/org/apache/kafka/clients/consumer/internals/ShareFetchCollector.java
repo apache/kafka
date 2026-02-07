@@ -44,18 +44,18 @@ public class ShareFetchCollector<K, V> {
     private final Logger log;
     private final ShareConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
-    private final FetchConfig fetchConfig;
+    private final ShareFetchConfig shareFetchConfig;
     private final Deserializers<K, V> deserializers;
 
     public ShareFetchCollector(final LogContext logContext,
                                final ShareConsumerMetadata metadata,
                                final SubscriptionState subscriptions,
-                               final FetchConfig fetchConfig,
+                               final ShareFetchConfig shareFetchConfig,
                                final Deserializers<K, V> deserializers) {
         this.log = logContext.logger(ShareFetchCollector.class);
         this.metadata = metadata;
         this.subscriptions = subscriptions;
-        this.fetchConfig = fetchConfig;
+        this.shareFetchConfig = shareFetchConfig;
         this.deserializers = deserializers;
     }
 
@@ -69,7 +69,7 @@ public class ShareFetchCollector<K, V> {
      */
     public ShareFetch<K, V> collect(final ShareFetchBuffer fetchBuffer) {
         ShareFetch<K, V> fetch = ShareFetch.empty();
-        int recordsRemaining = fetchConfig.maxPollRecords;
+        int recordsRemaining = shareFetchConfig.maxPollRecords;
 
         try {
             while (recordsRemaining > 0) {
@@ -102,7 +102,7 @@ public class ShareFetchCollector<K, V> {
                     ShareInFlightBatch<K, V> batch = nextInLineFetch.fetchRecords(
                             deserializers,
                             recordsRemaining,
-                            fetchConfig.checkCrcs);
+                            shareFetchConfig.checkCrcs);
 
                     if (batch.isEmpty()) {
                         nextInLineFetch.drain();

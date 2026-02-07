@@ -140,54 +140,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppression for the equals() for extension methods. -->
-        <Class name="kafka.api.package$ElectLeadersRequestOps"/>
-        <Bug pattern="EQ_UNUSUAL"/>
-    </Match>
-
-    <Match>
-        <!-- Suppression for the equals() for extension methods. -->
-        <Class name="kafka.utils.Implicits$MapExtensionMethods"/>
-        <Bug pattern="EQ_UNUSUAL"/>
-    </Match>
-
-    <Match>
-        <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
-        <Class name="kafka.log.Log"/>
-        <Bug pattern="NP_NULL_ON_SOME_PATH_EXCEPTION"/>
-    </Match>
-
-    <Match>
-        <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
-             on the compiler to fail if the code is changed to call a method that throws Exception.
-             Given that, this bug pattern doesn't make sense for Scala code. -->
-        <Or>
-            <Class name="kafka.log.Log"/>
-        </Or>
-        <Bug pattern="REC_CATCH_EXCEPTION"/>
-    </Match>
-
-    <Match>
-        <Or>
-            <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
-            <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
-            <!-- Java's own Map#compute forces this pattern on us -->
-            <Class name="org.apache.kafka.streams.query.Position"/>
-        </Or>
+        <!-- Java's own Map#compute forces this pattern on us -->
+        <Class name="org.apache.kafka.streams.query.Position"/>
         <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED"/>
-    </Match>
-
-    <Match>
-        <!-- offsets is a lazy val and it confuses spotBugs with its locking scheme -->
-        <Class name="kafka.server.checkpoints.LazyOffsetCheckpointMap"/>
-        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
-    </Match>
-
-    <Match>
-        <!-- Keeping this class for compatibility. It's deprecated and will be removed in the next major release -->
-        <Source name="MessageFormatter.scala"/>
-        <Package name="kafka.common"/>
-        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
     </Match>
 
     <Match>
@@ -424,13 +379,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppress a spurious warning about an unreleased lock. -->
-        <Class name="kafka.utils.timer.SystemTimer"/>
-        <Method name="add"/>
-        <Bug pattern="UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
-    </Match>
-
-    <Match>
         <!-- Suppress a spurious warning about calling notify without modifying
              other state under the monitor. -->
         <Package name="org.apache.kafka.trogdor.workload"/>
@@ -442,15 +390,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Package name="org.apache.kafka.streams.scala"/>
         <Source name="FunctionsCompatConversions.scala"/>
         <Bug pattern="EQ_UNUSUAL"/>
-    </Match>
-
--    <Match>
-        <Package name="org.apache.kafka.streams.scala"/>
-        <Or>
-            <Class name="org.apache.kafka.streams.scala.Serializer" />
-            <Class name="org.apache.kafka.streams.scala.Deserializer" />
-        </Or>
-        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_INTERFACE"/>
     </Match>
 
     <!-- Suppress warnings for unused members that are undetectably used by Jackson -->

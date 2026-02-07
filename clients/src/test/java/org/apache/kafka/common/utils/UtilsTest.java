@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.SplittableRandom;
 import java.util.TreeSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -115,6 +116,36 @@ public class UtilsTest {
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
             assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
         }
+    }
+
+    private static String toHexString(byte[] buf) {
+        StringBuilder bld = new StringBuilder();
+        for (byte b : buf) {
+            bld.append(String.format("%02x", b));
+        }
+        return bld.toString();
+    }
+
+    @Test
+    public void testMurmur2Checksum() {
+        // calculates the checksum of hashes of many different random byte arrays of variable length
+        // this test detects any incompatible changes to the Murmur2 implementation with near certainty
+        int numTrials = 100;
+        int maxLen = 1000;
+        long seed = 0;
+        SplittableRandom random = new SplittableRandom(seed);
+        long checksum = 0;
+
+        for (int len = 0; len <= maxLen; ++len) {
+            byte[] data = new byte[len];
+            for (int i = 0; i < numTrials; ++i) {
+                random.nextBytes(data);
+                int hash = Utils.murmur2(data);
+                checksum += Integer.toUnsignedLong(hash);
+            }
+        }
+
+        assertEquals(0xc3b8cf7c99fcL, checksum);
     }
 
     @ParameterizedTest

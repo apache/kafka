@@ -49,7 +49,7 @@ public enum RecordState {
     public RecordState validateTransition(RecordState newState) throws IllegalStateException {
         Objects.requireNonNull(newState, "newState cannot be null");
         if (this == newState) {
-            throw new IllegalStateException("The state transition is invalid as the new state is"
+            throw new IllegalStateException("The state transition is invalid as the new state is "
                 + "the same as the current state");
         }
 
