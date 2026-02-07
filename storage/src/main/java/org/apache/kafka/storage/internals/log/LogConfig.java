@@ -530,7 +530,8 @@ public class LogConfig extends AbstractConfig {
             validateRemoteStorageRequiresDeleteCleanupPolicy(newConfigs);
             validateRemoteStorageRetentionSize(newConfigs);
             validateRemoteStorageRetentionTime(newConfigs);
-            validateRemoteCopyLagNotExceedingLocalRetention(newConfigs);
+            validateRemoteCopyLagSize(newConfigs);
+            validateRemoteCopyLagTime(newConfigs);
             validateRetentionConfigsWhenRemoteCopyDisabled(newConfigs, isRemoteLogStorageEnabled);
         } else {
             // The new config "remote.storage.enable" is false, validate if it's turning from true to false
@@ -620,12 +621,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    private static void validateRemoteCopyLagNotExceedingLocalRetention(Map<?, ?> props) {
-        validateRemoteCopyLagMsNotExceedingLocalRetention(props);
-        validateRemoteCopyLagBytesNotExceedingLocalRetention(props);
-    }
-
-    private static void validateRemoteCopyLagMsNotExceedingLocalRetention(Map<?, ?> props) {
+    private static void validateRemoteCopyLagTime(Map<?, ?> props) {
         Long retentionMs = (Long) props.get(TopicConfig.RETENTION_MS_CONFIG);
         Long localRetentionMs = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG);
         Long remoteCopyLagMs = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_MS_CONFIG);
@@ -639,7 +635,7 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    private static void validateRemoteCopyLagBytesNotExceedingLocalRetention(Map<?, ?> props) {
+    private static void validateRemoteCopyLagSize(Map<?, ?> props) {
         Long retentionBytes = (Long) props.get(TopicConfig.RETENTION_BYTES_CONFIG);
         Long localRetentionBytes = (Long) props.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG);
         Long remoteCopyLagBytes = (Long) props.get(TopicConfig.REMOTE_COPY_LAG_BYTES_CONFIG);
