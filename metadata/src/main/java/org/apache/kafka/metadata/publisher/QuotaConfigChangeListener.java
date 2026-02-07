@@ -14,20 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.metrics;
+package org.apache.kafka.metadata.publisher;
 
-import org.apache.kafka.controller.metrics.ControllerMetadataMetrics;
-import org.apache.kafka.raft.ExternalKRaftMetrics;
-
-import java.util.Optional;
-
-public record DefaultExternalKRaftMetrics(
-        Optional<BrokerServerMetrics> brokerServerMetrics,
-        Optional<ControllerMetadataMetrics> controllerMetadataMetrics) implements ExternalKRaftMetrics {
-
-    @Override
-    public void setIgnoredStaticVoters(boolean ignoredStaticVoters) {
-        brokerServerMetrics.ifPresent(metrics -> metrics.setIgnoredStaticVoters(ignoredStaticVoters));
-        controllerMetadataMetrics.ifPresent(metrics -> metrics.setIgnoredStaticVoters(ignoredStaticVoters));
-    }
+/**
+ * A callback interface for reacting to quota configuration changes.
+ * This is used by DynamicTopicClusterQuotaPublisher to notify when quota metadata has changed.
+ */
+@FunctionalInterface
+public interface QuotaConfigChangeListener {
+    void onChange();
 }

@@ -21,7 +21,7 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Arrays, Collections, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
@@ -38,7 +38,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -209,6 +209,10 @@ class KafkaConfigTest {
 
     // listeners with duplicate port
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9091,SSL://localhost:9091")
+    assertBadConfigContainingMessage(props, "Each listener must have a different port")
+
+    // listeners with duplicate port but different hostnames
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://host1:9092,SSL://host2:9092")
     assertBadConfigContainingMessage(props, "Each listener must have a different port")
 
     // listeners with duplicate name
@@ -604,7 +608,7 @@ class KafkaConfigTest {
 
   private def listenerListToEndPoints(listenerList: java.util.List[String],
                               securityProtocolMap: util.Map[ListenerName, SecurityProtocol] = SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO) =
-    CoreUtils.listenerListToEndPoints(listenerList, securityProtocolMap)
+    AbstractKafkaConfig.listenerListToEndPoints(listenerList, securityProtocolMap)
 
   @Test
   def testListenerDefaults(): Unit = {
@@ -616,9 +620,9 @@ class KafkaConfigTest {
 
     // configuration with no listeners
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")), conf.listeners)
+    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")).asScala, conf.listeners)
     assertNull(conf.listeners.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).get.host)
-    assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")))
+    assertEquals(listenerListToEndPoints(util.List.of("PLAINTEXT://:9092")).asScala, conf.effectiveAdvertisedBrokerListeners)
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -1568,31 +1572,6 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
-  }
-
-  @Test
-  def testPopulateSynonymsOnEmptyMap(): Unit = {
-    assertEquals(Collections.emptyMap(), KafkaConfig.populateSynonyms(Collections.emptyMap()))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutNodeId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutBrokerId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
   }
 
   @Test

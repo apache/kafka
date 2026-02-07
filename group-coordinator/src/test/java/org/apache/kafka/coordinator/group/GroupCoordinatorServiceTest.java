@@ -127,7 +127,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
 import java.net.InetAddress;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -245,7 +244,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new ConsumerGroupHeartbeatResponseData()
@@ -283,7 +281,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -502,7 +499,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("streams-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new StreamsGroupHeartbeatResult(
@@ -562,7 +558,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("streams-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -1052,7 +1047,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new JoinGroupResponseData()
@@ -1082,7 +1076,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
@@ -1207,7 +1200,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new SyncGroupResponseData()
@@ -1236,7 +1228,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
@@ -1317,7 +1308,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new HeartbeatResponseData()
@@ -1346,7 +1336,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
             new CoordinatorLoadInProgressException(null)
@@ -1375,7 +1364,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
             new RebalanceInProgressException()
@@ -1745,7 +1733,6 @@ public class GroupCoordinatorServiceTest {
             when(runtime.scheduleWriteOperation(
                 ArgumentMatchers.eq(fetchAllOffsets ? "fetch-all-offsets" : "fetch-offsets"),
                 ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-                ArgumentMatchers.eq(Duration.ofMillis(5000)),
                 ArgumentMatchers.any()
             )).thenReturn(CompletableFuture.completedFuture(response));
         } else {
@@ -1849,7 +1836,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq(fetchAllOffsets ? "fetch-all-offsets" : "fetch-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
 
@@ -1881,7 +1867,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new LeaveGroupResponseData()
@@ -1918,7 +1903,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("classic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
             new UnknownMemberIdException()
@@ -2281,7 +2265,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
@@ -2321,7 +2304,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
@@ -2366,7 +2348,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -2442,14 +2423,12 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(Map.of()));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 2)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
@@ -2457,14 +2436,12 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(resultCollectionFuture);
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()));
 
@@ -2523,7 +2500,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             Map.of("share-group-id-1", Map.entry(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)), Errors.NONE))
@@ -2546,7 +2522,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
@@ -2554,7 +2529,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection2));
 
@@ -2605,7 +2579,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             Map.of("share-group-id-1", Map.entry(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)), Errors.NONE))
@@ -2641,7 +2614,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
@@ -2649,7 +2621,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 2)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection2));
 
@@ -2691,7 +2662,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.failedFuture(
             Errors.COORDINATOR_NOT_AVAILABLE.exception()
@@ -2701,7 +2671,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
@@ -2743,7 +2712,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             Map.of("share-group-id-1", Map.entry(EMPTY_PARAMS, Errors.forException(new GroupNotEmptyException("bad stuff"))))
@@ -2760,7 +2728,6 @@ public class GroupCoordinatorServiceTest {
         verify(persister, times(0)).deleteState(ArgumentMatchers.any());
         verify(runtime, times(0)).scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
@@ -2796,7 +2763,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             Map.of("share-group-id-1", Map.entry(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)), Errors.NONE))
@@ -2806,7 +2772,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.failedFuture(Errors.CLUSTER_AUTHORIZATION_FAILED.exception()));
 
@@ -2847,14 +2812,12 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(Map.of()));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -3010,7 +2973,6 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("transactional-id"),
             ArgumentMatchers.eq(10L),
             ArgumentMatchers.eq((short) 5),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any(),
             ArgumentMatchers.eq((int) txnOffsetCommitVersion)
         )).thenReturn(CompletableFuture.completedFuture(response));
@@ -3065,7 +3027,6 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("transactional-id"),
             ArgumentMatchers.eq(10L),
             ArgumentMatchers.eq((short) 5),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any(),
             ArgumentMatchers.eq((int) ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
         )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
@@ -3094,8 +3055,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.eq(10),
             ArgumentMatchers.eq(TransactionResult.COMMIT),
-            ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel()),
-            ArgumentMatchers.eq(Duration.ofMillis(100))
+            ArgumentMatchers.eq(TransactionVersion.TV_1.featureLevel())
         )).thenReturn(CompletableFuture.completedFuture(null));
 
         CompletableFuture<Void> future = service.completeTransaction(
@@ -3104,8 +3064,7 @@ public class GroupCoordinatorServiceTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            Duration.ofMillis(100)
+            TransactionVersion.TV_1.featureLevel()
         );
 
         assertNull(future.get());
@@ -3125,8 +3084,7 @@ public class GroupCoordinatorServiceTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            Duration.ofMillis(100)
+            TransactionVersion.TV_1.featureLevel()
         );
 
         assertFutureThrows(CoordinatorNotAvailableException.class, future);
@@ -3146,8 +3104,7 @@ public class GroupCoordinatorServiceTest {
             (short) 5,
             10,
             TransactionResult.COMMIT,
-            TransactionVersion.TV_1.featureLevel(),
-            Duration.ofMillis(100)
+            TransactionVersion.TV_1.featureLevel()
         );
 
         assertFutureThrows(IllegalStateException.class, future);
@@ -3203,13 +3160,11 @@ public class GroupCoordinatorServiceTest {
 
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-topics-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(offsetFutures);
 
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(shareFutures);
 
@@ -3219,12 +3174,10 @@ public class GroupCoordinatorServiceTest {
         // Wait for the operations to be scheduled and verify method is blocked.
         verify(runtime, timeout(5000).times(1)).scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-topics-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
         verify(runtime, timeout(5000).times(1)).scheduleWriteAllOperation(
             ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
         assertFalse(resultFuture.isDone());
@@ -3257,12 +3210,10 @@ public class GroupCoordinatorServiceTest {
         // Verify no operations scheduled.
         verify(runtime, times(0)).scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-topics-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
         verify(runtime, times(0)).scheduleWriteAllOperation(
             ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
     }
@@ -3289,7 +3240,6 @@ public class GroupCoordinatorServiceTest {
         // Mock operations with 3 futures, some failing.
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-topics-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(null),
@@ -3299,7 +3249,6 @@ public class GroupCoordinatorServiceTest {
 
         when(runtime.scheduleWriteAllOperation(
             ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(null),
@@ -3313,12 +3262,10 @@ public class GroupCoordinatorServiceTest {
         // Verify operations were still scheduled exactly once.
         verify(runtime, times(1)).scheduleWriteAllOperation(
             ArgumentMatchers.eq("on-topics-deleted"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
         verify(runtime, times(1)).scheduleWriteAllOperation(
             ArgumentMatchers.eq("maybe-cleanup-share-group-state"),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         );
     }
@@ -3359,7 +3306,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("share-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             Map.entry(
@@ -3398,7 +3344,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("share-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -4537,14 +4482,12 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("complete-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(responseData));
 
@@ -4612,14 +4555,12 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("complete-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(responseData));
 
@@ -4740,7 +4681,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4778,7 +4718,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4814,7 +4753,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
@@ -4850,7 +4788,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -4892,7 +4829,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4936,7 +4872,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4978,7 +4913,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5036,7 +4970,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5094,7 +5027,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5155,7 +5087,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5216,7 +5147,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5307,7 +5237,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5379,7 +5308,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5392,7 +5320,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("complete-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
@@ -5505,7 +5432,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -5518,7 +5444,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("complete-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(responseData));
 
@@ -5558,7 +5483,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -5575,7 +5499,6 @@ public class GroupCoordinatorServiceTest {
         assertEquals(defaultResponse, service.persisterInitialize(params, defaultResponse).getNow(null));
         verify(runtime, times(1)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
@@ -5601,13 +5524,11 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("uninitialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
@@ -5625,12 +5546,10 @@ public class GroupCoordinatorServiceTest {
         verify(runtime, times(0)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
         verify(runtime, times(1)).scheduleWriteOperation(
             ArgumentMatchers.eq("uninitialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
@@ -5663,13 +5582,11 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("uninitialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
@@ -5690,12 +5607,10 @@ public class GroupCoordinatorServiceTest {
         verify(runtime, times(0)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
         verify(runtime, times(1)).scheduleWriteOperation(
             ArgumentMatchers.eq("uninitialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
@@ -5733,13 +5648,11 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.failedFuture(exp));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("uninitialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
@@ -5760,12 +5673,10 @@ public class GroupCoordinatorServiceTest {
         verify(runtime, times(1)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.any(),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
         verify(runtime, times(1)).scheduleWriteOperation(
             ArgumentMatchers.eq("uninitialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
@@ -5861,7 +5772,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("share-group-offsets-alter"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(alterShareGroupOffsetsIntermediate));
 
@@ -5909,7 +5819,6 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("share-group-offsets-alter"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
             new GroupNotEmptyException("bad stuff")
@@ -5959,14 +5868,12 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
         assertEquals(defaultResponse, service.persisterInitialize(params, defaultResponse).getNow(null));
         verify(runtime, times(1)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
-            ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );

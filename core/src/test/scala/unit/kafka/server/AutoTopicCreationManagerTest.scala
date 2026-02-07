@@ -40,6 +40,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorCon
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.TopicCreator
 import org.apache.kafka.server.quota.ControllerMutationQuota
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}

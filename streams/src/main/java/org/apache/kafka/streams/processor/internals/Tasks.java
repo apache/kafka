@@ -58,6 +58,7 @@ class Tasks implements TasksRegistry {
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
+    private final Set<Task> pendingTasksToClose = new HashSet<>();
     private final Set<TaskId> failedTaskIds = new HashSet<>();
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
@@ -125,6 +126,20 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public Set<Task> drainPendingStandbyTasksToInit() {
+        final Set<Task> result = new HashSet<>();
+        final Iterator<Task> iterator = pendingTasksToInit.iterator();
+        while (iterator.hasNext()) {
+            final Task task = iterator.next();
+            if (!task.isActive()) {
+                result.add(task);
+                iterator.remove();
+            }
+        }
+        return result;
+    }
+
+    @Override
     public Set<Task> pendingTasksToInit() {
         return Collections.unmodifiableSet(pendingTasksToInit);
     }
@@ -137,6 +152,21 @@ class Tasks implements TasksRegistry {
     @Override
     public boolean hasPendingTasksToInit() {
         return !pendingTasksToInit.isEmpty();
+    }
+
+    @Override
+    public Set<Task> pendingTasksToClose() {
+        return Collections.unmodifiableSet(pendingTasksToClose);
+    }
+
+    @Override
+    public void addPendingTasksToClose(final Collection<Task> tasks) {
+        pendingTasksToClose.addAll(tasks);
+    }
+
+    @Override
+    public boolean hasPendingTasksToClose() {
+        return !pendingTasksToClose.isEmpty();
     }
 
     @Override
@@ -193,7 +223,9 @@ class Tasks implements TasksRegistry {
             throw new IllegalStateException("Attempted to remove a task that is not closed or suspended: " + taskId);
         }
 
-        if (taskToRemove.isActive()) {
+        if (pendingTasksToClose.contains(taskToRemove)) {
+            pendingTasksToClose.remove(taskToRemove);
+        } else if (taskToRemove.isActive()) {
             if (activeTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
@@ -203,7 +235,7 @@ class Tasks implements TasksRegistry {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
         }
-        failedTaskIds.remove(taskToRemove.id());
+        failedTaskIds.remove(taskId);
     }
 
     @Override
@@ -299,6 +331,11 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
+    }
+
+    @Override
+    public synchronized Collection<Task> standbyTasks() {
+        return Collections.unmodifiableCollection(standbyTasksPerId.values());
     }
 
     /**

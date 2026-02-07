@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.NodeApiVersions;

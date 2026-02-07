@@ -39,11 +39,19 @@ public interface TasksRegistry {
 
     Set<Task> drainPendingActiveTasksToInit();
 
+    Set<Task> drainPendingStandbyTasksToInit();
+
     Set<Task> pendingTasksToInit();
 
     void addPendingTasksToInit(final Collection<Task> tasks);
 
     boolean hasPendingTasksToInit();
+
+    Set<Task> pendingTasksToClose();
+
+    void addPendingTasksToClose(final Collection<Task> tasks);
+
+    boolean hasPendingTasksToClose();
 
     void addActiveTasks(final Collection<Task> tasks);
 
@@ -70,6 +78,8 @@ public interface TasksRegistry {
     Collection<TaskId> activeTaskIds();
 
     Collection<Task> activeTasks();
+
+    Collection<Task> standbyTasks();
 
     Set<Task> allTasks();
 
