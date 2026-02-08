@@ -44,7 +44,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
@@ -289,22 +292,29 @@ public class ClientsTestUtils {
     }
 
     public static void sendRecordsAndVerify(
-        Producer<Object, Object> producer,
+        Producer<byte[], byte[]> producer,
         String topic,
         int partition,
         int numRecords,
         int startOffset
-    ) {
+    ) throws ExecutionException, InterruptedException {
+        List<Future<RecordMetadata>> futures = new ArrayList<>();
         long now = System.currentTimeMillis();
-        var futures = IntStream.range(0, numRecords).mapToObj(i -> producer.send(new ProducerRecord<>(topic, partition, now,
-            String.format("key%d", i).getBytes(), String.format("value%d", i).getBytes()))).toList();
-        IntStream.range(0, numRecords).forEach(i -> {
-            RecordMetadata metadata = assertDoesNotThrow(() -> futures.get(i).get(30L, TimeUnit.SECONDS));
-            assertEquals(topic, metadata.topic());
-            assertEquals(partition, metadata.partition());
-            assertEquals(startOffset + i, metadata.offset());
-            assertEquals(now, metadata.timestamp());
-        });
+        for (int i = 0; i < numRecords; i++) {
+            futures.add(producer.send(new ProducerRecord<>(topic, partition, now,
+                String.format("key%d", i).getBytes(), String.format("value%d", i).getBytes())));
+        }
+        try {
+            for (int i = 0; i < numRecords; i++) {
+                RecordMetadata metadata = futures.get(i).get(30L, TimeUnit.SECONDS);
+                assertEquals(topic, metadata.topic());
+                assertEquals(partition, metadata.partition());
+                assertEquals(startOffset + i, metadata.offset());
+                assertEquals(now, metadata.timestamp());
+            }
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static void awaitAssignment(
