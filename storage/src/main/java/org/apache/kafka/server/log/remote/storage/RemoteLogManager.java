@@ -912,8 +912,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
                 boolean exceeded = segmentAgeMs >= copyLagMs;
                 if (!exceeded) {
-                    logger.debug("Segment {} not eligible for upload: segment age {} ms < copy lag {} ms",
-                            segment.baseOffset(), segmentAgeMs, copyLagMs);
+                    logger.debug("{} not eligible for upload: segment age {} ms < copy lag {} ms",
+                            segment, segmentAgeMs, copyLagMs);
                 }
                 return exceeded;
             } catch (IOException e) {
@@ -926,7 +926,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             long sizeLagBytes = totalLogSize - cumulativeSize;
             boolean exceeded = sizeLagBytes >= copyLagBytes;
             if (!exceeded) {
-                logger.debug("Segment {} not eligible for upload: size lag {} bytes < copy lag {} bytes (totalLogSize={}, cumulativeSize={})",
+                logger.debug("{} not eligible for upload: size lag {} bytes < copy lag {} bytes (totalLogSize={}, cumulativeSize={})",
                         segment, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
             }
             return exceeded;
@@ -951,7 +951,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 long copyLagBytes = log.config() != null ? log.config().remoteCopyLagBytes() : 0L;
                 
                 long currentTimeMs = time.milliseconds();
-                long totalLogSize = log.size();
+                long totalLogSize = UnifiedLog.sizeInBytes(segments);
                 long cumulativeSize = 0;
 
                 for (int idx = 1; idx < segments.size(); idx++) {
