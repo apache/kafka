@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import kafka.utils.Implicits._
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, TopicConfig}
@@ -39,12 +39,12 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.AbstractKafkaConfig.getMap
-import org.apache.kafka.server.config.{AbstractKafkaConfig, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DynamicConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
@@ -57,7 +57,7 @@ object KafkaConfig {
 
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
-      DynamicBrokerConfig.dynamicConfigUpdateModes))
+      JDynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
   val configDef = AbstractKafkaConfig.CONFIG_DEF
@@ -94,7 +94,7 @@ object KafkaConfig {
     typeOf(configName) match {
       case Some(t) => Some(t)
       case None =>
-        DynamicBrokerConfig.brokerConfigSynonyms(configName, matchListenerOverride = true).flatMap(typeOf).headOption
+        JDynamicBrokerConfig.brokerConfigSynonyms(configName, true).asScala.flatMap(typeOf).headOption
     }
   }
 
@@ -128,21 +128,6 @@ object KafkaConfig {
     }
     if (maybeSensitive) Password.HIDDEN else value
   }
-
-  /**
-   * Copy a configuration map, populating some keys that we want to treat as synonyms.
-   */
-  def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
-    val output = new util.HashMap[Any, Any](input)
-    val brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG)
-    val nodeId = output.get(KRaftConfigs.NODE_ID_CONFIG)
-    if (brokerId == null && nodeId != null) {
-      output.put(ServerConfigs.BROKER_ID_CONFIG, nodeId)
-    } else if (brokerId != null && nodeId == null) {
-      output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId)
-    }
-    output
-  }
 }
 
 /**
@@ -154,8 +139,8 @@ object KafkaConfig {
 class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   extends AbstractKafkaConfig(KafkaConfig.configDef, props, Utils.castToStringObjectMap(props), doLog) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props))
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _]) = this(true, AbstractKafkaConfig.populateSynonyms(props))
+  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, AbstractKafkaConfig.populateSynonyms(props))
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
@@ -164,6 +149,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private[server] def updateCurrentConfig(newConfig: KafkaConfig): Unit = {
     this.currentConfig = newConfig
+  }
+
+  // for testing
+  private[server] def updateCurrentConfig(props: util.Map[_, _]): Unit = {
+    this.currentConfig = new KafkaConfig(props)
   }
 
   override def originals: util.Map[String, AnyRef] =
@@ -207,9 +197,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def quotaConfig: QuotaConfig = _quotaConfig
 
   /** ********* General Configuration ***********/
-  val nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
-  val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
-  val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
   val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
   val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
   val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
@@ -298,7 +285,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def numNetworkThreads = getInt(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
 
   /***************** rack configuration **************/
-  val rack = Option(getString(ServerConfigs.BROKER_RACK_CONFIG))
   val replicaSelectorClassName = Option(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG))
 
   /** ********* Log Configuration ***********/
@@ -356,6 +342,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val leaderImbalanceCheckIntervalSeconds: Long = getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
   val uncleanLeaderElectionCheckIntervalMs: Long = getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
+  def followerFetchLastTieredOffsetEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
@@ -414,11 +401,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
   val unstableFeatureVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG)
 
-  def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
+  override def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
   }
 
-  def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
+  override def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.removeReconfigurable(reconfigurable)
   }
 
@@ -438,7 +425,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def listeners: Seq[Endpoint] =
-    CoreUtils.listenerListToEndPoints(getList(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
+    AbstractKafkaConfig.listenerListToEndPoints(getList(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap).asScala
 
   def controllerListeners: Seq[Endpoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listener))
@@ -455,7 +442,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def effectiveAdvertisedControllerListeners: Seq[Endpoint] = {
     val advertisedListenersProp = getList(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      AbstractKafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, false).asScala
         .filter(l => controllerListenerNames.contains(l.listener))
     } else {
       Seq.empty
@@ -485,7 +472,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     // Use advertised listeners if defined, fallback to listeners otherwise
     val advertisedListenersProp = getList(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     val advertisedListeners = if (advertisedListenersProp != null) {
-      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+      AbstractKafkaConfig.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, false).asScala
     } else {
       listeners
     }

@@ -52,7 +52,6 @@ class ActiveTaskCreator {
     private final StreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
-    private final ChangelogReader storeChangelogReader;
     private final ThreadCache cache;
     private final Time time;
     private final KafkaClientSupplier clientSupplier;
@@ -62,7 +61,6 @@ class ActiveTaskCreator {
     private final Logger log;
     private final Sensor createTaskSensor;
     private final StreamsProducer streamsProducer;
-    private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
     private boolean isClosed = false;
 
@@ -70,7 +68,6 @@ class ActiveTaskCreator {
                       final StreamsConfig applicationConfig,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
-                      final ChangelogReader storeChangelogReader,
                       final ThreadCache cache,
                       final Time time,
                       final KafkaClientSupplier clientSupplier,
@@ -78,13 +75,11 @@ class ActiveTaskCreator {
                       final int threadIdx,
                       final UUID processId,
                       final LogContext logContext,
-                      final boolean stateUpdaterEnabled,
                       final boolean processingThreadsEnabled) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
-        this.storeChangelogReader = storeChangelogReader;
         this.cache = cache;
         this.time = time;
         this.clientSupplier = clientSupplier;
@@ -92,7 +87,6 @@ class ActiveTaskCreator {
         this.threadIdx = threadIdx;
         this.processId = processId;
         this.log = logContext.logger(getClass());
-        this.stateUpdaterEnabled = stateUpdaterEnabled;
         this.processingThreadsEnabled = processingThreadsEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
@@ -154,10 +148,8 @@ class ActiveTaskCreator {
                 eosEnabled(applicationConfig),
                 logContext,
                 stateDirectory,
-                storeChangelogReader,
                 topology.storeToChangelogTopic(),
-                partitions,
-                stateUpdaterEnabled);
+                partitions);
 
             final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 taskId,

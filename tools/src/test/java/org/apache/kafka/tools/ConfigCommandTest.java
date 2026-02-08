@@ -295,13 +295,14 @@ public class ConfigCommandTest {
         createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
-            "--add-config", "a._-c=b,c=,d=e,f="));
+            "--add-config", "a._-c=b,c=,d=e,a$b=c,f="));
         createOpts.checkArgs();
 
         Properties addedProps2 = ConfigCommand.parseConfigsToBeAdded(createOpts);
-        assertEquals(4, addedProps2.size());
+        assertEquals(5, addedProps2.size());
         assertEquals("b", addedProps2.getProperty("a._-c"));
         assertEquals("e", addedProps2.getProperty("d"));
+        assertEquals("c", addedProps2.getProperty("a$b"));
         assertTrue(addedProps2.getProperty("c").isEmpty());
         assertTrue(addedProps2.getProperty("f").isEmpty());
 

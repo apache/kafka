@@ -339,6 +339,10 @@ public class ClusterControlManager {
         return brokerRegistrations;
     }
 
+    Map<Integer, ControllerRegistration> controllerRegistrations() {
+        return controllerRegistrations;
+    }
+
     /**
      * Process an incoming broker registration request.
      */

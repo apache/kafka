@@ -119,7 +119,7 @@ public class TopicCommandTest {
         TopicCommand.PartitionDescription partitionDescription = new TopicCommand.PartitionDescription("test-topic",
                 new TopicPartitionInfo(0, new Node(1, "localhost", 9091), replicas,
                         List.of(new Node(1, "localhost", 9091))),
-                null, false,
+                null,
                 new PartitionReassignment(replicaIds, List.of(2), List.of())
         );
 

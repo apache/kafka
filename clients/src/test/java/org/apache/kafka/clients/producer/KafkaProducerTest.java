@@ -176,7 +176,7 @@ import static org.mockito.Mockito.when;
 public class KafkaProducerTest {
 
     private static final String INIT_TXN_TIMEOUT_MSG =
-            "InitTransactions timed out — " +
+            "InitTransactions timed out - " +
                     "did not complete coordinator discovery or " +
                     "receive the InitProducerId response within max.block.ms.";
     

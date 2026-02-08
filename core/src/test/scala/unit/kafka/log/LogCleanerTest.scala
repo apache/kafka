@@ -18,7 +18,7 @@
 package kafka.log
 
 import kafka.server.KafkaConfig
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -69,7 +69,7 @@ class LogCleanerTest extends Logging {
 
   @AfterEach
   def teardown(): Unit = {
-    CoreUtils.swallow(time.scheduler.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => time.scheduler.shutdown())
     Utils.delete(tmpdir)
   }
 

@@ -577,7 +577,7 @@ public class DefaultStatePersister implements Persister {
 
         validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
     }
-    
+
     private static void validate(WriteShareGroupStateParameters params) {
         String prefix = "Write share group parameters";
         if (params == null) {

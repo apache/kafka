@@ -616,7 +616,10 @@ public class ConfigDefTest {
 
     @Test
     public void testConvertValueToStringDouble() {
-        assertEquals("3.125", ConfigDef.convertToString(3.125, Type.DOUBLE));
+        assertEquals("3.125", ConfigDef.convertToString(3.125d, Type.DOUBLE));
+        assertEquals("1.7976931348623157E308", ConfigDef.convertToString(Double.MAX_VALUE, Type.DOUBLE));
+        assertEquals("1.024E8",  ConfigDef.convertToString(102400000d, Type.DOUBLE));
+        assertEquals("-1.024E8",  ConfigDef.convertToString(-102400000d, Type.DOUBLE));
         assertNull(ConfigDef.convertToString(null, Type.DOUBLE));
     }
 
