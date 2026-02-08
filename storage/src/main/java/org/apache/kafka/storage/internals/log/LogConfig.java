@@ -146,8 +146,8 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
     public static final long DEFAULT_REMOTE_COPY_LAG_MS = 0;
     public static final long DEFAULT_REMOTE_COPY_LAG_BYTES = 0;
-    public static final long MAX_REMOTE_COPY_LAG_MS = -1; // It indicates the value to be derived from localRetentionBytes
-    public static final long MAX_REMOTE_COPY_LAG_BYTES = -1; // It indicates the value to be derived from localRetentionMs
+    public static final long MAX_REMOTE_COPY_LAG_MS = -1; // It indicates the value to be derived from localRetentionMs
+    public static final long MAX_REMOTE_COPY_LAG_BYTES = -1; // It indicates the value to be derived from localRetentionBytes
 
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
     public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
