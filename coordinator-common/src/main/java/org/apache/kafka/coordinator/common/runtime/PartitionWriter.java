@@ -32,7 +32,7 @@ public interface PartitionWriter {
 
     /**
      * Listener allowing to listen to high watermark changes. This is meant
-     * to be used in conjunction with {{@link PartitionWriter#append(TopicPartition, VerificationGuard, MemoryRecords)}}.
+     * to be used in conjunction with {@link PartitionWriter#append(TopicPartition, VerificationGuard, MemoryRecords, short)}.
      */
     interface Listener {
         void onHighWatermarkUpdated(
@@ -42,7 +42,7 @@ public interface PartitionWriter {
     }
 
     /**
-     * Register a {{@link Listener}}.
+     * Register a {@link Listener}.
      *
      * @param tp        The partition to register the listener to.
      * @param listener  The listener.
@@ -53,7 +53,7 @@ public interface PartitionWriter {
     );
 
     /**
-     * Deregister a {{@link Listener}}.
+     * Deregister a {@link Listener}.
      *
      * @param tp        The partition to deregister the listener from.
      * @param listener  The listener.
