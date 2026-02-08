@@ -909,30 +909,25 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
         private boolean hasExceededCopyLagTime(LogSegment segment, long currentTimeMs, long copyLagMs) {
             try {
-                long ts = segment.largestTimestamp();
-                if (ts >= 0) {
-                    long segmentAgeMs = currentTimeMs - ts;
-                    boolean exceeded = segmentAgeMs >= copyLagMs;
-                    if (!exceeded) {
-                        logger.debug("Segment {} not eligible for upload: segment age {} ms < copy lag {} ms",
-                                segment.baseOffset(), segmentAgeMs, copyLagMs);
-                    }
-                    return exceeded;
+                long segmentAgeMs = currentTimeMs - segment.largestTimestamp();
+                boolean exceeded = segmentAgeMs >= copyLagMs;
+                if (!exceeded) {
+                    logger.debug("Segment {} not eligible for upload: segment age {} ms < copy lag {} ms",
+                            segment.baseOffset(), segmentAgeMs, copyLagMs);
                 }
+                return exceeded;
             } catch (IOException e) {
-                logger.warn("Failed to get largest timestamp for segment {}, will not skip based on time", segment, e);
+                logger.warn("Failed to get largest timestamp for segment {}, take it as eligible for upload based on time", segment, e);
+                return true;
             }
-            logger.debug("Segment {} not eligible for upload: cannot determine segment age (invalid timestamp)", segment.baseOffset());
-            return false;
         }
 
-
-        private boolean hasExceededCopyLagSize(long totalLogSize, long cumulativeSize, long copyLagBytes) {
+        private boolean hasExceededCopyLagSize(LogSegment segment, long totalLogSize, long cumulativeSize, long copyLagBytes) {
             long sizeLagBytes = totalLogSize - cumulativeSize;
             boolean exceeded = sizeLagBytes >= copyLagBytes;
             if (!exceeded) {
-                logger.debug("Segment not eligible for upload: size lag {} bytes < copy lag {} bytes (totalLogSize={}, cumulativeSize={})",
-                        sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
+                logger.debug("Segment {} not eligible for upload: size lag {} bytes < copy lag {} bytes (totalLogSize={}, cumulativeSize={})",
+                        segment, sizeLagBytes, copyLagBytes, totalLogSize, cumulativeSize);
             }
             return exceeded;
         }
@@ -965,7 +960,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                         if (copyLagMs != 0 && !hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs))
                             break;
                         cumulativeSize += previousSeg.size();
-                        if (copyLagBytes != 0 && !hasExceededCopyLagSize(totalLogSize, cumulativeSize, copyLagBytes))
+                        if (copyLagBytes != 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes))
                             break;
                         candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
                     }
