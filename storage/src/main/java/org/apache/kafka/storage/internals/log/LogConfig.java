@@ -144,8 +144,10 @@ public class LogConfig extends AbstractConfig {
     public static final boolean DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = false;
     public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
-    public static final long DEFAULT_REMOTE_COPY_LAG_MS = 0L;
-    public static final long DEFAULT_REMOTE_COPY_LAG_BYTES = 0L;
+    public static final long DEFAULT_REMOTE_COPY_LAG_MS = 0;
+    public static final long DEFAULT_REMOTE_COPY_LAG_BYTES = 0;
+    public static final long MAX_REMOTE_COPY_LAG_MS = -1; // It indicates the value to be derived from localRetentionBytes
+    public static final long MAX_REMOTE_COPY_LAG_BYTES = -1; // It indicates the value to be derived from localRetentionMs
 
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
     public static final String INTERNAL_SEGMENT_BYTES_DOC = "The maximum size of a single log file. This should be used for testing only.";
@@ -410,11 +412,11 @@ public class LogConfig extends AbstractConfig {
 
 
     public long remoteCopyLagMs() {
-        return remoteLogConfig.remoteCopyLagMs == -1 ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs;
+        return remoteLogConfig.remoteCopyLagMs == MAX_REMOTE_COPY_LAG_MS ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs;
     }
 
     public long remoteCopyLagBytes() {
-        return remoteLogConfig.remoteCopyLagBytes == -1 ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes;
+        return remoteLogConfig.remoteCopyLagBytes == MAX_REMOTE_COPY_LAG_BYTES ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes;
     }
 
     public long localRetentionMs() {
