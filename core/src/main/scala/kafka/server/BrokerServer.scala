@@ -59,8 +59,6 @@ import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, BrokerLifecy
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
-import org.apache.kafka.server.NodeToControllerChannelManagerImpl
-import org.apache.kafka.server.RaftControllerNodeProvider
 import org.apache.kafka.server.partition.{AlterPartitionManager, DefaultAlterPartitionManager}
 
 import java.time.Duration
