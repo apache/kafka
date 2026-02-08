@@ -1699,7 +1699,7 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         consumer.poll(Duration.ZERO);
 
-        // Verify that subscription and assignment are set up correctly
+        // Verify that subscription are set up correctly
         assertEquals(Set.of(topic), consumer.subscription());
 
         // Mock a fetch response so that we have consumed some data
