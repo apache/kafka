@@ -27,10 +27,25 @@ public final class OffsetAndTimestamp {
     private final long offset;
     private final Optional<Integer> leaderEpoch;
 
+    /**
+     * Constructs a new OffsetAndTimestamp with the given offset and timestamp.
+     *
+     * @param offset the offset
+     * @param timestamp the timestamp
+     * @throws IllegalArgumentException if the offset or timestamp is negative
+     */
     public OffsetAndTimestamp(long offset, long timestamp) {
         this(offset, timestamp, Optional.empty());
     }
 
+    /**
+     * Constructs a new OffsetAndTimestamp with the given offset, timestamp, and leader epoch.
+     *
+     * @param offset the offset
+     * @param timestamp the timestamp
+     * @param leaderEpoch the leader epoch
+     * @throws IllegalArgumentException if the offset or timestamp is negative
+     */
     public OffsetAndTimestamp(long offset, long timestamp, Optional<Integer> leaderEpoch) {
         if (offset < 0)
             throw new IllegalArgumentException("Invalid negative offset");
@@ -43,10 +58,20 @@ public final class OffsetAndTimestamp {
         this.leaderEpoch = leaderEpoch;
     }
 
+    /**
+     * Returns the timestamp.
+     *
+     * @return the timestamp
+     */
     public long timestamp() {
         return timestamp;
     }
 
+    /**
+     * Returns the offset.
+     *
+     * @return the offset
+     */
     public long offset() {
         return offset;
     }

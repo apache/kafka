@@ -22,6 +22,13 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * Options for controlling the consumer close behavior.
+ * <p>
+ * This class allows customization of the close timeout and group membership operation
+ * when a consumer is being shut down.
+ * </p>
+ */
 public class CloseOptions {
     /**
      * Enum to specify the group membership operation upon leaving group.
@@ -102,10 +109,20 @@ public class CloseOptions {
         return this;
     }
 
+    /**
+     * Returns the group membership operation configured for this close.
+     *
+     * @return the group membership operation
+     */
     public GroupMembershipOperation groupMembershipOperation() {
         return operation;
     }
 
+    /**
+     * Returns the timeout configured for this close.
+     *
+     * @return the timeout, or empty if using the default timeout
+     */
     public Optional<Duration> timeout() {
         return timeout;
     }

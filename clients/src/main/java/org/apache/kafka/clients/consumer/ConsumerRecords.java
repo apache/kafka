@@ -45,6 +45,12 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         this(records, Map.of());
     }
 
+    /**
+     * Constructs a new ConsumerRecords with the given records and next offsets.
+     *
+     * @param records the records for each partition
+     * @param nextOffsets the next offsets for each partition
+     */
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records, final Map<TopicPartition, OffsetAndMetadata> nextOffsets) {
         this.records = records;
         this.nextOffsets = Map.copyOf(nextOffsets);
@@ -135,10 +141,22 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         }
     }
 
+    /**
+     * Returns whether this container has any records.
+     *
+     * @return true if there are no records, false otherwise
+     */
     public boolean isEmpty() {
         return records.isEmpty();
     }
 
+    /**
+     * Returns an empty ConsumerRecords instance.
+     *
+     * @param <K> the key type
+     * @param <V> the value type
+     * @return an empty ConsumerRecords
+     */
     @SuppressWarnings("unchecked")
     public static <K, V> ConsumerRecords<K, V> empty() {
         return (ConsumerRecords<K, V>) EMPTY;

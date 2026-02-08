@@ -75,6 +75,11 @@ public class OffsetAndMetadata implements Serializable {
         this(offset, "");
     }
 
+    /**
+     * Returns the offset to be committed.
+     *
+     * @return the offset
+     */
     public long offset() {
         return offset;
     }

@@ -56,18 +56,38 @@ public class ConsumerGroupMetadata {
             Optional.empty());
     }
 
+    /**
+     * Returns the consumer group id.
+     *
+     * @return the group id
+     */
     public String groupId() {
         return groupId;
     }
 
+    /**
+     * Returns the generation id of the consumer group.
+     *
+     * @return the generation id
+     */
     public int generationId() {
         return generationId;
     }
 
+    /**
+     * Returns the member id of this consumer.
+     *
+     * @return the member id
+     */
     public String memberId() {
         return memberId;
     }
 
+    /**
+     * Returns the group instance id if this is a static member.
+     *
+     * @return the group instance id, or empty if this is a dynamic member
+     */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
     }

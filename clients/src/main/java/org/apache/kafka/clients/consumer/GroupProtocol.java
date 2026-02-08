@@ -18,6 +18,17 @@ package org.apache.kafka.clients.consumer;
 
 import java.util.Locale;
 
+/**
+ * Enum representing the consumer group protocol type.
+ * <p>
+ * Kafka supports two types of consumer group protocols:
+ * </p>
+ * <ul>
+ *     <li>{@link #CLASSIC} - The original consumer group protocol</li>
+ *     <li>{@link #CONSUMER} - The consumer group protocol introduced in Kafka 4.0 (KIP-848)</li>
+ * </ul>
+ *
+ */
 public enum GroupProtocol {
     /** Classic group protocol.  */
     CLASSIC("CLASSIC"),
@@ -36,6 +47,10 @@ public enum GroupProtocol {
 
     /**
      * Case-insensitive group protocol lookup by string name.
+     *
+     * @param name the name of the group protocol
+     * @return the corresponding GroupProtocol
+     * @throws IllegalArgumentException if the name does not match any protocol
      */
     public static GroupProtocol of(final String name) {
         return GroupProtocol.valueOf(name.toUpperCase(Locale.ROOT));

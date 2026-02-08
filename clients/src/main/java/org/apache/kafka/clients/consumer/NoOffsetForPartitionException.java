@@ -32,11 +32,21 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
 
     private final Set<TopicPartition> partitions;
 
+    /**
+     * Constructs a new NoOffsetForPartitionException for a single partition.
+     *
+     * @param partition the partition for which no offset is defined
+     */
     public NoOffsetForPartitionException(TopicPartition partition) {
         super("Undefined offset with no reset policy for partition: " + partition);
         this.partitions = Collections.singleton(partition);
     }
 
+    /**
+     * Constructs a new NoOffsetForPartitionException for multiple partitions.
+     *
+     * @param partitions the partitions for which no offset is defined
+     */
     public NoOffsetForPartitionException(Collection<TopicPartition> partitions) {
         super("Undefined offset with no reset policy for partitions: " + partitions);
         this.partitions = Set.copyOf(partitions);
