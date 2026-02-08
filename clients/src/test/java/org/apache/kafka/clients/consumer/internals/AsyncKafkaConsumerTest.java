@@ -1814,6 +1814,38 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
     }
 
+    /**
+     * Verify that unsubscribe() does not commit offsets even when auto-commit is enabled.
+     * This ensures users are aware that they need to explicitly call commitSync() before
+     * unsubscribing to avoid duplicate processing upon re-joining the group.
+     */
+    @Test
+    public void testUnsubscribeDoesNotCommitOffsetsEvenWithAutoCommitEnabled() {
+        Properties props = requiredConsumerConfigAndGroupId("test-group");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+
+        consumer = newConsumer(props);
+
+        // Subscribe to a topic
+        completeTopicSubscriptionChangeEventSuccessfully();
+        consumer.subscribe(singleton("topic"));
+
+        // Clear any previous invocations to focus on unsubscribe behavior
+        clearInvocations(applicationEventHandler);
+
+        // Call unsubscribe - this should NOT commit offsets even though auto-commit is enabled
+        completeUnsubscribeApplicationEventSuccessfully();
+        consumer.unsubscribe();
+
+        // Verify that UnsubscribeEvent was sent
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeEvent.class));
+
+        // Verify that no commit event (sync or async) was sent despite auto-commit being enabled
+        verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(SyncCommitEvent.class));
+        verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(AsyncCommitEvent.class));
+        verify(applicationEventHandler, never()).add(ArgumentMatchers.isA(CommitOnCloseEvent.class));
+    }
+
     @Test
     public void testSeekToBeginning() {
         Collection<TopicPartition> topics = Collections.singleton(new TopicPartition("test", 0));
