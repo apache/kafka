@@ -277,15 +277,9 @@ public class OffsetFetcher {
             Map<TopicIdPartition, FetchPosition> fetchPositionsWithId = new HashMap<>();
             Map<String, Uuid> topicIds = metadata.topicIds();
             fetchPositions.forEach((tp, position) -> {
-                Uuid topicId = topicIds.get(tp.topic());
-                if (topicId != null) {
-                    TopicIdPartition tip = new TopicIdPartition(topicId, tp);
-                    fetchPositionsWithId.put(tip, position);
-                } else {
-                    // Topic ID not available yet, skip this partition for now
-                    // The metadata will be refreshed and we'll retry
-                    log.debug("Skipping offset validation for partition {} because topic ID is not available in metadata", tp);
-                }
+                Uuid topicId = topicIds.getOrDefault(tp.topic(), Uuid.ZERO_UUID);
+                TopicIdPartition tip = new TopicIdPartition(topicId, tp);
+                fetchPositionsWithId.put(tip, position);
             });
 
             RequestFuture<OffsetForEpochResult> future =

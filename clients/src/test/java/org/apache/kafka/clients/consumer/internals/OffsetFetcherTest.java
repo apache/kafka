@@ -1217,6 +1217,48 @@ public class OffsetFetcherTest {
     }
 
     @Test
+    public void testOffsetValidationFallbackToNameBasedWhenTopicIdNotAvailable() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put(tp0.topic(), 4);
+
+        final int epochOne = 1;
+
+        // Update metadata WITHOUT topic IDs so metadata.topicIds() returns empty for our topic
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+                Collections.emptyMap(), partitionCounts, tp -> epochOne, Collections.emptyMap()), false, 0L);
+
+        Node node = metadata.fetch().nodes().get(0);
+        apiVersions.update(node.idString(), NodeApiVersions.create());
+
+        // Seek with a position and leader+epoch
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(
+                metadata.currentLeader(tp0).leader, Optional.of(epochOne));
+        subscriptions.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(20L, Optional.of(epochOne), leaderAndEpoch));
+        assertTrue(subscriptions.awaitingValidation(tp0));
+
+        // Prepare response with ZERO_UUID (name-based matching)
+        OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
+        data.topics().add(new OffsetForLeaderTopicResult()
+            .setTopic(tp0.topic()).setTopicId(Uuid.ZERO_UUID)
+            .setPartitions(Collections.singletonList(new EpochEndOffset()
+                .setPartition(tp0.partition())
+                .setErrorCode(Errors.NONE.code())
+                .setLeaderEpoch(epochOne)
+                .setEndOffset(30L))));
+        client.prepareResponseFrom(new OffsetsForLeaderEpochResponse(data), node);
+
+        // Validate positions - should send request with ZERO_UUID and complete successfully
+        offsetFetcher.validatePositionsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.awaitingValidation(tp0));
+        assertEquals(20L, subscriptions.position(tp0).offset);
+    }
+
+    @Test
     public void testOffsetValidationSkippedForOldBroker() {
         // Old brokers may require CLUSTER permission to use the OffsetForLeaderEpoch API,
         // so we should skip offset validation and not send the request.

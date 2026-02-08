@@ -31,6 +31,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -667,6 +668,51 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
+    public void testValidatePositionsFallbackToNameBasedWhenTopicIdNotAvailable() {
+        int currentOffset = 5;
+        int expectedEndOffset = 100;
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(LEADER_1),
+                Optional.of(3));
+        TopicPartition tp = TEST_PARTITION_1;
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
+                Optional.of(10), leaderAndEpoch);
+
+        // Mock with empty topicIds - topic ID not available in metadata
+        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Map.of(TEST_PARTITION_1, position));
+        when(subscriptionState.positionOrNull(any())).thenReturn(position, position);
+        NodeApiVersions nodeApiVersions = NodeApiVersions.create();
+        when(apiVersions.get(LEADER_1.idString())).thenReturn(nodeApiVersions);
+        when(metadata.topicIds()).thenReturn(Collections.emptyMap());
+
+        requestManager.validatePositionsIfNeeded();
+        assertEquals(1, requestManager.requestsToSend(), "Request should still be sent even without topic ID");
+
+        verify(subscriptionState).setNextAllowedRetry(any(), anyLong());
+
+        // Validate positions response with end offsets
+        when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(LEADER_1, leaderAndEpoch.epoch));
+        NetworkClientDelegate.PollResult pollResult = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
+
+        // Verify the request uses ZERO_UUID as fallback
+        AbstractRequest abstractRequest = unsentRequest.requestBuilder().build();
+        assertInstanceOf(OffsetsForLeaderEpochRequest.class, abstractRequest);
+        OffsetsForLeaderEpochRequest request = (OffsetsForLeaderEpochRequest) abstractRequest;
+        for (OffsetForLeaderEpochRequestData.OffsetForLeaderTopic topic : request.data().topics()) {
+            assertEquals(Uuid.ZERO_UUID, topic.topicId(),
+                    "Topic ID should be ZERO_UUID when not available in metadata");
+        }
+
+        // Build response with ZERO_UUID (name-based matching)
+        ClientResponse clientResponse = buildOffsetsForLeaderEpochResponseNameBased(unsentRequest,
+                Collections.singletonList(tp), expectedEndOffset);
+        clientResponse.onComplete();
+        assertTrue(unsentRequest.future().isDone());
+        assertFalse(unsentRequest.future().isCompletedExceptionally());
+        verify(subscriptionState).maybeCompleteValidation(any(), any(), any());
+    }
+
+    @Test
     public void testUpdatePositionsWithCommittedOffsets() {
         long internalFetchCommittedTimeout = time.milliseconds() + DEFAULT_API_TIMEOUT_MS;
         TopicPartition tp1 = new TopicPartition("topic1", 1);
@@ -1071,6 +1117,44 @@ public class OffsetsRequestManagerTest {
             topic.partitions().add(new OffsetForLeaderEpochResponseData.EpochEndOffset()
                     .setPartition(tp.partition())
                     .setErrorCode(partitionErrors.get(tp).code()));
+        });
+
+        OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
+        return new ClientResponse(
+                new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
+                request.handler(),
+                "-1",
+                time.milliseconds(),
+                time.milliseconds(),
+                false,
+                null,
+                null,
+                response
+        );
+    }
+
+    private ClientResponse buildOffsetsForLeaderEpochResponseNameBased(
+            final NetworkClientDelegate.UnsentRequest request,
+            final List<TopicPartition> partitions,
+            final int endOffset) {
+
+        AbstractRequest abstractRequest = request.requestBuilder().build();
+        assertInstanceOf(OffsetsForLeaderEpochRequest.class, abstractRequest);
+        OffsetsForLeaderEpochRequest offsetsForLeaderEpochRequest = (OffsetsForLeaderEpochRequest) abstractRequest;
+        OffsetForLeaderEpochResponseData data = new OffsetForLeaderEpochResponseData();
+        partitions.forEach(tp -> {
+            OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult topic = data.topics().find(tp.topic());
+            if (topic == null) {
+                topic = new OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult()
+                        .setTopic(tp.topic())
+                        .setTopicId(Uuid.ZERO_UUID);
+                data.topics().add(topic);
+            }
+            topic.partitions().add(new OffsetForLeaderEpochResponseData.EpochEndOffset()
+                    .setPartition(tp.partition())
+                    .setErrorCode(Errors.NONE.code())
+                    .setLeaderEpoch(3)
+                    .setEndOffset(endOffset));
         });
 
         OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
