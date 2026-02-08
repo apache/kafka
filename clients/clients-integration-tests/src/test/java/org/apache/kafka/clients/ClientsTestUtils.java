@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.PartitionInfo;
@@ -43,6 +44,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -273,6 +278,32 @@ public class ClientsTestUtils {
             sendRecord(producer, tp, startingTimestamp, i, -1);
         }
         producer.flush();
+    }
+
+    public static void sendRecordsAndVerify(
+        Producer<byte[], byte[]> producer,
+        String topic,
+        int partition,
+        int numRecords,
+        int startOffset
+    ) throws ExecutionException, InterruptedException {
+        List<Future<RecordMetadata>> futures = new ArrayList<>();
+        long now = System.currentTimeMillis();
+        for (int i = 0; i < numRecords; i++) {
+            futures.add(producer.send(new ProducerRecord<>(topic, partition, now,
+                String.format("key%d", i).getBytes(), String.format("value%d", i).getBytes())));
+        }
+        try {
+            for (int i = 0; i < numRecords; i++) {
+                RecordMetadata metadata = futures.get(i).get(30L, TimeUnit.SECONDS);
+                assertEquals(topic, metadata.topic());
+                assertEquals(partition, metadata.partition());
+                assertEquals(startOffset + i, metadata.offset());
+                assertEquals(now, metadata.timestamp());
+            }
+        } catch (TimeoutException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static void awaitAssignment(
