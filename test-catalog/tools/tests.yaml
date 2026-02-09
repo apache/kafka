@@ -135,6 +135,9 @@ org.apache.kafka.tools.ConfigCommandTest:
 - testAlterIpConfig
 - testDescribeAllBrokerConfig
 - testDescribeAllTopicConfig
+- testDescribeGroupConfigOldBroker
+- testDescribeGroupConfigOldBrokerNotAuthorized
+- testDescribeGroupConfigOldBrokerUnexpectedException
 - testDescribeIpConfigs
 - testEntityDefaultForType
 - testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed
