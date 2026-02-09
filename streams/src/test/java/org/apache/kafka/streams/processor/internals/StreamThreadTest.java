@@ -1126,6 +1126,7 @@ public class StreamThreadTest {
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
         final Task task = mock(Task.class);
+        when(task.id()).thenReturn(task1);
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         when(activeTaskCreator.createTasks(any(), any())).thenReturn(Collections.singleton(task));
         when(activeTaskCreator.producerClientIds()).thenReturn("producerClientId");
