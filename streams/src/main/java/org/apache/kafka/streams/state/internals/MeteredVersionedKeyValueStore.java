@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -347,8 +348,8 @@ public class MeteredVersionedKeyValueStore<K, V>
     }
 
     @Override
-    public void flush() {
-        internal.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        internal.commit(changelogOffsets);
     }
 
     @Override

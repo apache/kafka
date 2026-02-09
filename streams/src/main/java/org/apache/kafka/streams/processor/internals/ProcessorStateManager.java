@@ -484,36 +484,36 @@ public class ProcessorStateManager implements StateManager {
 
     /**
      * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
-     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
-     *                          or flushing state store get IO errors; such error should cause the thread to die
+     * @throws StreamsException fatal error when committing the state store, for example sending changelog records failed
+     *                          or committing state store get IO errors; such error should cause the thread to die
      */
     @Override
     public void flush() {
         RuntimeException firstException = null;
-        // attempting to flush the stores
+        // attempting to commit the stores
         if (!stores.isEmpty()) {
-            log.debug("Flushing all stores registered in the state manager: {}", stores);
+            log.debug("Committing all stores registered in the state manager: {}", stores);
             for (final StateStoreMetadata metadata : stores.values()) {
                 final StateStore store = metadata.stateStore;
-                log.trace("Flushing store {}", store.name());
+                log.trace("Committing store {}", store.name());
                 try {
-                    store.flush();
+                    store.commit(Map.of());
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
                         // In case of FailedProcessingException Do not keep the failed processing exception in the stack trace
                         if (exception instanceof FailedProcessingException)
                             firstException = new ProcessorStateException(
-                                format("%sFailed to flush state store %s", logPrefix, store.name()),
+                                format("%sFailed to commit state store %s", logPrefix, store.name()),
                                 exception.getCause());
                         else if (exception instanceof StreamsException)
                             firstException = exception;
                         else
                             firstException = new ProcessorStateException(
-                                format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
-                        log.error("Failed to flush state store {}: ", store.name(), firstException);
+                                format("%sFailed to commit state store %s", logPrefix, store.name()), exception);
+                        log.error("Failed to commit state store {}: ", store.name(), firstException);
                     } else {
-                        log.error("Failed to flush state store {}: ", store.name(), exception);
+                        log.error("Failed to commit state store {}: ", store.name(), exception);
                     }
                 }
             }
@@ -533,9 +533,9 @@ public class ProcessorStateManager implements StateManager {
                 final StateStore store = metadata.stateStore;
 
                 try {
-                    // buffer should be flushed to send all records to changelog
+                    // buffer should be committed to send all records to changelog
                     if (store instanceof TimeOrderedKeyValueBuffer) {
-                        store.flush();
+                        store.commit(Map.of());
                     } else if (store instanceof CachedStateStore) {
                         ((CachedStateStore<?, ?>) store).flushCache();
                     }

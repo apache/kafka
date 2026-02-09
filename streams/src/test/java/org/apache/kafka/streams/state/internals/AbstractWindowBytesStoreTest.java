@@ -235,8 +235,8 @@ public abstract class AbstractWindowBytesStoreTest {
                 ofEpochMilli(defaultStartTime + 12L - WINDOW_SIZE),
                 ofEpochMilli(defaultStartTime + 12L + WINDOW_SIZE))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -627,8 +627,8 @@ public abstract class AbstractWindowBytesStoreTest {
             Set.of(),
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 13L - WINDOW_SIZE), ofEpochMilli(defaultStartTime + 13L))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -737,8 +737,8 @@ public abstract class AbstractWindowBytesStoreTest {
             valuesToSetAndCloseIterator(windowStore.fetch(2, ofEpochMilli(defaultStartTime + 12L),
                 ofEpochMilli(defaultStartTime + 12L + WINDOW_SIZE))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {
@@ -806,8 +806,8 @@ public abstract class AbstractWindowBytesStoreTest {
                 ofEpochMilli(defaultStartTime + 4L - WINDOW_SIZE),
                 ofEpochMilli(defaultStartTime + 4L + WINDOW_SIZE))));
 
-        // Flush the store and verify all current entries were properly flushed ...
-        windowStore.flush();
+        // Commit the store and verify all current entries were properly committed ...
+        windowStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
         for (final ProducerRecord<Object, Object> record : recordCollector.collected()) {

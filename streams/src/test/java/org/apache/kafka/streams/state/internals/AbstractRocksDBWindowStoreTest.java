@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static java.time.Duration.ofMillis;
@@ -439,7 +440,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
                         ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
 
         // check segment directories
-        windowStore.flush();
+        windowStore.commit(Map.of());
         assertEquals(
                 Set.of(
                         segments.segmentName(4),
@@ -596,7 +597,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
         windowStore.put(6, "six", startTime + increment * 6);
         windowStore.put(7, "seven", startTime + increment * 7);
         windowStore.put(8, "eight", startTime + increment * 8);
-        windowStore.flush();
+        windowStore.commit(Map.of());
 
         windowStore.close();
 
@@ -750,7 +751,7 @@ public abstract class AbstractRocksDBWindowStoreTest extends AbstractWindowBytes
                         ofEpochMilli(startTime + increment * 8 + WINDOW_SIZE))));
 
         // check segment directories
-        windowStore.flush();
+        windowStore.commit(Map.of());
         assertEquals(
                 Set.of(
                         segments.segmentName(4L),
