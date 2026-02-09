@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -108,6 +110,12 @@ public class GroupCoordinatorConfig {
     public static final String OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG = "offsets.topic.compression.codec";
     public static final CompressionType OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT = CompressionType.NONE;
     public static final String OFFSETS_TOPIC_COMPRESSION_CODEC_DOC = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits.";
+
+    public static final String CACHED_BUFFER_MAX_BYTES_CONFIG = "group.coordinator.cached.buffer.max.bytes";
+    public static final int CACHED_BUFFER_MAX_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final String CACHED_BUFFER_MAX_BYTES_DOC = "The maximum buffer size that the GroupCoordinator will retain for reuse. " +
+        "Note: Setting this larger than the maximum message size is not recommended. In this case, every write buffer will be eligible " +
+        "for recycling, which renders this configuration ineffective as a size limit.";
 
     ///
     /// Offset configs
@@ -300,6 +308,10 @@ public class GroupCoordinatorConfig {
     public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = 30_000;
     public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
 
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
+        CACHED_BUFFER_MAX_BYTES_CONFIG
+    );
+    
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs
         .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT, 
@@ -312,6 +324,9 @@ public class GroupCoordinatorConfig {
         .define(OFFSETS_TOPIC_PARTITIONS_CONFIG, INT, OFFSETS_TOPIC_PARTITIONS_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_PARTITIONS_DOC)
         .define(OFFSETS_TOPIC_SEGMENT_BYTES_CONFIG, INT, OFFSETS_TOPIC_SEGMENT_BYTES_DEFAULT, atLeast(1), HIGH, OFFSETS_TOPIC_SEGMENT_BYTES_DOC)
         .define(OFFSETS_TOPIC_COMPRESSION_CODEC_CONFIG, INT, (int) OFFSETS_TOPIC_COMPRESSION_CODEC_DEFAULT.id, HIGH, OFFSETS_TOPIC_COMPRESSION_CODEC_DOC)
+        // The minimum size is set equal to `INITIAL_BUFFER_SIZE` to prevent CACHED_BUFFER_MAX_BYTES from being configured too small,
+        // which could otherwise negatively impact performance.
+        .define(CACHED_BUFFER_MAX_BYTES_CONFIG, INT, CACHED_BUFFER_MAX_BYTES_DEFAULT, atLeast(512 * 1024), MEDIUM, CACHED_BUFFER_MAX_BYTES_DOC)
 
         // Offset configs
         .define(OFFSET_METADATA_MAX_SIZE_CONFIG, INT, OFFSET_METADATA_MAX_SIZE_DEFAULT, HIGH, OFFSET_METADATA_MAX_SIZE_DOC)
@@ -413,6 +428,8 @@ public class GroupCoordinatorConfig {
     private final int streamsGroupMaxStandbyReplicas;
     private final int streamsGroupInitialRebalanceDelayMs;
 
+    private final AbstractConfig config;
+
     @SuppressWarnings("this-escape")
     public GroupCoordinatorConfig(AbstractConfig config) {
         this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
@@ -465,6 +482,7 @@ public class GroupCoordinatorConfig {
         this.streamsGroupNumStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupMaxStandbyReplicas = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
         this.streamsGroupInitialRebalanceDelayMs = config.getInt(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG);
+        this.config = config;
 
         // New group coordinator configs validation.
         require(consumerGroupMaxHeartbeatIntervalMs >= consumerGroupMinHeartbeatIntervalMs,
@@ -706,6 +724,15 @@ public class GroupCoordinatorConfig {
      */
     public int offsetMetadataMaxSize() {
         return offsetMetadataMaxSize;
+    }
+
+    /**
+     * The maximum buffer size that the coordinator can cache.
+     *
+     * Note: On hot paths, frequent calls to this method may cause performance bottlenecks due to synchronization overhead.
+     */
+    public int cachedBufferMaxBytes() {
+        return config.getInt(GroupCoordinatorConfig.CACHED_BUFFER_MAX_BYTES_CONFIG);
     }
 
     /**

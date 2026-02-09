@@ -61,7 +61,7 @@ import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManage
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.security.DelegationTokenManager
-import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, ProcessRole}
+import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, FetchManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.share.context.ShareFetchContext
@@ -72,7 +72,6 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.AppendOrigin
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
-import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
@@ -1792,8 +1791,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               marker.producerEpoch,
               marker.coordinatorEpoch,
               marker.transactionResult,
-              markerTransactionVersion,
-              Duration.ofMillis(config.requestTimeoutMs.toLong)
+              markerTransactionVersion
             ).whenComplete { (_, exception) =>
               val error = if (exception == null) {
                 Errors.NONE
@@ -2825,19 +2823,25 @@ class KafkaApis(val requestChannel: RequestChannel,
               val timeoutMs = heartbeatIntervalMs * 2
 
               autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext, timeoutMs)
-              
+
               // Check for cached topic creation errors only if there's already a MISSING_INTERNAL_TOPICS status
-              val hasMissingInternalTopicsStatus = responseData.status() != null && 
+              val hasMissingInternalTopicsStatus = responseData.status() != null &&
                 responseData.status().stream().anyMatch(s => s.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
-              
+
               if (hasMissingInternalTopicsStatus) {
                 val currentTimeMs = time.milliseconds()
                 val cachedErrors = autoTopicCreationManager.getStreamsInternalTopicCreationErrors(topicsToCreate.keys.toSet, currentTimeMs)
                 if (cachedErrors.nonEmpty) {
                   val missingInternalTopicStatus =
                     responseData.status().stream().filter(x => x.statusCode() == StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code()).findFirst()
-                  val creationErrorDetails = cachedErrors.map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
                   if (missingInternalTopicStatus.isPresent) {
+                    val maxErrorsToInclude = 3
+                    val errorList = cachedErrors.take(maxErrorsToInclude).map { case (topic, error) => s"$topic ($error)" }.mkString(", ")
+                    val creationErrorDetails = if (cachedErrors.size > maxErrorsToInclude) {
+                      s"$errorList and ${cachedErrors.size - maxErrorsToInclude} more"
+                    } else {
+                      errorList
+                    }
                     val existingDetail = Option(missingInternalTopicStatus.get().statusDetail()).getOrElse("")
                     missingInternalTopicStatus.get().setStatusDetail(
                       existingDetail + s"; Creation failed: $creationErrorDetails."
@@ -3370,7 +3374,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   error(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session for client id ${request.header.clientId} succeeded, response: $releaseAcquiredRecordsData")
                 }
               )
           }
@@ -3594,7 +3598,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   debug(s"Releasing share session close with correlation from client ${request.header.clientId}  " +
                     s"failed with error ${throwable.getMessage}")
                 } else {
-                  info(s"Releasing share session close $releaseAcquiredRecordsData succeeded")
+                  info(s"Releasing share session for client id ${request.header.clientId} succeeded, response: $releaseAcquiredRecordsData")
                 }
               }
           }
@@ -4236,9 +4240,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ =>
           throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
       }
-      request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
+      request.messageConversionsTimeNanos += conversionStats.conversionTimeNanos
     }
-    request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
+    request.temporaryMemoryBytes += conversionStats.temporaryMemoryBytes
   }
 
   def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Boolean = {

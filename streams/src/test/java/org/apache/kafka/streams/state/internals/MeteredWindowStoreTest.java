@@ -349,11 +349,11 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldRecordFlushLatency() {
-        doNothing().when(innerStoreMock).flush();
+    public void shouldRecordCommitLatency() {
+        doNothing().when(innerStoreMock).commit(Map.of());
 
         store.init(context, store);
-        store.flush();
+        store.commit(Map.of());
 
         // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
@@ -499,7 +499,7 @@ public class MeteredWindowStoreTest {
         final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
         assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
-        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
 
         KeyValueIterator<Windowed<String>, String> second = null;
         final long secondTimestamp;
@@ -517,14 +517,14 @@ public class MeteredWindowStoreTest {
             }
 
             // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
-            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+            assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
         } finally {
             if (second != null) {
                 second.close();
             }
         }
 
-        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 
     private KafkaMetric metric(final String name) {

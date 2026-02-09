@@ -620,6 +620,15 @@ public class TestUtils {
         assertEquals(expectedMessage, receivedException.getMessage());
     }
 
+    public static <T extends Throwable> void assertFutureThrowsWithMessageContaining(
+            Class<T> expectedCauseClassApiException,
+            Future<?> future,
+            String expectedMessage
+    ) {
+        T receivedException = assertFutureThrows(expectedCauseClassApiException, future);
+        assertTrue(receivedException.getMessage().contains(expectedMessage));
+    }
+
     public static ApiKeys apiKeyFrom(NetworkReceive networkReceive) {
         return RequestHeader.parse(networkReceive.payload().duplicate()).apiKey();
     }

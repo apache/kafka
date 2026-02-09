@@ -23,8 +23,6 @@ USER root
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
 ARG kafka_url
 
-ENV KAFKA_URL=$kafka_url
-
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 COPY server.properties /etc/kafka/docker/server.properties
 
@@ -34,16 +32,18 @@ RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
     apk add --no-cache bash; \
-    if [ -n "$KAFKA_URL" ]; then \
+    mkdir opt/kafka; \
+    if [ -n "$kafka_url" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent procps; \
-        wget -nv -O kafka.tgz "$KAFKA_URL"; \
-        wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+        wget -nv -O kafka.tgz "$kafka_url"; \
+        wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+        tar xfz kafka.tgz -C opt/kafka --strip-components 1; \
         gpg --import KEYS; \
         gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-    fi; \
-    mkdir opt/kafka; \
-    tar xfz kafka.tgz -C opt/kafka --strip-components 1;
+    else \
+        tar xfz kafka.tgz -C opt/kafka --strip-components 1; \
+    fi;
 
 # Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
 RUN /etc/kafka/docker/jsa_launch
@@ -60,8 +60,6 @@ USER root
 ARG kafka_url
 ARG build_date
 
-ENV KAFKA_URL=$kafka_url
-
 COPY *kafka.tgz kafka.tgz
 
 LABEL org.label-schema.name="kafka" \
@@ -75,10 +73,10 @@ RUN mkdir opt/kafka; \
     apk update ; \
     apk upgrade ; \
     apk add --no-cache bash; \
-    if [ -n "$KAFKA_URL" ]; then \
+    if [ -n "$kafka_url" ]; then \
         apk add --no-cache wget gcompat gpg gpg-agent procps; \
-        wget -nv -O kafka.tgz "$KAFKA_URL"; \
-        wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+        wget -nv -O kafka.tgz "$kafka_url"; \
+        wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
         gpg --import KEYS; \

@@ -4114,20 +4114,20 @@ class KafkaRaftClientTest {
         }
 
         assertEquals("leader", getMetric(context.metrics, "current-state").metricValue());
-        assertEquals((double) localId, getMetric(context.metrics, "current-leader").metricValue());
-        assertEquals((double) localId, getMetric(context.metrics, "current-vote").metricValue());
-        assertEquals((double) epoch, getMetric(context.metrics, "current-epoch").metricValue());
-        assertEquals((double) 1L, getMetric(context.metrics, "high-watermark").metricValue());
-        assertEquals((double) 1L, getMetric(context.metrics, "log-end-offset").metricValue());
-        assertEquals((double) epoch, getMetric(context.metrics, "log-end-epoch").metricValue());
+        assertEquals(localId, getMetric(context.metrics, "current-leader").metricValue());
+        assertEquals(localId, getMetric(context.metrics, "current-vote").metricValue());
+        assertEquals(epoch, getMetric(context.metrics, "current-epoch").metricValue());
+        assertEquals(1L, getMetric(context.metrics, "high-watermark").metricValue());
+        assertEquals(1L, getMetric(context.metrics, "log-end-offset").metricValue());
+        assertEquals(epoch, getMetric(context.metrics, "log-end-epoch").metricValue());
 
         context.client.prepareAppend(epoch, List.of("a", "b", "c"));
         context.client.schedulePreparedAppend();
         context.client.poll();
 
-        assertEquals((double) 4L, getMetric(context.metrics, "high-watermark").metricValue());
-        assertEquals((double) 4L, getMetric(context.metrics, "log-end-offset").metricValue());
-        assertEquals((double) epoch, getMetric(context.metrics, "log-end-epoch").metricValue());
+        assertEquals(4L, getMetric(context.metrics, "high-watermark").metricValue());
+        assertEquals(4L, getMetric(context.metrics, "log-end-offset").metricValue());
+        assertEquals(epoch, getMetric(context.metrics, "log-end-epoch").metricValue());
 
         context.client.close();
 
