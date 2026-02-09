@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.CloseOptions;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -160,8 +159,8 @@ public class RebalanceTaskClosureIntegrationTest {
         // After the rebalance finished, the "poison pill" record gets picked up crashing the thread,
         // and starting the shutdown directly
         // We don't want to let the rebalance finish before we trigger the shutdown, because we want the stream thread to stop before it gets to moving pending tasks from task registry to state updater.
-        streams1.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
-        streams2.close(CloseOptions.groupMembershipOperation(CloseOptions.GroupMembershipOperation.LEAVE_GROUP));
+        streams1.close(new KafkaStreams.CloseOptions().leaveGroup(true));
+        streams2.close(new KafkaStreams.CloseOptions().leaveGroup(true));
 
         assertEquals(initCount.get(), closeCount.get());
     }
@@ -229,7 +228,7 @@ public class RebalanceTaskClosureIntegrationTest {
                 // to avoid that the "pending task" get fully initialized
                 // (otherwise, we don't have a pending task when the shutdown happens)
                 pendingShutdownLatch.await();
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }
