@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -54,7 +54,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
-public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
+public class NetworkPartitionMetadataClient implements org.apache.kafka.server.util.PartitionMetadataClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkPartitionMetadataClient.class);
 
