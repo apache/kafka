@@ -37,10 +37,8 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.coordinator.group.GroupCoordinatorService;
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics;
 import org.apache.kafka.test.TestUtils;
 
 import java.nio.charset.StandardCharsets;
@@ -52,9 +50,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Function;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -343,7 +339,6 @@ public class ConsumerIntegrationTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @ClusterTest(
         brokers = 2,
         types = {Type.KRAFT},
@@ -362,29 +357,35 @@ public class ConsumerIntegrationTest {
         }
 
         try (var consumer = clusterInstance.consumer(Map.of(ConsumerConfig.GROUP_ID_CONFIG, "test-group"));
-             var admin = clusterInstance.admin()) {
+            var admin = clusterInstance.admin()) {
             consumer.subscribe(List.of("topic"));
             TestUtils.waitForCondition(() -> consumer.poll(Duration.ofMillis(100)).isEmpty(), "polling to join group");
-            // append records to coordinator
+            // Append records to coordinator.
             consumer.commitSync();
 
-            // unload the coordinator by changing leader (0 -> 1)
-            admin.alterPartitionReassignments(Map.of(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0),
-                Optional.of(new NewPartitionReassignment(List.of(1))))).all().get();
+            var broker0Metrics = clusterInstance.brokers().get(0).metrics();
+            var broker1Metrics = clusterInstance.brokers().get(1).metrics();
+            var activeNumPartitions = broker0Metrics.metricName(
+                "num-partitions",
+                GroupCoordinatorRuntimeMetrics.METRICS_GROUP,
+                Map.of("state", "active")
+            );
+
+            assertEquals(1L, broker0Metrics.metric(activeNumPartitions).metricValue());
+            assertEquals(0L, broker1Metrics.metric(activeNumPartitions).metricValue());
+
+            // Unload the coordinator by changing leader (0 -> 1).
+            admin.alterPartitionReassignments(
+                Map.of(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0), Optional.of(new NewPartitionReassignment(List.of(1))))
+            ).all().get();
+
+            // Wait for the coordinator metrics to update after leadership change.
+            TestUtils.waitForCondition(() ->
+                0L == (Long) broker0Metrics.metric(activeNumPartitions).metricValue() &&
+                    1L == (Long) broker1Metrics.metric(activeNumPartitions).metricValue(),
+                "Incorrect num-partitions metric after partition reassignment to the new coordinator"
+            );
         }
-
-        Function<GroupCoordinator, List<TopicPartition>> partitionsInGroupMetrics = service -> assertDoesNotThrow(() -> {
-            var f0 = GroupCoordinatorService.class.getDeclaredField("groupCoordinatorMetrics");
-            f0.setAccessible(true);
-            var f1 = GroupCoordinatorMetrics.class.getDeclaredField("shards");
-            f1.setAccessible(true);
-            return List.copyOf(((Map<TopicPartition, ?>) f1.get(f0.get(service))).keySet());
-        });
-
-        // the offset partition should NOT be hosted by multiple coordinators
-        var tps = clusterInstance.brokers().values().stream()
-            .flatMap(b -> partitionsInGroupMetrics.apply(b.groupCoordinator()).stream()).toList();
-        assertEquals(1, tps.size());
     }
 
     private void sendMsg(ClusterInstance clusterInstance, String topic, int sendMsgNum) {
