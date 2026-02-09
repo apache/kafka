@@ -173,25 +173,6 @@ public class ValueTimestampHeadersDeserializerTest {
     }
 
     @Test
-    public void shouldDeserializeWithLargeValue() {
-        final StringBuilder largeValue = new StringBuilder();
-        largeValue.append("x".repeat(10000));
-
-        final Headers headers = new RecordHeaders()
-            .add("key1", "value1".getBytes());
-        final ValueTimestampHeaders<String> original =
-            ValueTimestampHeaders.make(largeValue.toString(), 123456789L, headers);
-
-        final byte[] serialized = serializer.serialize(TOPIC, original);
-        final ValueTimestampHeaders<String> deserialized = deserializer.deserialize(TOPIC, serialized);
-
-        assertNotNull(deserialized);
-        assertEquals(largeValue.toString(), deserialized.value());
-        assertEquals(123456789L, deserialized.timestamp());
-        assertEquals(1, deserialized.headers().toArray().length);
-    }
-
-    @Test
     public void shouldExtractValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());

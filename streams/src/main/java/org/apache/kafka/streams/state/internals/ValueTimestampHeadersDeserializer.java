@@ -39,9 +39,9 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  *
  * Where:
  * - headersSize: Size of the headersBytes section in bytes, encoded as varint
+ * - headersBytes:
  *   - For null/empty headers: headersSize = 0, headersBytes is omitted (0 bytes)
- *   - For non-empty headers: headersSize > 0, headersBytes follows
- * - headersBytes: Serialized headers ([count(varint)][header1][header2]...) to be deserialized by HeadersDeserializer
+ *   - For non-empty headers: headersSize > 0, serialized headers in the format [count(varint)][header1][header2]... to be processed by HeadersDeserializer.
  * - timestamp: 8-byte long timestamp
  * - value: Serialized value to be deserialized with the provided value deserializer
  *
