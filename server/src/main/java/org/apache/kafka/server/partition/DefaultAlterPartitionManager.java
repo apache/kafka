@@ -55,29 +55,25 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
     private static final Logger log = LoggerFactory.getLogger(DefaultAlterPartitionManager.class);
     private final NodeToControllerChannelManager controllerChannelManager;
     private final Scheduler scheduler;
-    private Time time;
     private final int brokerId;
     private final Supplier<Long> brokerEpochSupplier;
 
-
     // Used to allow only one pending ISR update per partition (visible for testing)
-    ConcurrentHashMap<TopicIdPartition, AlterPartitionItem> unsentIsrUpdates = new ConcurrentHashMap<>();
+    final ConcurrentHashMap<TopicIdPartition, AlterPartitionItem> unsentIsrUpdates = new ConcurrentHashMap<>();
 
     // Used to allow only one in-flight request at a time
-    private AtomicBoolean inflightRequest = new AtomicBoolean(false);
+    private final AtomicBoolean inflightRequest = new AtomicBoolean(false);
 
-
-    private DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, Time time, int brokerId, Supplier<Long> brokerEpochSupplier) {
+    private DefaultAlterPartitionManager(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, int brokerId, Supplier<Long> brokerEpochSupplier) {
         this.controllerChannelManager = controllerChannelManager;
         this.scheduler = scheduler;
-        this.time = time;
         this.brokerId = brokerId;
         this.brokerEpochSupplier = brokerEpochSupplier;
     }
 
-    //For testing
+    // For testing
     public static DefaultAlterPartitionManager create(NodeToControllerChannelManager controllerChannelManager, Scheduler scheduler, Time time, int brokerId, Supplier<Long> brokerEpochSupplier) {
-        return new DefaultAlterPartitionManager(controllerChannelManager, scheduler, time, brokerId, brokerEpochSupplier);
+        return new DefaultAlterPartitionManager(controllerChannelManager, scheduler, brokerId, brokerEpochSupplier);
     }
 
     public static DefaultAlterPartitionManager create(AbstractKafkaConfig config,
@@ -97,7 +93,7 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                 Long.MAX_VALUE
         );
 
-        return new DefaultAlterPartitionManager(channelManager, scheduler, time, config.brokerId(), brokerEpochSupplier);
+        return new DefaultAlterPartitionManager(channelManager, scheduler, config.brokerId(), brokerEpochSupplier);
     }
 
     @Override
@@ -191,7 +187,6 @@ public class DefaultAlterPartitionManager implements AlterPartitionManager {
                     }
                 });
     }
-
 
     /**
      * Builds an AlterPartition request.
