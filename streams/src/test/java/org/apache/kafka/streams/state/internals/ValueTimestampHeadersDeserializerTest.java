@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -27,8 +28,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Iterator;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -105,7 +109,7 @@ public class ValueTimestampHeadersDeserializerTest {
     public void shouldDeserializeWithMultipleHeaders() {
         final Headers headers = new RecordHeaders()
             .add("key0", "value0".getBytes())
-            .add("key1", "value1".getBytes())
+            .add("key0", "value1".getBytes())
             .add("key2", "value2".getBytes());
         final ValueTimestampHeaders<String> original =
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
@@ -119,14 +123,19 @@ public class ValueTimestampHeadersDeserializerTest {
 
         final Headers deserializedHeaders = deserialized.headers();
         assertNotNull(deserializedHeaders);
-        Header[] headersArray = deserializedHeaders.toArray();
+        final Header[] headersArray = deserializedHeaders.toArray();
         assertEquals(3, headersArray.length);
-
-        for (int i = 0; i < headersArray.length; i++) {
-            Header header = headersArray[i];
-            assertEquals("key" + i, header.key());
-            assertArrayEquals(("value" + i).getBytes(), header.value());
-        }
+        final Iterator<Header> iterator = headers.iterator();
+        Header next = iterator.next();
+        assertEquals("key0", next.key());
+        assertArrayEquals(("value0").getBytes(), next.value());
+        next = iterator.next();
+        assertEquals("key0", next.key());
+        assertArrayEquals(("value1").getBytes(), next.value());
+        next = iterator.next();
+        assertEquals("key2", next.key());
+        assertArrayEquals(("value2").getBytes(), next.value());
+        assertFalse(iterator.hasNext());
     }
 
     @Test
@@ -183,27 +192,25 @@ public class ValueTimestampHeadersDeserializerTest {
     }
 
     @Test
-    public void shouldExtractRawValue() {
+    public void shouldExtractValue() {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());
         final ValueTimestampHeaders<String> original =
             ValueTimestampHeaders.make("test-value", 123456789L, headers);
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
-        final byte[] rawValue = ValueTimestampHeadersDeserializer.rawValue(serialized);
-
-        assertNotNull(rawValue);
 
         try (Serde<String> stringSerde = Serdes.String()) {
-            final String value = stringSerde.deserializer().deserialize(TOPIC, rawValue);
+            final String value = ValueTimestampHeadersDeserializer.value(serialized, stringSerde.deserializer());
+            assertNotNull(value);
             assertEquals("test-value", value);
         }
     }
 
     @Test
     public void shouldReturnNullForRawValueWhenInputIsNull() {
-        final byte[] rawValue = ValueTimestampHeadersDeserializer.rawValue(null);
-        assertNull(rawValue);
+        final ValueTimestampHeaders<String> value = ValueTimestampHeadersDeserializer.value(null, deserializer);
+        assertNull(value);
     }
 
     @Test
@@ -268,9 +275,9 @@ public class ValueTimestampHeadersDeserializerTest {
         // Create malformed data: only headersSize varint, no actual headers or timestamp
         final byte[] malformedData = new byte[] {0x02};  // headersSize = 1 but no data follows
 
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SerializationException.class, () ->
             deserializer.deserialize(TOPIC, malformedData),
-            "Should throw IllegalArgumentException for malformed data"
+            "Should throw SerializationException for malformed data"
         );
     }
 
@@ -282,9 +289,9 @@ public class ValueTimestampHeadersDeserializerTest {
             0x00, 0x00  // Only 2 bytes when 10 + 8 (timestamp) are expected
         };
 
-        assertThrows(IllegalArgumentException.class, () ->
+        assertThrows(SerializationException.class, () ->
             deserializer.deserialize(TOPIC, malformedData),
-            "Should throw IllegalArgumentException when buffer doesn't have enough data"
+            "Should throw SerializationException when buffer doesn't have enough data"
         );
     }
 }

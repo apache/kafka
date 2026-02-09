@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -38,6 +39,8 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  *
  * Where:
  * - headersSize: Size of the headersBytes section in bytes, encoded as varint
+ *   - For null/empty headers: headersSize = 0, headersBytes is omitted (0 bytes)
+ *   - For non-empty headers: headersSize > 0, headersBytes follows
  * - headersBytes: Serialized headers ([count(varint)][header1][header2]...) to be deserialized by HeadersDeserializer
  * - timestamp: 8-byte long timestamp
  * - value: Serialized value to be deserialized with the provided value deserializer
@@ -46,6 +49,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  */
 class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializer<ValueTimestampHeaders<V>, Void, V> {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
+    private static final HeadersDeserializer HEADERS_DESERIALIZER = new HeadersDeserializer();
 
     public final Deserializer<V> valueDeserializer;
     private final Deserializer<Long> timestampDeserializer;
@@ -75,13 +79,13 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         final int headersSize = ByteUtils.readVarint(buffer);
 
         final byte[] rawHeaders = readBytes(buffer, headersSize);
+        final Headers headers = headersDeserializer.deserialize("", rawHeaders);
         final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp);
-
         final byte[] rawValue = readBytes(buffer, buffer.remaining());
         final V value = valueDeserializer.deserialize(topic, rawValue);
 
-        return ValueTimestampHeaders.makeWithRawHeaders(value, timestamp, rawHeaders);
+        return ValueTimestampHeaders.make(value, timestamp, headers);
     }
 
     @Override
@@ -104,11 +108,11 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
      * @param buffer the ByteBuffer to read from
      * @param length the number of bytes to read
      * @return the byte array containing the read bytes
-     * @throws IllegalArgumentException if buffer doesn't have enough bytes
+     * @throws SerializationException if buffer doesn't have enough bytes
      */
     private static byte[] readBytes(final ByteBuffer buffer, final int length) {
         if (buffer.remaining() < length) {
-            throw new IllegalArgumentException(
+            throw new SerializationException(
                 "Invalid ValueTimestampHeaders format: expected " + length +
                 " bytes but only " + buffer.remaining() + " bytes remaining"
             );
@@ -119,18 +123,20 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
     }
 
     /**
-     * Extract raw value bytes from serialized ValueTimestampHeaders.
+     * Extract value from serialized ValueTimestampHeaders.
      */
-    static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
+    static <V> V value(final byte[] rawValueTimestampHeaders, final Deserializer<V> deserializer) {
         if (rawValueTimestampHeaders == null) {
             return null;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
+        // skip headers plus timestamp
         buffer.position(buffer.position() + headersSize + Long.BYTES);
+        byte[] bytes = readBytes(buffer, buffer.remaining());
 
-        return readBytes(buffer, buffer.remaining());
+        return deserializer.deserialize("", bytes);
     }
 
     /**
@@ -156,7 +162,6 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
         final byte[] rawHeaders = readBytes(buffer, headersSize);
-
-        return HeadersDeserializer.deserialize(rawHeaders);
+        return HEADERS_DESERIALIZER.deserialize("", rawHeaders);
     }
 }

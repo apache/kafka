@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.streams.state.internals.HeadersDeserializer;
 
 import java.util.Objects;
 
@@ -31,22 +30,18 @@ public final class ValueTimestampHeaders<V> {
 
     private final V value;
     private final long timestamp;
-    //visible for test
-    volatile Headers headers;
-    private final byte[] rawHeaders;
+    private Headers headers;
 
     private ValueTimestampHeaders(final V value, final long timestamp, final Headers headers) {
         this.value = value;
         this.timestamp = timestamp;
         this.headers = headers == null ? new RecordHeaders() : headers;
-        this.rawHeaders = null;
     }
 
     private ValueTimestampHeaders(final V value, final long timestamp, final byte[] rawHeaders) {
         this.value = value;
         this.timestamp = timestamp;
         this.headers = null;
-        this.rawHeaders = rawHeaders;
     }
 
     /**
@@ -131,17 +126,6 @@ public final class ValueTimestampHeaders<V> {
     }
 
     public Headers headers() {
-        if (headers == null) {
-            synchronized (this) {
-                if (headers == null) {
-                    if (rawHeaders != null) {
-                        headers = HeadersDeserializer.deserialize(rawHeaders);
-                    } else {
-                        headers = new RecordHeaders();
-                    }
-                }
-            }
-        }
         return headers;
     }
 

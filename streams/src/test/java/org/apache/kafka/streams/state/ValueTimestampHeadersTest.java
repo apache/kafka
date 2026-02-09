@@ -18,11 +18,9 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.streams.state.internals.HeadersSerializer;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -87,8 +85,11 @@ public class ValueTimestampHeadersTest {
     @Test
     public void shouldGetValueOrNull() {
         final Headers headers = new RecordHeaders();
-        final ValueTimestampHeaders<String> valueTimestampHeaders = ValueTimestampHeaders.make(VALUE, TIMESTAMP, headers);
+        ValueTimestampHeaders<String> valueTimestampHeaders = ValueTimestampHeaders.make(VALUE, TIMESTAMP, headers);
+        assertEquals(VALUE, ValueTimestampHeaders.getValueOrNull(valueTimestampHeaders));
+        assertNull(ValueTimestampHeaders.getValueOrNull(null));
 
+        valueTimestampHeaders = ValueTimestampHeaders.makeAllowNullable(VALUE, TIMESTAMP, null);
         assertEquals(VALUE, ValueTimestampHeaders.getValueOrNull(valueTimestampHeaders));
         assertNull(ValueTimestampHeaders.getValueOrNull(null));
     }
@@ -153,111 +154,5 @@ public class ValueTimestampHeadersTest {
         assertNotNull(toString);
         assertTrue(toString.contains("value=" + VALUE));
         assertTrue(toString.contains("timestamp=" + TIMESTAMP));
-    }
-
-    @Test
-    public void shouldCreateInstanceWithMakeWithRawHeaders() {
-        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
-        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
-
-        final ValueTimestampHeaders<String> valueTimestampHeaders =
-            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
-
-        assertNotNull(valueTimestampHeaders);
-        assertEquals(VALUE, valueTimestampHeaders.value());
-        assertEquals(TIMESTAMP, valueTimestampHeaders.timestamp());
-
-        final Headers deserializedHeaders = valueTimestampHeaders.headers();
-        assertNotNull(deserializedHeaders);
-        assertEquals(1, deserializedHeaders.toArray().length);
-        assertEquals("key1", deserializedHeaders.lastHeader("key1").key());
-        assertArrayEquals("value1".getBytes(), deserializedHeaders.lastHeader("key1").value());
-    }
-
-    @Test
-    public void shouldDeserializeHeaderLazily() {
-        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
-        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
-
-        final ValueTimestampHeaders<String> valueTimestampHeaders =
-            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
-
-        assertNotNull(valueTimestampHeaders);
-        assertEquals(VALUE, valueTimestampHeaders.value());
-        assertEquals(TIMESTAMP, valueTimestampHeaders.timestamp());
-        assertNull(valueTimestampHeaders.headers, "should be null before invocation of headers()");
-        valueTimestampHeaders.headers();
-        assertNotNull(valueTimestampHeaders.headers, "should be deserialize after invocation of headers()");
-        assertEquals(headers, valueTimestampHeaders.headers);
-        assertEquals(headers, valueTimestampHeaders.headers());
-    }
-
-    @Test
-    public void shouldReturnNullWhenValueIsNullWithMakeWithRawHeaders() {
-        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
-        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
-
-        final ValueTimestampHeaders<String> valueTimestampHeaders =
-            ValueTimestampHeaders.makeWithRawHeaders(null, TIMESTAMP, rawHeaders);
-
-        assertNull(valueTimestampHeaders);
-    }
-
-    @Test
-    public void shouldHandleEmptyRawHeaders() {
-        final Headers headers = new RecordHeaders();
-        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
-
-        final ValueTimestampHeaders<String> valueTimestampHeaders =
-            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
-
-        assertNotNull(valueTimestampHeaders);
-        final Headers deserializedHeaders = valueTimestampHeaders.headers();
-        assertNotNull(deserializedHeaders);
-        assertEquals(0, deserializedHeaders.toArray().length);
-    }
-
-    @Test
-    public void shouldBeEqualWhenCreatedWithMakeAndMakeWithRawHeaders() {
-        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
-        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
-
-        final ValueTimestampHeaders<String> valueTimestampHeaders1 =
-            ValueTimestampHeaders.make(VALUE, TIMESTAMP, headers);
-        final ValueTimestampHeaders<String> valueTimestampHeaders2 =
-            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
-
-        assertEquals(valueTimestampHeaders1, valueTimestampHeaders2);
-        assertEquals(valueTimestampHeaders1.hashCode(), valueTimestampHeaders2.hashCode());
-    }
-
-    @Test
-    public void shouldBeEqualWhenBothCreatedWithMakeWithRawHeaders() {
-        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
-        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
-
-        final ValueTimestampHeaders<String> valueTimestampHeaders1 =
-            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
-        final ValueTimestampHeaders<String> valueTimestampHeaders2 =
-            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
-
-        assertEquals(valueTimestampHeaders1, valueTimestampHeaders2);
-        assertEquals(valueTimestampHeaders1.hashCode(), valueTimestampHeaders2.hashCode());
-    }
-
-    @Test
-    public void shouldCallHeadersMultipleTimesWithoutError() {
-        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
-        final byte[] rawHeaders = new HeadersSerializer().serialize("", headers);
-
-        final ValueTimestampHeaders<String> valueTimestampHeaders =
-            ValueTimestampHeaders.makeWithRawHeaders(VALUE, TIMESTAMP, rawHeaders);
-
-        final Headers headers1 = valueTimestampHeaders.headers();
-        final Headers headers2 = valueTimestampHeaders.headers();
-
-        assertNotNull(headers1);
-        assertNotNull(headers2);
-        assertEquals(headers1, headers2);
     }
 }

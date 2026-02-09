@@ -41,6 +41,8 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  *
  * Where:
  * - headersSize: Size of the headersBytes section in bytes, encoded as varint
+ *   - For null/empty headers: headersSize = 0, headersBytes is omitted (0 bytes)
+ *   - For non-empty headers: headersSize > 0, headersBytes follows
  * - headersBytes: Serialized headers ([count(varint)][header1][header2]...) from HeadersSerializer
  * - timestamp: 8-byte long timestamp
  * - value: Serialized value using the provided value serializer
@@ -67,19 +69,19 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
     }
 
     @Override
-    public byte[] serialize(final String topic, final ValueTimestampHeaders<V> data) {
-        if (data == null) {
+    public byte[] serialize(final String topic, final ValueTimestampHeaders<V> valueTimestampHeaders) {
+        if (valueTimestampHeaders == null) {
             return null;
         }
-        return serialize(topic, data.value(), data.timestamp(), data.headers());
+        return serialize(topic, valueTimestampHeaders.value(), valueTimestampHeaders.timestamp(), valueTimestampHeaders.headers());
     }
 
-    public byte[] serialize(final String topic, final V data, final long timestamp, final Headers headers) {
-        if (data == null) {
+    public byte[] serialize(final String topic, final V plainValue, final long timestamp, final Headers headers) {
+        if (plainValue == null) {
             return null;
         }
 
-        final byte[] rawValue = valueSerializer.serialize(topic, headers, data);
+        final byte[] rawValue = valueSerializer.serialize(topic, headers, plainValue);
 
         // Since we can't control the result of the internal serializer, we make sure that the result
         // is not null as well.
@@ -90,17 +92,19 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
             return null;
         }
 
-        final byte[] rawHeaders = headersSerializer.serialize(topic, headers);  // [count][header1][header2]...
         final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
+
+        // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
+        final byte[] rawHeaders = headersSerializer.serialize(topic, headers);
 
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              DataOutputStream out = new DataOutputStream(baos)) {
 
-            ByteUtils.writeVarint(rawHeaders.length, out);  // headersSize
-            out.write(rawHeaders);                           // [count][header1][header2]...
-            out.write(rawTimestamp);                         // [timestamp(8)]
-            out.write(rawValue);                             // [value]
+            ByteUtils.writeVarint(rawHeaders.length, out);  // headersSize (it may be 0 due to null/empty headers)
+            out.write(rawHeaders);                          // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
+            out.write(rawTimestamp);                        // [timestamp(8)]
+            out.write(rawValue);                            // [value]
 
             return baos.toByteArray();
         } catch (IOException e) {

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -101,7 +102,7 @@ public class ValueTimestampHeadersSerializerTest {
     public void shouldSerializeValueWithMultipleHeaders() {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes())
-            .add("key2", "value2".getBytes())
+            .add("key1", "value2".getBytes())
             .add("key3", "value3".getBytes());
         final ValueTimestampHeaders<String> valueTimestampHeaders =
             ValueTimestampHeaders.make(VALUE, TIMESTAMP, headers);
@@ -138,47 +139,10 @@ public class ValueTimestampHeadersSerializerTest {
         final Headers headers = new RecordHeaders()
             .add("key1", "value1".getBytes());
         final byte[] serialized = serializer.serialize(TOPIC, VALUE, TIMESTAMP, headers);
-
-        final byte[] rawValue = ValueTimestampHeadersDeserializer.rawValue(serialized);
-        assertNotNull(rawValue);
-
-        final String deserializedValue = Serdes.String().deserializer().deserialize(TOPIC, rawValue);
-        assertEquals(VALUE, deserializedValue);
-    }
-
-    @Test
-    public void shouldExtractTimestamp() {
-        final Headers headers = new RecordHeaders()
-            .add("key1", "value1".getBytes());
-        final byte[] serialized = serializer.serialize(TOPIC, VALUE, TIMESTAMP, headers);
-
-        final long extractedTimestamp = ValueTimestampHeadersDeserializer.timestamp(serialized);
-        assertEquals(TIMESTAMP, extractedTimestamp);
-    }
-
-    @Test
-    public void shouldExtractHeaders() {
-        final Headers headers = new RecordHeaders()
-            .add("key1", "value1".getBytes())
-            .add("key2", "value2".getBytes());
-        final byte[] serialized = serializer.serialize(TOPIC, VALUE, TIMESTAMP, headers);
-
-        final Headers extractedHeaders = ValueTimestampHeadersDeserializer.headers(serialized);
-        assertNotNull(extractedHeaders);
-        assertEquals(2, extractedHeaders.toArray().length);
-        assertArrayEquals("value1".getBytes(), extractedHeaders.lastHeader("key1").value());
-        assertArrayEquals("value2".getBytes(), extractedHeaders.lastHeader("key2").value());
-    }
-
-    @Test
-    public void shouldDeserializeNull() {
-        final ValueTimestampHeaders<String> deserialized = deserializer.deserialize(TOPIC, null);
-        assertNull(deserialized);
-    }
-
-    @Test
-    public void shouldReturnNullForRawValueOfNull() {
-        final byte[] rawValue = ValueTimestampHeadersDeserializer.rawValue(null);
-        assertNull(rawValue);
+        try (Serde<String> stringSerde = Serdes.String()) {
+            final String value = ValueTimestampHeadersDeserializer.value(serialized, stringSerde.deserializer());
+            assertNotNull(value);
+            assertEquals(VALUE, value);
+        }
     }
 }
