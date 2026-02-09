@@ -21,6 +21,7 @@ import java.util
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.SupportedConfigChecker
+import org.apache.kafka.server.config.DynamicConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 import scala.jdk.CollectionConverters._
