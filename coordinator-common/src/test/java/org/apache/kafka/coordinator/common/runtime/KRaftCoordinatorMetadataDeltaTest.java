@@ -118,7 +118,9 @@ public class KRaftCoordinatorMetadataDeltaTest {
         KRaftCoordinatorMetadataDelta coordinatorDelta = new KRaftCoordinatorMetadataDelta(delta);
         KRaftCoordinatorMetadataDelta coordinatorDeltaCopy = new KRaftCoordinatorMetadataDelta(delta);
 
-        MetadataDelta delta2 = new MetadataDelta.Builder().setImage(MetadataImage.EMPTY).build();
+        MetadataDelta delta2 = new MetadataDelta.Builder()
+            .setImage(MetadataImage.EMPTY)
+            .build();
         delta.replay(new TopicRecord().setTopicId(topicId3).setName(topicName3));
         KRaftCoordinatorMetadataDelta coordinatorDelta2 = new KRaftCoordinatorMetadataDelta(delta2);
 
