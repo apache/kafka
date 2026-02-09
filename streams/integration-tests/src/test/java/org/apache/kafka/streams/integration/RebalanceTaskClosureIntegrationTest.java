@@ -159,8 +159,8 @@ public class RebalanceTaskClosureIntegrationTest {
         // After the rebalance finished, the "poison pill" record gets picked up crashing the thread,
         // and starting the shutdown directly
         // We don't want to let the rebalance finish before we trigger the shutdown, because we want the stream thread to stop before it gets to moving pending tasks from task registry to state updater.
-        streams1.close(new KafkaStreams.CloseOptions().leaveGroup(true));
-        streams2.close(new KafkaStreams.CloseOptions().leaveGroup(true));
+        streams1.close();
+        streams2.close();
 
         assertEquals(initCount.get(), closeCount.get());
     }
@@ -178,6 +178,7 @@ public class RebalanceTaskClosureIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.LongSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        streamsConfiguration.put("internal.leave.group.on.close", true);
 
         return streamsConfiguration;
     }
