@@ -1568,6 +1568,7 @@ kafka.server.ConfigAdminManagerTest:
 - testContainsDuplicates
 - testCopyWithoutPreprocessedForIncremental
 - testCopyWithoutPreprocessedForLegacy
+- testPrepareIncrementalConfigsWithNonExistentKey
 - testPreprocessIncrementalWithDuplicates
 - testPreprocessIncrementalWithLoggerChanges
 - testPreprocessIncrementalWithNulls
