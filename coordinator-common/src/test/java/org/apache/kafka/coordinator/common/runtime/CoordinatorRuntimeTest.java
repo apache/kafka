@@ -790,7 +790,6 @@ public class CoordinatorRuntimeTest {
         assertThrows(NotCoordinatorException.class, () -> runtime.contextOrThrow(TP));
     }
 
-
     @Test
     public void testScheduleWriteOp() throws ExecutionException, InterruptedException, TimeoutException {
         MockTimer timer = new MockTimer();

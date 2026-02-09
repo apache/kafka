@@ -360,10 +360,11 @@ public class ConsumerIntegrationTest {
              var admin = clusterInstance.admin()) {
             consumer.subscribe(List.of("topic"));
             TestUtils.waitForCondition(() -> consumer.poll(Duration.ofMillis(100)).isEmpty(), "polling to join group");
-            // append records to coordinator
+            // Append records to coordinator.
             consumer.commitSync();
 
             var broker0Metrics = clusterInstance.brokers().get(0).metrics();
+            var broker1Metrics = clusterInstance.brokers().get(1).metrics();
             var activeNumPartitions = broker0Metrics.metricName(
                 "num-partitions",
                 GroupCoordinatorRuntimeMetrics.METRICS_GROUP,
@@ -371,16 +372,18 @@ public class ConsumerIntegrationTest {
             );
 
             assertEquals(1L, broker0Metrics.metric(activeNumPartitions).metricValue());
+            assertEquals(0L, broker1Metrics.metric(activeNumPartitions).metricValue());
 
-            // unload the coordinator by changing leader (0 -> 1)
+            // Unload the coordinator by changing leader (0 -> 1).
             admin.alterPartitionReassignments(
                 Map.of(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0), Optional.of(new NewPartitionReassignment(List.of(1))))
             ).all().get();
 
-            // Wait for the coordinator metrics to update after leadership change
+            // Wait for the coordinator metrics to update after leadership change.
             TestUtils.waitForCondition(() ->
-                0L == (Long) broker0Metrics.metric(activeNumPartitions).metricValue(),
-                "Num-partitions metric should be 1 after partition reassignment to the new coordinator"
+                0L == (Long) broker0Metrics.metric(activeNumPartitions).metricValue() &&
+                    1L == (Long) broker1Metrics.metric(activeNumPartitions).metricValue(),
+                "Incorrect num-partitions metric after partition reassignment to the new coordinator"
             );
         }
     }

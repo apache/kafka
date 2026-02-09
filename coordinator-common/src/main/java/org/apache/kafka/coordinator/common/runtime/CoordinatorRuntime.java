@@ -773,6 +773,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             currentBatch.lingerTimeoutTask.ifPresent(TimerTask::cancel);
 
             // Release the buffer only if it is not larger than the maxBatchSize.
+            // We avoid querying the log's configuration for the max message size here,
+            // because after a partition leadership change, this throws a NOT_LEADER_OR_FOLLOWER
+            // exception. Such exceptions can propagate unexpectedly and disrupt subsequent operations.
             int maxBatchSize = currentBatch.maxBatchSize;
 
             if (currentBatch.builder.buffer().capacity() <= maxBatchSize) {
