@@ -111,7 +111,7 @@ class SharedServer(
   private var usedByController: Boolean = false
   val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
   val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
-  val supportedConfigChecker: SupportedConfigChecker = new ControllerConfigurationValidator(brokerConfig)
+  val supportedConfigChecker: SupportedConfigChecker = new DefaultSupportedConfigChecker()
   
   // Factory for creating request handler pools with shared aggregate thread counter
   val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()

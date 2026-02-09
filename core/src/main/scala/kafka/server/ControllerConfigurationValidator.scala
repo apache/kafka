@@ -22,16 +22,13 @@ import java.util.Properties
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
-import org.apache.kafka.metadata.SupportedConfigChecker
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager}
-import org.apache.kafka.server.config.QuotaConfig
+import org.apache.kafka.coordinator.group.GroupConfigManager
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.mutable
-import scala.jdk.CollectionConverters._
 
 /**
  * The validator that the controller uses for dynamic configuration changes.
@@ -47,32 +44,9 @@ import scala.jdk.CollectionConverters._
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
  * as the others. It is not persisted to the metadata log.
  */
-class ControllerConfigurationValidator(private val kafkaConfig: KafkaConfig) 
-    extends ConfigurationValidator with SupportedConfigChecker {
-  private val validConfigsByType: Map[ConfigResource.Type, util.Set[String]] = {
-    val topicConfigs = LogConfig.nonInternalConfigNames.asScala.toSet
-    val brokerConfigs = DynamicConfig.Broker.names.asScala.toSet
-    val clientMetricsConfigs = ClientMetricsConfigs.configDef().names.asScala.toSet
-    val groupConfigs = GroupConfig.configDef().names.asScala.toSet
-    // Quota configs can be used with different resource types, so we include them for all types
-    val allQuotaConfigs = QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs().names.asScala ++
-                          QuotaConfig.userAndClientQuotaConfigs().names.asScala ++
-                          QuotaConfig.ipConfigs.names.asScala
-
-    Map(
-      ConfigResource.Type.TOPIC -> (topicConfigs ++ allQuotaConfigs).asJava,
-      ConfigResource.Type.BROKER -> (brokerConfigs ++ allQuotaConfigs).asJava,
-      ConfigResource.Type.CLIENT_METRICS -> (clientMetricsConfigs ++ allQuotaConfigs).asJava,
-      ConfigResource.Type.GROUP -> (groupConfigs ++ allQuotaConfigs).asJava
-    )
-  }
-
-  override def isSupported(resourceType: ConfigResource.Type, configName: String): Boolean = {
-    validConfigsByType.get(resourceType) match {
-      case Some(configs) => configs.contains(configName)
-      case None => false
-    }
-  }
+class ControllerConfigurationValidator(
+  private val kafkaConfig: KafkaConfig
+) extends ConfigurationValidator {
 
   private def validateTopicName(
     name: String

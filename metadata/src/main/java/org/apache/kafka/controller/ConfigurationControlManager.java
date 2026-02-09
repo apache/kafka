@@ -89,7 +89,7 @@ public class ConfigurationControlManager {
         private Map<String, Object> staticConfig = Map.of();
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
-        private SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> true;
+        private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -522,6 +522,8 @@ public class ConfigurationControlManager {
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
 
         if (!supportedConfigChecker.isSupported(configResource.type(), record.name())) {
+            // We skip unsupported configs during replay. This can happen when the config was
+            // deprecated and removed, but old records still exist in the log.
             return;
         }
         

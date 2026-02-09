@@ -17,8 +17,7 @@
 
 package org.apache.kafka.shell;
 
-import kafka.server.ControllerConfigurationValidator;
-import kafka.server.KafkaConfig;
+import kafka.server.DefaultSupportedConfigChecker;
 import kafka.tools.TerseFailure;
 
 import org.apache.kafka.common.utils.Exit;
@@ -50,7 +49,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -152,7 +150,7 @@ public final class MetadataShell {
 
     private void initializeWithSnapshotFileReader() throws Exception {
         this.fileLock = takeDirectoryLockIfExists(parentParent(new File(snapshotPath)));
-        SupportedConfigChecker supportedConfigChecker = new ControllerConfigurationValidator(new KafkaConfig(new Properties(), false));
+        SupportedConfigChecker supportedConfigChecker = new DefaultSupportedConfigChecker();
 
         this.loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).

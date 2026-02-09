@@ -76,9 +76,11 @@ public class KRaftCoordinatorMetadataImage implements CoordinatorMetadataImage {
 
     @Override
     public CoordinatorMetadataDelta emptyDelta() {
-        return new KRaftCoordinatorMetadataDelta(new MetadataDelta.Builder().
-            setImage(metadataImage).
-            build());
+        return new KRaftCoordinatorMetadataDelta(
+            new MetadataDelta.Builder()
+                .setImage(metadataImage)
+                .build()
+        );
     }
 
     @Override

@@ -82,7 +82,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private FaultHandler faultHandler = FaultHandlerException::new;
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
-        private SupportedConfigChecker supportedConfigChecker = (resourceType, configName) -> true;
+        private SupportedConfigChecker supportedConfigChecker = SupportedConfigChecker.TRUE;
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;

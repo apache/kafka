@@ -84,7 +84,7 @@ public class ConfigurationsImageTest {
             setResourceName("2").setName("foo").setValue("bar"),
             CONFIG_RECORD.highestSupportedVersion()));
 
-        DELTA1 = new ConfigurationsDelta(IMAGE1, (resourceType, configName) -> true);
+        DELTA1 = new ConfigurationsDelta(IMAGE1, SupportedConfigChecker.TRUE);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<ConfigResource, ConfigurationImage> map2 = new HashMap<>();
@@ -146,7 +146,7 @@ public class ConfigurationsImageTest {
         Map<String, String> initialConfigs = Map.of("foo", "value1", "bar", "value2");
         ConfigurationImage image = new ConfigurationImage(new ConfigResource(BROKER, "0"), initialConfigs);
 
-        ConfigurationDelta delta = new ConfigurationDelta(image, (resourceType, configName) -> true);
+        ConfigurationDelta delta = new ConfigurationDelta(image, SupportedConfigChecker.TRUE);
         delta.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0")
             .setName("baz").setValue("value3"));
 
@@ -195,7 +195,7 @@ public class ConfigurationsImageTest {
         // test from empty image stopping each of the various intermediate images along the way
         new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
             () -> ConfigurationsImage.EMPTY,
-            img -> new ConfigurationsDelta(img, (resourceType, configName) -> true)
+            img -> new ConfigurationsDelta(img, SupportedConfigChecker.TRUE)
         ).test(image, fromRecords);
     }
 

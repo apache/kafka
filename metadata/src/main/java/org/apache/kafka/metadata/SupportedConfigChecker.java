@@ -32,4 +32,9 @@ public interface SupportedConfigChecker {
      * @return true if the configuration is supported for the resource type, false otherwise
      */
     boolean isSupported(ConfigResource.Type resourceType, String configName);
+
+    /**
+     * A SupportedConfigChecker that always returns true, accepting all configurations.
+     */
+    SupportedConfigChecker TRUE = (resourceType, configName) -> true;
 }

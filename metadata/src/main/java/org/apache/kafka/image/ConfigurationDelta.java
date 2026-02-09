@@ -49,6 +49,8 @@ public final class ConfigurationDelta {
 
     public void replay(ConfigRecord record) {
         if (!supportedConfigChecker.isSupported(image.resource().type(), record.name())) {
+            // We skip unsupported configs during replay. This can happen when the config was
+            // deprecated and removed, but old records still exist in the log.
             return;
         }
         changes.put(record.name(), Optional.ofNullable(record.value()));
