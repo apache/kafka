@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -52,7 +51,6 @@ import static org.apache.kafka.server.common.TransactionVersion.TV_2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 class TransactionLogTest {
@@ -64,15 +62,6 @@ class TransactionLogTest {
         new TopicPartition("topic2", 1),
         new TopicPartition("topic2", 2)
     );
-
-    private sealed interface TxnKeyResult {
-        record TransactionalId(String id) implements TxnKeyResult { }
-    }
-
-    private static TxnKeyResult readTxnRecordKey(ByteBuffer buf) {
-        var result = TransactionLog.readTxnRecordKey(buf);
-        return new TxnKeyResult.TransactionalId(result);
-    }
 
     private static TransactionMetadata TransactionMetadata(TransactionState state) {
         return new TransactionMetadata(
@@ -123,8 +112,8 @@ class TransactionLogTest {
             TransactionLog.keyToBytes(txnMetadata.transactionalId()),
             TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2)
         )).records().iterator().next();
-        var txnIdResult = assertInstanceOf(TxnKeyResult.TransactionalId.class, readTxnRecordKey(record.key()));
-        var deserialized = TransactionLog.readTxnRecordValue(txnIdResult.id(), record.value());
+        var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(record.key(), record.value()));
+        var deserialized = readResult.metadata();
 
         assertEquals(txnMetadata.producerId(), deserialized.producerId());
         assertEquals(txnMetadata.producerEpoch(), deserialized.producerEpoch());
@@ -167,8 +156,10 @@ class TransactionLogTest {
             .setTransactionTimeoutMs(500)
             .setTransactionPartitions(List.of(txnPartitions));
 
-        var serialized = MessageUtil.toVersionPrefixedByteBuffer((short) 1, txnLogValue);
-        var deserialized = TransactionLog.readTxnRecordValue("transactionId", serialized);
+        var keyBuffer = wrap(TransactionLog.keyToBytes("transactionId"));
+        var valueBuffer = MessageUtil.toVersionPrefixedByteBuffer((short) 1, txnLogValue);
+        var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(keyBuffer, valueBuffer));
+        var deserialized = readResult.metadata();
 
         assertEquals(100, deserialized.producerId());
         assertEquals(50, deserialized.producerEpoch());
@@ -249,7 +240,9 @@ class TransactionLogTest {
 
         // Read the buffer with readTxnRecordValue.
         buffer.rewind();
-        var metadata = TransactionLog.readTxnRecordValue("transaction-id", buffer);
+        var keyBuffer = wrap(TransactionLog.keyToBytes("transaction-id"));
+        var readResult = assertInstanceOf(TransactionLog.TxnRecord.class, TransactionLog.read(keyBuffer, buffer));
+        var metadata = readResult.metadata();
 
         assertNotNull(metadata, "Expected transaction metadata but got none");
         assertEquals(1000L, metadata.producerId());
@@ -262,15 +255,24 @@ class TransactionLogTest {
     }
 
     @Test
-    void testReadTxnRecordKeyThrowsOnUnknownVersion() {
-        var unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MAX_VALUE, new TransactionLogKey());
-        var exception = assertThrows(IllegalStateException.class,
-            () -> TransactionLog.readTxnRecordKey(wrap(unknownRecord)));
-        assertTrue(exception.getMessage().contains("Unknown version " + Short.MAX_VALUE));
+    void testReadReturnsUnknownKeyVersionForInvalidKey() {
+        var unknownKeyBuffer = MessageUtil.toVersionPrefixedByteBuffer(Short.MAX_VALUE, new TransactionLogKey());
+        var readResult = assertInstanceOf(TransactionLog.UnknownKeyVersion.class, TransactionLog.read(unknownKeyBuffer, null));
+        assertEquals(Short.MAX_VALUE, readResult.version());
     }
-   
+
     @Test
-    void shouldReturnNullForTombstoneRecord() {
-        assertNull(TransactionLog.readTxnRecordValue("transaction-id", null));
+    void testReadReturnsUnknownValueVersionForInvalidValue() {
+        var keyBuffer = wrap(TransactionLog.keyToBytes("transaction-id"));
+        var unknownValueBuffer = MessageUtil.toVersionPrefixedByteBuffer(Short.MAX_VALUE, new TransactionLogValue());
+        var readResult = assertInstanceOf(TransactionLog.UnknownValueVersion.class, TransactionLog.read(keyBuffer, unknownValueBuffer));
+        assertEquals(Short.MAX_VALUE, readResult.version());
+    }
+
+    @Test
+    void shouldReturnTxnTombstoneForNullValue() {
+        var keyBuffer = wrap(TransactionLog.keyToBytes("transaction-id"));
+        var readResult = assertInstanceOf(TransactionLog.TxnTombstone.class, TransactionLog.read(keyBuffer, null));
+        assertEquals("transaction-id", readResult.transactionId());
     }
 }

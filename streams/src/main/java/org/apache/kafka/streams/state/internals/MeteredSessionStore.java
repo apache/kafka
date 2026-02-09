@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -403,8 +404,8 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public void flush() {
-        maybeMeasureLatency(super::flush, time, flushSensor);
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, flushSensor);
     }
 
     @Override
