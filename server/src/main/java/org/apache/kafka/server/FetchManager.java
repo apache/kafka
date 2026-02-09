@@ -45,7 +45,8 @@ public class FetchManager {
     private final Time time;
     private final FetchSessionCache cache;
 
-    public FetchManager(Time time, FetchSessionCacheShard cacheShard) {
+    // Only for testing
+    FetchManager(Time time, FetchSessionCacheShard cacheShard) {
         this(time, new FetchSessionCache(List.of(cacheShard)));
     }
 

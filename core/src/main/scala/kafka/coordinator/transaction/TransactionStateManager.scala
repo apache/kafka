@@ -491,24 +491,23 @@ class TransactionStateManager(brokerId: Int,
                 fileRecords.readInto(buffer, 0)
                 MemoryRecords.readableRecords(buffer)
             }
+
+            def unknownVersionWarning(versionType: String, version: Short): String =
+              s"Unknown message $versionType with version $version" +
+                s" while loading transaction state from $topicPartition. Ignoring it. " +
+                s"It could be a left over from an aborted upgrade."
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                val transactionalId = try Some(TransactionLog.readTxnRecordKey(record.key))
-                catch {
-                  case e: IllegalStateException =>
-                    warn(s"Unknown message key version while loading transaction state from $topicPartition. " +
-                      s"Ignoring it. It could be a left over from an aborted upgrade", e)
-                    None
-                }
-                transactionalId.foreach { txnId =>
-                  // load transaction metadata along with transaction state
-                  val txnMetadata = TransactionLog.readTxnRecordValue(txnId, record.value)
-                  if (txnMetadata == null) {
-                    loadedTransactions.remove(txnId)
-                  } else {
-                    loadedTransactions.put(txnId, txnMetadata)
-                  }
+                TransactionLog.read(record.key(), record.value()) match {
+                  case v: TransactionLog.UnknownKeyVersion =>
+                    warn(unknownVersionWarning("key", v.version()))
+                  case v: TransactionLog.UnknownValueVersion =>
+                    warn(unknownVersionWarning("value", v.version()))
+                  case r: TransactionLog.TxnTombstone =>
+                    loadedTransactions.remove(r.transactionId())
+                  case r: TransactionLog.TxnRecord =>
+                    loadedTransactions.put(r.transactionId(), r.metadata())
                 }
               }
               currOffset = batch.nextOffset
