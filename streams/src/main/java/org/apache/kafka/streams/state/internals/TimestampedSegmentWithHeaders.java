@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
-class TimestampedSegmentWithHeaders extends RocksDBHeadersStore implements Comparable<TimestampedSegmentWithHeaders>, Segment {
+class TimestampedSegmentWithHeaders extends RocksDBTimestampedStoreWithHeaders implements Comparable<TimestampedSegmentWithHeaders>, Segment {
     public final long id;
 
     TimestampedSegmentWithHeaders(final String segmentName,
