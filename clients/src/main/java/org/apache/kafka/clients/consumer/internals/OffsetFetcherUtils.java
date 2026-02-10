@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 /**
  * Utility functions for fetching offsets, validating and resetting positions.
  */
-class OffsetFetcherUtils {
+public class OffsetFetcherUtils {
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptionState;
     private final Time time;
@@ -297,7 +297,9 @@ class OffsetFetcherUtils {
      */
     void clearPartitionEndOffsetRequests(Collection<TopicPartition> partitions) {
         for (final TopicPartition partition : partitions) {
-            subscriptionState.tryClearingPartitionEndOffsetRequested(partition);
+            if (subscriptionState.maybeClearPartitionEndOffsetRequested(partition)) {
+                log.trace("Clearing partition end offset requested for partition {}", partition);
+            }
         }
     }
 

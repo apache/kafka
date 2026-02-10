@@ -583,6 +583,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 }
             } else {
                 log.debug("ListOffsets request failed with error", error);
+                offsetFetcherUtils.clearPartitionEndOffsetRequests(multiNodeRequest.partitionsToRetry);
                 listOffsetsRequestState.globalResult.completeExceptionally(error);
             }
         });

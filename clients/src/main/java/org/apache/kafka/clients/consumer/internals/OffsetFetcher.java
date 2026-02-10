@@ -141,6 +141,7 @@ public class OffsetFetcher {
         if (timestampsToSearch.isEmpty())
             return result;
 
+        boolean isZeroTimestamp = timer.timeoutMs() == 0L;
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
             RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
@@ -153,11 +154,27 @@ public class OffsetFetcher {
                         remainingToSearch.keySet().retainAll(value.partitionsToRetry);
 
                         offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
+
+                        if (isZeroTimestamp) {
+                            // In the case that the user supplied a zero timeout, only a single pass of this method's
+                            // loop will be performed and no timeout will be thrown. In case the single pass did not
+                            // yield an offset, make sure to clear those partitions' respective 'end offset requested'
+                            // flags so that another attempt can be made.
+                            offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
+                        }
                     }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
+                    if (isZeroTimestamp) {
+                        // In the case that the user supplied a zero timeout, only a single pass of this method's
+                        // loop will be performed and no timeout will be thrown. In case there's an error, clear
+                        // any remaining partitions' respective 'end offset requested' flags so that another attempt
+                        // can be made.
+                        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
+                    }
+
                     if (!(e instanceof RetriableException)) {
                         throw future.exception();
                     }
@@ -167,7 +184,7 @@ public class OffsetFetcher {
             // if timeout is set to zero, do not try to poll the network client at all
             // and return empty immediately; otherwise try to get the results synchronously
             // and throw timeout exception if it cannot complete in time
-            if (timer.timeoutMs() == 0L)
+            if (isZeroTimestamp)
                 return result;
 
             client.poll(future, timer);
@@ -180,6 +197,10 @@ public class OffsetFetcher {
                 client.awaitMetadataUpdate(timer);
             }
         } while (timer.notExpired());
+
+        // If there are any remaining partitions that have not received responses, clear their respective
+        // 'end offset requested' flags so that another attempt can be made.
+        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
 
         throw new TimeoutException("Failed to get offsets by times in " + timer.elapsedMs() + "ms");
     }

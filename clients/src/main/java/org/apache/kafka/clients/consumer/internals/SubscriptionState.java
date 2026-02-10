@@ -667,11 +667,15 @@ public class SubscriptionState {
         return topicPartitionState.endOffsetRequested();
     }
 
-    public synchronized void tryClearingPartitionEndOffsetRequested(TopicPartition tp) {
-        TopicPartitionState topicPartitionState = assignedState(tp);
+    public synchronized boolean maybeClearPartitionEndOffsetRequested(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
 
-        if (topicPartitionState != null)
+        if (topicPartitionState != null && topicPartitionState.endOffsetRequested()) {
             topicPartitionState.setRequestEndOffset(false);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     synchronized Long partitionLead(TopicPartition tp) {

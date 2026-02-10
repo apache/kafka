@@ -28,6 +28,8 @@ import org.apache.kafka.clients.consumer.internals.ClassicKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils;
+import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.common.Cluster;
@@ -49,6 +51,8 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Headers;
@@ -92,6 +96,7 @@ import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupResponse;
@@ -2733,10 +2738,17 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
-    public void testCurrentLagFailureDoesntUpdateSubscriptions(GroupProtocol groupProtocol) {
+    public void testCurrentLagClearsFlagsOnPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            Class<?> clazzLogger = groupProtocol == GroupProtocol.CLASSIC ? ClassicKafkaConsumer.class : ApplicationEventProcessor.class;
-            appender.setClassLogger(clazzLogger, Level.INFO);
+            appender.setClassLogger(OffsetFetcherUtils.class, Level.TRACE);
+
+            if (groupProtocol == GroupProtocol.CLASSIC) {
+                appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
+            } else {
+                appender.setClassLogger(ApplicationEventProcessor.class, Level.INFO);
+                appender.setClassLogger(OffsetsRequestManager.class, Level.TRACE);
+            }
+
             final ConsumerMetadata metadata = createMetadata(subscription);
             final MockClient client = new MockClient(time, metadata);
 
@@ -2746,44 +2758,89 @@ public class KafkaConsumerTest {
                 null, groupInstanceId, false);
             consumer.assign(Collections.singleton(tp0));
 
-            ListOffsetsResponse listOffsetsResponse = listOffsetsResponse(
-                Collections.emptyMap(),
-                Collections.singletonMap(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+            // poll once to update with the current metadata
+            consumer.poll(Duration.ofMillis(0));
+            TestUtils.waitForCondition(
+                () -> requestGenerated(client, ApiKeys.FIND_COORDINATOR),
+                "No FIND_COORDINATOR request sent within allotted timeout"
             );
+            client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, metadata.fetch().nodes().get(0)));
 
-            client.prepareResponse(request -> request instanceof ListOffsetsRequest, listOffsetsResponse);
-
+            // Validate the state of the endOffsetRequested flag. It should be unset before the call to currentLag(),
+            // then set immediately afterward.
             assertFalse(subscription.partitionEndOffsetRequested(tp0));
             assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
-            assertTrue(
-                wasLogMessageEmitted(
-                    appender,
-                    "^Requesting the log end offset for " + tp0 + " in order to compute lag$"
-                )
+            assertLogEmitted(
+                appender,
+                "^Requesting the log end offset for " + tp0 + " in order to compute lag$"
             );
 
+            if (groupProtocol == GroupProtocol.CLASSIC) {
+                // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
+                // different from the new async consumer, that will send the LIST_OFFSETS request in the background
+                // thread on the next background thread poll.
+                consumer.poll(Duration.ofMillis(0));
+            }
+
+            TestUtils.waitForCondition(
+                () -> requestGenerated(client, ApiKeys.LIST_OFFSETS),
+                "No LIST_OFFSETS request sent within allotted timeout"
+            );
+
+            // Validate the state of the endOffsetRequested flag. It should still be set before the call to
+            // currentLag(), because the previous LIST_OFFSETS call has not received a response.
+            assertTrue(subscription.partitionEndOffsetRequested(tp0));
             assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
-            assertTrue(
-                wasLogMessageEmitted(
-                    appender,
-                    "^Not requesting the log end offset for " + tp0 + " to compute lag as an outstanding request already exists"
-                )
+            assertLogEmitted(
+                appender,
+                "^Not requesting the log end offset for " + tp0 + " to compute lag as an outstanding request already exists$"
+            );
+
+            // Now respond to the LIST_OFFSETS request with an error in the partition.
+            ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
+            client.respondToRequest(listOffsetRequest, listOffsetsResponse(Map.of(), Map.of(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+
+            if (groupProtocol == GroupProtocol.CLASSIC) {
+                // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
+                // different from the new async consumer, that will send the LIST_OFFSETS request in the background
+                // thread on the next background thread poll.
+                consumer.poll(Duration.ofMillis(0));
+            }
+
+            // AsyncKafkaConsumer may take a moment to poll and process the LIST_OFFSETS response, so a repeated
+            // wait is appropriate here.
+            TestUtils.waitForCondition(
+                () -> {
+                    return !subscription.partitionEndOffsetRequested(tp0);
+                },
+                2000,
+                "endOffsetRequested flag was not cleared within allotted timeout"
+            );
+
+            assertLogEmitted(
+                appender,
+                "^Received unknown topic or partition error in ListOffset request for partition " + tp0 + "$"
+            );
+
+            assertLogEmitted(
+                appender,
+                "^Clearing partition end offset requested for partition " + tp0 + "$"
             );
         }
     }
 
-    private boolean wasLogMessageEmitted(LogCaptureAppender appender, String messagePattern) {
+    private void assertLogEmitted(LogCaptureAppender appender, String messagePattern) {
         Pattern pattern = Pattern.compile(messagePattern);
 
         for (String message : appender.getMessages()) {
             Matcher matcher = pattern.matcher(message);
             if (matcher.find())
-                return true;
+                return;
         }
 
-        return false;
+        fail("Message pattern (\"" + messagePattern + "\") not found in logs");
     }
 
     @ParameterizedTest
