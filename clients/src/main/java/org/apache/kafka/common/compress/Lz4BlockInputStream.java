@@ -51,6 +51,9 @@ public final class Lz4BlockInputStream extends InputStream {
 
     private static final LZ4SafeDecompressor DECOMPRESSOR = LZ4Factory.fastestInstance().safeDecompressor();
     private static final XXHash32 CHECKSUM = XXHashFactory.fastestInstance().hash32();
+    private static final int CONTENT_CHECKSUM_SIZE = 4;
+
+    public static final String CONTENT_CHECKSUM_MISMATCH = "Content checksum mismatch";
 
     private static final RuntimeException BROKEN_LZ4_EXCEPTION;
     // https://issues.apache.org/jira/browse/KAFKA-9203
@@ -79,6 +82,11 @@ public final class Lz4BlockInputStream extends InputStream {
     private ByteBuffer decompressedBuffer;
     private boolean finished;
 
+    // Running content checksum for verifying end-to-end data integrity
+    private int contentChecksum;
+    // Temporary buffer for computing block checksums
+    private byte[] checksumBuffer;
+
     /**
      * Create a new {@link InputStream} that will decompress data using the LZ4 algorithm.
      *
@@ -96,6 +104,7 @@ public final class Lz4BlockInputStream extends InputStream {
         readHeader();
         decompressionBuffer = bufferSupplier.get(maxBlockSize);
         finished = false;
+        contentChecksum = 0;
     }
 
     /**
@@ -169,8 +178,15 @@ public final class Lz4BlockInputStream extends InputStream {
         // Check for EndMark
         if (blockSize == 0) {
             finished = true;
-            if (flg.isContentChecksumSet())
-                in.getInt(); // TODO: verify this content checksum
+            if (flg.isContentChecksumSet()) {
+                if (in.remaining() < CONTENT_CHECKSUM_SIZE) {
+                    throw new IOException(PREMATURE_EOS);
+                }
+                int expectedChecksum = in.getInt();
+                if (contentChecksum != expectedChecksum) {
+                    throw new IOException(CONTENT_CHECKSUM_MISMATCH);
+                }
+            }
             return;
         } else if (blockSize > maxBlockSize) {
             throw new IOException(String.format("Block size %d exceeded max: %d", blockSize, maxBlockSize));
@@ -193,6 +209,20 @@ public final class Lz4BlockInputStream extends InputStream {
         } else {
             decompressedBuffer = in.slice();
             decompressedBuffer.limit(blockSize);
+        }
+
+        // Update content checksum if enabled
+        if (flg.isContentChecksumSet()) {
+            if (decompressedBuffer.hasArray()) {
+                contentChecksum ^= CHECKSUM.hash(decompressedBuffer.array(), decompressedBuffer.arrayOffset(), decompressedBuffer.remaining(), 0);
+            } else {
+                // For direct buffers, need to copy to a temporary buffer
+                if (checksumBuffer == null || checksumBuffer.length < decompressedBuffer.remaining()) {
+                    checksumBuffer = new byte[decompressedBuffer.remaining()];
+                }
+                decompressedBuffer.duplicate().get(checksumBuffer, 0, decompressedBuffer.remaining());
+                contentChecksum ^= CHECKSUM.hash(checksumBuffer, 0, decompressedBuffer.remaining(), 0);
+            }
         }
 
         // verify checksum
