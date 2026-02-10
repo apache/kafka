@@ -25,62 +25,49 @@ path_to_jdk_cache() {
   echo "/tmp/jdk-${jdk_version}.tar.gz"
 }
 
-# Fetches JDK tarball from S3
-# Arguments:
-#   jdk_version - Full version string (e.g., "17", "25.0.2", "8u202")
-#   jdk_arch    - CPU architecture: "x64" or "aarch64"
 fetch_jdk_tgz() {
   jdk_version=$1
-  jdk_arch=$2
 
   path=$(path_to_jdk_cache $jdk_version)
 
   if [ ! -e $path ]; then
     mkdir -p $(dirname $path)
-
-    # All JDKs use unified path: kafka-packages/jdk/jdk-{version}-linux-{arch}.tar.gz
-    # Version can be: "17", "25.0.2", "8u202", etc.
-    s3_url="https://s3-us-west-2.amazonaws.com/kafka-packages/jdk/jdk-${jdk_version}-linux-${jdk_arch}.tar.gz"
-
-    echo "===> Downloading JDK from: ${s3_url}"
-    curl --retry 5 -s -L "$s3_url" -o $path
-  else
-    echo "===> Using cached JDK: ${path}"
+    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk/jdk-${jdk_version}.tar.gz" -o $path
   fi
 }
 
-# JDK_VERSION: Full version string (e.g., "17", "25.0.2", "8u202")
-# Follows Oracle Runtime.Version naming for feature-only ("17") and feature.interim.update ("25.0.2") formats
-# Supports both JDK_VERSION (new) and JDK_MAJOR (legacy) for backward compatibility
-if [ -z "$JDK_VERSION" ]; then
-  JDK_VERSION="${JDK_MAJOR:-17}"
+# Validate JDK_MAJOR - must be a version number (e.g., 8u144, 17, 25.0.1), default to 17 if empty or invalid
+if [[ -z "$JDK_MAJOR" || ! "$JDK_MAJOR" =~ ^[0-9]+(u[0-9]+|(\.[0-9]+)+)?$ ]]; then
+    JDK_MAJOR="17"
 fi
-JDK_ARCH="${JDK_ARCH:-x64}"
-# Extract major version for install directory (e.g., "25.0.2" -> "25", "8u202" -> "8")
-JDK_MAJOR=$(echo "$JDK_VERSION" | sed -nE 's/^([0-9]+).*/\1/p')
-if [ -z "$JDK_MAJOR" ]; then
-  echo "ERROR: Invalid JDK_VERSION format: ${JDK_VERSION}. Expected format: 17, 25.0.2, 8u202, etc."
-  exit 1
-fi
-export DEBIAN_FRONTEND=noninteractive
 
-echo "===> JDK Configuration: JDK_VERSION=${JDK_VERSION}, JDK_ARCH=${JDK_ARCH}, JDK_MAJOR=${JDK_MAJOR}"
+# Validate JDK_ARCH - default to x64 if empty or invalid
+if [[ -z "$JDK_ARCH" || ! "$JDK_ARCH" =~ ^(x64|aarch64)$ ]]; then
+    JDK_ARCH="x64"
+fi
+
+# Use JDK_FULL if provided and valid, otherwise construct from JDK_MAJOR and JDK_ARCH
+if [[ -z "$JDK_FULL" || ! "$JDK_FULL" =~ ^[0-9]+(u[0-9]+|(\.[0-9]+)+)?-linux-(x64|aarch64)$ ]]; then
+    JDK_FULL="${JDK_MAJOR}-linux-${JDK_ARCH}"
+fi
+
+echo "JDK_MAJOR=$JDK_MAJOR JDK_ARCH=$JDK_ARCH JDK_FULL=$JDK_FULL"
+export DEBIAN_FRONTEND=noninteractive
 
 if [ -z `which javac` ]; then
     apt-get -y update
     apt-get install -y software-properties-common python-software-properties binutils java-common
 
-    echo "===> Installing JDK..."
+    echo "===> Installing JDK..." 
 
     mkdir -p /opt/jdk
     cd /opt/jdk
     rm -rf $JDK_MAJOR
     mkdir -p $JDK_MAJOR
     cd $JDK_MAJOR
-    JDK_CACHE_PATH=$(path_to_jdk_cache $JDK_VERSION)
-    fetch_jdk_tgz $JDK_VERSION $JDK_ARCH
-    tar x --strip-components=1 -zf $JDK_CACHE_PATH
-    for bin in /opt/jdk/$JDK_MAJOR/bin/* ; do
+    fetch_jdk_tgz $JDK_FULL
+    tar x --strip-components=1 -zf $(path_to_jdk_cache $JDK_FULL)
+    for bin in /opt/jdk/$JDK_MAJOR/bin/* ; do 
       name=$(basename $bin)
       update-alternatives --install /usr/bin/$name $name $bin 1081 && update-alternatives --set $name $bin
     done
@@ -122,7 +109,8 @@ get_kafka() {
 }
 
 # Install Kibosh
-apt-get update -y && apt-get install -y git cmake pkg-config libfuse-dev
+apt-get update -y && apt-get install -y git cmake pkg-config libfuse-dev ca-certificates
+update-ca-certificates --fresh
 pushd /opt
 rm -rf /opt/kibosh
 git clone -q  https://github.com/confluentinc/kibosh.git
