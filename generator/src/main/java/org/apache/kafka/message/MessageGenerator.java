@@ -103,7 +103,7 @@ public final class MessageGenerator {
 
     static final String SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.Schema";
 
-    static final String NULLABLE_SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.nullable.NullableSchema";
+    static final String NULLABLE_SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.NullableSchema";
 
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 

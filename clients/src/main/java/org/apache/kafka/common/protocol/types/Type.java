@@ -116,6 +116,30 @@ public abstract class Type {
             return typeName();
         }
     }
+
+    public static String stringRead(ByteBuffer buffer, int length) {
+        if (length > Short.MAX_VALUE)
+            throw new SchemaException("String length " + length + " is larger than the maximum string length.");
+        if (length > buffer.remaining())
+            throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
+        String result = Utils.utf8(buffer, length);
+        buffer.position(buffer.position() + length);
+        return result;
+    }
+
+    public static ByteBuffer bytesRead(ByteBuffer buffer, int size) {
+        if (size > buffer.remaining())
+            throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
+
+        int limit = buffer.limit();
+        int newPosition = buffer.position() + size;
+        buffer.limit(newPosition);
+        ByteBuffer val = buffer.slice();
+        buffer.limit(limit);
+        buffer.position(newPosition);
+        return val;
+    }
+
     /**
      * The Boolean type represents a boolean value in a byte by using
      * the value of 0 to represent false, and 1 to represent true.
@@ -499,16 +523,6 @@ public abstract class Type {
         }
     };
 
-    public static String stringRead(ByteBuffer buffer, int length) {
-        if (length > Short.MAX_VALUE)
-            throw new SchemaException("String length " + length + " is larger than the maximum string length.");
-        if (length > buffer.remaining())
-            throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-        String result = Utils.utf8(buffer, length);
-        buffer.position(buffer.position() + length);
-        return result;
-    }
-
     public static final DocumentedType COMPACT_STRING = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -665,19 +679,6 @@ public abstract class Type {
                     "A null string is represented with a length of 0.";
         }
     };
-
-    public ByteBuffer bytesRead(ByteBuffer buffer, int size) {
-        if (size > buffer.remaining())
-            throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
-
-        int limit = buffer.limit();
-        int newPosition = buffer.position() + size;
-        buffer.limit(newPosition);
-        ByteBuffer val = buffer.slice();
-        buffer.limit(limit);
-        buffer.position(newPosition);
-        return val;
-    }
 
     public static final DocumentedType BYTES = new DocumentedType() {
         @Override

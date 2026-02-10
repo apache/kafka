@@ -176,7 +176,7 @@ public class Schema extends DocumentedType {
         return this.fields;
     }
 
-    public boolean tolerateMissingFieldsWithDefaults() {
+    protected boolean tolerateMissingFieldsWithDefaults() {
         return this.tolerateMissingFieldsWithDefaults;
     }
 
