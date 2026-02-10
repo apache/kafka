@@ -38,7 +38,6 @@ import java.security.DigestException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +63,7 @@ public class Cleaner {
     /**
      * The topic partitions that have segment overflow history mapped to their segment size ratio
      */
-    private final Map<TopicPartition, Double> segmentOverflowPartitions = new HashMap<>();
+    private final Map<TopicPartition, Double> segmentOverflowPartitions;
 
     /**
      * Buffer used for read i/o
@@ -94,7 +93,8 @@ public class Cleaner {
                    double dupBufferLoadFactor,
                    Throttler throttler,
                    Time time,
-                   Consumer<TopicPartition> checkDone) {
+                   Consumer<TopicPartition> checkDone,
+                   Map<TopicPartition, Double> segmentOverflowPartitions) {
         this.id = id;
         this.offsetMap = offsetMap;
         this.ioBufferSize = ioBufferSize;
@@ -103,6 +103,7 @@ public class Cleaner {
         this.throttler = throttler;
         this.time = time;
         this.checkDone = checkDone;
+        this.segmentOverflowPartitions = segmentOverflowPartitions;
         logger = new LogContext("Cleaner " + id + ": ").logger(Cleaner.class);
 
         readBuffer = ByteBuffer.allocate(ioBufferSize);
@@ -800,10 +801,5 @@ public class Cleaner {
         restoreBuffers();
 
         return false;
-    }
-    
-    // only for testing
-    public Map<TopicPartition, Double> segmentOverflowPartitions() {
-        return Map.copyOf(segmentOverflowPartitions);
     }
 }

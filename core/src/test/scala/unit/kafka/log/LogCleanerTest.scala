@@ -45,6 +45,7 @@ import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties}
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.function.Consumer
@@ -2222,24 +2223,29 @@ class LogCleanerTest extends Logging {
 
   @Test
   def testSegmentWithCompactionDataOverflow(): Unit = {
-    val cleaner = makeCleaner(Int.MaxValue)
+    val overflowPartitions = new ConcurrentHashMap[TopicPartition, java.lang.Double]()
+
+    val cleaner = makeCleaner(
+      capacity = Int.MaxValue,
+      segmentOverflowPartitions = overflowPartitions
+    )
 
     val logProps = new Properties()
     logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
     val log = makeLog(config = config)
     val dir = log.parentDir
+    val topicPartition = log.topicPartition()
 
     log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, key = "test".getBytes), 0)
 
     val segments = log.logSegments.asScala.toList
     val segmentToClean = segments.head
-    val topicPartition = log.topicPartition()
 
     val mockTxnIndex = Mockito.mock(classOf[TransactionIndex])
     Mockito.when(mockTxnIndex.file()).thenReturn(new File(dir, "mock.txnindex"))
 
-    val appendCallCount = new java.util.concurrent.atomic.AtomicInteger(0)
+    val appendCallCount = new AtomicInteger(0)
 
     val mockLogSegmentCtor = Mockito.mockConstruction(
       classOf[LogSegment],
@@ -2247,7 +2253,6 @@ class LogCleanerTest extends Logging {
         override def prepare(mock: LogSegment, context: MockedConstruction.Context): Unit = {
           Mockito.when(mock.txnIndex()).thenReturn(mockTxnIndex)
           Mockito.when(mock.baseOffset()).thenReturn(segmentToClean.baseOffset())
-
           Mockito.when(mock.readNextOffset()).thenReturn(segmentToClean.baseOffset() + 1)
           Mockito.doNothing().when(mock).onBecomeInactiveSegment()
           Mockito.doNothing().when(mock).flush()
@@ -2255,10 +2260,8 @@ class LogCleanerTest extends Logging {
 
           Mockito.doAnswer((invocation: InvocationOnMock) => {
             if (appendCallCount.incrementAndGet() == 1) {
-              // first time, it should throw SegmentOverflowException
               throw new SegmentOverflowException(mock)
             } else {
-              // second time, it should work fine
               null
             }
           }).when(mock).append(
@@ -2278,14 +2281,14 @@ class LogCleanerTest extends Logging {
           -1, log.logEndOffset)
       )
 
-      assertTrue(cleaner.segmentOverflowPartitions().containsKey(topicPartition))
-      val segmentRatio = cleaner.segmentOverflowPartitions().get(topicPartition)
+      assertTrue(overflowPartitions.containsKey(topicPartition))
+      val segmentRatio = overflowPartitions.get(topicPartition)
       assertEquals(0.9, segmentRatio)
 
       val cleanable = new LogToClean(log, 0L, log.activeSegment.baseOffset, true)
       cleaner.doClean(cleanable, time.milliseconds())
 
-      assertFalse(cleaner.segmentOverflowPartitions().containsKey(topicPartition))
+      assertFalse(overflowPartitions.containsKey(topicPartition))
 
     } finally {
       mockLogSegmentCtor.close()
@@ -2347,15 +2350,21 @@ class LogCleanerTest extends Logging {
     )
   }
 
-  private def makeCleaner(capacity: Int, checkDone: Consumer[TopicPartition] = _ => (), maxMessageSize: Int = 64*1024) =
+  private def makeCleaner(
+    capacity: Int,
+    checkDone: Consumer[TopicPartition] = _ => (),
+    maxMessageSize: Int = 64 * 1024,
+    segmentOverflowPartitions: util.Map[TopicPartition, java.lang.Double] = new util.HashMap[TopicPartition, java.lang.Double]()
+  ) =
     new Cleaner(0,
-                new FakeOffsetMap(capacity),
-                maxMessageSize,
-                maxMessageSize,
-                0.75,
-                throttler,
-                time,
-                checkDone)
+      new FakeOffsetMap(capacity),
+      maxMessageSize,
+      maxMessageSize,
+      0.75,
+      throttler,
+      time,
+      checkDone,
+      segmentOverflowPartitions)
 
   private def writeToLog(log: UnifiedLog, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq)

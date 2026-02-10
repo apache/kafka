@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -142,6 +143,11 @@ public class LogCleaner implements BrokerReconfigurable {
     private final Time time;
     private final List<CleanerThread> cleaners = new ArrayList<>();
 
+    /**
+     * The topic partitions that have segment overflow history mapped to their segment size ratio
+     */
+    private final Map<TopicPartition, Double> segmentOverflowPartitions = new ConcurrentHashMap<>();
+    
     /**
      * Log cleaner configuration which may be dynamically updated.
      */
@@ -483,7 +489,8 @@ public class LogCleaner implements BrokerReconfigurable {
                     config.dedupeBufferLoadFactor,
                     throttler,
                     time,
-                    this::checkDone
+                    this::checkDone,
+                    segmentOverflowPartitions
             );
 
             if (config.dedupeBufferSize / config.numThreads > Integer.MAX_VALUE) {
