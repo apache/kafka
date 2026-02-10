@@ -69,9 +69,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
@@ -248,6 +248,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public static final String NETWORK_THREAD_PREFIX = "kafka-producer-network-thread";
     public static final String PRODUCER_METRIC_GROUP_NAME = "producer-metrics";
 
+    private static final String INIT_TXN_TIMEOUT_MSG = "InitTransactions timed out - " +
+            "did not complete coordinator discovery or " +
+            "receive the InitProducerId response within max.block.ms.";
+
+    private static final String SEND_OFFSETS_TIMEOUT_MSG =
+            "SendOffsetsToTransaction timed out - did not reach the coordinator or " +
+                    "receive the TxnOffsetCommit/AddOffsetsToTxn response within max.block.ms";
+    private static final String COMMIT_TXN_TIMEOUT_MSG =
+            "CommitTransaction timed out - did not complete EndTxn with the transaction coordinator within max.block.ms";
+    private static final String ABORT_TXN_TIMEOUT_MSG =
+            "AbortTransaction timed out - did not complete EndTxn(abort) with the transaction coordinator within max.block.ms";
+    
     private final String clientId;
     // Visible for testing
     final Metrics metrics;
@@ -672,7 +684,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long now = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.initializeTransactions(keepPreparedTxn);
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, INIT_TXN_TIMEOUT_MSG);
         producerMetrics.recordInit(time.nanoseconds() - now);
         transactionManager.maybeUpdateTransactionV2Enabled(true);
     }
@@ -761,7 +773,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long start = time.nanoseconds();
             TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, groupMetadata);
             sender.wakeup();
-            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+            result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, SEND_OFFSETS_TIMEOUT_MSG);
             producerMetrics.recordSendOffsets(time.nanoseconds() - start);
         }
     }
@@ -847,7 +859,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long commitStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, COMMIT_TXN_TIMEOUT_MSG);
         producerMetrics.recordCommitTxn(time.nanoseconds() - commitStart);
     }
 
@@ -882,7 +894,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long abortStart = time.nanoseconds();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS, ABORT_TXN_TIMEOUT_MSG);
         producerMetrics.recordAbortTxn(time.nanoseconds() - abortStart);
     }
 
@@ -1033,12 +1045,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
      * to parallelize processing.
      *
-     * @param record   The record to send
+     * @param record   The record to send. If the topic or the partition specified in it cannot be found
+     *                 in metadata within {@code max.block.ms}, the returned future will time out when retrieved.
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
      *                 indicates no callback)
      * @throws IllegalStateException  if a transactional.id has been configured and no transaction has been started, or
      *                                when send is invoked after producer has been closed.
-     * @throws TimeoutException       if the topic or the partition specified in the record cannot be found in metadata within {@code max.block.ms}
      * @throws InterruptException     If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws KafkaException         If a Kafka related error occurs that does not belong to the public API exceptions.

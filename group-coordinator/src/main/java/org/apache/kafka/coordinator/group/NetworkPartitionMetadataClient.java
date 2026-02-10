@@ -30,10 +30,14 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
+import org.apache.kafka.common.utils.ExponentialBackoffManager;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.InterBrokerSendThread;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
+import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,20 +58,42 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkPartitionMetadataClient.class);
 
+    private static final long REQUEST_BACKOFF_MS = 1_000L;
+    private static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
+    private static final int MAX_RETRY_ATTEMPTS = 5;
+
     private final MetadataCache metadataCache;
     private final Supplier<KafkaClient> networkClientSupplier;
     private final Time time;
     private final ListenerName listenerName;
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private volatile SendThread sendThread;
+    private final Timer timer;
 
     public NetworkPartitionMetadataClient(MetadataCache metadataCache,
                                           Supplier<KafkaClient> networkClientSupplier,
-                                          Time time, ListenerName listenerName) {
+                                          Time time, ListenerName listenerName, Timer timer) {
+        if (metadataCache == null) {
+            throw new IllegalArgumentException("MetadataCache must not be null.");
+        }
+        if (networkClientSupplier == null) {
+            throw new IllegalArgumentException("NetworkClientSupplier must not be null.");
+        }
+        if (time == null) {
+            throw new IllegalArgumentException("Time must not be null.");
+        }
+        if (listenerName == null) {
+            throw new IllegalArgumentException("ListenerName must not be null.");
+        }
+        if (timer == null) {
+            throw new IllegalArgumentException("Timer must not be null.");
+        }
+
         this.metadataCache = metadataCache;
         this.networkClientSupplier = networkClientSupplier;
         this.time = time;
         this.listenerName = listenerName;
+        this.timer = timer;
     }
 
     @Override
@@ -125,6 +151,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     public void close() {
         // Only close sendThread if it was initialized. Note, close is called only during broker shutdown, so need
         // for further synchronization here.
+        Utils.closeQuietly(timer, "NetworkPartitionMetadataClient timer");
         if (!initialized.get()) {
             return;
         }
@@ -186,14 +213,18 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
      * Handles the response from a ListOffsets request.
      */
     // Visible for Testing.
-    void handleResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
+    void handleResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
         // Handle error responses first
-        if (maybeHandleErrorResponse(partitionFutures, clientResponse)) {
+        if (maybeHandleErrorResponse(pendingRequest, clientResponse)) {
             return;
         }
 
         log.debug("ListOffsets response received successfully - {}", clientResponse);
+        // Reset retry attempts on success
+        pendingRequest.backoffManager().resetAttempts();
+        
         ListOffsetsResponse response = (ListOffsetsResponse) clientResponse.responseBody();
+        Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures = pendingRequest.futures();
 
         for (ListOffsetsTopicResponse topicResponse : response.topics()) {
             String topicName = topicResponse.name();
@@ -216,11 +247,14 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     }
 
     /**
-     * Handles error responses by completing all associated futures with an error. Returns true if an error was
-     * handled. Otherwise, returns false.
+     * Handles error responses by completing all associated futures with an error or retrying the request.
+     * Returns true if an error was handled. Otherwise, returns false.
      */
-    private boolean maybeHandleErrorResponse(Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures, ClientResponse clientResponse) {
+    private boolean maybeHandleErrorResponse(PendingRequest pendingRequest, ClientResponse clientResponse) {
+        Map<TopicPartition, CompletableFuture<OffsetResponse>> partitionFutures = pendingRequest.futures();
         Errors error;
+        boolean shouldRetry = false;
+        
         if (clientResponse == null) {
             log.error("Response for ListOffsets for topicPartitions: {} is null", partitionFutures.keySet());
             error = Errors.UNKNOWN_SERVER_ERROR;
@@ -231,11 +265,13 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
             log.error("Version mismatch exception", clientResponse.versionMismatch());
             error = Errors.UNKNOWN_SERVER_ERROR;
         } else if (clientResponse.wasDisconnected()) {
-            log.error("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", partitionFutures.keySet(), clientResponse);
+            log.debug("Response for ListOffsets for TopicPartitions: {} was disconnected - {}.", partitionFutures.keySet(), clientResponse);
             error = Errors.NETWORK_EXCEPTION;
+            shouldRetry = true;
         } else if (clientResponse.wasTimedOut()) {
-            log.error("Response for ListOffsets for TopicPartitions: {} timed out - {}.", partitionFutures.keySet(), clientResponse);
+            log.debug("Response for ListOffsets for TopicPartitions: {} timed out - {}.", partitionFutures.keySet(), clientResponse);
             error = Errors.REQUEST_TIMED_OUT;
+            shouldRetry = true;
         } else if (!clientResponse.hasResponse()) {
             log.error("Response for ListOffsets for TopicPartitions: {} has no response - {}.", partitionFutures.keySet(), clientResponse);
             error = Errors.UNKNOWN_SERVER_ERROR;
@@ -244,6 +280,23 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
             return false;
         }
 
+        // For retriable errors (disconnected or timed out), attempt retry if possible
+        if (shouldRetry) {
+            ExponentialBackoffManager backoffManager = pendingRequest.backoffManager();
+            if (backoffManager.canAttempt()) {
+                backoffManager.incrementAttempt();
+                long backoffMs = backoffManager.backOff();
+                log.debug("Retrying ListOffsets request for TopicPartitions: {} after {} ms (attempt {}/{})",
+                    partitionFutures.keySet(), backoffMs, backoffManager.attempts(), MAX_RETRY_ATTEMPTS);
+                timer.add(new RetryTimerTask(backoffMs, pendingRequest));
+                return true;
+            } else {
+                log.error("Exhausted max retries ({}) for ListOffsets request for TopicPartitions: {}",
+                    MAX_RETRY_ATTEMPTS, partitionFutures.keySet());
+            }
+        }
+
+        // Complete all futures with error (either non-retriable error or exhausted retries)
         partitionFutures.forEach((tp, future) -> future.complete(new OffsetResponse(-1, error)));
         return true;
     }
@@ -251,9 +304,39 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
     /**
      * Tracks a pending ListOffsets request and its associated futures.
      */
-    private record PendingRequest(Node node,
-                                  Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
-                                  ListOffsetsRequest.Builder requestBuilder) {
+    // Visible for testing.
+    record PendingRequest(Node node,
+                          Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
+                          ListOffsetsRequest.Builder requestBuilder,
+                          ExponentialBackoffManager backoffManager) {
+        PendingRequest(Node node,
+                      Map<TopicPartition, CompletableFuture<OffsetResponse>> futures,
+                      ListOffsetsRequest.Builder requestBuilder) {
+            this(node, futures, requestBuilder, new ExponentialBackoffManager(
+                MAX_RETRY_ATTEMPTS,
+                REQUEST_BACKOFF_MS,
+                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+                REQUEST_BACKOFF_MAX_MS,
+                CommonClientConfigs.RETRY_BACKOFF_JITTER));
+        }
+    }
+
+    /**
+     * Timer task for retrying failed requests after backoff.
+     */
+    private final class RetryTimerTask extends TimerTask {
+        private final PendingRequest pendingRequest;
+
+        RetryTimerTask(long delayMs, PendingRequest pendingRequest) {
+            super(delayMs);
+            this.pendingRequest = pendingRequest;
+        }
+
+        @Override
+        public void run() {
+            sendThread.enqueue(pendingRequest);
+            sendThread.wakeup();
+        }
     }
 
     private class SendThread extends InterBrokerSendThread {
@@ -286,8 +369,7 @@ public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
                     time.hiResClockMs(),
                     current.node,
                     requestBuilder,
-                    response -> handleResponse(current.futures, response)
-                );
+                    response -> handleResponse(current, response));
 
                 requests.add(requestHandler);
             }

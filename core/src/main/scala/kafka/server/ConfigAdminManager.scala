@@ -417,10 +417,12 @@ object ConfigAdminManager {
     configKeys: Map[String, ConfigKey]
   ): Unit = {
     def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
-      val configKey = configKeys(configName)
-      if (configKey == null)
-        throw new InvalidConfigurationException(s"Unknown config name: $configName")
-      configKey.`type` == ConfigDef.Type.LIST
+      configKeys.get(configName) match {
+        case Some(configKey) =>
+          configKey.`type` == ConfigDef.Type.LIST
+        case None =>
+          throw new InvalidConfigurationException(s"Unknown config name: $configName")
+      }
     }
 
     alterConfigOps.foreach { alterConfigOp =>

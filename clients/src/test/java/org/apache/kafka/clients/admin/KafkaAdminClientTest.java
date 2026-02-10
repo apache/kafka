@@ -8845,8 +8845,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             assertThrows(
                 IllegalArgumentException.class,
-                () -> env.adminClient().updateFeatures(
-                    new HashMap<>(), new UpdateFeaturesOptions()));
+                () -> env.adminClient().updateFeatures(new HashMap<>()));
         }
     }
 
@@ -8857,8 +8856,7 @@ public class KafkaAdminClientTest {
                 IllegalArgumentException.class,
                 () -> env.adminClient().updateFeatures(
                     Utils.mkMap(Utils.mkEntry("feature", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)),
-                                Utils.mkEntry("", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE))),
-                    new UpdateFeaturesOptions()));
+                                Utils.mkEntry("", new FeatureUpdate((short) 2,  FeatureUpdate.UpgradeType.UPGRADE)))));
         }
     }
 
@@ -8893,6 +8891,33 @@ public class KafkaAdminClientTest {
             final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(options).featureMetadata();
             final ExecutionException e = assertThrows(ExecutionException.class, future::get);
             assertEquals(Errors.INVALID_REQUEST.exception().getClass(), e.getCause().getClass());
+        }
+    }
+
+    @Test
+    public void testDescribeFeaturesWithNodeSuccess() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponseFrom(
+                body -> body instanceof ApiVersionsRequest,
+                prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
+                env.cluster().nodeById(0));
+            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(10000).nodeId(0)).featureMetadata();
+            final FeatureMetadata metadata = future.get();
+            assertEquals(defaultFeatureMetadata(), metadata);
+        }
+    }
+
+    @Test
+    public void testDescribeFeaturesWithNodeFailure() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponseFrom(
+                body -> body instanceof ApiVersionsRequest,
+                prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
+                env.cluster().nodeById(1));
+            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(1000).nodeId(0)).featureMetadata();
+            assertThrows(ExecutionException.class, future::get);
         }
     }
 

@@ -60,6 +60,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -130,6 +132,7 @@ class PersisterStateManagerTest {
     }
 
     private abstract class TestStateHandler extends PersisterStateManager.PersisterStateManagerHandler {
+        private static final Logger LOG = LoggerFactory.getLogger(TestStateHandler.class);
         private final CompletableFuture<TestHandlerResponse> result;
 
         private class TestHandlerResponseData extends WriteShareGroupStateResponseData {
@@ -152,6 +155,11 @@ class PersisterStateManagerTest {
             int maxFindCoordAttempts) {
             stateManager.super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxFindCoordAttempts);
             this.result = result;
+        }
+
+        @Override
+        protected Logger log() {
+            return LOG;
         }
 
         @Override

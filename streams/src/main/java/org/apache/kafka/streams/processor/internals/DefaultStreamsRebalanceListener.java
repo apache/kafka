@@ -96,6 +96,7 @@ public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener
         log.info("Processing new assignment {} from Streams Rebalance Protocol", assignment);
 
         try {
+            streamThread.setStreamsGroupReady(assignment.isGroupReady());
             taskManager.handleAssignment(activeTasksWithPartitions, standbyTasksWithPartitions);
             streamThread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
             taskManager.handleRebalanceComplete();

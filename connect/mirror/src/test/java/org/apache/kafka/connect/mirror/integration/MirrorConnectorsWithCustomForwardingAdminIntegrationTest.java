@@ -35,7 +35,7 @@ import org.apache.kafka.connect.mirror.clients.admin.FakeForwardingAdminWithLoca
 import org.apache.kafka.connect.mirror.clients.admin.FakeLocalMetadataStore;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.raft.KRaftConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 
 import org.junit.jupiter.api.AfterEach;

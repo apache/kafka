@@ -16,41 +16,33 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 
-public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implements CoordinatorExecutor<U> {
+public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
     private record TaskResult<R>(R result, Throwable exception) { }
 
     private final Logger log;
-    private final TopicPartition shard;
-    private final CoordinatorRuntime<S, U> runtime;
     private final ExecutorService executor;
-    private final Duration writeTimeout;
+    private final CoordinatorShardScheduler<U> scheduler;
     private final Map<String, TaskRunnable<?>> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorExecutorImpl(
         LogContext logContext,
-        TopicPartition shard,
-        CoordinatorRuntime<S, U> runtime,
         ExecutorService executor,
-        Duration writeTimeout
+        CoordinatorShardScheduler<U> scheduler
     ) {
         this.log = logContext.logger(CoordinatorExecutorImpl.class);
-        this.shard = shard;
-        this.runtime = runtime;
         this.executor = executor;
-        this.writeTimeout = writeTimeout;
+        this.scheduler = scheduler;
     }
 
     private <R> TaskResult<R> executeTask(TaskRunnable<R> task) {
@@ -77,14 +69,12 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
             if (tasks.get(key) != task) return;
 
             // Execute the task.
-            final TaskResult<R> result = executeTask(task);
+            var result = executeTask(task);
 
             // Schedule the operation.
-            runtime.scheduleWriteOperation(
+            scheduler.scheduleWriteOperation(
                 key,
-                shard,
-                writeTimeout,
-                coordinator -> {
+                () -> {
                     // If the task associated with the key is not us, it means
                     // that the task was either replaced or cancelled. We stop.
                     if (!tasks.remove(key, task)) {
@@ -92,7 +82,7 @@ public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implement
                     }
 
                     // Call the underlying write operation with the result of the task.
-                    return operation.onComplete(result.result, result.exception);
+                    return operation.onComplete(result.result(), result.exception());
                 }
             ).exceptionally(exception -> {
                 // Remove the task after a failure.

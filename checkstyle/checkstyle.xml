@@ -125,7 +125,7 @@
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->
-      <property name="max" value="25"/>
+      <property name="max" value="28"/>
       <property name="excludeClassesRegexps" value="AtomicInteger"/>
     </module>
     <module name="BooleanExpressionComplexity">
@@ -135,7 +135,7 @@
 
     <module name="ClassFanOutComplexity">
       <!-- default is 20 -->
-      <property name="max" value="52"/>
+      <property name="max" value="55"/>
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->

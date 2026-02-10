@@ -17,6 +17,7 @@ import json
 import os
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition, consumer_group
@@ -267,6 +268,13 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         for node in self.nodes:
             node.version = version
 
+    def start(self, **kwargs):
+        super().start(**kwargs)
+        timeout_sec=kwargs.get("timeout_sec", 120)
+        wait_until(lambda: len(self.started_nodes()) == len(self.nodes),
+                   timeout_sec=timeout_sec,
+                   err_msg="Verifiable consumer didn't finish startup in %d seconds" % timeout_sec)
+
     def java_class_name(self):
         return "VerifiableConsumer"
 
@@ -510,6 +518,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return max(handler.revoked_count for handler in self.event_handlers.values()
                        if handler.idx <= keep_alive)
+
+    def started_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state is not None and handler.state != ConsumerState.Dead]
 
     def joined_nodes(self):
         with self.lock:

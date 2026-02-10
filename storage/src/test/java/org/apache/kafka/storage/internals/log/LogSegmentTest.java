@@ -19,17 +19,17 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.FileLogInputStream;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.FileLogInputStream;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -509,9 +509,12 @@ public class LogSegmentTest {
 
             // recover again, assuming the transaction from pid2 began on a previous segment
             stateManager = newProducerStateManager();
-            stateManager.loadProducerEntry(new ProducerStateEntry(pid2, producerEpoch, 0,
-                RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L),
-                Optional.of(new BatchMetadata(10, 10L, 5, RecordBatch.NO_TIMESTAMP))));
+
+            ProducerStateEntry stateEntry = new ProducerStateEntry(pid2, producerEpoch, 0,
+                RecordBatch.NO_TIMESTAMP, OptionalLong.of(75L));
+            stateEntry.addBatch(producerEpoch, 10, 10L, 5, RecordBatch.NO_TIMESTAMP);
+
+            stateManager.loadProducerEntry(stateEntry);
             segment.recover(stateManager, mock(LeaderEpochFileCache.class));
             assertEquals(108L, stateManager.mapEndOffset());
 

@@ -545,35 +545,39 @@ public class ShareGroupCommand {
                         .thenComparingInt(info -> info.partition))
                     .toList();
 
-                String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
-
-                if (verbose) {
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET", "LAG");
+                if (offsetsInfo.isEmpty()) {
+                    System.out.println("\nShare group '" + groupId + "' has no offset information.");
                 } else {
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET", "LAG");
-                }
+                    String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
 
-                for (SharePartitionOffsetInformation info : offsetsInfo) {
                     if (verbose) {
-                        System.out.printf(fmt,
-                            groupId,
-                            info.topic,
-                            info.partition,
-                            info.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                            info.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
-                        );
+                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET", "LAG");
                     } else {
-                        System.out.printf(fmt,
-                            groupId,
-                            info.topic,
-                            info.partition,
-                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
-                            info.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
-                        );
+                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET", "LAG");
                     }
+
+                    for (SharePartitionOffsetInformation info : offsetsInfo) {
+                        if (verbose) {
+                            System.out.printf(fmt,
+                                groupId,
+                                info.topic,
+                                info.partition,
+                                info.leaderEpoch.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                info.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            );
+                        } else {
+                            System.out.printf(fmt,
+                                groupId,
+                                info.topic,
+                                info.partition,
+                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE),
+                                info.lag.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            );
+                        }
+                    }
+                    System.out.println();
                 }
-                System.out.println();
             });
         }
 

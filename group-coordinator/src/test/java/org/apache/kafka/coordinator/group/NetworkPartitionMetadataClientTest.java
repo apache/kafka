@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
@@ -31,8 +32,12 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.ExponentialBackoffManager;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.timer.MockTimer;
+import org.apache.kafka.server.util.timer.Timer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,18 +68,27 @@ class NetworkPartitionMetadataClientTest {
     private static final MockTime MOCK_TIME = new MockTime();
     private static final MetadataCache METADATA_CACHE = mock(MetadataCache.class);
     private static final Supplier<KafkaClient> KAFKA_CLIENT_SUPPLIER = () -> mock(KafkaClient.class);
+    private static final Timer MOCK_TIMER = new MockTimer(MOCK_TIME);
     private static final String HOST = "localhost";
     private static final int PORT = 9092;
     private static final ListenerName LISTENER_NAME = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
     private static final String TOPIC = "test-topic";
     private static final int PARTITION = 0;
     private static final Node LEADER_NODE = new Node(1, HOST, PORT);
+    private static final int MAX_RETRY_ATTEMPTS = 2;
+    private static final long REQUEST_BACKOFF_MS = 1_000L;
+    private static final long REQUEST_BACKOFF_MAX_MS = 30_000L;
+    private static final int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
+    private static final double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
+
 
     private NetworkPartitionMetadataClient networkPartitionMetadataClient;
 
     private static class NetworkPartitionMetadataClientBuilder {
         private MetadataCache metadataCache = METADATA_CACHE;
         private Supplier<KafkaClient> kafkaClientSupplier = KAFKA_CLIENT_SUPPLIER;
+        private Time time = MOCK_TIME;
+        private Timer timer = MOCK_TIMER;
 
         NetworkPartitionMetadataClientBuilder withMetadataCache(MetadataCache metadataCache) {
             this.metadataCache = metadataCache;
@@ -86,12 +100,22 @@ class NetworkPartitionMetadataClientTest {
             return this;
         }
 
+        NetworkPartitionMetadataClientBuilder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        NetworkPartitionMetadataClientBuilder withTimer(Timer timer) {
+            this.timer = timer;
+            return this;
+        }
+
         static NetworkPartitionMetadataClientBuilder builder() {
             return new NetworkPartitionMetadataClientBuilder();
         }
 
         NetworkPartitionMetadataClient build() {
-            return new NetworkPartitionMetadataClient(metadataCache, kafkaClientSupplier, MOCK_TIME, LISTENER_NAME);
+            return new NetworkPartitionMetadataClient(metadataCache, kafkaClientSupplier, time, LISTENER_NAME, timer);
         }
     }
 
@@ -273,11 +297,16 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
+        Node node = mock(Node.class);
+        ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
+        NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
+            node,
+            futures,
+            builder);
         // Pass null as clientResponse.
-        networkPartitionMetadataClient.handleResponse(futures, null);
+        networkPartitionMetadataClient.handleResponse(pendingReqeust, null);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
@@ -290,14 +319,19 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         AuthenticationException authenticationException = new AuthenticationException("Test authentication exception");
         ClientResponse clientResponse = mock(ClientResponse.class);
         // Mock authentication exception in client response.
         when(clientResponse.authenticationException()).thenReturn(authenticationException);
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
-        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
+        Node node = mock(Node.class);
+        ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
+        NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
+            node,
+            futures,
+            builder);
+        networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
@@ -310,62 +344,24 @@ class NetworkPartitionMetadataClientTest {
         CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
         Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
-            partitionFuture
-        );
+            partitionFuture);
         UnsupportedVersionException unsupportedVersionException = new UnsupportedVersionException("Test unsupportedVersionException exception");
         ClientResponse clientResponse = mock(ClientResponse.class);
         when(clientResponse.authenticationException()).thenReturn(null);
         // Mock version mismatch exception in client response.
         when(clientResponse.versionMismatch()).thenReturn(unsupportedVersionException);
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
-        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
+        Node node = mock(Node.class);
+        ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
+        NetworkPartitionMetadataClient.PendingRequest pendingReqeust = new NetworkPartitionMetadataClient.PendingRequest(
+            node,
+            futures,
+            builder);
+        networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
         PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
-    }
-
-    @Test
-    public void testListLatestOffsetsDisconnected() throws ExecutionException, InterruptedException {
-        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
-            tp,
-            partitionFuture
-        );
-        ClientResponse clientResponse = mock(ClientResponse.class);
-        when(clientResponse.authenticationException()).thenReturn(null);
-        when(clientResponse.versionMismatch()).thenReturn(null);
-        // Mock disconnected in client response.
-        when(clientResponse.wasDisconnected()).thenReturn(true);
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
-        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
-        assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
-        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
-        assertEquals(-1, response.offset());
-        assertEquals(Errors.NETWORK_EXCEPTION.code(), response.error().code());
-    }
-
-    @Test
-    public void testListLatestOffsetsTimedOut() throws ExecutionException, InterruptedException {
-        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
-            tp,
-            partitionFuture
-        );
-        ClientResponse clientResponse = mock(ClientResponse.class);
-        when(clientResponse.authenticationException()).thenReturn(null);
-        when(clientResponse.versionMismatch()).thenReturn(null);
-        when(clientResponse.wasDisconnected()).thenReturn(false);
-        // Mock timed out in client response.
-        when(clientResponse.wasTimedOut()).thenReturn(true);
-        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
-        networkPartitionMetadataClient.handleResponse(futures, clientResponse);
-        assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
-        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
-        assertEquals(-1, response.offset());
-        assertEquals(Errors.REQUEST_TIMED_OUT.code(), response.error().code());
     }
 
     @Test
@@ -968,5 +964,207 @@ class NetworkPartitionMetadataClientTest {
 
         // Verify supplier was still only called once (not again)
         assertEquals(1, supplierCallCount[0]);
+    }
+
+    @Test
+    public void testRetryOnDisconnect() {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture);
+        MockTimer timer = new MockTimer(MOCK_TIME);
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(clientResponse.authenticationException()).thenReturn(null);
+        when(clientResponse.versionMismatch()).thenReturn(null);
+        when(clientResponse.wasDisconnected()).thenReturn(true);
+
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
+            .withTimer(timer)
+            .build();
+
+        ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
+            MAX_RETRY_ATTEMPTS,
+            REQUEST_BACKOFF_MS,
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
+        Node node = mock(Node.class);
+        ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
+        NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
+            node,
+            futures,
+            builder,
+            exponentialBackoffManager);
+
+        // Initially, timer should be empty
+        assertEquals(0, timer.size());
+        assertEquals(0, exponentialBackoffManager.attempts());
+
+        // Handle disconnected response
+        networkPartitionMetadataClient.handleResponse(pendingRequest, clientResponse);
+
+        // Verify that a timer entry is present for retry
+        assertEquals(1, timer.size());
+        assertEquals(1, exponentialBackoffManager.attempts());
+        // Future should not be completed yet since retry is scheduled
+        assertFalse(partitionFuture.isDone());
+    }
+
+    @Test
+    public void testRetryOnTimeout() {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture);
+        MockTimer timer = new MockTimer(MOCK_TIME);
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(clientResponse.authenticationException()).thenReturn(null);
+        when(clientResponse.versionMismatch()).thenReturn(null);
+        when(clientResponse.wasDisconnected()).thenReturn(false);
+        when(clientResponse.wasTimedOut()).thenReturn(true);
+
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
+            .withTimer(timer)
+            .build();
+
+        ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
+            MAX_RETRY_ATTEMPTS,
+            REQUEST_BACKOFF_MS,
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
+        Node node = mock(Node.class);
+        ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
+        NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
+            node,
+            futures,
+            builder,
+            exponentialBackoffManager);
+
+        // Initially, timer should be empty
+        assertEquals(0, timer.size());
+        assertEquals(0, exponentialBackoffManager.attempts());
+
+        // Handle timeout response
+        networkPartitionMetadataClient.handleResponse(pendingRequest, clientResponse);
+
+        // Verify that a timer entry is present for retry
+        assertEquals(1, timer.size());
+        assertEquals(1, exponentialBackoffManager.attempts());
+        // Future should not be completed yet since retry is scheduled
+        assertFalse(partitionFuture.isDone());
+    }
+
+    @Test
+    public void testMaxRetryAttemptsExhaustedOnDisconnect() throws ExecutionException, InterruptedException {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture);
+        MockTimer timer = new MockTimer(MOCK_TIME);
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(clientResponse.authenticationException()).thenReturn(null);
+        when(clientResponse.versionMismatch()).thenReturn(null);
+        when(clientResponse.wasDisconnected()).thenReturn(true);
+
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
+            .withTimer(timer)
+            .build();
+
+        ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
+            MAX_RETRY_ATTEMPTS,
+            REQUEST_BACKOFF_MS,
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
+        Node node = mock(Node.class);
+        ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
+
+        NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
+            node,
+            futures,
+            builder,
+            exponentialBackoffManager);
+
+        // Initially, timer should be empty
+        assertEquals(0, timer.size());
+
+        // Exhaust all retry attempts by incrementing to MAX_RETRY_ATTEMPTS (5)
+        for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
+            exponentialBackoffManager.incrementAttempt();
+        }
+
+        // Verify that attempts are exhausted
+        assertFalse(exponentialBackoffManager.canAttempt());
+
+        // Handle disconnected response with exhausted retries
+        networkPartitionMetadataClient.handleResponse(pendingRequest, clientResponse);
+
+        // Verify that no timer entry is added (max retries exhausted)
+        assertEquals(0, timer.size());
+        // Verify that future is completed with error
+        assertTrue(partitionFuture.isDone());
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        assertEquals(-1, response.offset());
+        assertEquals(Errors.NETWORK_EXCEPTION.code(), response.error().code());
+    }
+
+    @Test
+    public void testMaxRetryAttemptsExhaustedOnTimeout() throws ExecutionException, InterruptedException {
+        TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+            tp,
+            partitionFuture);
+        MockTimer timer = new MockTimer(MOCK_TIME);
+        ClientResponse clientResponse = mock(ClientResponse.class);
+        when(clientResponse.authenticationException()).thenReturn(null);
+        when(clientResponse.versionMismatch()).thenReturn(null);
+        when(clientResponse.wasDisconnected()).thenReturn(false);
+        when(clientResponse.wasTimedOut()).thenReturn(true);
+
+        networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder()
+            .withTimer(timer)
+            .build();
+
+        ExponentialBackoffManager exponentialBackoffManager = new ExponentialBackoffManager(
+            MAX_RETRY_ATTEMPTS,
+            REQUEST_BACKOFF_MS,
+            RETRY_BACKOFF_EXP_BASE,
+            REQUEST_BACKOFF_MAX_MS,
+            RETRY_BACKOFF_JITTER);
+        Node node = mock(Node.class);
+        ListOffsetsRequest.Builder builder = mock(ListOffsetsRequest.Builder.class);
+
+        NetworkPartitionMetadataClient.PendingRequest pendingRequest = new NetworkPartitionMetadataClient.PendingRequest(
+            node,
+            futures,
+            builder,
+            exponentialBackoffManager);
+
+        // Initially, timer should be empty
+        assertEquals(0, timer.size());
+
+        // Exhaust all retry attempts by incrementing to MAX_RETRY_ATTEMPTS (5)
+        for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
+            exponentialBackoffManager.incrementAttempt();
+        }
+
+        // Verify that attempts are exhausted
+        assertFalse(exponentialBackoffManager.canAttempt(), "Retry attempts should be exhausted");
+
+        // Handle timeout response with exhausted retries
+        networkPartitionMetadataClient.handleResponse(pendingRequest, clientResponse);
+
+        // Verify that no timer entry is added (max retries exhausted)
+        assertEquals(0, timer.size(), "Timer should not have an entry when max retries are exhausted");
+        // Verify that future is completed with error
+        assertTrue(partitionFuture.isDone(), "Future should be completed when max retries are exhausted");
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        assertEquals(-1, response.offset());
+        assertEquals(Errors.REQUEST_TIMED_OUT.code(), response.error().code());
     }
 }
