@@ -181,7 +181,7 @@ public class ValueTimestampHeadersDeserializerTest {
 
         final byte[] serialized = serializer.serialize(TOPIC, original);
 
-        try (Serde<String> stringSerde = Serdes.String()) {
+        try (final Serde<String> stringSerde = Serdes.String()) {
             final String value = ValueTimestampHeadersDeserializer.value(serialized, stringSerde.deserializer());
             assertNotNull(value);
             assertEquals("test-value", value);

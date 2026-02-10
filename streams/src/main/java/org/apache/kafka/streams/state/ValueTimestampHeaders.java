@@ -30,7 +30,7 @@ public final class ValueTimestampHeaders<V> {
 
     private final V value;
     private final long timestamp;
-    private Headers headers;
+    private final Headers headers;
 
     private ValueTimestampHeaders(final V value, final long timestamp, final Headers headers) {
         this.value = value;
