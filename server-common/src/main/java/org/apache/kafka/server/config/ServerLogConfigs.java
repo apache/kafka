@@ -18,7 +18,7 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
 import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;

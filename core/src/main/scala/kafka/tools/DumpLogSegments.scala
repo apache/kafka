@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter
 import org.apache.kafka.common.message.VotersRecordJsonConverter
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
 import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, GroupMetadataValueJsonConverter, CoordinatorRecordJsonConverters => GroupCoordinatorRecordJsonConverters, CoordinatorRecordType => GroupCoordinatorRecordType}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde
