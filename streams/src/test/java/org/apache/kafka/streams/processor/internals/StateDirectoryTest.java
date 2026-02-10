@@ -78,7 +78,6 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -878,62 +877,14 @@ public class StateDirectoryTest {
         assertFalse(directory.removeStartupState(taskId));
     }
 
-    private class FakeStreamThread extends Thread {
-        private final TaskId taskId;
-        private final AtomicBoolean result;
-
-        private FakeStreamThread(final TaskId taskId, final AtomicBoolean result) {
-            this.taskId = taskId;
-            this.result = result;
-        }
-
-        @Override
-        public void run() {
-            result.set(directory.removeStartupState(taskId));
-        }
-    }
-
-    @Test
-    public void shouldAssignStartupTaskToStreamThread() throws InterruptedException {
-        final TaskId taskId = new TaskId(0, 0);
-
-        initializeStartupStores(taskId, true);
-
-        // main thread owns the newly initialized tasks
-        assertThat(directory.lockOwner(taskId), is(Thread.currentThread()));
-
-        // spawn off a "fake" StreamThread, so we can verify the lock was updated to the correct thread
-        final AtomicBoolean result = new AtomicBoolean();
-        final Thread streamThread = new FakeStreamThread(taskId, result);
-        streamThread.start();
-        streamThread.join();
-        assertTrue(result.get());
-
-        // verify the owner of the task directory lock has been shifted over to our assigned StreamThread
-        assertThat(directory.lockOwner(taskId), is(instanceOf(FakeStreamThread.class)));
-    }
-
     @Test
     public void shouldUnlockStartupTasksOnClose() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupStores(taskId, true);
 
         assertEquals(Thread.currentThread(), directory.lockOwner(taskId));
-        directory.closeStartupTasks();
-        assertNull(directory.lockOwner(taskId));
-    }
-
-    @Test
-    public void shouldCloseStartupTasksOnDirectoryClose() {
-        final StateStore store = initializeStartupStores(new TaskId(0, 0), true);
-
-        assertTrue(directory.hasStartupTasks());
-        assertFalse(store.isOpen());
-
         directory.close();
-
-        assertFalse(directory.hasStartupTasks());
-        assertFalse(store.isOpen());
+        assertNull(directory.lockOwner(taskId));
     }
 
     @Test

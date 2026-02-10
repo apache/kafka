@@ -229,19 +229,6 @@ public class ProcessorStateManager implements StateManager {
         return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
     }
 
-    /**
-     * Standby tasks initialized for local state on-startup are only partially initialized, because they are not yet
-     * assigned to a StreamThread. Once assigned to a StreamThread, we complete their initialization here using the
-     * assigned StreamThread's context.
-     */
-    void assignToStreamThread(final LogContext logContext,
-                              final Collection<TopicPartition> sourcePartitions) {
-        this.sourcePartitions.clear();
-        this.log = logContext.logger(ProcessorStateManager.class);
-        this.logPrefix = logContext.logPrefix();
-        this.sourcePartitions.addAll(sourcePartitions);
-    }
-
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {

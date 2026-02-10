@@ -641,9 +641,6 @@ public class KafkaStreams implements AutoCloseable {
                 return;
             }
 
-            // all (alive) threads have received their assignment, close any remaining startup tasks, they're not needed
-            stateDirectory.closeStartupTasks();
-
             setState(State.RUNNING);
         }
 
