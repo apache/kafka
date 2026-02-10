@@ -64,7 +64,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * A component that provides a {@link #context() StateStoreContext} that can be supplied to a {@link KeyValueStore} so that
- * all entries written to the Kafka topic by the store during {@link KeyValueStore#flush()} are captured for testing purposes.
+ * all entries written to the Kafka topic by the store during {@link KeyValueStore#commit(Map)} are captured for testing purposes.
  * This class simplifies testing of various {@link KeyValueStore} instances, especially those that use
  * {@link MeteredKeyValueStore} to monitor and write its entries to the Kafka topic.
  *
@@ -93,29 +93,29 @@ import static org.mockito.Mockito.when;
  * assertNull(store.get(3));
  * store.delete(5);
  *
- * // Flush the store and verify all current entries were properly flushed ...
- * store.flush();
- * assertEquals("zero", driver.flushedEntryStored(0));
- * assertEquals("one", driver.flushedEntryStored(1));
- * assertEquals("two", driver.flushedEntryStored(2));
- * assertEquals("four", driver.flushedEntryStored(4));
- * assertNull(driver.flushedEntryStored(5));
+ * // Commit the store and verify all current entries were properly committed ...
+ * store.commit(Map.of());
+ * assertEquals("zero", driver.committedEntryStored(0));
+ * assertEquals("one", driver.committedEntryStored(1));
+ * assertEquals("two", driver.committedEntryStored(2));
+ * assertEquals("four", driver.committedEntryStored(4));
+ * assertNull(driver.committedEntryStored(5));
  *
- * assertEquals(false, driver.flushedEntryRemoved(0));
- * assertEquals(false, driver.flushedEntryRemoved(1));
- * assertEquals(false, driver.flushedEntryRemoved(2));
- * assertEquals(false, driver.flushedEntryRemoved(4));
- * assertEquals(true, driver.flushedEntryRemoved(5));
+ * assertEquals(false, driver.committedEntryRemoved(0));
+ * assertEquals(false, driver.committedEntryRemoved(1));
+ * assertEquals(false, driver.committedEntryRemoved(2));
+ * assertEquals(false, driver.committedEntryRemoved(4));
+ * assertEquals(true, driver.committedEntryRemoved(5));
  * </pre>
  *
  *
  * <h2>Restoring a store</h2>
  * This component can be used to test whether a {@link KeyValueStore} implementation properly
  * {@link StateStoreContext#register(StateStore, StateRestoreCallback) registers itself} with the {@link StateStoreContext}, so that
- * the persisted contents of a store are properly restored from the flushed entries when the store instance is started.
+ * the persisted contents of a store are properly restored from the committed entries when the store instance is started.
  * <p>
  * To do this, create an instance of this driver component, {@link #addEntryToRestoreLog(Object, Object) add entries} that will be
- * passed to the store upon creation (simulating the entries that were previously flushed to the topic), and then create the store
+ * passed to the store upon creation (simulating the entries that were previously committed to the topic), and then create the store
  * using this driver's {@link #context() ProcessorContext}:
  *
  * <pre>
@@ -189,8 +189,8 @@ public class KeyValueStoreTestDriver<K, V> {
         return new KeyValueStoreTestDriver<>(serdes);
     }
 
-    private final Map<K, V> flushedEntries = new HashMap<>();
-    private final Set<K> flushedRemovals = new HashSet<>();
+    private final Map<K, V> committedEntries = new HashMap<>();
+    private final Set<K> committedRemovals = new HashSet<>();
     private final List<KeyValue<byte[], byte[]>> restorableEntries = new LinkedList<>();
 
     private final InternalMockProcessorContext<?, ?> context;
@@ -243,7 +243,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 final K keyTest = serdes.keyFrom(keyBytes);
                 final V valueTest = serdes.valueFrom(valueBytes);
 
-                recordFlushed(keyTest, valueTest);
+                recordCommitted(keyTest, valueTest);
             }
 
             @Override
@@ -286,15 +286,15 @@ public class KeyValueStoreTestDriver<K, V> {
         };
     }
 
-    private void recordFlushed(final K key, final V value) {
+    private void recordCommitted(final K key, final V value) {
         if (value == null) {
             // This is a removal ...
-            flushedRemovals.add(key);
-            flushedEntries.remove(key);
+            committedRemovals.add(key);
+            committedEntries.remove(key);
         } else {
             // This is a normal add
-            flushedEntries.put(key, value);
-            flushedRemovals.remove(key);
+            committedEntries.put(key, value);
+            committedRemovals.remove(key);
         }
     }
 
@@ -343,8 +343,8 @@ public class KeyValueStoreTestDriver<K, V> {
 
     /**
      * Get the context that should be supplied to a {@link KeyValueStore}'s constructor. This context records any messages
-     * written by the store to the Kafka topic, making them available via the {@link #flushedEntryStored(Object)} and
-     * {@link #flushedEntryRemoved(Object)} methods.
+     * written by the store to the Kafka topic, making them available via the {@link #committedEntryStored(Object)} and
+     * {@link #committedEntryRemoved(Object)} methods.
      * <p>
      * If the {@link KeyValueStore}'s are to be restored upon its startup, be sure to {@link #addEntryToRestoreLog(Object, Object)
      * add the restore entries} before creating the store with the {@link StateStoreContext} returned by this method.
@@ -395,47 +395,47 @@ public class KeyValueStoreTestDriver<K, V> {
     }
 
     /**
-     * Retrieve the value that the store {@link KeyValueStore#flush() flushed} with the given key.
+     * Retrieve the value that the store {@link KeyValueStore#commit(Map) committed} with the given key.
      *
      * @param key the key
-     * @return the value that was flushed with the key, or {@code null} if no such key was flushed or if the entry with this
-     * key was removed upon flush
+     * @return the value that was committed with the key, or {@code null} if no such key was committed or if the entry with this
+     * key was removed upon commit
      */
-    public V flushedEntryStored(final K key) {
-        return flushedEntries.get(key);
+    public V committedEntryStored(final K key) {
+        return committedEntries.get(key);
     }
 
     /**
-     * Determine whether the store {@link KeyValueStore#flush() flushed} the removal of the given key.
+     * Determine whether the store {@link KeyValueStore#commit(Map) committed} the removal of the given key.
      *
      * @param key the key
-     * @return {@code true} if the entry with the given key was removed when flushed, or {@code false} if the entry was not
-     * removed when last flushed
+     * @return {@code true} if the entry with the given key was removed when committed, or {@code false} if the entry was not
+     * removed when last committed
      */
-    public boolean flushedEntryRemoved(final K key) {
-        return flushedRemovals.contains(key);
+    public boolean committedEntryRemoved(final K key) {
+        return committedRemovals.contains(key);
     }
 
     /**
      * Return number of removed entry
      */
-    public int numFlushedEntryStored() {
-        return flushedEntries.size();
+    public int numCommittedEntryStored() {
+        return committedEntries.size();
     }
 
     /**
      * Return number of removed entry
      */
-    public int numFlushedEntryRemoved() {
-        return flushedRemovals.size();
+    public int numCommittedEntryRemoved() {
+        return committedRemovals.size();
     }
 
     /**
-     * Remove all {@link #flushedEntryStored(Object) flushed entries}, {@link #flushedEntryRemoved(Object) flushed removals},
+     * Remove all {@link #committedEntryStored(Object) committed entries}, {@link #committedEntryRemoved(Object) committed removals},
      */
     public void clear() {
         restorableEntries.clear();
-        flushedEntries.clear();
-        flushedRemovals.clear();
+        committedEntries.clear();
+        committedRemovals.clear();
     }
 }

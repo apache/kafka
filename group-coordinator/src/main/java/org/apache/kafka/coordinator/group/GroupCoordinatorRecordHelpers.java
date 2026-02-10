@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;

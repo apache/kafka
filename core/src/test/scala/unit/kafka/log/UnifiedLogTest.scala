@@ -26,9 +26,10 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.record.MemoryRecords.RecordFilter
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal.FileRecords.TimestampAndOffset
+import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig

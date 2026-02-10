@@ -105,12 +105,12 @@ public class FetchSessionCacheShard {
         this.logger = new LogContext("[Shard " + shardNum + "] ").logger(FetchSessionCacheShard.class);
     }
 
-    public int sessionIdRange() {
+    int sessionIdRange() {
         return sessionIdRange;
     }
 
     // Only for testing
-    public Meter evictionsMeter() {
+    Meter evictionsMeter() {
         return evictionsMeter;
     }
 
@@ -120,21 +120,21 @@ public class FetchSessionCacheShard {
      * @param sessionId  The session ID.
      * @return           The session, or None if no such session was found.
      */
-    public synchronized Optional<FetchSession> get(int sessionId) {
+    synchronized Optional<FetchSession> get(int sessionId) {
         return Optional.ofNullable(sessions.get(sessionId));
     }
 
     /**
      * Get the number of entries currently in the fetch session cache.
      */
-    public synchronized int size() {
+    synchronized int size() {
         return sessions.size();
     }
 
     /**
      * Get the total number of cached partitions.
      */
-    public synchronized long totalPartitions() {
+    synchronized long totalPartitions() {
         return numPartitions;
     }
 
@@ -143,7 +143,7 @@ public class FetchSessionCacheShard {
      *
      * @return   The new session ID.
      */
-    public synchronized int newSessionId() {
+    synchronized int newSessionId() {
         int id;
         do {
             id = ThreadLocalRandom.current().nextInt(Math.max(1, shardNum * sessionIdRange), (shardNum + 1) * sessionIdRange);
@@ -163,11 +163,11 @@ public class FetchSessionCacheShard {
      *                           topic name to topic ID for the topics.
      * @return                   If we created a session, the ID; INVALID_SESSION_ID otherwise.
      */
-    public synchronized int maybeCreateSession(long now,
-                                               boolean privileged,
-                                               int size,
-                                               boolean usesTopicIds,
-                                               Supplier<ImplicitLinkedHashCollection<FetchSession.CachedPartition>> createPartitions) {
+    synchronized int maybeCreateSession(long now,
+                                        boolean privileged,
+                                        int size,
+                                        boolean usesTopicIds,
+                                        Supplier<ImplicitLinkedHashCollection<FetchSession.CachedPartition>> createPartitions) {
         // If there is room, create a new session entry.
         if ((sessions.size() < maxEntries) || tryEvict(privileged, new EvictableKey(privileged, size, 0), now)) {
             ImplicitLinkedHashCollection<FetchSession.CachedPartition> partitionMap = createPartitions.get();
@@ -233,7 +233,7 @@ public class FetchSessionCacheShard {
         }
     }
 
-    public synchronized Optional<FetchSession> remove(int sessionId) {
+    synchronized Optional<FetchSession> remove(int sessionId) {
         Optional<FetchSession> session = get(sessionId);
         return session.isPresent() ? remove(session.get()) : Optional.empty();
     }
@@ -245,7 +245,7 @@ public class FetchSessionCacheShard {
      *
      * @return         The removed session, or None if there was no such session.
      */
-    public synchronized Optional<FetchSession> remove(FetchSession session) {
+    synchronized Optional<FetchSession> remove(FetchSession session) {
         EvictableKey evictableKey;
         synchronized (session) {
             lastUsed.remove(session.lastUsedKey());
@@ -268,7 +268,7 @@ public class FetchSessionCacheShard {
      * @param session  The session
      * @param now      The current time in milliseconds
      */
-    public synchronized void touch(FetchSession session, long now) {
+    synchronized void touch(FetchSession session, long now) {
         synchronized (session) {
             // Update the lastUsed map.
             lastUsed.remove(session.lastUsedKey());
