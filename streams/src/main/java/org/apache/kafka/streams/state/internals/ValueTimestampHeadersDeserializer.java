@@ -83,7 +83,7 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp);
         final byte[] rawValue = readBytes(buffer, buffer.remaining());
-        final V value = valueDeserializer.deserialize(topic, rawValue);
+        final V value = valueDeserializer.deserialize(topic, headers, rawValue);
 
         return ValueTimestampHeaders.make(value, timestamp, headers);
     }
