@@ -24,8 +24,9 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * Class used to hold dynamic configs. These are configs which have no physical manifestation in the server.properties
- * and can only be set dynamically.
+ * Holds dynamic configs, including both dynamic-only configs which have no physical manifestation in server.properties and
+ * can only be set dynamically (i.e., {@link QuotaConfig#brokerQuotaConfigs()}), and dual-mode configs that can be set
+ * statically or dynamically.
  */
 public class DynamicConfig {
 
@@ -33,7 +34,7 @@ public class DynamicConfig {
 
         private static final ConfigDef BROKER_CONFIGS;
         static {
-            ConfigDef configs = new ConfigDef();
+            ConfigDef configs = QuotaConfig.brokerQuotaConfigs();
             // Filter and define all dynamic configurations
             AbstractKafkaConfig.CONFIG_DEF.configKeys().forEach((name, value) -> {
                 if (DynamicBrokerConfig.ALL_DYNAMIC_CONFIGS.contains(name)) {

@@ -56,7 +56,9 @@ import scala.jdk.OptionConverters.RichOptional
 object KafkaConfig {
 
   def main(args: Array[String]): Unit = {
-    System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
+    val combined = new ConfigDef(configDef)
+    QuotaConfig.brokerQuotaConfigs().configKeys().forEach((_, v) => combined.define(v))
+    System.out.println(combined.toHtml(4, (config: String) => "brokerconfigs_" + config,
       JDynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
