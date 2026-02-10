@@ -202,6 +202,7 @@ class TransactionLogTest {
             new Field("producer_epoch", Type.INT16, ""),
             new Field("transaction_timeout_ms", Type.INT32, ""),
             new Field("transaction_status", Type.INT8, ""),
+            new Field("transaction_partitions", CompactArrayOf.nullable(futurePartitionsSchema), ""),
             new Field("transaction_last_update_timestamp_ms", Type.INT64, ""),
             new Field("transaction_start_timestamp_ms", Type.INT64, ""),
             TaggedFieldsSection.of(

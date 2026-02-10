@@ -17,7 +17,6 @@
 package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.protocol.types.nullable.NullableSchema;
 import org.apache.kafka.common.record.internal.BaseRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
@@ -967,8 +966,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + COMPACT_BYTES + ". " +
-                    "For a detailed description of records see " +
-                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -1023,8 +1022,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + NULLABLE_BYTES + ". " +
-                    "For a detailed description of records see " +
-                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -1080,8 +1079,8 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a sequence of Kafka records as " + COMPACT_NULLABLE_BYTES + ". " +
-                    "For a detailed description of records see " +
-                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -1162,7 +1161,8 @@ public abstract class Type {
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
             RECORDS, COMPACT_RECORDS, NULLABLE_RECORDS, COMPACT_NULLABLE_RECORDS,
-            new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING), new Schema(), new NullableSchema(new Schema())};
+            new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING), ArrayOf.nullable(STRING), CompactArrayOf.nullable(STRING),
+            new Schema(), new NullableSchema(new Schema())};
 
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");

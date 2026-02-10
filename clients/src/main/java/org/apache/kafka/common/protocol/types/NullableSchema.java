@@ -14,11 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.protocol.types.nullable;
-
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
+package org.apache.kafka.common.protocol.types;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
