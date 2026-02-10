@@ -544,9 +544,10 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @param record The record to append
      */
     public void appendControlRecordWithOffset(long offset, SimpleRecord record) {
-        ControlRecordType type = ControlRecordType.parse(record.key());
+        short typeId = ControlRecordType.parseTypeId(record.key());
+        ControlRecordType type = ControlRecordType.fromTypeId(typeId);
         if (type == ControlRecordType.UNKNOWN)
-            throw new IllegalArgumentException("Cannot append record with unknown control record type");
+            throw new IllegalArgumentException("Cannot append record with unknown control record type " + typeId);
 
         appendWithOffset(offset, true, record.timestamp(),
             record.key(), record.value(), record.headers());

@@ -334,7 +334,8 @@ object DumpLogSegments {
   }
 
   private def printControlRecord(record: Record): Unit = {
-    ControlRecordType.parse(record.key) match {
+    val controlTypeId = ControlRecordType.parseTypeId(record.key)
+    ControlRecordType.fromTypeId(controlTypeId) match {
       case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
         val endTxnMarker = EndTransactionMarker.deserialize(record)
         print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
@@ -354,7 +355,7 @@ object DumpLogSegments {
         val voters = ControlRecordUtils.deserializeVotersRecord(record)
         print(s" KRaftVoters ${VotersRecordJsonConverter.write(voters, voters.version())}")
       case controlType =>
-        print(s" controlType: $controlType")
+        print(s" controlType: $controlType($controlTypeId)")
     }
   }
 

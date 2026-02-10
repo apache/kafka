@@ -81,7 +81,7 @@ public enum ControlRecordType {
         return buffer.remaining();
     }
 
-    private static short parseTypeId(ByteBuffer key) {
+    public static short parseTypeId(ByteBuffer key) {
         // We should duplicate the original buffer since it will be read again in some cases, for example,
         // read by KafkaRaftClient and RaftClient.Listener
         ByteBuffer buffer = key.duplicate();
