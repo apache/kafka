@@ -113,17 +113,6 @@ public class QuotaConfig {
             .define(QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG, INT, QuotaConfig.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT, atLeast(1), LOW, QuotaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_DOC)
             .define(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, CLASS, null, LOW, QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_DOC);
 
-    public static final ConfigDef BROKER_QUOTA_CONFIG_DEF = new ConfigDef()
-            .define(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
-                    QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
-                    ConfigDef.Importance.MEDIUM, QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_DOC)
-            .define(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
-                    QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
-                    ConfigDef.Importance.MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
-            .define(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ConfigDef.Type.LONG,
-                    QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
-                    ConfigDef.Importance.MEDIUM, QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
-
     private static final Set<String> USER_AND_CLIENT_QUOTA_NAMES = Set.of(
             PRODUCER_BYTE_RATE_OVERRIDE_CONFIG,
             CONSUMER_BYTE_RATE_OVERRIDE_CONFIG,
@@ -224,7 +213,17 @@ public class QuotaConfig {
     }
 
     public static ConfigDef brokerQuotaConfigs() {
-        return BROKER_QUOTA_CONFIG_DEF;
+        return new ConfigDef()
+                // Round minimum value down, to make it easier for users.
+                .define(QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfig.LEADER_REPLICATION_THROTTLED_RATE_DOC)
+                .define(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
+                .define(QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfig.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
     }
 
     public static final Set<String> BROKER_QUOTA_CONFIGS = Set.copyOf(brokerQuotaConfigs().names());

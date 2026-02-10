@@ -282,6 +282,6 @@ public class DynamicBrokerConfig {
     }
 
     public static class DynamicQuotaConfig {
-        public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIG_DEF.names();
+        public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIGS;
     }
 }
