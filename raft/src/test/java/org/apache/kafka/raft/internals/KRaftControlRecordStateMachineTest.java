@@ -21,7 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.ExternalKRaftMetrics;

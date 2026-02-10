@@ -2038,6 +2038,7 @@ project(':clients') {
     include "**/org/apache/kafka/common/metrics/*"
     include "**/org/apache/kafka/common/metrics/stats/*"
     include "**/org/apache/kafka/common/quota/*"
+    include "**/org/apache/kafka/common/record/*"
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/security/auth/*"
     include "**/org/apache/kafka/common/security/oauthbearer/*"
