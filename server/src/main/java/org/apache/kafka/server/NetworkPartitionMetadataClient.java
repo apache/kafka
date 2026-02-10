@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.InterBrokerSendThread;
+import org.apache.kafka.server.util.PartitionMetadataClient;
 import org.apache.kafka.server.util.RequestAndCompletionHandler;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -54,7 +55,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
-public class NetworkPartitionMetadataClient implements org.apache.kafka.server.util.PartitionMetadataClient {
+public class NetworkPartitionMetadataClient implements PartitionMetadataClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkPartitionMetadataClient.class);
 

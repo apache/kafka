@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.ExponentialBackoffManager;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.PartitionMetadataClient;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.Timer;
 
@@ -177,14 +178,14 @@ class NetworkPartitionMetadataClientTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
         assertEquals(1, futures.size());
         assertTrue(futures.containsKey(tp));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
+        PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
         assertTrue(futures.get(tp).isDone() && !futures.get(tp).isCompletedExceptionally());
         assertNotNull(response);
         assertEquals(Errors.NONE.code(), response.error().code());
@@ -207,14 +208,14 @@ class NetworkPartitionMetadataClientTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
         assertEquals(1, futures.size());
         assertTrue(futures.containsKey(tp));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
+        PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
         assertTrue(futures.get(tp).isDone() && !futures.get(tp).isCompletedExceptionally());
         assertNotNull(response);
         assertEquals(Errors.LEADER_NOT_AVAILABLE.code(), response.error().code());
@@ -236,14 +237,14 @@ class NetworkPartitionMetadataClientTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
         assertEquals(1, futures.size());
         assertTrue(futures.containsKey(tp));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
+        PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
         assertTrue(futures.get(tp).isDone() && !futures.get(tp).isCompletedExceptionally());
         assertNotNull(response);
         assertEquals(Errors.LEADER_NOT_AVAILABLE.code(), response.error().code());
@@ -278,14 +279,14 @@ class NetworkPartitionMetadataClientTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
         assertEquals(1, futures.size());
         assertTrue(futures.containsKey(tp));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
+        PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
         assertTrue(futures.get(tp).isDone() && !futures.get(tp).isCompletedExceptionally());
         assertNotNull(response);
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
@@ -294,8 +295,8 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testListLatestOffsetsNullResponse() throws ExecutionException, InterruptedException {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
             partitionFuture);
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
@@ -308,7 +309,7 @@ class NetworkPartitionMetadataClientTest {
         // Pass null as clientResponse.
         networkPartitionMetadataClient.handleResponse(pendingReqeust, null);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
     }
@@ -316,8 +317,8 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testListLatestOffsetsAuthenticationError() throws ExecutionException, InterruptedException {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
             partitionFuture);
         AuthenticationException authenticationException = new AuthenticationException("Test authentication exception");
@@ -333,7 +334,7 @@ class NetworkPartitionMetadataClientTest {
             builder);
         networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
     }
@@ -341,8 +342,8 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testListLatestOffsetsVersionMismatch() throws ExecutionException, InterruptedException {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
             partitionFuture);
         UnsupportedVersionException unsupportedVersionException = new UnsupportedVersionException("Test unsupportedVersionException exception");
@@ -359,7 +360,7 @@ class NetworkPartitionMetadataClientTest {
             builder);
         networkPartitionMetadataClient.handleResponse(pendingReqeust, clientResponse);
         assertTrue(partitionFuture.isDone() && !partitionFuture.isCompletedExceptionally());
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
         assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.error().code());
     }
@@ -418,7 +419,7 @@ class NetworkPartitionMetadataClientTest {
         partitions.add(tp1);
         partitions.add(tp2);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
@@ -426,13 +427,13 @@ class NetworkPartitionMetadataClientTest {
         assertTrue(futures.containsKey(tp1));
         assertTrue(futures.containsKey(tp2));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response1 = futures.get(tp1).get();
+        PartitionMetadataClient.OffsetResponse response1 = futures.get(tp1).get();
         assertTrue(futures.get(tp1).isDone() && !futures.get(tp1).isCompletedExceptionally());
         assertNotNull(response1);
         assertEquals(Errors.NONE.code(), response1.error().code());
         assertEquals(expectedOffset1, response1.offset());
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response2 = futures.get(tp2).get();
+        PartitionMetadataClient.OffsetResponse response2 = futures.get(tp2).get();
         assertTrue(futures.get(tp2).isDone() && !futures.get(tp2).isCompletedExceptionally());
         assertNotNull(response2);
         assertEquals(Errors.NONE.code(), response2.error().code());
@@ -516,7 +517,7 @@ class NetworkPartitionMetadataClientTest {
         partitions.add(tp1);
         partitions.add(tp2);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
@@ -524,13 +525,13 @@ class NetworkPartitionMetadataClientTest {
         assertTrue(futures.containsKey(tp1));
         assertTrue(futures.containsKey(tp2));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response1 = futures.get(tp1).get();
+        PartitionMetadataClient.OffsetResponse response1 = futures.get(tp1).get();
         assertTrue(futures.get(tp1).isDone() && !futures.get(tp1).isCompletedExceptionally());
         assertNotNull(response1);
         assertEquals(Errors.NONE.code(), response1.error().code());
         assertEquals(expectedOffset1, response1.offset());
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response2 = futures.get(tp2).get();
+        PartitionMetadataClient.OffsetResponse response2 = futures.get(tp2).get();
         assertTrue(futures.get(tp2).isDone() && !futures.get(tp2).isCompletedExceptionally());
         assertNotNull(response2);
         assertEquals(Errors.NONE.code(), response2.error().code());
@@ -595,7 +596,7 @@ class NetworkPartitionMetadataClientTest {
         partitions.add(tp1);
         partitions.add(tp2);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
@@ -603,13 +604,13 @@ class NetworkPartitionMetadataClientTest {
         assertTrue(futures.containsKey(tp1));
         assertTrue(futures.containsKey(tp2));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response1 = futures.get(tp1).get();
+        PartitionMetadataClient.OffsetResponse response1 = futures.get(tp1).get();
         assertTrue(futures.get(tp1).isDone() && !futures.get(tp1).isCompletedExceptionally());
         assertNotNull(response1);
         assertEquals(Errors.NONE.code(), response1.error().code());
         assertEquals(expectedOffset1, response1.offset());
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response2 = futures.get(tp2).get();
+        PartitionMetadataClient.OffsetResponse response2 = futures.get(tp2).get();
         assertTrue(futures.get(tp2).isDone() && !futures.get(tp2).isCompletedExceptionally());
         assertNotNull(response2);
         assertEquals(Errors.NONE.code(), response2.error().code());
@@ -620,7 +621,7 @@ class NetworkPartitionMetadataClientTest {
     public void testListLatestOffsetsNullPartitions() {
         networkPartitionMetadataClient = NetworkPartitionMetadataClientBuilder.builder().build();
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(null);
 
         assertNotNull(futures);
@@ -633,7 +634,7 @@ class NetworkPartitionMetadataClientTest {
 
         Set<TopicPartition> partitions = new HashSet<>();
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
@@ -680,14 +681,14 @@ class NetworkPartitionMetadataClientTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
         assertEquals(1, futures.size());
         assertTrue(futures.containsKey(tp));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
+        PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
         assertTrue(futures.get(tp).isDone() && !futures.get(tp).isCompletedExceptionally());
         assertNotNull(response);
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), response.error().code());
@@ -729,14 +730,14 @@ class NetworkPartitionMetadataClientTest {
         Set<TopicPartition> partitions = new HashSet<>();
         partitions.add(tp);
 
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures =
             networkPartitionMetadataClient.listLatestOffsets(partitions);
 
         assertNotNull(futures);
         assertEquals(1, futures.size());
         assertTrue(futures.containsKey(tp));
 
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
+        PartitionMetadataClient.OffsetResponse response = futures.get(tp).get();
         assertTrue(futures.get(tp).isDone() && !futures.get(tp).isCompletedExceptionally());
         assertNotNull(response);
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), response.error().code());
@@ -969,8 +970,8 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testRetryOnDisconnect() {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
             partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
@@ -1014,8 +1015,8 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testRetryOnTimeout() {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
             partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
@@ -1060,8 +1061,8 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testMaxRetryAttemptsExhaustedOnDisconnect() throws ExecutionException, InterruptedException {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
             partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
@@ -1107,7 +1108,7 @@ class NetworkPartitionMetadataClientTest {
         assertEquals(0, timer.size());
         // Verify that future is completed with error
         assertTrue(partitionFuture.isDone());
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
         assertEquals(Errors.NETWORK_EXCEPTION.code(), response.error().code());
     }
@@ -1115,8 +1116,8 @@ class NetworkPartitionMetadataClientTest {
     @Test
     public void testMaxRetryAttemptsExhaustedOnTimeout() throws ExecutionException, InterruptedException {
         TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
-        CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> futures = Map.of(
+        CompletableFuture<PartitionMetadataClient.OffsetResponse> partitionFuture = new CompletableFuture<>();
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> futures = Map.of(
             tp,
             partitionFuture);
         MockTimer timer = new MockTimer(MOCK_TIME);
@@ -1163,7 +1164,7 @@ class NetworkPartitionMetadataClientTest {
         assertEquals(0, timer.size(), "Timer should not have an entry when max retries are exhausted");
         // Verify that future is completed with error
         assertTrue(partitionFuture.isDone(), "Future should be completed when max retries are exhausted");
-        org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
+        PartitionMetadataClient.OffsetResponse response = partitionFuture.get();
         assertEquals(-1, response.offset());
         assertEquals(Errors.REQUEST_TIMED_OUT.code(), response.error().code());
     }

@@ -119,6 +119,7 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParamet
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.PartitionMetadataClient;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
@@ -171,7 +172,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private GroupConfigManager groupConfigManager;
         private Persister persister;
         private Optional<Plugin<Authorizer>> authorizerPlugin;
-        private org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient;
+        private PartitionMetadataClient partitionMetadataClient;
 
         public Builder(
             int nodeId,
@@ -226,7 +227,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
-        public Builder withPartitionMetadataClient(org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient) {
+        public Builder withPartitionMetadataClient(PartitionMetadataClient partitionMetadataClient) {
             this.partitionMetadataClient = partitionMetadataClient;
             return this;
         }
@@ -340,7 +341,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * The client used for getting partition end offsets
      */
-    private final org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient;
+    private final PartitionMetadataClient partitionMetadataClient;
 
     /**
      * The number of partitions of the __consumer_offsets topics. This is provided
@@ -372,7 +373,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         GroupConfigManager groupConfigManager,
         Persister persister,
         Timer timer,
-        org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient
+        PartitionMetadataClient partitionMetadataClient
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -1822,7 +1823,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         // Fetch latest offsets for all partitions that need lag computation.
-        Map<TopicPartition, CompletableFuture<org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse>> partitionLatestOffsets =
+        Map<TopicPartition, CompletableFuture<PartitionMetadataClient.OffsetResponse>> partitionLatestOffsets =
             partitionsToComputeLag.isEmpty() ? Map.of() : partitionMetadataClient.listLatestOffsets(partitionsToComputeLag);
 
         // Final response object to be built. It will include lag information computed from partitionMetadataClient.
@@ -1869,7 +1870,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         } else {
                             // This code is reached when allOf above is complete, which happens when all the
                             // individual futures are complete. Thus, the call to join() here is safe.
-                            org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse offsetResponse = partitionLatestOffsets.get(tp).join();
+                            PartitionMetadataClient.OffsetResponse offsetResponse = partitionLatestOffsets.get(tp).join();
                             if (offsetResponse.error().code() != Errors.NONE.code()) {
                                 // If there was an error during fetching latest offset for a partition, return the error in the response for that partition.
                                 log.error("Partition end offset fetch failed for topicPartition {}", tp);

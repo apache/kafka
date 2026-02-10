@@ -114,6 +114,7 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParamet
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.PartitionMetadataClient;
 import org.apache.kafka.server.util.timer.MockTimer;
 
 import org.junit.jupiter.api.Test;
@@ -3648,7 +3649,7 @@ public class GroupCoordinatorServiceTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
 
-        org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient = mock(org.apache.kafka.server.util.PartitionMetadataClient.class);
+        PartitionMetadataClient partitionMetadataClient = mock(PartitionMetadataClient.class);
 
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3661,7 +3662,7 @@ public class GroupCoordinatorServiceTest {
         Set<TopicPartition> partitionsToComputeLag = new HashSet<>(Set.of(new TopicPartition(TOPIC_NAME, 1)));
         when(partitionMetadataClient.listLatestOffsets(partitionsToComputeLag))
             .thenReturn(Map.of(new TopicPartition(TOPIC_NAME, 1),
-                CompletableFuture.completedFuture(new org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse(41L, Errors.NONE))));
+                CompletableFuture.completedFuture(new PartitionMetadataClient.OffsetResponse(41L, Errors.NONE))));
 
         int partition = 1;
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
@@ -3903,7 +3904,7 @@ public class GroupCoordinatorServiceTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
 
-        org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient = mock(org.apache.kafka.server.util.PartitionMetadataClient.class);
+        PartitionMetadataClient partitionMetadataClient = mock(PartitionMetadataClient.class);
 
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3965,7 +3966,7 @@ public class GroupCoordinatorServiceTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
 
-        org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient = mock(org.apache.kafka.server.util.PartitionMetadataClient.class);
+        PartitionMetadataClient partitionMetadataClient = mock(PartitionMetadataClient.class);
 
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -3978,7 +3979,7 @@ public class GroupCoordinatorServiceTest {
         Set<TopicPartition> partitionsToComputeLag = new HashSet<>(Set.of(new TopicPartition(TOPIC_NAME, 1)));
         when(partitionMetadataClient.listLatestOffsets(partitionsToComputeLag))
             .thenReturn(Map.of(new TopicPartition(TOPIC_NAME, 1),
-                CompletableFuture.completedFuture(new org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse(-1, Errors.NETWORK_EXCEPTION))));
+                CompletableFuture.completedFuture(new PartitionMetadataClient.OffsetResponse(-1, Errors.NETWORK_EXCEPTION))));
 
         int partition = 1;
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
@@ -4038,7 +4039,7 @@ public class GroupCoordinatorServiceTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
 
-        org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient = mock(org.apache.kafka.server.util.PartitionMetadataClient.class);
+        PartitionMetadataClient partitionMetadataClient = mock(PartitionMetadataClient.class);
 
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -4165,7 +4166,7 @@ public class GroupCoordinatorServiceTest {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
 
-        org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient = mock(org.apache.kafka.server.util.PartitionMetadataClient.class);
+        PartitionMetadataClient partitionMetadataClient = mock(PartitionMetadataClient.class);
 
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
             .setConfig(createConfig())
@@ -4177,7 +4178,7 @@ public class GroupCoordinatorServiceTest {
         Set<TopicPartition> partitionsToComputeLag = new HashSet<>(Set.of(new TopicPartition(TOPIC_NAME, 1)));
         when(partitionMetadataClient.listLatestOffsets(partitionsToComputeLag))
             .thenReturn(Map.of(new TopicPartition(TOPIC_NAME, 1),
-                CompletableFuture.completedFuture(new org.apache.kafka.server.util.PartitionMetadataClient.OffsetResponse(41L, Errors.NONE))));
+                CompletableFuture.completedFuture(new PartitionMetadataClient.OffsetResponse(41L, Errors.NONE))));
 
         MetadataImage image = new MetadataImageBuilder()
             .addTopic(TOPIC_ID, TOPIC_NAME, 3)
@@ -5893,7 +5894,7 @@ public class GroupCoordinatorServiceTest {
         private GroupCoordinatorMetrics metrics = new GroupCoordinatorMetrics();
         private Persister persister = new NoOpStatePersister();
         private MetadataImage metadataImage = null;
-        private org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient = null;
+        private PartitionMetadataClient partitionMetadataClient = null;
 
         GroupCoordinatorService build() {
             return build(false);
@@ -5945,7 +5946,7 @@ public class GroupCoordinatorServiceTest {
             return this;
         }
 
-        public GroupCoordinatorServiceBuilder setPartitionMetadataClient(org.apache.kafka.server.util.PartitionMetadataClient partitionMetadataClient) {
+        public GroupCoordinatorServiceBuilder setPartitionMetadataClient(PartitionMetadataClient partitionMetadataClient) {
             this.partitionMetadataClient = partitionMetadataClient;
             return this;
         }
