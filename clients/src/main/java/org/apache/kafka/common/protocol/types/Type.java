@@ -17,8 +17,6 @@
 package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.protocol.types.nullable.CompactNullableArrayOf;
-import org.apache.kafka.common.protocol.types.nullable.NullableArrayOf;
 import org.apache.kafka.common.protocol.types.nullable.NullableSchema;
 import org.apache.kafka.common.record.internal.BaseRecords;
 import org.apache.kafka.common.record.internal.MemoryRecords;
@@ -458,14 +456,6 @@ public abstract class Type {
         }
     };
 
-    public String stringRead(ByteBuffer buffer, short length) {
-        if (length > buffer.remaining())
-            throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-        String result = Utils.utf8(buffer, length);
-        buffer.position(buffer.position() + length);
-        return result;
-    }
-
     public static final DocumentedType STRING = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -510,7 +500,7 @@ public abstract class Type {
         }
     };
 
-    public String compactStringRead(ByteBuffer buffer, int length) {
+    public static String stringRead(ByteBuffer buffer, int length) {
         if (length > Short.MAX_VALUE)
             throw new SchemaException("String length " + length + " is larger than the maximum string length.");
         if (length > buffer.remaining())
@@ -535,7 +525,7 @@ public abstract class Type {
             int length = ByteUtils.readUnsignedVarint(buffer) - 1;
             if (length < 0)
                 throw new SchemaException("String length " + length + " cannot be negative");
-            return compactStringRead(buffer, length);
+            return stringRead(buffer, length);
         }
 
         @Override
@@ -641,7 +631,7 @@ public abstract class Type {
             int length = ByteUtils.readUnsignedVarint(buffer) - 1;
             if (length < 0)
                 return null;
-            return compactStringRead(buffer, length);
+            return stringRead(buffer, length);
         }
 
         @Override
@@ -1172,8 +1162,7 @@ public abstract class Type {
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
             RECORDS, COMPACT_RECORDS, NULLABLE_RECORDS, COMPACT_NULLABLE_RECORDS,
-            new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING), new NullableArrayOf(STRING), new CompactNullableArrayOf(STRING),
-            new Schema(), new NullableSchema(new Schema())};
+            new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING), new Schema(), new NullableSchema(new Schema())};
 
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");

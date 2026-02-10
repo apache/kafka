@@ -301,18 +301,18 @@ final class SchemaGenerator {
             }
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {
-                headerGenerator.addImport(nullable ? MessageGenerator.COMPACT_NULLABLE_ARRAYOF_CLASS : MessageGenerator.COMPACT_ARRAYOF_CLASS);
+                headerGenerator.addImport(MessageGenerator.COMPACT_ARRAYOF_CLASS);
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
-                String prefix = nullable ? "new CompactNullableArrayOf" : "new CompactArrayOf";
+                String prefix = nullable ? "CompactArrayOf.nullable" : "new CompactArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                    fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
 
             } else {
-                headerGenerator.addImport(nullable ? MessageGenerator.NULLABLE_ARRAYOF_CLASS : MessageGenerator.ARRAYOF_CLASS);
+                headerGenerator.addImport(MessageGenerator.ARRAYOF_CLASS);
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
-                String prefix = nullable ? "new NullableArrayOf" : "new ArrayOf";
+                String prefix = nullable ? "ArrayOf.nullable" : "new ArrayOf";
                 return String.format("%s(%s)", prefix,
-                        fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
+                    fieldTypeToSchemaType(arrayType.elementType(), false, version, fieldFlexibleVersions, false));
             }
         } else if (type.isStruct()) {
             if (nullable) {

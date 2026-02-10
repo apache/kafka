@@ -107,11 +107,7 @@ public final class MessageGenerator {
 
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 
-    static final String NULLABLE_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.nullable.NullableArrayOf";
-
     static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
-
-    static final String COMPACT_NULLABLE_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.nullable.CompactNullableArrayOf";
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 
