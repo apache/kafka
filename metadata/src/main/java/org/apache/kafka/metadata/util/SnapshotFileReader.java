@@ -130,8 +130,7 @@ public final class SnapshotFileReader implements AutoCloseable {
     private void handleControlBatch(FileChannelRecordBatch batch) {
         for (Record record : batch) {
             try {
-                short typeId = ControlRecordType.parseTypeId(record.key());
-                ControlRecordType type = ControlRecordType.fromTypeId(typeId);
+                ControlRecordType type = ControlRecordType.parse(record.key());
                 switch (type) {
                     case LEADER_CHANGE:
                         LeaderChangeMessage message = new LeaderChangeMessage();

@@ -1147,11 +1147,7 @@ class LogCleanerTest extends Logging {
 
     // Now we append one transaction with a key which conflicts with the COMMIT marker appended above
     def commitRecordKey(): ByteBuffer = {
-      val keySize = ControlRecordType.COMMIT.recordKey().sizeOf()
-      val key = ByteBuffer.allocate(keySize)
-      ControlRecordType.COMMIT.recordKey().writeTo(key)
-      key.flip()
-      key
+      ControlRecordType.COMMIT.recordKey()
     }
 
     val producerId2 = 2L
