@@ -1601,7 +1601,13 @@ class KafkaConfigTest {
     props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "/other/path")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
-    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    val e = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(e.getMessage.contains("/other/path"))
+
+    props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, "/other/path,/another")
+    val e2 = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(e2.getMessage.contains("/other/path"))
+    assertTrue(e2.getMessage.contains("/another"))
 
     props.setProperty(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, s"$dataDir1,*")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))

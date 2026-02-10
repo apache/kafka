@@ -636,7 +636,7 @@ public class ReplicationControlManagerTest {
         expectedResponse.topics().add(new CreatableTopicResult().setName("foo").
             setErrorCode(INVALID_REPLICATION_FACTOR.code()).
                 setErrorMessage("Unable to replicate the partition 3 time(s): All " +
-                    "brokers are currently fenced."));
+                    "brokers are currently fenced, or have all their log directories cordoned."));
         assertEquals(expectedResponse, result.response());
 
         ctx.registerBrokers(0, 1, 2);

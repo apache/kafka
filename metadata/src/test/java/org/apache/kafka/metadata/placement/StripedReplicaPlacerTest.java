@@ -190,7 +190,7 @@ public class StripedReplicaPlacerTest {
     public void testAllBrokersFenced() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        assertEquals("All brokers are currently fenced.",
+        assertEquals("All brokers are currently fenced, or have all their log directories cordoned.",
             assertThrows(InvalidReplicationFactorException.class,
                 () -> place(placer, 0, 1, (short) 1, List.of(
                     new UsableBroker(11, Optional.of("1"), true),
@@ -274,7 +274,7 @@ public class StripedReplicaPlacerTest {
         assertEquals(3, rackList.numTotalBrokers());
         assertEquals(0, rackList.numUnfencedBrokers());
         assertEquals(List.of(Optional.empty()), rackList.rackNames());
-        assertEquals("All brokers are currently fenced.",
+        assertEquals("All brokers are currently fenced, or have all their log directories cordoned.",
                 assertThrows(InvalidReplicationFactorException.class,
                         () -> rackList.place(3)).getMessage());
     }

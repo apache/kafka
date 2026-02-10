@@ -404,7 +404,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
 
     private static void throwInvalidReplicationFactorIfZero(int numUnfenced) {
         if (numUnfenced == 0) {
-            throw new InvalidReplicationFactorException("All brokers are currently fenced.");
+            throw new InvalidReplicationFactorException("All brokers are currently fenced, or have all their log directories cordoned.");
         }
     }
 
