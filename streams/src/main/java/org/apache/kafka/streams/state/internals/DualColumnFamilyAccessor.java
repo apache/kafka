@@ -54,13 +54,13 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
     private final RocksDBStore store;
 
     /**
-   * Constructs a DualColumnFamilyAccessor.
-   *
-   * @param oldColumnFamily the column family containing legacy data
-   * @param newColumnFamily the column family for new format data
-   * @param valueConverter function to convert old format values to new format
-   * @param store the RocksDBStore instance (for accessing position, context, and name)
-   */
+     * Constructs a DualColumnFamilyAccessor.
+     *
+     * @param oldColumnFamily the column family containing legacy data
+     * @param newColumnFamily the column family for new format data
+     * @param valueConverter  function to convert old format values to new format
+     * @param store           the RocksDBStore instance (for accessing position, context, and name)
+     */
     DualColumnFamilyAccessor(final ColumnFamilyHandle oldColumnFamily,
             final ColumnFamilyHandle newColumnFamily,
             final Function<byte[], byte[]> valueConverter,
