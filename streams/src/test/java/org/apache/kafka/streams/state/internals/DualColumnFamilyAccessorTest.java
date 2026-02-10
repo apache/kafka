@@ -66,8 +66,6 @@ public class DualColumnFamilyAccessorTest {
     @Mock
     private RocksDBStore.DBAccessor dbAccessor;
 
-    private RocksDBStore store;
-    private Position position;
     private Function<byte[], byte[]> valueConverter;
     private DualColumnFamilyAccessor accessor;
 
@@ -79,10 +77,10 @@ public class DualColumnFamilyAccessorTest {
     @BeforeEach
     public void setUp() {
         // Create a real Position object
-        position = Position.emptyPosition();
+        final Position position = Position.emptyPosition();
 
         // Create a mock store with real position field
-        store = mock(RocksDBStore.class);
+        final RocksDBStore store = mock(RocksDBStore.class);
         store.position = position;
         store.context = mock(org.apache.kafka.streams.processor.StateStoreContext.class);
         lenient().when(store.name()).thenReturn(STORE_NAME);
@@ -148,7 +146,7 @@ public class DualColumnFamilyAccessorTest {
         lenient().doNothing().when(dbAccessor).delete(eq(oldCF), any(byte[].class));
         doThrow(new RocksDBException("Delete failed")).when(dbAccessor).delete(eq(newCF), any(byte[].class));
 
-        ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, null));
+        final ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, null));
 
         assertEquals("Error while removing key from store " + STORE_NAME, exception.getMessage());
         verify(dbAccessor).delete(oldCF, KEY); // Should have tried to delete from old first
@@ -158,7 +156,7 @@ public class DualColumnFamilyAccessorTest {
     public void shouldGetValueFromNewColumnFamily() throws RocksDBException {
         when(dbAccessor.get(newCF, KEY)).thenReturn(NEW_VALUE);
 
-        byte[] result = accessor.get(dbAccessor, KEY);
+        final byte[] result = accessor.get(dbAccessor, KEY);
 
         assertArrayEquals(NEW_VALUE, result);
         verify(dbAccessor).get(newCF, KEY);
@@ -170,7 +168,7 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.get(newCF, KEY)).thenReturn(null);
         when(dbAccessor.get(oldCF, KEY)).thenReturn(OLD_VALUE);
 
-        byte[] result = accessor.get(dbAccessor, KEY);
+        final byte[] result = accessor.get(dbAccessor, KEY);
 
         assertNotNull(result);
         verify(dbAccessor).get(newCF, KEY);
@@ -187,7 +185,7 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.get(newCF, KEY)).thenReturn(null);
         when(dbAccessor.get(oldCF, KEY)).thenReturn(null);
 
-        byte[] result = accessor.get(dbAccessor, KEY);
+        final byte[] result = accessor.get(dbAccessor, KEY);
 
         assertNull(result);
         verify(dbAccessor).get(newCF, KEY);
@@ -199,7 +197,7 @@ public class DualColumnFamilyAccessorTest {
         ReadOptions readOptions = mock(ReadOptions.class);
         when(dbAccessor.get(newCF, readOptions, KEY)).thenReturn(NEW_VALUE);
 
-        byte[] result = accessor.get(dbAccessor, KEY, readOptions);
+        final byte[] result = accessor.get(dbAccessor, KEY, readOptions);
 
         assertArrayEquals(NEW_VALUE, result);
         verify(dbAccessor).get(newCF, readOptions, KEY);
@@ -212,7 +210,7 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.get(newCF, readOptions, KEY)).thenReturn(null);
         when(dbAccessor.get(oldCF, readOptions, KEY)).thenReturn(OLD_VALUE);
 
-        byte[] result = accessor.get(dbAccessor, KEY, readOptions);
+        final byte[] result = accessor.get(dbAccessor, KEY, readOptions);
 
         assertNotNull(result);
         verify(dbAccessor).get(newCF, readOptions, KEY);
@@ -229,7 +227,7 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.get(newCF, KEY)).thenReturn(null);
         when(dbAccessor.get(oldCF, KEY)).thenReturn(OLD_VALUE);
 
-        byte[] result = accessor.getOnly(dbAccessor, KEY);
+        final byte[] result = accessor.getOnly(dbAccessor, KEY);
 
         assertNotNull(result);
         verify(dbAccessor).get(newCF, KEY);
@@ -246,15 +244,15 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.get(newCF, KEY)).thenReturn(null);
         when(dbAccessor.get(oldCF, KEY)).thenReturn(null);
 
-        byte[] result = accessor.getOnly(dbAccessor, KEY);
+        final byte[] result = accessor.getOnly(dbAccessor, KEY);
 
         assertNull(result);
     }
 
     @Test
     public void shouldPrepareBatchWithMultipleEntries() throws RocksDBException {
-        WriteBatchInterface batch = mock(WriteBatchInterface.class);
-        List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        final WriteBatchInterface batch = mock(WriteBatchInterface.class);
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(new Bytes("key1".getBytes()), "value1".getBytes()));
         entries.add(new KeyValue<>(new Bytes("key2".getBytes()), "value2".getBytes()));
         entries.add(new KeyValue<>(new Bytes("key3".getBytes()), null)); // Delete
@@ -271,8 +269,8 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldThrowNPEWhenBatchEntryHasNullKey() {
-        WriteBatchInterface batch = mock(WriteBatchInterface.class);
-        List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        final WriteBatchInterface batch = mock(WriteBatchInterface.class);
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(null, "value".getBytes()));
 
         assertThrows(NullPointerException.class, () -> accessor.prepareBatch(entries, batch));
@@ -280,7 +278,7 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldAddToBatchDeletesFromOldAndPutsToNew() throws RocksDBException {
-        WriteBatchInterface batch = mock(WriteBatchInterface.class);
+        final WriteBatchInterface batch = mock(WriteBatchInterface.class);
 
         accessor.addToBatch(KEY, NEW_VALUE, batch);
 
@@ -290,7 +288,7 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldAddToBatchDeletesFromBothWhenValueIsNull() throws RocksDBException {
-        WriteBatchInterface batch = mock(WriteBatchInterface.class);
+        final WriteBatchInterface batch = mock(WriteBatchInterface.class);
 
         accessor.addToBatch(KEY, null, batch);
 
@@ -301,8 +299,8 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldDeleteRangeFromBothColumnFamilies() throws RocksDBException {
-        byte[] from = "a".getBytes();
-        byte[] to = "z".getBytes();
+        final byte[] from = "a".getBytes();
+        final byte[] to = "z".getBytes();
 
         accessor.deleteRange(dbAccessor, from, to);
 
@@ -312,8 +310,8 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldThrowProcessorStateExceptionWhenDeleteRangeFailsOnOldColumnFamily() throws RocksDBException {
-        byte[] from = "a".getBytes();
-        byte[] to = "z".getBytes();
+        final byte[] from = "a".getBytes();
+        final byte[] to = "z".getBytes();
 
         doThrow(new RocksDBException("Delete range failed")).when(dbAccessor).deleteRange(eq(oldCF), any(byte[].class), any(byte[].class));
 
@@ -324,8 +322,8 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldThrowProcessorStateExceptionWhenDeleteRangeFailsOnNewColumnFamily() throws RocksDBException {
-        byte[] from = "a".getBytes();
-        byte[] to = "z".getBytes();
+        final byte[] from = "a".getBytes();
+        final byte[] to = "z".getBytes();
 
         lenient().doNothing().when(dbAccessor).deleteRange(eq(oldCF), any(byte[].class), any(byte[].class));
         doThrow(new RocksDBException("Delete range failed")).when(dbAccessor).deleteRange(eq(newCF), any(byte[].class), any(byte[].class));
@@ -341,7 +339,7 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.approximateNumEntries(oldCF)).thenReturn(100L);
         when(dbAccessor.approximateNumEntries(newCF)).thenReturn(50L);
 
-        long result = accessor.approximateNumEntries(dbAccessor);
+        final long result = accessor.approximateNumEntries(dbAccessor);
 
         assertEquals(150L, result);
     }
@@ -351,14 +349,14 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.approximateNumEntries(oldCF)).thenReturn(0L);
         when(dbAccessor.approximateNumEntries(newCF)).thenReturn(0L);
 
-        long result = accessor.approximateNumEntries(dbAccessor);
+        final long result = accessor.approximateNumEntries(dbAccessor);
 
         assertEquals(0L, result);
     }
 
     @Test
     public void shouldFlushBothColumnFamiliesOnCommit() throws RocksDBException {
-        Map<TopicPartition, Long> offsets = new HashMap<>();
+        final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(new TopicPartition("topic", 0), 100L);
 
         accessor.commit(dbAccessor, offsets);
@@ -368,15 +366,15 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldCreateRangeIterator() {
-        RocksIterator newIter = mock(RocksIterator.class);
-        RocksIterator oldIter = mock(RocksIterator.class);
+        final RocksIterator newIter = mock(RocksIterator.class);
+        final RocksIterator oldIter = mock(RocksIterator.class);
         when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
         when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
 
-        Bytes from = new Bytes("a".getBytes());
-        Bytes to = new Bytes("z".getBytes());
+        final Bytes from = new Bytes("a".getBytes());
+        final Bytes to = new Bytes("z".getBytes());
 
-        ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.range(dbAccessor, from, to, true);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.range(dbAccessor, from, to, true);
 
         assertNotNull(iterator);
         verify(dbAccessor).newIterator(newCF);
@@ -385,8 +383,8 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldCreateAllIteratorForward() {
-        RocksIterator newIter = mock(RocksIterator.class);
-        RocksIterator oldIter = mock(RocksIterator.class);
+        final RocksIterator newIter = mock(RocksIterator.class);
+        final RocksIterator oldIter = mock(RocksIterator.class);
         when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
         when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
 
@@ -399,12 +397,12 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldCreateAllIteratorReverse() {
-        RocksIterator newIter = mock(RocksIterator.class);
-        RocksIterator oldIter = mock(RocksIterator.class);
+        final RocksIterator newIter = mock(RocksIterator.class);
+        final RocksIterator oldIter = mock(RocksIterator.class);
         when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
         when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
 
-        ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, false);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, false);
 
         assertNotNull(iterator);
         verify(newIter).seekToLast();
@@ -413,14 +411,14 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldCreatePrefixScanIterator() {
-        RocksIterator newIter = mock(RocksIterator.class);
-        RocksIterator oldIter = mock(RocksIterator.class);
+        final RocksIterator newIter = mock(RocksIterator.class);
+        final RocksIterator oldIter = mock(RocksIterator.class);
         when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
         when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
 
-        Bytes prefix = new Bytes("prefix".getBytes());
+        final Bytes prefix = new Bytes("prefix".getBytes());
 
-        ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.prefixScan(dbAccessor, prefix);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.prefixScan(dbAccessor, prefix);
 
         assertNotNull(iterator);
         verify(dbAccessor).newIterator(newCF);
