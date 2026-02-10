@@ -52,7 +52,6 @@ if [[ -z "$JDK_FULL" || ! "$JDK_FULL" =~ ^[0-9]+(u[0-9]+|(\.[0-9]+)+)?-linux-(x6
 fi
 
 echo "JDK_MAJOR=$JDK_MAJOR JDK_ARCH=$JDK_ARCH JDK_FULL=$JDK_FULL"
-export DEBIAN_FRONTEND=noninteractive
 
 if [ -z `which javac` ]; then
     apt-get -y update
