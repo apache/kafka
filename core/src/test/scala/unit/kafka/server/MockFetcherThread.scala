@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time

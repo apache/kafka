@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -244,7 +245,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         if (loggingEnabled) {
             // counting on this getting called before the record collector's flush
             for (final Bytes key : dirtyKeys) {

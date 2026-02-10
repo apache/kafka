@@ -65,7 +65,8 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -2359,6 +2360,61 @@ class KafkaApisTest extends Logging {
         kafkaApis.close()
       }
     }
+  }
+
+  @Test
+  def testRecordConversionStatsAccumulatedAcrossMultiplePartitions(): Unit = {
+    val topic = "topic"
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
+    val tp0 = new TopicIdPartition(topicId, 0, topic)
+    val tp1 = new TopicIdPartition(topicId, 1, topic)
+    addTopicToMetadataCache(topic, numPartitions = 2, topicId = topicId)
+
+    val version = ApiKeys.PRODUCE.latestVersion
+
+    val statsCallback: ArgumentCaptor[Map[TopicIdPartition, RecordValidationStats] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, RecordValidationStats] => Unit])
+
+    val produceData = new ProduceRequestData.TopicProduceData()
+      .setTopicId(topicId)
+      .setPartitionData(util.List.of(
+        new ProduceRequestData.PartitionProduceData()
+          .setIndex(0)
+          .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test0".getBytes))),
+        new ProduceRequestData.PartitionProduceData()
+          .setIndex(1)
+          .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test1".getBytes)))))
+
+    val produceRequest = ProduceRequest.builder(new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+        util.List.of(produceData).iterator))
+      .setAcks(1.toShort)
+      .setTimeoutMs(5000))
+      .build(version)
+    val request = buildRequest(produceRequest)
+
+    when(replicaManager.handleProduceAppend(anyLong,
+      anyShort,
+      ArgumentMatchers.eq(false),
+      any(),
+      any(),
+      any(),
+      statsCallback.capture(),
+      any(),
+      any()
+    )).thenAnswer(_ => {
+      statsCallback.getValue.apply(Map(
+        tp0 -> new RecordValidationStats(1000L, 5, 100L),
+        tp1 -> new RecordValidationStats(2000L, 3, 200L)
+      ))
+    })
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    // Verify that conversion stats are accumulated, not overwritten
+    assertEquals(300L, request.messageConversionsTimeNanos)
+    assertEquals(3000L, request.temporaryMemoryBytes)
   }
 
   @Test

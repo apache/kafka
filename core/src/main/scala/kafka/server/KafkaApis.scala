@@ -44,7 +44,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
@@ -4240,9 +4240,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case _ =>
           throw new IllegalStateException("Message conversion info is recorded only for Produce/Fetch requests")
       }
-      request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
+      request.messageConversionsTimeNanos += conversionStats.conversionTimeNanos
     }
-    request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
+    request.temporaryMemoryBytes += conversionStats.temporaryMemoryBytes
   }
 
   def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Boolean = {

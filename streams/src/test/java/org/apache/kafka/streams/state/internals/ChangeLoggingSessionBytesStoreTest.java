@@ -35,6 +35,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.util.Map;
+
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.mockito.Mockito.times;
@@ -175,10 +177,10 @@ public class ChangeLoggingSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldFlushUnderlyingStore() {
-        store.flush();
+    public void shouldCommitUnderlyingStore() {
+        store.commit(Map.of());
 
-        verify(inner).flush();
+        verify(inner).commit(Map.of());
     }
 
     @Test
