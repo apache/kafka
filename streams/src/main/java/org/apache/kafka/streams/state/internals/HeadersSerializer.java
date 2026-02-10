@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
@@ -93,7 +94,7 @@ public class HeadersSerializer implements Serializer<Headers> {
 
             return baos.toByteArray();
         } catch (IOException e) {
-            throw new RuntimeException("Failed to serialize headers", e);
+            throw new SerializationException("Failed to serialize headers", e);
         }
     }
 }
