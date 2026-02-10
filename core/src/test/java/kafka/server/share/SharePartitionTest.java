@@ -71,7 +71,6 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.share.persister.WriteShareGroupStateResult;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -909,7 +908,7 @@ public class SharePartitionTest {
     public void testMaybeInitializeWithReadException() {
         Persister persister = Mockito.mock(Persister.class);
         // Complete the future exceptionally for read state.
-        Mockito.when(persister.readState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Read exception")));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Read exception")));
         SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition1.maybeInitialize();
@@ -7514,7 +7513,7 @@ public class SharePartitionTest {
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        Mockito.when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Write exception")));
         CompletableFuture<Void> writeResult = sharePartition1.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(IllegalStateException.class, writeResult);
