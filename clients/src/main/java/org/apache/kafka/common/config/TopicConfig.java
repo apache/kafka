@@ -105,7 +105,7 @@ public class TopicConfig {
     public static final String REMOTE_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
             "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay). " +
             "When set to -1, resolves to <code>local.retention.ms</code> (maximum delay). " +
-            "When set to a positive value (ms), a segment is eligible for upload only after it has been closed for at least this many milliseconds. " +
+            "When set to a positive value (ms), a segment is eligible for upload only after it has lived for at least this many milliseconds. " +
             "The value should not exceed <code>local.retention.ms</code> (local retention time).";
 
     public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
