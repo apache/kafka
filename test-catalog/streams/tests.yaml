@@ -3781,6 +3781,19 @@ org.apache.kafka.streams.state.StreamsMetadataTest:
 - shouldNotBeEqualIfDifferInStandByTopicPartitions
 - shouldNotBeEqualIfDifferInTopicPartitions
 - shouldNotBeEqualIfDifferStateStoreNames
+org.apache.kafka.streams.state.ValueTimestampHeadersTest:
+- shouldBeEqualToItself
+- shouldBeEqualWhenSameValues
+- shouldCreateEmptyHeadersWhenHeadersAreNull
+- shouldCreateInstanceWithMake
+- shouldCreateInstanceWithMakeAllowNullable
+- shouldCreateInstanceWithNullValueUsingMakeAllowNullable
+- shouldGetValueOrNull
+- shouldHaveCorrectToString
+- shouldNotBeEqualWhenDifferentHeaders
+- shouldNotBeEqualWhenDifferentTimestamps
+- shouldNotBeEqualWhenDifferentValues
+- shouldReturnNullWhenValueIsNullWithMake
 org.apache.kafka.streams.state.internals.BlockBasedTableConfigWithAccessibleCacheTest:
 - shouldReturnNoBlockCacheIfNoneIsSet
 - shouldSetBlockCacheAndMakeItAccessible
@@ -4186,6 +4199,7 @@ org.apache.kafka.streams.state.internals.GlobalStateStoreProviderTest:
 - shouldReturnWindowStore
 - shouldThrowExceptionIfStoreIsntOpen
 org.apache.kafka.streams.state.internals.HeadersDeserializerTest:
+- shouldAllowDuplicateKeys
 - shouldDeserializeEmptyData
 - shouldDeserializeNullData
 - shouldRoundTripEmptyHeaders
@@ -4197,7 +4211,6 @@ org.apache.kafka.streams.state.internals.HeadersSerializerTest:
 - shouldSerializeEmptyHeaders
 - shouldSerializeHeaderWithNullValue
 - shouldSerializeHeadersWithEmptyValue
-- shouldSerializeHeadersWithSpecialCharacters
 - shouldSerializeMultipleHeaders
 - shouldSerializeNullHeaders
 - shouldSerializeSingleHeader
@@ -5709,6 +5722,28 @@ org.apache.kafka.streams.state.internals.ValueAndTimestampSerializerTest:
 - shouldReturnNullWhenTheInternalSerializerReturnsNull
 - shouldSerializeNonNullDataUsingTheInternalSerializer
 - shouldSerializeNullDataAsNull
+org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializerTest:
+- shouldDeserializeNullToNull
+- shouldDeserializeWithEmptyHeaders
+- shouldDeserializeWithHeaderContainingNullValue
+- shouldDeserializeWithMultipleHeaders
+- shouldDeserializeWithSingleHeader
+- shouldExtractEmptyHeaders
+- shouldExtractHeaders
+- shouldExtractTimestamp
+- shouldExtractValue
+- shouldReturnNullForRawValueWhenInputIsNull
+- shouldReturnNullWhenExtractingHeadersFromNull
+- shouldReturnNullWhenSerializingNullValue
+- shouldThrowExceptionWhenDataIsTooShort
+- shouldThrowExceptionWhenExtractingTimestampFromNull
+- shouldThrowExceptionWhenHeadersSizeIsInconsistent
+org.apache.kafka.streams.state.internals.ValueTimestampHeadersSerializerTest:
+- shouldReturnNullWhenSerializingNullValue
+- shouldSerializeAndDeserializeNonNullData
+- shouldSerializeNullDataAsNull
+- shouldSerializeValueWithEmptyHeaders
+- shouldSerializeValueWithMultipleHeaders
 org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilderTest:
 - shouldHaveChangeLoggingStoreByDefault
 - shouldHaveChangeLoggingStoreWhenLoggingEnabled
