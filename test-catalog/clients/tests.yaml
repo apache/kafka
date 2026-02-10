@@ -3408,6 +3408,7 @@ org.apache.kafka.common.config.ConfigDefTest:
 - testConvertValueToStringList
 - testConvertValueToStringLong
 - testConvertValueToStringNestedClass
+- testConvertValueToStringNullType
 - testConvertValueToStringPassword
 - testConvertValueToStringShort
 - testConvertValueToStringString
@@ -4073,7 +4074,7 @@ org.apache.kafka.common.protocol.types.TypeTest:
 - testNullCompactRecordsSerde
 - testNullRecordsSerde
 - testRecordsSerde
-org.apache.kafka.common.record.AbstractLegacyRecordBatchTest:
+org.apache.kafka.common.record.internal.AbstractLegacyRecordBatchTest:
 - testInvalidWrapperOffsetV1
 - testIterateCompressedRecordWithWrapperOffsetZero
 - testSetCreateTimeNotAllowedV0
@@ -4085,24 +4086,24 @@ org.apache.kafka.common.record.AbstractLegacyRecordBatchTest:
 - testSetPartitionLeaderEpochNotAllowedV0
 - testSetPartitionLeaderEpochNotAllowedV1
 - testZStdCompressionTypeWithV0OrV1
-org.apache.kafka.common.record.BufferSupplierTest:
+org.apache.kafka.common.record.internal.BufferSupplierTest:
 - testGrowableBuffer
-org.apache.kafka.common.record.ByteBufferLogInputStreamTest:
+org.apache.kafka.common.record.internal.ByteBufferLogInputStreamTest:
 - iteratorIgnoresIncompleteEntries
 - iteratorRaisesOnInvalidMagic
 - iteratorRaisesOnTooLargeRecords
 - iteratorRaisesOnTooSmallRecords
-org.apache.kafka.common.record.CompressionRatioEstimatorTest:
+org.apache.kafka.common.record.internal.CompressionRatioEstimatorTest:
 - testUpdateEstimation
-org.apache.kafka.common.record.ControlRecordTypeTest:
+org.apache.kafka.common.record.internal.ControlRecordTypeTest:
 - testParseUnknownType
 - testParseUnknownVersion
 - testRoundTrip
-org.apache.kafka.common.record.ControlRecordUtilsTest:
+org.apache.kafka.common.record.internal.ControlRecordUtilsTest:
 - testCurrentVersions
 - testDeserializeByteData
 - testInvalidControlRecordType
-org.apache.kafka.common.record.DefaultRecordBatchTest:
+org.apache.kafka.common.record.internal.DefaultRecordBatchTest:
 - buildDefaultRecordBatch
 - buildDefaultRecordBatchWithProducerId
 - buildDefaultRecordBatchWithSequenceWrapAround
@@ -4125,7 +4126,7 @@ org.apache.kafka.common.record.DefaultRecordBatchTest:
 - testStreamingIteratorConsistency
 - testWriteEmptyHeader
 - testZstdJniForSkipKeyValueIterator
-org.apache.kafka.common.record.DefaultRecordTest:
+org.apache.kafka.common.record.internal.DefaultRecordTest:
 - testBasicSerde
 - testBasicSerdeInvalidHeaderCountTooHigh
 - testBasicSerdeInvalidHeaderCountTooLow
@@ -4146,7 +4147,7 @@ org.apache.kafka.common.record.DefaultRecordTest:
 - testSerdeNoSequence
 - testUnderflowReadingTimestamp
 - testUnderflowReadingVarlong
-org.apache.kafka.common.record.EndTransactionMarkerTest:
+org.apache.kafka.common.record.internal.EndTransactionMarkerTest:
 - testBackwardDeserializeCompatibility
 - testCannotDeserializeUnknownControlType
 - testDeserializeNewerVersion
@@ -4156,7 +4157,7 @@ org.apache.kafka.common.record.EndTransactionMarkerTest:
 - testSerde
 - testSerializeAndDeserialize
 - testUnknownControlTypeNotAllowed
-org.apache.kafka.common.record.FileLogInputStreamTest:
+org.apache.kafka.common.record.internal.FileLogInputStreamTest:
 - testBatchIterationIncompleteBatch
 - testBatchIterationV2
 - testBatchIterationWithMultipleRecordsPerBatch
@@ -4164,7 +4165,7 @@ org.apache.kafka.common.record.FileLogInputStreamTest:
 - testNextBatchSelectionWithZeroedParams
 - testSimpleBatchIteration
 - testWriteTo
-org.apache.kafka.common.record.FileRecordsTest:
+org.apache.kafka.common.record.internal.FileRecordsTest:
 - testAppendProtectsFromOverflow
 - testBytesLengthOfWriteTo
 - testConversion
@@ -4193,11 +4194,11 @@ org.apache.kafka.common.record.FileRecordsTest:
 - testTruncateIfSizeIsDifferentToTargetSize
 - testTruncateNotCalledIfSizeIsBiggerThanTargetSize
 - testTruncateNotCalledIfSizeIsSameAsTargetSize
-org.apache.kafka.common.record.LegacyRecordTest:
+org.apache.kafka.common.record.internal.LegacyRecordTest:
 - testChecksum
 - testEquality
 - testFields
-org.apache.kafka.common.record.MemoryRecordsBuilderTest:
+org.apache.kafka.common.record.internal.MemoryRecordsBuilderTest:
 - buildUsingCreateTime
 - buildUsingLogAppendTime
 - shouldResetBufferToInitialPositionOnAbort
@@ -4222,7 +4223,7 @@ org.apache.kafka.common.record.MemoryRecordsBuilderTest:
 - testWriteTransactionalRecordSet
 - testWriteTransactionalWithInvalidPID
 - writePastLimit
-org.apache.kafka.common.record.MemoryRecordsTest:
+org.apache.kafka.common.record.internal.MemoryRecordsTest:
 - testBaseTimestampToDeleteHorizonConversion
 - testBuildEndTxnMarker
 - testBuildLeaderChangeMessage
@@ -4248,19 +4249,19 @@ org.apache.kafka.common.record.MemoryRecordsTest:
 - testSliceInvalidSize
 - testUnsupportedCompress
 - testWithRecords
-org.apache.kafka.common.record.MultiRecordsSendTest:
+org.apache.kafka.common.record.internal.MultiRecordsSendTest:
 - testSendsFreedAfterWriting
-org.apache.kafka.common.record.RemoteLogInputStreamTest:
+org.apache.kafka.common.record.internal.RemoteLogInputStreamTest:
 - testBatchIterationIncompleteBatch
 - testBatchIterationV2
 - testBatchIterationWithMultipleRecordsPerBatch
 - testSimpleBatchIteration
-org.apache.kafka.common.record.SimpleLegacyRecordTest:
+org.apache.kafka.common.record.internal.SimpleLegacyRecordTest:
 - testCompressedIterationWithEmptyRecords
 - testCompressedIterationWithNullValue
 - testIsValidWithChecksumMismatch
 - testIsValidWithTooSmallBuffer
-org.apache.kafka.common.record.UnalignedFileRecordsTest:
+org.apache.kafka.common.record.internal.UnalignedFileRecordsTest:
 - testWriteTo
 org.apache.kafka.common.replica.ReplicaSelectorTest:
 - testSameRackSelector

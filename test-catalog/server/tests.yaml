@@ -64,6 +64,7 @@ org.apache.kafka.server.BootstrapControllersIntegrationTest:
 - testIncrementalAlterConfigsBySingleControllerWithDynamicQuorum
 - testPutBrokersInBootstrapControllersConfig
 - testPutControllersInBootstrapBrokersConfig
+- testQuotaConfigsIsReadOnlyShouldBeFalse
 - testUpdateFeatures
 - testUpdateFeaturesByControllers
 - testUsingBootstrapControllersOnUnsupportedAdminApi
