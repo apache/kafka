@@ -37,7 +37,7 @@ import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests._
