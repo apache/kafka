@@ -51,7 +51,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  */
 public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<ValueTimestampHeaders<V>, Void, V> {
     public final Serializer<V> valueSerializer;
-    private final Serializer<Long> timestampSerializer;
+    private final LongSerializer timestampSerializer;
     private final HeadersSerializer headersSerializer;
 
     ValueTimestampHeadersSerializer(final Serializer<V> valueSerializer) {
@@ -76,7 +76,7 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
         return serialize(topic, valueTimestampHeaders.value(), valueTimestampHeaders.timestamp(), valueTimestampHeaders.headers());
     }
 
-    public byte[] serialize(final String topic, final V plainValue, final long timestamp, final Headers headers) {
+    private byte[] serialize(final String topic, final V plainValue, final long timestamp, final Headers headers) {
         if (plainValue == null) {
             return null;
         }
@@ -98,8 +98,8 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
         final byte[] rawHeaders = headersSerializer.serialize(topic, headers);
 
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream out = new DataOutputStream(baos)) {
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             final DataOutputStream out = new DataOutputStream(baos)) {
 
             ByteUtils.writeVarint(rawHeaders.length, out);  // headersSize (it may be 0 due to null/empty headers)
             out.write(rawHeaders);                          // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty

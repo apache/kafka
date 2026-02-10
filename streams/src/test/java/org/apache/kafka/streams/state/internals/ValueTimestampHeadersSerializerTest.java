@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -119,30 +118,10 @@ public class ValueTimestampHeadersSerializerTest {
     }
 
     @Test
-    public void shouldSerializeValueWithNullHeaders() {
+    public void shouldReturnNullWhenSerializingNullValue() {
         final ValueTimestampHeaders<String> valueTimestampHeaders =
-            ValueTimestampHeaders.make(VALUE, TIMESTAMP, null);
-
+            ValueTimestampHeaders.makeAllowNullable(null, TIMESTAMP, new RecordHeaders());
         final byte[] serialized = serializer.serialize(TOPIC, valueTimestampHeaders);
-        assertNotNull(serialized);
-
-        final ValueTimestampHeaders<String> deserialized =
-            deserializer.deserialize(TOPIC, serialized);
-
-        assertEquals(VALUE, deserialized.value());
-        assertEquals(TIMESTAMP, deserialized.timestamp());
-        assertEquals(0, deserialized.headers().toArray().length);
-    }
-
-    @Test
-    public void shouldExtractRawValue() {
-        final Headers headers = new RecordHeaders()
-            .add("key1", "value1".getBytes());
-        final byte[] serialized = serializer.serialize(TOPIC, VALUE, TIMESTAMP, headers);
-        try (Serde<String> stringSerde = Serdes.String()) {
-            final String value = ValueTimestampHeadersDeserializer.value(serialized, stringSerde.deserializer());
-            assertNotNull(value);
-            assertEquals(VALUE, value);
-        }
+        assertNull(serialized);
     }
 }

@@ -60,7 +60,7 @@ public class ValueTimestampHeadersDeserializerTest {
     }
 
     @Test
-    public void shouldDeserializeNull() {
+    public void shouldDeserializeNullToNull() {
         final ValueTimestampHeaders<String> result = deserializer.deserialize(TOPIC, null);
         assertNull(result);
     }

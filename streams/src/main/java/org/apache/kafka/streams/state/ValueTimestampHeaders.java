@@ -38,12 +38,6 @@ public final class ValueTimestampHeaders<V> {
         this.headers = headers == null ? new RecordHeaders() : headers;
     }
 
-    private ValueTimestampHeaders(final V value, final long timestamp, final byte[] rawHeaders) {
-        this.value = value;
-        this.timestamp = timestamp;
-        this.headers = null;
-    }
-
     /**
      * Create a new {@link ValueTimestampHeaders} instance if the provided {@code value} is not {@code null}.
      *
@@ -91,32 +85,6 @@ public final class ValueTimestampHeaders<V> {
         return valueTimestampHeaders == null ? null : valueTimestampHeaders.value;
     }
 
-    /**
-     * <strong>Internal use only.</strong> This method is used by the deserialization infrastructure
-     * and should not be called directly by application code.
-     * <p>
-     * Create a new {@link ValueTimestampHeaders} instance with raw (serialized) headers for lazy deserialization.
-     * The headers will be deserialized lazily when {@link #headers()} is first called, minimizing overhead
-     * during range scans when headers are not accessed.
-     * <p>
-     * This method is used internally by {@link org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer}.
-     *
-     * @param value       the value
-     * @param timestamp   the timestamp
-     * @param rawHeaders  the serialized headers bytes
-     * @param <V>         the type of the value
-     * @return a new {@link ValueTimestampHeaders} instance if the provided {@code value} is not {@code null};
-     * otherwise {@code null} is returned
-     */
-    public static <V> ValueTimestampHeaders<V> makeWithRawHeaders(final V value,
-                                                                  final long timestamp,
-                                                                  final byte[] rawHeaders) {
-        if (value == null) {
-            return null;
-        }
-        return new ValueTimestampHeaders<>(value, timestamp, rawHeaders);
-    }
-
     public V value() {
         return value;
     }
@@ -138,16 +106,14 @@ public final class ValueTimestampHeaders<V> {
             return false;
         }
         final ValueTimestampHeaders<?> that = (ValueTimestampHeaders<?>) o;
-        // Ensure headers are deserialized before comparison (lazy deserialization)
         return timestamp == that.timestamp
             && Objects.equals(value, that.value)
-            && Objects.equals(this.headers(), that.headers());
+            && Objects.equals(this.headers, that.headers);
     }
 
     @Override
     public int hashCode() {
-        // Ensure headers are deserialized before hashing (lazy deserialization)
-        return Objects.hash(value, timestamp, headers());
+        return Objects.hash(value, timestamp, headers);
     }
 
     @Override
@@ -155,7 +121,7 @@ public final class ValueTimestampHeaders<V> {
         return "ValueTimestampHeaders{" +
             "value=" + value +
             ", timestamp=" + timestamp +
-            ", headers=" + headers() +
+            ", headers=" + headers +
             '}';
     }
 }

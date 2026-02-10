@@ -87,10 +87,10 @@ public class ValueTimestampHeadersTest {
         final Headers headers = new RecordHeaders();
         ValueTimestampHeaders<String> valueTimestampHeaders = ValueTimestampHeaders.make(VALUE, TIMESTAMP, headers);
         assertEquals(VALUE, ValueTimestampHeaders.getValueOrNull(valueTimestampHeaders));
-        assertNull(ValueTimestampHeaders.getValueOrNull(null));
 
-        valueTimestampHeaders = ValueTimestampHeaders.makeAllowNullable(VALUE, TIMESTAMP, null);
-        assertEquals(VALUE, ValueTimestampHeaders.getValueOrNull(valueTimestampHeaders));
+        valueTimestampHeaders = ValueTimestampHeaders.makeAllowNullable(null, TIMESTAMP, headers);
+        assertNull(ValueTimestampHeaders.getValueOrNull(valueTimestampHeaders));
+
         assertNull(ValueTimestampHeaders.getValueOrNull(null));
     }
 
