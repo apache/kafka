@@ -101,7 +101,7 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
-import org.apache.kafka.server.util.{FutureUtils, MockTime}
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -3447,7 +3447,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
-    )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
+    )).thenReturn(CompletableFuture.failedFuture[Void](error.exception()))
     kafkaApis = createKafkaApis()
     kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching)
 
@@ -5003,7 +5003,7 @@ class KafkaApisTest extends Logging {
     val memberId: String = Uuid.randomUuid().toString
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any(), any())).thenReturn(
@@ -5064,7 +5064,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
@@ -5120,11 +5120,11 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
 
     when(sharePartitionManager.fetchMessages(any(), any(), any(), any(), anyInt(), anyInt(), anyInt(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
@@ -7143,7 +7143,7 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -7576,7 +7576,7 @@ class KafkaApisTest extends Logging {
       any[Session](), anyString, anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.acknowledge(any(), any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
@@ -7704,7 +7704,7 @@ class KafkaApisTest extends Logging {
     doNothing().when(sharePartitionManager).acknowledgeSessionUpdate(any(), any(), any())
 
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
-      FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
+      CompletableFuture.failedFuture[util.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().

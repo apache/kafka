@@ -113,7 +113,6 @@ import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 
 import org.junit.jupiter.api.Test;
@@ -282,7 +281,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("consumer-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(exception));
+        )).thenReturn(CompletableFuture.failedFuture(exception));
 
         CompletableFuture<ConsumerGroupHeartbeatResponseData> future = service.consumerGroupHeartbeat(
             requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
@@ -559,7 +558,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(exception));
+        )).thenReturn(CompletableFuture.failedFuture(exception));
 
         CompletableFuture<StreamsGroupHeartbeatResult> future = service.streamsGroupHeartbeat(
             requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT),
@@ -1077,7 +1076,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
+        )).thenReturn(CompletableFuture.failedFuture(new IllegalStateException()));
 
         CompletableFuture<JoinGroupResponseData> future = service.joinGroup(
             requestContext(ApiKeys.JOIN_GROUP),
@@ -1229,7 +1228,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
+        )).thenReturn(CompletableFuture.failedFuture(new IllegalStateException()));
 
         CompletableFuture<SyncGroupResponseData> future = service.syncGroup(
             requestContext(ApiKeys.SYNC_GROUP),
@@ -1337,7 +1336,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new CoordinatorLoadInProgressException(null)
         ));
 
@@ -1365,7 +1364,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new RebalanceInProgressException()
         ));
 
@@ -1477,7 +1476,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(List.of(expectedResults.get(0))),
             CompletableFuture.completedFuture(List.of(expectedResults.get(1))),
-            FutureUtils.failedFuture(new NotCoordinatorException(""))
+            CompletableFuture.failedFuture(new NotCoordinatorException(""))
         ));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
@@ -1504,7 +1503,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(List.of()),
             CompletableFuture.completedFuture(List.of()),
-            FutureUtils.failedFuture(new CoordinatorLoadInProgressException(""))
+            CompletableFuture.failedFuture(new CoordinatorLoadInProgressException(""))
         ));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
@@ -1652,7 +1651,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("describe-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new CoordinatorLoadInProgressException(null)
         ));
 
@@ -1837,7 +1836,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(fetchAllOffsets ? "fetch-all-offsets" : "fetch-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
+        )).thenReturn(CompletableFuture.failedFuture(new CompletionException(error.exception())));
 
         CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> future = service.fetchOffsets(
             requestContext(ApiKeys.OFFSET_FETCH),
@@ -1904,7 +1903,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("classic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new UnknownMemberIdException()
         ));
 
@@ -2049,7 +2048,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("consumer-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new CoordinatorLoadInProgressException(null)
         ));
 
@@ -2076,7 +2075,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("consumer-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             Errors.COORDINATOR_NOT_AVAILABLE.exception()
         ));
 
@@ -2187,7 +2186,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new CoordinatorLoadInProgressException(null)
         ));
 
@@ -2214,7 +2213,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             Errors.COORDINATOR_NOT_AVAILABLE.exception()
         ));
 
@@ -2349,7 +2348,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(exception));
+        )).thenReturn(CompletableFuture.failedFuture(exception));
 
         CompletableFuture<OffsetDeleteResponseData> future = service.deleteOffsets(
             requestContext(ApiKeys.OFFSET_DELETE),
@@ -2443,7 +2442,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()));
+        )).thenReturn(CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()));
 
         List<String> groupIds = Arrays.asList("group-id-1", "group-id-2", "group-id-3", null);
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
@@ -2819,7 +2818,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(exception));
+        )).thenReturn(CompletableFuture.failedFuture(exception));
 
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(
@@ -3029,7 +3028,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.any(),
             ArgumentMatchers.eq((int) ApiKeys.TXN_OFFSET_COMMIT.latestVersion())
-        )).thenReturn(FutureUtils.failedFuture(new CompletionException(error.exception())));
+        )).thenReturn(CompletableFuture.failedFuture(new CompletionException(error.exception())));
 
         CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
             requestContext(ApiKeys.TXN_OFFSET_COMMIT),
@@ -3244,7 +3243,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(null),
             CompletableFuture.completedFuture(null),
-            FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+            CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
         ));
 
         when(runtime.scheduleWriteAllOperation(
@@ -3253,7 +3252,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(Arrays.asList(
             CompletableFuture.completedFuture(null),
             CompletableFuture.completedFuture(null),
-            FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+            CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
         ));
 
         // Verify no exception thrown.
@@ -3345,7 +3344,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("share-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(exception));
+        )).thenReturn(CompletableFuture.failedFuture(exception));
 
         CompletableFuture<ShareGroupHeartbeatResponseData> future = service.shareGroupHeartbeat(
             requestContext(ApiKeys.SHARE_GROUP_HEARTBEAT),
@@ -3563,7 +3562,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("share-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new CoordinatorLoadInProgressException(null)
         ));
 
@@ -3591,7 +3590,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("share-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             Errors.COORDINATOR_NOT_AVAILABLE.exception()
         ));
 
@@ -4754,7 +4753,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+        )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
             service.deleteShareGroupOffsets(requestContext(ApiKeys.DELETE_SHARE_GROUP_OFFSETS), requestData);
@@ -5321,7 +5320,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("complete-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+        )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
             service.deleteShareGroupOffsets(requestContext(ApiKeys.DELETE_SHARE_GROUP_OFFSETS), requestData);
@@ -5820,7 +5819,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("share-group-offsets-alter"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(
+        )).thenReturn(CompletableFuture.failedFuture(
             new GroupNotEmptyException("bad stuff")
         ));
 
