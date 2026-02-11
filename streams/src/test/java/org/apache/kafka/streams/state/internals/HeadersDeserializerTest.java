@@ -22,6 +22,8 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Iterator;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -123,5 +125,37 @@ public class HeadersDeserializerTest {
         assertNotNull(header);
         assertEquals("key1", header.key());
         assertArrayEquals(new byte[0], header.value());
+    }
+
+    @Test
+    public void shouldAllowDuplicateKeys() {
+        final Headers original = new RecordHeaders()
+            .add("key0", "value0".getBytes())
+            .add("key0", "value0".getBytes())
+            .add("key1", "value1".getBytes())
+            .add("key2", "value2".getBytes())
+            .add("key2", "value3".getBytes());
+        final byte[] serialized = serializer.serialize("", original);
+        final Headers deserialized = deserializer.deserialize("", serialized);
+        assertNotNull(deserialized);
+
+        final Header[] headerArray = deserialized.toArray();
+        assertEquals(5, headerArray.length);
+        final Iterator<Header> iterator = deserialized.iterator();
+        Header next = iterator.next();
+        assertEquals("key0", next.key());
+        assertArrayEquals("value0".getBytes(), next.value());
+        next = iterator.next();
+        assertEquals("key0", next.key());
+        assertArrayEquals("value0".getBytes(), next.value());
+        next = iterator.next();
+        assertEquals("key1", next.key());
+        assertArrayEquals("value1".getBytes(), next.value());
+        next = iterator.next();
+        assertEquals("key2", next.key());
+        assertArrayEquals("value2".getBytes(), next.value());
+        next = iterator.next();
+        assertEquals("key2", next.key());
+        assertArrayEquals("value3".getBytes(), next.value());
     }
 }

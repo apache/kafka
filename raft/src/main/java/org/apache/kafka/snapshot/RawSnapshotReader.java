@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.UnalignedRecords;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.UnalignedRecords;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 
 /**

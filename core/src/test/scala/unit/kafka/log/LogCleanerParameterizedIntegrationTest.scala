@@ -24,7 +24,8 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.util.MockTime
