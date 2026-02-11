@@ -212,6 +212,15 @@ public class MockInternalProcessorContext<KOut, VOut> extends MockProcessorConte
     }
 
     @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp,
+                          final Headers headers,
+                          final Position position) {
+    }
+
+    @Override
     public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
     }
 
