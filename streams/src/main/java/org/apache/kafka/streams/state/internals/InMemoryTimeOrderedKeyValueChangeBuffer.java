@@ -383,49 +383,45 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<Eviction<K, Change<V>>> callback) {
-        final List<Map.Entry<BufferKey, BufferValue>> entries = new ArrayList<>(sortedMap.entrySet());
-        int evictions = 0;
+        final Iterator<Map.Entry<BufferKey, BufferValue>> iterator = sortedMap.entrySet().iterator();
+        final List<Eviction<K, Change<V>>> evictions = new ArrayList<>();
+        int evictionCount = 0;
 
-        final List<BufferKey> keysToDelete = new ArrayList<>();
+        while (iterator.hasNext()) {
+            if (!predicate.get()) {
+                break;
+            }
 
-        if (predicate.get()) {
-            for (Iterator<Map.Entry<BufferKey, BufferValue>> entryIterator = entries.iterator(); entryIterator.hasNext(); ) {
-                final Map.Entry<BufferKey, BufferValue> next = entryIterator.next();
+            final Map.Entry<BufferKey, BufferValue> next = iterator.next();
+            final BufferValue bufferValue = next.getValue();
 
-                if (!predicate.get()) {
-                    break;
-                }
-
-                if (next.getKey().time() != minTimestamp) {
-                    throw new IllegalStateException(
-                        "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
-                            next.getKey().time() + "]"
-                    );
-                }
-                final K key = keySerde.deserializer().deserialize(changelogTopic, next.getKey().key().get());
-                final BufferValue bufferValue = next.getValue();
-                final Change<V> value = valueSerde.deserializeParts(
+            // Collect evictions to process them outside the iterator loop
+            final K key = keySerde.deserializer().deserialize(changelogTopic, next.getKey().key().get());
+            final Change<V> value = valueSerde.deserializeParts(
                     changelogTopic,
                     new Change<>(bufferValue.newValue(), bufferValue.oldValue())
-                );
-                callback.accept(new Eviction<K, Change<V>>(key, value, bufferValue.context()));
-                keysToDelete.add(next.getKey());
+            );
+            evictions.add(new Eviction<>(key, value, bufferValue.context()));
 
-                if (loggingEnabled) {
-                    dirtyKeys.add(next.getKey().key());
-                }
-                memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
-                minTimestamp = entries.isEmpty() ? Long.MAX_VALUE : entries.get(0).getKey().time();
-                evictions++;
+            if (loggingEnabled) {
+                dirtyKeys.add(next.getKey().key());
             }
-            for (BufferKey keyToDelete : keysToDelete) {
-                sortedMap.remove(keyToDelete);
-                index.remove(keyToDelete.key());
-            }
-            minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
+
+            memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
+
+            iterator.remove();
+            index.remove(next.getKey().key());
+
+            evictionCount++;
         }
-        if (evictions > 0) {
+
+        if (evictionCount > 0) {
+            minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
             updateBufferMetrics();
+        }
+
+        for (final Eviction<K, Change<V>> eviction : evictions) {
+            callback.accept(eviction);
         }
     }
 
