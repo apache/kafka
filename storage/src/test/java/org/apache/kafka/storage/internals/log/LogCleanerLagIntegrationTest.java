@@ -18,8 +18,8 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.server.util.MockTime;
 
 import org.junit.jupiter.api.Tag;
