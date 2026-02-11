@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
@@ -24,12 +25,15 @@ import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
+import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
+import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -64,15 +68,15 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         // Check if we're upgrading from RocksDBTimestampedStore (which uses keyValueWithTimestamp CF)
         final List<byte[]> existingCFs;
         try {
-            final org.rocksdb.Options options = new org.rocksdb.Options(dbOptions, new ColumnFamilyOptions());
+            final Options options = new Options(dbOptions, new ColumnFamilyOptions());
             existingCFs = RocksDB.listColumnFamilies(options, dbDir.getAbsolutePath());
             options.close();
-        } catch (final org.rocksdb.RocksDBException e) {
-            throw new org.apache.kafka.streams.errors.ProcessorStateException("Error listing column families for store " + name, e);
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error listing column families for store " + name, e);
         }
 
         final boolean upgradingFromTimestampedStore = existingCFs.stream()
-            .anyMatch(cf -> java.util.Arrays.equals(cf, LEGACY_TIMESTAMPED_CF_NAME));
+            .anyMatch(cf -> Arrays.equals(cf, LEGACY_TIMESTAMPED_CF_NAME));
 
         if (upgradingFromTimestampedStore) {
             openWithLegacyTimestampedCF(dbOptions, columnFamilyOptions);
