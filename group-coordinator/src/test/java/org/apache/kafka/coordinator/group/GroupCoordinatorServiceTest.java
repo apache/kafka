@@ -3899,7 +3899,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupOffsetsWithDefaultPersisterLatestOffsetThrowsError() throws InterruptedException, ExecutionException {
+    public void testDescribeShareGroupOffsetsWithDefaultPersisterLatestOffsetThrowsError() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
 
@@ -4034,7 +4034,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDescribeShareGroupAllOffsetsLatestOffsetError() throws InterruptedException, ExecutionException {
+    public void testDescribeShareGroupAllOffsetsLatestOffsetError() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
 
@@ -5878,11 +5878,6 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         );
         verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
-    }
-
-    @FunctionalInterface
-    private interface TriFunction<A, B, C, R> {
-        R apply(A a, B b, C c);
     }
 
     private static class GroupCoordinatorServiceBuilder {

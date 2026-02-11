@@ -79,7 +79,7 @@ public class InternalTopicManager {
             throwOnMissingSourceTopics(topology, metadataImage);
 
             Map<String, Integer> decidedPartitionCountsForInternalTopics =
-                decidePartitionCounts(logContext, topology, metadataImage, copartitionGroupsBySubtopology, log);
+                decidePartitionCounts(logContext, topology, metadataImage, copartitionGroupsBySubtopology);
 
             final SortedMap<String, ConfiguredSubtopology> configuredSubtopologies =
                 subtopologies.stream()
@@ -146,8 +146,7 @@ public class InternalTopicManager {
     private static Map<String, Integer> decidePartitionCounts(final LogContext logContext,
                                                               final StreamsTopology topology,
                                                               final CoordinatorMetadataImage metadataImage,
-                                                              final Map<String, Collection<Set<String>>> copartitionGroupsBySubtopology,
-                                                              final Logger log) {
+                                                              final Map<String, Collection<Set<String>>> copartitionGroupsBySubtopology) {
         final Map<String, Integer> decidedPartitionCountsForInternalTopics = new HashMap<>();
         final Function<String, OptionalInt> topicPartitionCountProvider =
             topic -> getPartitionCount(metadataImage, topic, decidedPartitionCountsForInternalTopics);
