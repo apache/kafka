@@ -313,8 +313,11 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * Handles ListOffsetsEvent by fetching the offsets for the given partitions and timestamps.
      */
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future =
-            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(), event.requireTimestamps());
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future = requestManagers.offsetsRequestManager.fetchOffsets(
+            event.timestampsToSearch(),
+            event.requireTimestamps(),
+            true
+        );
         future.whenComplete(complete(event.future()));
     }
 
@@ -672,7 +675,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                             ListOffsetsRequest.LATEST_TIMESTAMP
                         );
 
-                        requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false);
+                        requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false, false);
                     }
                 }
 
