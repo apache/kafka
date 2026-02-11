@@ -79,7 +79,8 @@ public class DynamicBrokerConfig {
             DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
             List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
             GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
-            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS)
+            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS, 
+            QuotaConfig.BROKER_QUOTA_CONFIGS)
         .flatMap(Collection::stream)
         .collect(Collectors.toUnmodifiableSet());
 

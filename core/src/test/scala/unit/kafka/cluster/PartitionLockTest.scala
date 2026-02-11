@@ -25,7 +25,7 @@ import kafka.log.LogManager
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
