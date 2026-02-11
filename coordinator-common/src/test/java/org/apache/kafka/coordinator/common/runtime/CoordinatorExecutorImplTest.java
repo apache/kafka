@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.server.util.FutureUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -215,7 +214,7 @@ public class CoordinatorExecutorImplTest {
 
             CoordinatorShardScheduler.WriteOperation<String> op = args.getArgument(1);
             Throwable ex = assertThrows(RejectedExecutionException.class, op::generate);
-            return FutureUtils.failedFuture(ex);
+            return CompletableFuture.failedFuture(ex);
         });
 
         when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
@@ -259,7 +258,7 @@ public class CoordinatorExecutorImplTest {
         when(scheduler.scheduleWriteOperation(
             eq(TASK_KEY),
             any()
-        )).thenReturn(FutureUtils.failedFuture(new Throwable("Oh no!")));
+        )).thenReturn(CompletableFuture.failedFuture(new Throwable("Oh no!")));
 
         when(executorService.submit(any(Runnable.class))).thenAnswer(args -> {
             Runnable op = args.getArgument(0);
