@@ -675,7 +675,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                             ListOffsetsRequest.LATEST_TIMESTAMP
                         );
 
-                        requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false, false);
+                        // The currentLag() API is a "best effort" attempt at calling the LIST_OFFSETS RPC. If it
+                        // fails, don't retry the attempt internally, but let the user attempt it again.
+                        requestManagers.offsetsRequestManager.fetchOffsets(
+                            timestampToSearch,
+                            false,
+                            false
+                        );
                     }
                 }
 

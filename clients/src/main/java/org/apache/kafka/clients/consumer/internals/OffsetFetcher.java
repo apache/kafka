@@ -141,7 +141,15 @@ public class OffsetFetcher {
         if (timestampsToSearch.isEmpty())
             return result;
 
+        // In the case that the user supplied a zero timeout to this method, only a single pass of the loop below will
+        // be performed before exiting. No TimeoutException will be thrown in that case. In the case that the single
+        // pass did not yield a response (either transient or fatal error), make sure to clear the relevant partitions'
+        // respective 'end offset requested' flags so that another attempt can be made by the user.
+        //
+        // If the timeout is not zero, the loop will be executed at least once. In the case that not all the partitions
+        // were found, a TimeoutException will be thrown.
         boolean isZeroTimestamp = timer.timeoutMs() == 0L;
+
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
             RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
@@ -154,26 +162,13 @@ public class OffsetFetcher {
                         remainingToSearch.keySet().retainAll(value.partitionsToRetry);
 
                         offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
-
-                        if (isZeroTimestamp) {
-                            // In the case that the user supplied a zero timeout, only a single pass of this method's
-                            // loop will be performed and no timeout will be thrown. In case the single pass did not
-                            // yield an offset, make sure to clear those partitions' respective 'end offset requested'
-                            // flags so that another attempt can be made.
-                            offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
-                        }
+                        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
                     }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    if (isZeroTimestamp) {
-                        // In the case that the user supplied a zero timeout, only a single pass of this method's
-                        // loop will be performed and no timeout will be thrown. In case there's an error, clear
-                        // any remaining partitions' respective 'end offset requested' flags so that another attempt
-                        // can be made.
-                        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
-                    }
+                    offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
 
                     if (!(e instanceof RetriableException)) {
                         throw future.exception();
