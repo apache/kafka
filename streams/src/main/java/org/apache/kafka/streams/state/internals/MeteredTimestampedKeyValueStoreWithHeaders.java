@@ -89,11 +89,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     protected ValueTimestampHeaders<V> outerValue(final byte[] value) {
-        Headers headers =
-            HeadersDeserializer.deserialize(ValueTimestampHeadersDeserializer.rawHeaders(value));
-        if (headers == null) {
-            throw new ProcessorStateException("Headers cannot be null");
-        }
+        Headers headers = ValueTimestampHeadersDeserializer.headers(value);
         return value != null ? serdes.valueFrom(value, headers) : null;
     }
 
