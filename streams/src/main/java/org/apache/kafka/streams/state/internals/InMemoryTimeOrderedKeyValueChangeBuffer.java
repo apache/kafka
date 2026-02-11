@@ -443,88 +443,82 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<Eviction<K, Change<V>>> callback) {
-        final List<Map.Entry<BufferKey, BufferValue>> entries = new ArrayList<>(sortedMap.entrySet());
-        int evictions = 0;
+        final Iterator<Map.Entry<BufferKey, BufferValue>> iterator = sortedMap.entrySet().iterator();
+        final List<Eviction<K, Change<V>>> evictions = new ArrayList<>();
+        int evictionCount = 0;
 
-        final List<BufferKey> keysToDelete = new ArrayList<>();
-
-        if (predicate.get()) {
-            for (Iterator<Map.Entry<BufferKey, BufferValue>> entryIterator = entries.iterator(); entryIterator.hasNext(); ) {
-                final Map.Entry<BufferKey, BufferValue> next = entryIterator.next();
-
-                if (!predicate.get()) {
-                    break;
-                }
-
-                if (next.getKey().time() != minTimestamp) {
-                    throw new IllegalStateException(
-                        "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
-                            next.getKey().time() + "]"
-                    );
-                }
-                final BufferValue bufferValue = next.getValue();
-                final ProcessorRecordContext bufferedContext = bufferValue.context();
-
-                final K key;
-                final Change<V> value;
-                final ProcessorRecordContext evictionContext;
-                if (storeHeaders) {
-                    // Each value part was stored as a ValueTimestampHeaders blob carrying the headers of
-                    // the record it originated from, so take them from the value rather than from the
-                    // buffered context: the old value came from an earlier record than the new one, and
-                    // deserializing it with the new record's headers would hand the serde the wrong ones.
-                    // (ValueTimestampHeadersDeserializer feeds each part's own headers to the inner
-                    // value deserializer.)
-                    final ValueTimestampHeaders<V> newPart = deserializeValueTimestampHeaders(bufferValue.newValue());
-                    final ValueTimestampHeaders<V> oldPart = deserializeValueTimestampHeaders(bufferValue.oldValue());
-                    // A tombstone has no new value to take headers from; fall back to the buffered context.
-                    // That fallback is not a second-best guess: the buffered context and the new value's
-                    // embedded headers always agree. put() hands the very same record.headers() instance to
-                    // both, and ValueTimestampHeadersSerializer snapshots the headers only AFTER running the
-                    // inner value serializer, so even a serde that writes into the headers it is given (a
-                    // Schema Registry serde recording the schema id, say) is reflected in both. Restoring
-                    // preserves the equality, because toInMemoryEncoding rebuilds the new part from that
-                    // same context. Only the old and prior parts can differ from the context, which is why
-                    // they are the ones read from the value here.
-                    final Headers newHeaders = newPart == null ? bufferedContext.headers() : newPart.headers();
-                    key = keySerde.deserializer().deserialize(changelogTopic, newHeaders, next.getKey().key().get());
-                    value = new Change<>(
-                        ValueTimestampHeaders.getValueOrNull(newPart),
-                        ValueTimestampHeaders.getValueOrNull(oldPart)
-                    );
-                    // The emitted record carries the new value's headers, so hand them to the callback
-                    // via the eviction's context (which is what the suppress processor forwards).
-                    evictionContext = withHeaders(bufferedContext, newHeaders);
-                } else {
-                    // Plain values store no headers of their own; the buffered context is the only
-                    // carrier, exactly as before.
-                    final Headers headers = bufferedContext.headers();
-                    key = keySerde.deserializer().deserialize(changelogTopic, headers, next.getKey().key().get());
-                    value = new Change<>(
-                        deserializeValue(bufferValue.newValue(), headers),
-                        deserializeValue(bufferValue.oldValue(), headers)
-                    );
-                    evictionContext = bufferedContext;
-                }
-                callback.accept(new Eviction<K, Change<V>>(key, value, evictionContext));
-
-                keysToDelete.add(next.getKey());
-
-                if (loggingEnabled) {
-                    dirtyKeys.add(next.getKey().key());
-                }
-                memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
-                minTimestamp = entries.isEmpty() ? Long.MAX_VALUE : entries.get(0).getKey().time();
-                evictions++;
+        while (iterator.hasNext()) {
+            if (!predicate.get()) {
+                break;
             }
-            for (BufferKey keyToDelete : keysToDelete) {
-                sortedMap.remove(keyToDelete);
-                index.remove(keyToDelete.key());
+
+            final Map.Entry<BufferKey, BufferValue> next = iterator.next();
+            final BufferValue bufferValue = next.getValue();
+
+            final ProcessorRecordContext bufferedContext = bufferValue.context();
+
+            final K key;
+            final Change<V> value;
+            final ProcessorRecordContext evictionContext;
+            if (storeHeaders) {
+                // Each value part was stored as a ValueTimestampHeaders blob carrying the headers of
+                // the record it originated from, so take them from the value rather than from the
+                // buffered context: the old value came from an earlier record than the new one, and
+                // deserializing it with the new record's headers would hand the serde the wrong ones.
+                // (ValueTimestampHeadersDeserializer feeds each part's own headers to the inner
+                // value deserializer.)
+                final ValueTimestampHeaders<V> newPart = deserializeValueTimestampHeaders(bufferValue.newValue());
+                final ValueTimestampHeaders<V> oldPart = deserializeValueTimestampHeaders(bufferValue.oldValue());
+                // A tombstone has no new value to take headers from; fall back to the buffered context.
+                // That fallback is not a second-best guess: the buffered context and the new value's
+                // embedded headers always agree. put() hands the very same record.headers() instance to
+                // both, and ValueTimestampHeadersSerializer snapshots the headers only AFTER running the
+                // inner value serializer, so even a serde that writes into the headers it is given (a
+                // Schema Registry serde recording the schema id, say) is reflected in both. Restoring
+                // preserves the equality, because toInMemoryEncoding rebuilds the new part from that
+                // same context. Only the old and prior parts can differ from the context, which is why
+                // they are the ones read from the value here.
+                final Headers newHeaders = newPart == null ? bufferedContext.headers() : newPart.headers();
+                key = keySerde.deserializer().deserialize(changelogTopic, newHeaders, next.getKey().key().get());
+                value = new Change<>(
+                    ValueTimestampHeaders.getValueOrNull(newPart),
+                    ValueTimestampHeaders.getValueOrNull(oldPart)
+                );
+                // The emitted record carries the new value's headers, so hand them to the callback
+                // via the eviction's context (which is what the suppress processor forwards).
+                evictionContext = withHeaders(bufferedContext, newHeaders);
+            } else {
+                // Plain values store no headers of their own; the buffered context is the only
+                // carrier, exactly as before.
+                final Headers headers = bufferedContext.headers();
+                key = keySerde.deserializer().deserialize(changelogTopic, headers, next.getKey().key().get());
+                value = new Change<>(
+                    deserializeValue(bufferValue.newValue(), headers),
+                    deserializeValue(bufferValue.oldValue(), headers)
+                );
+                evictionContext = bufferedContext;
             }
-            minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
+            evictions.add(new Eviction<>(key, value, evictionContext));
+
+            if (loggingEnabled) {
+                dirtyKeys.add(next.getKey().key());
+            }
+
+            memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
+
+            iterator.remove();
+            index.remove(next.getKey().key());
+
+            evictionCount++;
         }
-        if (evictions > 0) {
+
+        if (evictionCount > 0) {
+            minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
             updateBufferMetrics();
+        }
+
+        for (final Eviction<K, Change<V>> eviction : evictions) {
+            callback.accept(eviction);
         }
     }
 
