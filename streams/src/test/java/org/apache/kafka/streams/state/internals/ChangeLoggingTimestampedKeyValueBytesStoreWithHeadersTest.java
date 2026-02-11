@@ -142,7 +142,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
         assertEquals(hi, collector.collected().get(0).key());
         assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
         assertEquals(97L, collector.collected().get(0).timestamp());
-        Headers headers0 = collector.collected().get(0).headers();
+        final Headers headers0 = collector.collected().get(0).headers();
         assertEquals(1, headers0.toArray().length);
         assertEquals("value1", new String(headers0.lastHeader("key1").value()));
 
@@ -150,7 +150,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
         assertEquals(hello, collector.collected().get(1).key());
         assertArrayEquals(world.value(), (byte[]) collector.collected().get(1).value());
         assertEquals(98L, collector.collected().get(1).timestamp());
-        Headers headers1 = collector.collected().get(1).headers();
+        final Headers headers1 = collector.collected().get(1).headers();
         assertEquals(1, headers1.toArray().length);
         assertEquals("value2", new String(headers1.lastHeader("key2").value()));
     }
@@ -180,7 +180,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
         assertEquals(hi, collector.collected().get(0).key());
         assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
         assertEquals(97L, collector.collected().get(0).timestamp());
-        Headers headers0 = collector.collected().get(0).headers();
+        final Headers headers0 = collector.collected().get(0).headers();
         assertEquals(1, headers0.toArray().length);
         assertEquals("value1", new String(headers0.lastHeader("key1").value()));
 
@@ -213,7 +213,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
         assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
         assertEquals(97L, collector.collected().get(0).timestamp());
 
-        Headers headers = collector.collected().get(0).headers();
+        final Headers headers = collector.collected().get(0).headers();
         assertEquals(1, headers.toArray().length);
         assertEquals("value1", new String(headers.lastHeader("key1").value()));
     }
@@ -227,7 +227,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
         assertEquals(hi, collector.collected().get(0).key());
         assertArrayEquals(there.value(), (byte[]) collector.collected().get(0).value());
         assertEquals(97L, collector.collected().get(0).timestamp());
-        Headers headers0 = collector.collected().get(0).headers();
+        final Headers headers0 = collector.collected().get(0).headers();
         assertEquals(1, headers0.toArray().length);
         assertEquals("value1", new String(headers0.lastHeader("key1").value()));
     }
