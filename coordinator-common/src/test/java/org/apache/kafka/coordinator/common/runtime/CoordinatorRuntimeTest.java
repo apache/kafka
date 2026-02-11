@@ -1258,7 +1258,7 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 50,
             TXN_OFFSET_COMMIT_LATEST_VERSION
-        )).thenReturn(FutureUtils.failedFuture(Errors.NOT_ENOUGH_REPLICAS.exception()));
+        )).thenReturn(CompletableFuture.failedFuture(Errors.NOT_ENOUGH_REPLICAS.exception()));
 
         // Schedule a transactional write.
         CompletableFuture<String> future = runtime.scheduleTransactionalWriteOperation(

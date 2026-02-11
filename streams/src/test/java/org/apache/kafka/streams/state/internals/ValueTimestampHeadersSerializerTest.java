@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.junit.jupiter.api.AfterEach;
@@ -29,6 +30,13 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ValueTimestampHeadersSerializerTest {
 
@@ -123,5 +131,25 @@ public class ValueTimestampHeadersSerializerTest {
             ValueTimestampHeaders.makeAllowNullable(null, TIMESTAMP, new RecordHeaders());
         final byte[] serialized = serializer.serialize(TOPIC, valueTimestampHeaders);
         assertNull(serialized);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldPassHeadersToSerializer() {
+        final Serializer<String> mockSerializer = mock(Serializer.class);
+        when(mockSerializer.serialize(anyString(), any(Headers.class), anyString()))
+            .thenReturn("test-value".getBytes());
+
+        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
+        final ValueTimestampHeaders<String> valueTimestampHeaders =
+            ValueTimestampHeaders.make(VALUE, TIMESTAMP, headers);
+
+        final ValueTimestampHeadersSerializer<String> testSerializer =
+            new ValueTimestampHeadersSerializer<>(mockSerializer);
+        testSerializer.serialize(TOPIC, valueTimestampHeaders);
+
+        // we should invoke the serialize(String, Headers, Object) instead of serialize(String, Object)
+        verify(mockSerializer).serialize(eq(TOPIC), any(Headers.class), eq(VALUE));
+        verify(mockSerializer, never()).serialize(eq(TOPIC), eq(VALUE));
     }
 }

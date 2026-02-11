@@ -1439,6 +1439,9 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
      * This will block until all threads have stopped.
+     * <p>
+     * When using the classic protocol, the consumer will not leave the group explicitly. However, when using
+     * the streams group protocol ({@code group.protocol=streams}), the consumer will always leave the group.
      */
     public void close() {
         close(Optional.empty(), org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
@@ -1584,6 +1587,9 @@ public class KafkaStreams implements AutoCloseable {
      * threads to join.
      * A {@code timeout} of {@link Duration#ZERO} (or any other zero duration) makes the close operation asynchronous.
      * Negative-duration timeouts are rejected.
+     * <p>
+     * When using the classic protocol, the consumer will not leave the group explicitly. However, when using
+     * the streams group protocol ({@code group.protocol=streams}), the consumer will always leave the group.
      *
      * @param timeout how long to wait for the threads to shut down
      * @return {@code true} if all threads were successfully stopped&mdash;{@code false} if the timeout was reached
