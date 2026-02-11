@@ -1751,6 +1751,57 @@ public class PlaintextConsumerTest {
         return result.get();
     }
 
+    @ClusterTest
+    public void testClassicConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled() throws Exception {
+        testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(Map.of(
+            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)
+        ));
+    }
+
+    /**
+     * Verify that {@link Consumer#unsubscribe()} does not commit offsets even when
+     * {@code enable.auto.commit} is enabled. A second consumer using the same group ID
+     * should see no committed offsets after the first consumer unsubscribes.
+     */
+    private void testUnsubscribeDoesNotCommitOffsetsWithAutoCommitEnabled(Map<String, Object> consumerConfig) throws Exception {
+        var numRecords = 10;
+        var groupId = "unsubscribe-no-commit-test";
+        sendRecords(cluster, TP, numRecords);
+
+        // Consumer 1: subscribe, consume records, then unsubscribe (without explicit commit)
+        Map<String, Object> config = new HashMap<>(consumerConfig);
+        config.put(GROUP_ID_CONFIG, groupId);
+        config.put(ENABLE_AUTO_COMMIT_CONFIG, true);
+        config.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        try (Consumer<byte[], byte[]> consumer1 = cluster.consumer(config)) {
+            consumer1.subscribe(List.of(TOPIC));
+            consumeRecords(consumer1, numRecords);
+
+            // Unsubscribe - this should NOT commit offsets even though auto-commit is enabled
+            consumer1.unsubscribe();
+        }
+
+        // Consumer 2: use the same group ID to check committed offsets
+        Map<String, Object> verifyConfig = new HashMap<>(consumerConfig);
+        verifyConfig.put(GROUP_ID_CONFIG, groupId);
+        verifyConfig.put(ENABLE_AUTO_COMMIT_CONFIG, false);
+
+        try (Consumer<byte[], byte[]> consumer2 = cluster.consumer(verifyConfig)) {
+            consumer2.assign(List.of(TP));
+            OffsetAndMetadata committed = consumer2.committed(Set.of(TP)).get(TP);
+            assertNull(committed,
+                "unsubscribe() should not commit offsets even when auto-commit is enabled");
+        }
+    }
+
     public static class SerializerImpl implements Serializer<byte[]> {
         private final ByteArraySerializer serializer = new ByteArraySerializer();
 
