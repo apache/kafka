@@ -94,7 +94,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, false);
+        return new RocksDBKeyValueBytesStoreSupplier(name, false, false);
     }
 
     /**
@@ -113,7 +113,28 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, true);
+        return new RocksDBKeyValueBytesStoreSupplier(name, true, false);
+    }
+
+    }
+
+    /**
+     * Create a persistent {@link KeyValueBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link KeyValueStore} or a {@link VersionedKeyValueStore}
+     * you should use {@link #KeyValueStore(String)} or
+     * {@link #persistentVersionedKeyValueStore(String, Duration)}, respectively,
+     * to create a store supplier instead.
+     *
+     * @param name  name of the store (cannot be {@code null})
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * to build a persistent key-(headers/timestamp/value) store
+     */
+    public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStoreWithHeaders(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
+        return new RocksDBKeyValueBytesStoreSupplier(name, true, true);
     }
 
     /**

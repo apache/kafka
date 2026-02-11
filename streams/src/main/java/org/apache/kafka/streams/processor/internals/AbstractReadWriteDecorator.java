@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
@@ -61,7 +62,9 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
     }
 
     static StateStore wrapWithReadWriteStore(final StateStore store) {
-        if (store instanceof TimestampedKeyValueStore) {
+        if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+            return new TimestampedKeyValueStoreReadWriteDecoratorWithHeaders<>((TimestampedKeyValueStoreWithHeaders<?, ?>) store);
+        } else if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
         } else if (store instanceof VersionedKeyValueStore) {
             return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
@@ -324,6 +327,15 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom,
                                                         final K keyTo) {
             return wrapped().fetch(keyFrom, keyTo);
+        }
+    }
+
+    static class TimestampedKeyValueStoreReadWriteDecoratorWithHeaders<K, V>
+        extends KeyValueStoreReadWriteDecorator<K, ValueTimestampHeaders<V>>
+        implements TimestampedKeyValueStoreWithHeaders<K, V> {
+
+        TimestampedKeyValueStoreReadWriteDecoratorWithHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> inner) {
+            super(inner);
         }
     }
 }

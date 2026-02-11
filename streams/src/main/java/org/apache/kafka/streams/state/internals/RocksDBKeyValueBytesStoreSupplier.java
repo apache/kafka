@@ -24,11 +24,14 @@ public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     private final String name;
     private final boolean returnTimestampedStore;
+    private final boolean returnHeadersStore;
 
     public RocksDBKeyValueBytesStoreSupplier(final String name,
-                                             final boolean returnTimestampedStore) {
+                                             final boolean returnTimestampedStore,
+                                             final boolean returnHeadersStore) {
         this.name = name;
         this.returnTimestampedStore = returnTimestampedStore;
+        this.returnHeadersStore = returnHeadersStore;
     }
 
     @Override
@@ -38,7 +41,9 @@ public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
-        return returnTimestampedStore ?
+        return returnHeadersStore ?
+            new RocksDBTimestampedStoreWithHeaders(name, metricsScope()) :
+            returnTimestampedStore ?
             new RocksDBTimestampedStore(name, metricsScope()) :
             new RocksDBStore(name, metricsScope());
     }
