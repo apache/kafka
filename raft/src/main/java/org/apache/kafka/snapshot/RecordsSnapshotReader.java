@@ -33,7 +33,7 @@ import java.util.OptionalLong;
 public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
     private final RecordsIterator<T> iterator;
-    
+
     private Optional<Batch<T>> nextBatch = Optional.empty();
     private OptionalLong lastContainedLogTimestamp = OptionalLong.empty();
 
