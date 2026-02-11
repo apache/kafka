@@ -3716,6 +3716,10 @@ org.apache.kafka.streams.query.StateQueryResultTest:
 org.apache.kafka.streams.query.VersionedKeyQueryTest:
 - shouldThrowNPEWithNullAsOftimestamp
 - shouldThrowNPEWithNullKey
+org.apache.kafka.streams.state.HeadersBytesStoreTest:
+- shouldConvertEmptyValueToHeaderFormat
+- shouldConvertLegacyValueToHeaderFormat
+- shouldReturnNullWhenConvertingNullValue
 org.apache.kafka.streams.state.HostInfoTest:
 - shouldCreateHostInfo
 - shouldReturnNullHostInfoForEmptyEndPoint
