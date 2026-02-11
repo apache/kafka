@@ -7751,14 +7751,14 @@ public class GroupMetadataManager {
 
         return switch (group.currentState()) {
             case EMPTY -> new CoordinatorResult<>(
-                    List.of(),
-                    new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                List.of(),
+                new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
             );
             case PREPARING_REBALANCE -> {
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
                 yield new CoordinatorResult<>(
-                        List.of(),
-                        new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
+                    List.of(),
+                    new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
                 );
             }
             case COMPLETING_REBALANCE, STABLE -> {
@@ -7767,8 +7767,8 @@ public class GroupMetadataManager {
                 // normal heartbeat requests and reset the timer
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
                 yield new CoordinatorResult<>(
-                        List.of(),
-                        new HeartbeatResponseData()
+                    List.of(),
+                    new HeartbeatResponseData()
                 );
             }
             default -> throw new IllegalStateException("Reached unexpected state " +
