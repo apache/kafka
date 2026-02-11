@@ -139,11 +139,12 @@ public class TransactionMetadata {
 
     public TxnTransitMetadata prepareFenceProducerEpoch() {
         if (producerEpoch == Short.MAX_VALUE)
-            throw new IllegalStateException("Cannot fence producer with epoch equal to Short.MaxValue since this would overflow");
+            LOGGER.error("Fencing producer {} {} with epoch equal to Short.MaxValue, this must not happen unless there is a bug", transactionalId, producerId);
 
         // If we've already failed to fence an epoch (because the write to the log failed), we don't increase it again.
         // This is safe because we never return the epoch to client if we fail to fence the epoch
-        short bumpedEpoch = hasFailedEpochFence ? producerEpoch : (short) (producerEpoch + 1);
+        // Also don't increase if producerEpoch is already at max, to avoid overflow.
+        short bumpedEpoch = hasFailedEpochFence || producerEpoch == Short.MAX_VALUE ? producerEpoch : (short) (producerEpoch + 1);
 
         TransitionData data = new TransitionData(TransactionState.PREPARE_EPOCH_FENCE);
         data.producerEpoch = bumpedEpoch;
@@ -238,8 +239,14 @@ public class TransactionMetadata {
                                                    boolean noPartitionAdded) {
         TransitionData data = new TransitionData(newState);
         if (clientTransactionVersion.supportsEpochBump()) {
-            // We already ensured that we do not overflow here. MAX_SHORT is the highest possible value.
-            data.producerEpoch = (short) (producerEpoch + 1);
+            if (producerEpoch == Short.MAX_VALUE && newState == TransactionState.PREPARE_ABORT) {
+                // If we're already in a broken state, we let the abort go through without
+                // epoch overflow, so that we can recover and continue.
+                LOGGER.error("Aborting producer {} {} with epoch equal to Short.MaxValue, this must not happen unless there is a bug", transactionalId, producerId);
+            } else {
+                // We already ensured that we do not overflow here. MAX_SHORT is the highest possible value.
+                data.producerEpoch = (short) (producerEpoch + 1);
+            }
             data.lastProducerEpoch = producerEpoch;
         } else {
             data.producerEpoch = producerEpoch;

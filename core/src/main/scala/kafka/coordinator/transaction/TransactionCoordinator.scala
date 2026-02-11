@@ -1006,6 +1006,9 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
+  // Package-private for testing
+  private[kafka] def transactionManager: TransactionStateManager = txnManager
+
   private def onEndTransactionComplete(txnIdAndPidEpoch: TransactionalIdAndProducerIdEpoch)(error: Errors, newProducerId: Long, newProducerEpoch: Short): Unit = {
     error match {
       case Errors.NONE =>
