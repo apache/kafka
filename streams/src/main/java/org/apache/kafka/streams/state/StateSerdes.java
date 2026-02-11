@@ -154,7 +154,7 @@ public final class StateSerdes<K, V> {
      */
     @Deprecated
     public K keyFrom(final byte[] rawKey) {
-        return keySerde.deserializer().deserialize(topic, rawKey);
+        return keyFrom(rawKey, new RecordHeaders());
     }
 
     /**
