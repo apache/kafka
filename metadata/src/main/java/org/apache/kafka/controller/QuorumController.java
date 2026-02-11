@@ -1066,6 +1066,51 @@ public final class QuorumController implements Controller {
         }
 
         @Override
+        public void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+            appendRaftEvent(String.format("handleLoadBootstrap[snapshotId=%s]", reader.snapshotId()), () -> {
+                try {
+                    String snapshotName = Snapshots.filenameFromSnapshotId(reader.snapshotId());
+                    if (isActiveController()) {
+                        throw fatalFaultHandler.handleFault("Asked to load bootstrap snapshot " + snapshotName +
+                                ", but we are the active controller at epoch " + curClaimEpoch);
+                    }
+                    offsetControl.beginLoadSnapshot(reader.snapshotId());
+                    while (reader.hasNext()) {
+                        Batch<ApiMessageAndVersion> batch = reader.next();
+                        long offset = batch.lastOffset();
+                        List<ApiMessageAndVersion> messages = batch.records();
+                        log.debug("Replaying bootstrap snapshot {} batch with last offset of {}",
+                                snapshotName, offset);
+
+                        int i = 1;
+                        for (ApiMessageAndVersion message : messages) {
+                            try {
+                                replay(message.message(), Optional.of(reader.snapshotId()),
+                                        reader.lastContainedLogOffset());
+                            } catch (Throwable e) {
+                                String failureMessage = String.format("Unable to apply %s record " +
+                                    "from bootstrap snapshot %s on standby controller, which was %d of " +
+                                    "%d record(s) in the batch with baseOffset %d.",
+                                    message.message().getClass().getSimpleName(), reader.snapshotId(),
+                                    i, messages.size(), batch.baseOffset());
+                                throw fatalFaultHandler.handleFault(failureMessage, e);
+                            }
+                            i++;
+                        }
+                    }
+                    offsetControl.endLoadSnapshot(reader.lastContainedLogTimestamp());
+                } catch (FaultHandlerException e) {
+                    throw e;
+                } catch (Throwable e) {
+                    throw fatalFaultHandler.handleFault("Error while loading bootstrap snapshot " +
+                            reader.snapshotId(), e);
+                } finally {
+                    reader.close();
+                }
+            });
+        }
+
+        @Override
         public void handleLeaderChange(LeaderAndEpoch newLeader) {
             appendRaftEvent("handleLeaderChange[" + newLeader.epoch() + "]", () -> {
                 final String newLeaderName = newLeader.leaderId().isPresent() ?

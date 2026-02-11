@@ -82,6 +82,12 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
     }
 
     @Override
+    public synchronized void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
+        // Mock listener does not process bootstrap snapshots.
+        reader.close();
+    }
+
+    @Override
     public synchronized void handleLeaderChange(LeaderAndEpoch newLeaderAndEpoch) {
         LeaderAndEpoch oldLeaderAndEpoch = this.leaderAndEpoch;
         this.leaderAndEpoch = newLeaderAndEpoch;

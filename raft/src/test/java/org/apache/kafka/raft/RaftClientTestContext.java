@@ -2363,6 +2363,12 @@ public final class RaftClientTestContext {
             savedBatches.clear();
             snapshot = Optional.of(reader);
         }
+
+        @Override
+        public void handleLoadBootstrap(SnapshotReader<String> reader) {
+            // MockListener does not process bootstrap snapshots.
+            reader.close();
+        }
     }
 
     /**
