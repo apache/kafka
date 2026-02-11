@@ -852,7 +852,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotInitializeStandbyTasksWhenNoLocalState() {
+    public void shouldNotInitializeStartupStateWhenNoLocalState() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupStores(new TaskId(0, 0), false);
         assertFalse(directory.hasStartupTasks());
@@ -861,7 +861,7 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldInitializeStandbyTasksForLocalState() {
+    public void shouldInitializeStartupStateForLocalState() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupStores(new TaskId(0, 0), true);
         assertTrue(directory.hasStartupTasks());
@@ -871,14 +871,14 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldNotAssignStartupTasksWeDontHave() {
+    public void shouldNotAssignStartupStateWeDontHave() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupStores(taskId, false);
         assertFalse(directory.removeStartupState(taskId));
     }
 
     @Test
-    public void shouldUnlockStartupTasksOnClose() {
+    public void shouldUnlockStartupStateOnClose() {
         final TaskId taskId = new TaskId(0, 0);
         initializeStartupStores(taskId, true);
 
@@ -888,21 +888,25 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCloseStartupTasksOnAutoCleanUp() {
+    public void shouldCloseStartupStateOnAutoCleanUp() {
         // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
         // which can't be mocked
         time.setCurrentTimeMs(System.currentTimeMillis());
+        TaskId taskId = new TaskId(0, 0);
 
-        final StateStore store = initializeStartupStores(new TaskId(0, 0), true);
+        final StateStore store = initializeStartupStores(taskId, true);
 
         assertTrue(directory.hasStartupTasks());
         assertFalse(store.isOpen());
 
         time.sleep(10000);
+        // We need to manually unlock the task because the cleanup process only
+        // cleans tasks that are no-longer owned by the current thread
+        directory.unlock(taskId);
 
         directory.cleanRemovedTasks(1000);
 
-        assertTrue(directory.hasStartupTasks());
+        assertFalse(directory.hasStartupTasks());
         assertFalse(store.isOpen());
     }
 

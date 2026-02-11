@@ -583,6 +583,7 @@ public class StateDirectory implements AutoCloseable {
                         if (now - cleanupDelayMs > lastModifiedMs) {
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
                                 logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
+                            removeStartupState(id);
                             Utils.delete(taskDir.file());
                         }
                     }
