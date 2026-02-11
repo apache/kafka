@@ -122,7 +122,6 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
     @Test
     public void shouldMigrateFromTimestampedToHeadersAwareColumnFamily() throws Exception {
-        // Prepare legacy RocksDBTimestampedStore with timestamped values
         prepareOldStore();
 
         // Open with RocksDBTimestampedStoreWithHeaders - should detect legacy CF and enter upgrade mode
@@ -132,79 +131,52 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in upgrade mode"));
         }
 
-        // approx: 7 entries on legacy timestamped CF, 0 in new headers-aware CF
-        assertEquals(7L, rocksDBStore.approximateNumEntries());
+        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 7 entries in legacy CF and 0 in headers-aware CF before migration");
 
         // get() - tests lazy migration on read
 
-        // should be no-op on both CFs
-        assertNull(rocksDBStore.get(new Bytes("unknown".getBytes())));
-        // approx: 7 entries on legacy CF, 0 in headers-aware CF
-        assertEquals(7L, rocksDBStore.approximateNumEntries());
+        assertNull(rocksDBStore.get(new Bytes("unknown".getBytes())), "Expected null for unknown key");
+        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 7 entries on legacy CF, 0 in headers-aware CF");
 
-        // should migrate key1 from legacy timestamped CF to headers-aware CF
-        // returns header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(1) = 10 bytes
-        assertEquals(1 + 0 + 8 + 1, rocksDBStore.get(new Bytes("key1".getBytes())).length);
-        // one delete on legacy CF, one put on headers-aware CF
-        // approx: 6 entries on legacy CF, 1 in headers-aware CF
-        assertEquals(7L, rocksDBStore.approximateNumEntries());
+        assertEquals(1 + 0 + 8 + 1, rocksDBStore.get(new Bytes("key1".getBytes())).length,
+            "Expected header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(1) = 10 bytes");
+        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 6 entries on legacy CF, 1 in headers-aware CF after migrating key1");
 
         // put() - tests migration on write
 
-        // should migrate key2 from legacy CF to headers-aware CF with new value
         rocksDBStore.put(new Bytes("key2".getBytes()), "timestamp+22".getBytes());
-        // one delete on legacy CF, one put on headers-aware CF
-        // approx: 5 entries on legacy CF, 2 in headers-aware CF
-        assertEquals(7L, rocksDBStore.approximateNumEntries());
+        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 5 entries on legacy CF, 2 in headers-aware CF after migrating key2 with put()");
 
-        // should delete key3 from both legacy and headers-aware CF
         rocksDBStore.put(new Bytes("key3".getBytes()), null);
         // count is off by one, due to two delete operations (even if one does not delete anything)
-        // approx: 4 entries on legacy CF, 1 in headers-aware CF
-        assertEquals(5L, rocksDBStore.approximateNumEntries());
+        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 4 entries on legacy CF, 1 in headers-aware CF after deleting key3 with put()");
 
-        // should add new key8 to headers-aware CF only
         rocksDBStore.put(new Bytes("key8".getBytes()), "headers+timestamp+88888888".getBytes());
-        // one delete on legacy CF (no-op), one put on headers-aware CF
-        // approx: 3 entries on legacy CF, 2 in headers-aware CF
-        assertEquals(5L, rocksDBStore.approximateNumEntries());
+        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 3 entries on legacy CF, 2 in headers-aware CF after adding new key8 with put()");
 
         // putIfAbsent() - tests migration on conditional write
 
-        // should migrate key4 from legacy CF to headers-aware CF with old value (not new value)
-        // returns header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(4) = 13 bytes
-        assertEquals(1 + 0 + 8 + 4, rocksDBStore.putIfAbsent(new Bytes("key4".getBytes()), "headers+timestamp+4444".getBytes()).length);
-        // one delete on legacy CF, one put on headers-aware CF
-        // approx: 2 entries on legacy CF, 3 in headers-aware CF
-        assertEquals(5L, rocksDBStore.approximateNumEntries());
+        assertEquals(1 + 0 + 8 + 4,
+            rocksDBStore.putIfAbsent(new Bytes("key4".getBytes()), "headers+timestamp+4444".getBytes()).length,
+            "Expected header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(4) = 13 bytes");
+        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 2 entries on legacy CF, 3 in headers-aware CF after migrating key4 with putIfAbsent()");
 
-        // should add new key11 to headers-aware CF only (returns null because key doesn't exist)
-        assertNull(rocksDBStore.putIfAbsent(new Bytes("key11".getBytes()), "headers+timestamp+11111111111".getBytes()));
-        // one delete on legacy CF (no-op), one put on headers-aware CF
-        // approx: 1 entries on legacy CF, 4 in headers-aware CF
-        assertEquals(5L, rocksDBStore.approximateNumEntries());
+        assertNull(rocksDBStore.putIfAbsent(new Bytes("key11".getBytes()), "headers+timestamp+11111111111".getBytes()),
+            "Expected null return value for putIfAbsent on non-existing key11, and new key should be added to headers-aware CF");
+        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 1 entry on legacy CF, 4 in headers-aware CF after adding new key11 with putIfAbsent()");
 
-        // should not delete key5 but migrate to headers-aware CF (putIfAbsent with null doesn't delete)
-        // returns header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(5) = 14 bytes
-        assertEquals(1 + 0 + 8 + 5, rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length);
-        // one delete on legacy CF, one put on headers-aware CF
-        // approx: 0 entries on legacy CF, 5 in headers-aware CF
-        assertEquals(5L, rocksDBStore.approximateNumEntries());
+        assertEquals(1 + 0 + 8 + 5, rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length,
+            "Expected header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(5) = 14 bytes for putIfAbsent with null on existing key5");
+        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 0 entries on legacy CF, 5 in headers-aware CF after migrating key5 with putIfAbsent(null)");
 
-        // should be no-op on both CFs (key doesn't exist)
         assertNull(rocksDBStore.putIfAbsent(new Bytes("key12".getBytes()), null));
-        // two delete operations, however, only one is counted because legacy CF count was zero before already
-        // approx: 0 entries on legacy CF, 4 in headers-aware CF
-        assertEquals(4L, rocksDBStore.approximateNumEntries());
+        assertEquals(4L, rocksDBStore.approximateNumEntries(), "Expected 0 entries on legacy CF, 4 in headers-aware CF after putIfAbsent with null on non-existing key12");
 
         // delete() - tests migration on delete
 
-        // should delete key6 from both legacy and headers-aware CF
-        // returns header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(6) = 15 bytes
-        assertEquals(1 + 0 + 8 + 6, rocksDBStore.delete(new Bytes("key6".getBytes())).length);
-        // two delete operations, however, only one is counted because legacy CF count was zero before already
-        // approx: 0 entries on legacy CF, 3 in headers-aware CF
-        assertEquals(3L, rocksDBStore.approximateNumEntries());
+        assertEquals(1 + 0 + 8 + 6, rocksDBStore.delete(new Bytes("key6".getBytes())).length,
+            "Expected header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(6) = 15 bytes for delete() on existing key6");
+        assertEquals(3L, rocksDBStore.approximateNumEntries(), "Expected 0 entries on legacy CF, 3 in headers-aware CF after deleting key6 with delete()");
 
         // iterators should not trigger migration (read-only)
         iteratorsShouldNotMigrateData();
@@ -223,9 +195,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key1".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('1')
-                // Total: 1 + 0 + 8 + 1 = 10 bytes
-                assertEquals(10, keyValue.value.length);
+                assertEquals(10, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(1) = 10 bytes for key1 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
@@ -240,23 +210,17 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('4444')
-                // Total: 1 + 0 + 8 + 4 = 13 bytes
-                assertEquals(13, keyValue.value.length);
+                assertEquals(13, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(4) = 13 bytes for key4 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('55555')
-                // Total: 1 + 0 + 8 + 5 = 14 bytes
-                assertEquals(14, keyValue.value.length);
+                assertEquals(14, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(5) = 14 bytes for key5 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key7".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('7777777')
-                // Total: 1 + 0 + 8 + 7 = 16 bytes
-                assertEquals(16, keyValue.value.length);
+                assertEquals(16, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(7) = 16 bytes for key7 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
@@ -276,16 +240,12 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('4444')
-                // Total: 1 + 0 + 8 + 4 = 13 bytes
-                assertEquals(13, keyValue.value.length);
+                assertEquals(13, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(4) = 13 bytes for key4 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('55555')
-                // Total: 1 + 0 + 8 + 5 = 14 bytes
-                assertEquals(14, keyValue.value.length);
+                assertEquals(14, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(5) = 14 bytes for key5 from legacy CF");
             }
             assertFalse(it.hasNext());
         }
@@ -299,23 +259,17 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key7".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('7777777')
-                // Total: 1 + 0 + 8 + 7 = 16 bytes
-                assertEquals(16, keyValue.value.length);
+                assertEquals(16, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(7) = 16 bytes for key7 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('55555')
-                // Total: 1 + 0 + 8 + 5 = 14 bytes
-                assertEquals(14, keyValue.value.length);
+                assertEquals(14, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(5) = 14 bytes for key5 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('4444')
-                // Total: 1 + 0 + 8 + 4 = 13 bytes
-                assertEquals(13, keyValue.value.length);
+                assertEquals(13, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(4) = 13 bytes for key4 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
@@ -330,9 +284,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key1".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('1')
-                // Total: 1 + 0 + 8 + 1 = 10 bytes
-                assertEquals(10, keyValue.value.length);
+                assertEquals(10, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(1) = 10 bytes for key1 from legacy CF");
             }
             assertFalse(itAll.hasNext());
         }
@@ -342,16 +294,12 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('55555')
-                // Total: 1 + 0 + 8 + 5 = 14 bytes
-                assertEquals(14, keyValue.value.length);
+                assertEquals(14, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(5) = 14 bytes for key5 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('4444')
-                // Total: 1 + 0 + 8 + 4 = 13 bytes
-                assertEquals(13, keyValue.value.length);
+                assertEquals(13, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(4) = 13 bytes for key4 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
@@ -365,9 +313,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key1".getBytes(), keyValue.key.get());
-                // header-aware format: varint(0) + empty headers + timestamp(8 bytes) + value('1')
-                // Total: 1 + 0 + 8 + 1 = 10 bytes
-                assertEquals(10, keyValue.value.length);
+                assertEquals(10, keyValue.value.length, "Expected header-aware format: varint(0) + empty headers(0) + timestamp(8) + value(1) = 10 bytes for key1 from legacy CF");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
