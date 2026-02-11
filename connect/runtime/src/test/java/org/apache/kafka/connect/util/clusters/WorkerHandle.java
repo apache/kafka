@@ -38,6 +38,10 @@ public class WorkerHandle {
         this.worker = worker;
     }
 
+    public Connect<?> worker() {
+        return worker;
+    }
+
     /**
      * Track the worker status during startup.
      * @return {@link Connect#herderTask()} to track or null

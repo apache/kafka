@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -1036,6 +1037,10 @@ abstract class EmbeddedConnect {
      */
     public ConnectAssertions assertions() {
         return assertions;
+    }
+
+    public Set<ConnectMetrics> allConnectMetrics() {
+        return workers().stream().map(w -> w.worker().herder().connectMetrics()).collect(Collectors.toSet());
     }
 
 }

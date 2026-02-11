@@ -26,12 +26,16 @@ import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -51,6 +55,7 @@ import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.MirrorUtils;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.mirror.TestUtils;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
@@ -88,6 +93,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.METRIC_NAMES_NEW;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_CLIENT_ROLE_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_TOPIC_CONFIG_PREFIX;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -999,6 +1005,76 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "Unexpected number of replicated records for partition " + topicPartition.partition()
             );
         });
+    }
+
+    @Test
+    public void testConnectorMetrics() throws InterruptedException, ExecutionException {
+        // one way replication from primary to backup
+        mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
+        mm2Props.put(PRIMARY_CLUSTER_ALIAS + "->" + BACKUP_CLUSTER_ALIAS + "." + MirrorConnectorConfig.METRIC_NAMES_FORMAT, METRIC_NAMES_NEW);
+        mm2Config = new MirrorMakerConfig(mm2Props);
+
+        String topic = "test-topic-metrics";
+        primary.kafka().createTopic(topic);
+        try (KafkaProducer<byte[], byte[]> producer = primary.kafka().createProducer(Map.of())) {
+            for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
+                producer.send(new ProducerRecord<>(topic, ("value" + i).getBytes())).get();
+            }
+        }
+
+        waitUntilMirrorMakerIsRunning(backup,
+                List.of(MirrorSourceConnector.class, MirrorCheckpointConnector.class),
+                mm2Config,
+                PRIMARY_CLUSTER_ALIAS,
+                BACKUP_CLUSTER_ALIAS);
+
+        try (KafkaConsumer<byte[], byte[]> consumer = primary.kafka().createConsumer(
+                Map.of("group.id", "consumer-group-metrics",
+                        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                        ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "1"))) {
+            int consumed = 0;
+            consumer.subscribe(List.of(topic));
+            while (consumed < NUM_RECORDS_PRODUCED) {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
+                consumer.commitSync();
+                consumed += records.count();
+            }
+        }
+
+        Set<String> expectedSourceTags = Set.of("connector", "task", "source", "target", "topic", "partition");
+        Set<String> expectedCheckpointTags = Set.of("connector", "task", "source", "target", "group", "topic", "partition");
+        // We have 4 topics totalling 13 partitions
+        // primary.test-topic - 10 partitions
+        // primary.test-topic-no-checkpoints - 1 partition
+        // primary.test-topic-metrics - 1 partition
+        // primary.heartbeats - 1 partition
+        // There are 12 metrics per partition, 12 x 13 = 156
+        int expectedSourceCount = 156;
+        // We have 1 consumer group (consumer-group-metrics)
+        // There are 4 metrics per group
+        int expectedCheckpointCount = 4;
+        waitForCondition(() -> {
+            Set<ConnectMetrics> allConnectMetrics = backup.allConnectMetrics();
+            int sourceMetrics = 0;
+            int checkpointMetrics = 0;
+            for (ConnectMetrics connectMetrics : allConnectMetrics) {
+                Set<MetricName> metrics = connectMetrics.metrics().metrics().keySet();
+                for (MetricName metricName : metrics) {
+                    if (metricName.group().equals("plugins")) {
+                        Map<String, String> tags = metricName.tags();
+                        if (MirrorSourceConnector.class.getSimpleName().equals(tags.get("connector"))) {
+                            assertEquals(expectedSourceTags, tags.keySet());
+                            sourceMetrics++;
+                        }
+                        if (MirrorCheckpointConnector.class.getSimpleName().equals(tags.get("connector"))) {
+                            assertEquals(expectedCheckpointTags, tags.keySet());
+                            checkpointMetrics++;
+                        }
+                    }
+                }
+            }
+            return sourceMetrics == expectedSourceCount && checkpointMetrics == expectedCheckpointCount;
+        }, 10_000L, "Unable to find the MirrorMaker metrics");
     }
 
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {
