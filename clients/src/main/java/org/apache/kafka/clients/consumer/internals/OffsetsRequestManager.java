@@ -202,9 +202,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             if (error != null) {
                 log.debug("Fetch offsets completed with error for partitions and timestamps {}.",
                         timestampsToSearch, error);
+                offsetFetcherUtils.clearPartitionEndOffsetRequests(timestampsToSearch.keySet());
             } else {
                 log.debug("Fetch offsets completed successfully for partitions and timestamps {}." +
                         " Result {}", timestampsToSearch, result);
+                offsetFetcherUtils.clearPartitionEndOffsetRequests(result.partitionsToRetry);
             }
         });
 
@@ -583,7 +585,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 }
             } else {
                 log.debug("ListOffsets request failed with error", error);
-                offsetFetcherUtils.clearPartitionEndOffsetRequests(multiNodeRequest.partitionsToRetry);
                 listOffsetsRequestState.globalResult.completeExceptionally(error);
             }
         });

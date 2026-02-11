@@ -2738,7 +2738,7 @@ public class KafkaConsumerTest {
 
     @ParameterizedTest
     @EnumSource(value = GroupProtocol.class)
-    public void testCurrentLagClearsFlagsOnPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
+    public void testCurrentLagClearsFlagOnPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(OffsetFetcherUtils.class, Level.TRACE);
 
@@ -2752,11 +2752,11 @@ public class KafkaConsumerTest {
             final ConsumerMetadata metadata = createMetadata(subscription);
             final MockClient client = new MockClient(time, metadata);
 
-            initMetadata(client, Collections.singletonMap(topic, 1));
+            initMetadata(client, Map.of(topic, 1));
 
             consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false,
-                null, groupInstanceId, false);
-            consumer.assign(Collections.singleton(tp0));
+                groupId, groupInstanceId, false);
+            consumer.assign(Set.of(tp0));
 
             // poll once to update with the current metadata
             consumer.poll(Duration.ofMillis(0));
@@ -2800,28 +2800,20 @@ public class KafkaConsumerTest {
 
             // Now respond to the LIST_OFFSETS request with an error in the partition.
             ClientRequest listOffsetRequest = findRequest(client, ApiKeys.LIST_OFFSETS);
-            client.respondToRequest(listOffsetRequest, listOffsetsResponse(Map.of(), Map.of(tp0, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+            client.respondToRequest(listOffsetRequest, listOffsetsResponse(Map.of(), Map.of(tp0, Errors.TOPIC_AUTHORIZATION_FAILED)));
 
             if (groupProtocol == GroupProtocol.CLASSIC) {
                 // Classic consumer does not send the LIST_OFFSETS right away (requires an explicit poll),
                 // different from the new async consumer, that will send the LIST_OFFSETS request in the background
                 // thread on the next background thread poll.
-                consumer.poll(Duration.ofMillis(0));
+                assertThrows(TopicAuthorizationException.class, () -> consumer.poll(Duration.ofMillis(0)));
             }
 
             // AsyncKafkaConsumer may take a moment to poll and process the LIST_OFFSETS response, so a repeated
             // wait is appropriate here.
             TestUtils.waitForCondition(
-                () -> {
-                    return !subscription.partitionEndOffsetRequested(tp0);
-                },
-                2000,
+                () -> !subscription.partitionEndOffsetRequested(tp0),
                 "endOffsetRequested flag was not cleared within allotted timeout"
-            );
-
-            assertLogEmitted(
-                appender,
-                "^Received unknown topic or partition error in ListOffset request for partition " + tp0 + "$"
             );
 
             assertLogEmitted(
