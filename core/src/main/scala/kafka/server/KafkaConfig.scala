@@ -57,6 +57,8 @@ object KafkaConfig {
 
   def main(args: Array[String]): Unit = {
     val combined = new ConfigDef(configDef)
+    // Broker quota configs are dynamic-only and not defined in AbstractKafkaConfig.CONFIG_DEF,
+    // so we need to add them explicitly here for the generated HTML documentation.
     QuotaConfig.brokerQuotaConfigs().configKeys().forEach((_, v) => combined.define(v))
     System.out.println(combined.toHtml(4, (config: String) => "brokerconfigs_" + config,
       JDynamicBrokerConfig.dynamicConfigUpdateModes))
