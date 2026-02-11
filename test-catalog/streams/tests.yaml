@@ -4183,6 +4183,34 @@ org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIteratorTest:
 - shouldPeekNextKey
 - shouldThrowNoSuchElementWhenNoMoreItemsLeftAndNextCalled
 - shouldThrowNoSuchElementWhenNoMoreItemsLeftAndPeekNextCalled
+org.apache.kafka.streams.state.internals.DualColumnFamilyAccessorTest:
+- shouldAddToBatchDeletesFromBothWhenValueIsNull
+- shouldAddToBatchDeletesFromOldAndPutsToNew
+- shouldCloseBothColumnFamilies
+- shouldCreateAllIteratorForward
+- shouldCreateAllIteratorReverse
+- shouldCreatePrefixScanIterator
+- shouldCreateRangeIterator
+- shouldDeleteFromBothColumnFamiliesWhenValueIsNull
+- shouldDeleteRangeFromBothColumnFamilies
+- shouldFlushBothColumnFamiliesOnCommit
+- shouldGetFromOldColumnFamilyWithReadOptionsAndConvert
+- shouldGetOnlyFromOldColumnFamilyAndConvertWithoutMigration
+- shouldGetOnlyReturnNullWhenNotFound
+- shouldGetValueFromNewColumnFamily
+- shouldGetValueFromOldColumnFamilyAndConvert
+- shouldGetValueWithReadOptions
+- shouldPrepareBatchWithMultipleEntries
+- shouldPutValueToNewColumnFamilyAndDeleteFromOld
+- shouldReturnNullWhenKeyNotFoundInEitherColumnFamily
+- shouldReturnSumOfEntriesFromBothColumnFamilies
+- shouldThrowNPEWhenBatchEntryHasNullKey
+- shouldThrowProcessorStateExceptionWhenDeleteFailsOnNewColumnFamilyWithNullValue
+- shouldThrowProcessorStateExceptionWhenDeleteFailsOnOldColumnFamilyWithNullValue
+- shouldThrowProcessorStateExceptionWhenDeleteRangeFailsOnNewColumnFamily
+- shouldThrowProcessorStateExceptionWhenDeleteRangeFailsOnOldColumnFamily
+- shouldThrowProcessorStateExceptionWhenPutFailsOnDeleteColumnFamily
+- shouldThrowProcessorStateExceptionWhenPutFailsOnNewColumnFamily
 org.apache.kafka.streams.state.internals.FilteredCacheIteratorTest:
 - shouldAllowEntryMatchingHasNextCondition
 - shouldFilterEntriesNotMatchingHasNextCondition
@@ -5736,6 +5764,7 @@ org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializerTest:
 - shouldExtractHeaders
 - shouldExtractTimestamp
 - shouldExtractValue
+- shouldPassHeadersToDeserializer
 - shouldReturnNullForRawValueWhenInputIsNull
 - shouldReturnNullWhenExtractingHeadersFromNull
 - shouldReturnNullWhenSerializingNullValue
@@ -5743,6 +5772,7 @@ org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializerTest:
 - shouldThrowExceptionWhenExtractingTimestampFromNull
 - shouldThrowExceptionWhenHeadersSizeIsInconsistent
 org.apache.kafka.streams.state.internals.ValueTimestampHeadersSerializerTest:
+- shouldPassHeadersToSerializer
 - shouldReturnNullWhenSerializingNullValue
 - shouldSerializeAndDeserializeNonNullData
 - shouldSerializeNullDataAsNull
