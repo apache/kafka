@@ -26,10 +26,9 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.record.internal.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.record.internal.MemoryRecords.RecordFilter
-import org.apache.kafka.common.record.internal._
-import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
@@ -3273,35 +3272,35 @@ class UnifiedLogTest {
     val epoch = 5.toShort
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-
+    
     // First, write some transactional records to establish the current epoch
     val records = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, epoch, 0,
       new SimpleRecord("key".getBytes, "value".getBytes)
     )
     log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)
-
+    
     // Test 1: Old epoch (epoch - 1) should be rejected for both TV0/TV1 and TV2
     // TV0/TV1: markerEpoch < currentEpoch is rejected
     // TV2: markerEpoch <= currentEpoch is rejected (requires strict >)
     assertThrows(classOf[InvalidProducerEpochException],
-      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort,
-        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1,
+      () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, (epoch - 1).toShort, 
+        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
         leaderEpoch = 0, transactionVersion = transactionVersion))
-
+    
     // Test 2: Same epoch behavior differs between TV0/TV1 and TV2
     // TV0/TV1: same epoch is allowed (markerEpoch >= currentEpoch)
     // TV2: same epoch is rejected (requires strict >, markerEpoch > currentEpoch)
     if (transactionVersion >= 2) {
       // TV2: same epoch should be rejected
       assertThrows(classOf[InvalidProducerEpochException],
-        () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch,
-          ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1,
+        () => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, 
+          ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
           leaderEpoch = 0, transactionVersion = transactionVersion))
     } else {
       // TV0/TV1: same epoch should be allowed
-      assertDoesNotThrow(() => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch,
-        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1,
+      assertDoesNotThrow(() => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, 
+        ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 1, 
         leaderEpoch = 0, transactionVersion = transactionVersion))
     }
   }
@@ -3315,20 +3314,20 @@ class UnifiedLogTest {
     val epoch = 5.toShort
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-
+    
     // First, write some transactional records to establish the current epoch
     val records = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, epoch, 0,
       new SimpleRecord("key".getBytes, "value".getBytes)
     )
     log.appendAsLeader(records, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, transactionVersion)
-
+    
     // TV2: Verify that bumped epoch (epoch + 1) is accepted
     val bumpedEpoch = (epoch + 1).toShort
     assertDoesNotThrow(() => LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, bumpedEpoch,
       ControlRecordType.COMMIT, mockTime.milliseconds(), coordinatorEpoch = 1,
       leaderEpoch = 0, transactionVersion = TransactionVersion.TV_2.featureLevel()))
-
+    
     // Verify the marker was successfully appended by checking producer state
     val producerState = log.producerStateManager.activeProducers.get(producerId)
     assertNotNull(producerState)
@@ -3344,20 +3343,20 @@ class UnifiedLogTest {
     // 2. Leader writes MemoryRecords to log (transactionVersion is not stored in MemoryRecords)
     // 3. Follower receives MemoryRecords via replication (without transactionVersion metadata)
     // 4. Follower uses TV_UNKNOWN which defaults to TV_0 validation (more permissive, safe because leader already validated)
-
+    
     val producerId = 1L
     val epoch = 5.toShort
     val coordinatorEpoch = 1
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-
+    
     // Step 1: Write transactional records as leader to establish current epoch
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, epoch, 0,
       new SimpleRecord("key".getBytes, "value".getBytes)
     )
     log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
-
+    
     // Step 2: Simulate leader writing TV2 marker with bumped epoch (epoch + 1)
     // This is what happens at the leader when WriteTxnMarkersRequest is received
     val bumpedEpoch = (epoch + 1).toShort
@@ -3369,16 +3368,16 @@ class UnifiedLogTest {
     )
     // Leader validates with TV2 (strict: markerEpoch > currentEpoch)
     log.appendAsLeader(leaderMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
-
+    
     // Verify leader state
     val leaderProducerState = log.producerStateManager.activeProducers.get(producerId)
     assertNotNull(leaderProducerState)
     assertEquals(bumpedEpoch, leaderProducerState.producerEpoch)
-
+    
     // Step 3: Create a new log to simulate a follower
     val followerLogDir = TestUtils.randomPartitionLogDir(tmpDir)
     val followerLog = createLog(followerLogDir, logConfig)
-
+    
     // Step 4: Follower replicates transactional records first
     val followerTransactionalRecords = MemoryRecords.withTransactionalRecords(
       0L,
@@ -3387,7 +3386,7 @@ class UnifiedLogTest {
       new SimpleRecord("key".getBytes, "value".getBytes)
     )
     followerLog.appendAsFollower(followerTransactionalRecords, 0)
-
+    
     // Step 5: Follower replicates the marker (appendAsFollower uses TV_UNKNOWN internally)
     // This should succeed because TV_UNKNOWN is allowed for REPLICATION origin
     // and defaults to TV_0 validation (markerEpoch >= currentEpoch), which is more permissive
@@ -3400,16 +3399,16 @@ class UnifiedLogTest {
       bumpedEpoch,
       new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
     )
-
+    
     // This should not throw an exception - TV_UNKNOWN is allowed for replication
     assertDoesNotThrow(() => followerLog.appendAsFollower(followerMarker, 0))
-
+    
     // Verify follower state matches leader state
     val followerProducerState = followerLog.producerStateManager.activeProducers.get(producerId)
     assertNotNull(followerProducerState)
     assertEquals(bumpedEpoch, followerProducerState.producerEpoch)
     assertEquals(coordinatorEpoch, followerProducerState.coordinatorEpoch)
-
+    
     // Verify the marker was written to the follower log
     assertEquals(2L, followerLog.logEndOffset) // 1 transactional record + 1 marker
   }
@@ -3423,14 +3422,14 @@ class UnifiedLogTest {
     val coordinatorEpoch = 1
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-
+    
     // Write transactional records as leader to establish current epoch
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, epoch, 0,
       new SimpleRecord("key".getBytes, "value".getBytes)
     )
     log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_2.featureLevel())
-
+    
     // Attempt to write a transaction marker with TV_UNKNOWN as COORDINATOR (leader)
     // This should throw IllegalArgumentException because TV_UNKNOWN is not allowed for COORDINATOR origin
     val marker = MemoryRecords.withEndTransactionMarker(
@@ -3439,11 +3438,11 @@ class UnifiedLogTest {
       (epoch + 1).toShort, // bumped epoch for TV2
       new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
     )
-
+    
     val exception = assertThrows(classOf[IllegalArgumentException], () => {
       log.appendAsLeader(marker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN)
     })
-
+    
     assertTrue(exception.getMessage.contains("transactionVersion must be explicitly specified"))
     assertTrue(exception.getMessage.contains("TV_UNKNOWN"))
     assertTrue(exception.getMessage.contains("COORDINATOR"))
@@ -4275,7 +4274,7 @@ class UnifiedLogTest {
       // TV2 behavior: Create verification state that supports epoch bumps
       val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
       // Should reject non-zero sequences when there's no existing producer state
-      assertThrows(classOf[OutOfOrderSequenceException], () =>
+      assertThrows(classOf[OutOfOrderSequenceException], () => 
         log.appendAsLeader(transactionalRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, verificationGuard,
           TransactionVersion.TV_0.featureLevel()))
     } else {
@@ -4811,15 +4810,15 @@ class UnifiedLogTest {
   def testStaleProducerEpochReturnsRecoverableErrorForTV1Clients(): Unit = {
     // Producer epoch gets incremented (coordinator fail over, completed transaction, etc.)
     // and client has stale cached epoch. Fix prevents fatal InvalidTxnStateException.
-
+    
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
-
+    
     val producerId = 123L
     val oldEpoch = 5.toShort
     val newEpoch = 6.toShort
-
+    
     // Step 1: Simulate a scenario where producer epoch was incremented to fence the producer
     val previousRecords = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, newEpoch, 0,
@@ -4828,28 +4827,28 @@ class UnifiedLogTest {
     val previousGuard = log.maybeStartTransactionVerification(producerId, 0, newEpoch, false)  // TV1 = supportsEpochBump = false
     log.appendAsLeader(previousRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, previousGuard,
       TransactionVersion.TV_1.featureLevel())
-
+    
     // Complete the transaction normally (commits do update producer state with current epoch)
     val commitMarker = MemoryRecords.withEndTransactionMarker(
       producerId, newEpoch, new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
     log.appendAsLeader(commitMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL,
       TransactionVersion.TV_1.featureLevel())
-
-    // Step 2: TV1 client tries to write with stale cached epoch (before learning about epoch increment)
+    
+    // Step 2: TV1 client tries to write with stale cached epoch (before learning about epoch increment)  
     val staleEpochRecords = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, oldEpoch, 0,
       new SimpleRecord("stale-epoch-key".getBytes, "stale-epoch-value".getBytes)
     )
-
+    
     // Step 3: Verify our fix - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
     val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
-      val staleGuard = log.maybeStartTransactionVerification(producerId, 0, oldEpoch, false)
+      val staleGuard = log.maybeStartTransactionVerification(producerId, 0, oldEpoch, false)  
       log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard,
         TransactionVersion.TV_1.featureLevel())
      })
-
-     // Verify the error message indicates epoch mismatch
+     
+     // Verify the error message indicates epoch mismatch  
      assertTrue(exception.getMessage.contains("smaller than the last seen epoch"))
      assertTrue(exception.getMessage.contains(s"$oldEpoch"))
      assertTrue(exception.getMessage.contains(s"$newEpoch"))
@@ -4858,15 +4857,15 @@ class UnifiedLogTest {
   @Test
   def testStaleProducerEpochReturnsRecoverableErrorForTV2Clients(): Unit = {
     // Check producer epoch FIRST - if stale, return recoverable error before verification checks.
-
+    
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
-
+    
     val producerId = 456L
     val originalEpoch = 3.toShort
     val bumpedEpoch = 4.toShort
-
+    
     // Step 1: Start transaction with epoch 3 (before timeout)
     val initialRecords = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, originalEpoch, 0,
@@ -4875,7 +4874,7 @@ class UnifiedLogTest {
     val initialGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
     log.appendAsLeader(initialRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, initialGuard,
       TransactionVersion.TV_2.featureLevel())
-
+    
     // Step 2: Coordinator times out and aborts transaction
     // TV2 (KIP-890): Coordinator bumps epoch from 3 → 4 and sends abort marker with epoch 4
     val abortMarker = MemoryRecords.withEndTransactionMarker(
@@ -4883,20 +4882,20 @@ class UnifiedLogTest {
     )
     log.appendAsLeader(abortMarker, 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching, VerificationGuard.SENTINEL,
       TransactionVersion.TV_2.featureLevel())
-
+    
     // Step 3: TV2 transactional producer tries to append with stale epoch (timeout recovery scenario)
     val staleEpochRecords = MemoryRecords.withTransactionalRecords(
       Compression.NONE, producerId, originalEpoch, 0,
       new SimpleRecord("ks-resume-key".getBytes, "ks-resume-value".getBytes)
     )
-
+    
     // Step 4: Verify our fix works for TV2 - should get InvalidProducerEpochException (recoverable), not InvalidTxnStateException (fatal)
     val exception = assertThrows(classOf[InvalidProducerEpochException], () => {
       val staleGuard = log.maybeStartTransactionVerification(producerId, 0, originalEpoch, true)  // TV2 = supportsEpochBump = true
       log.appendAsLeader(staleEpochRecords, 0, AppendOrigin.CLIENT, RequestLocal.noCaching, staleGuard,
         TransactionVersion.TV_2.featureLevel())
      })
-
+     
      // Verify the error message indicates epoch mismatch (3 < 4)
      assertTrue(exception.getMessage.contains("smaller than the last seen epoch"))
      assertTrue(exception.getMessage.contains(s"$originalEpoch"))
