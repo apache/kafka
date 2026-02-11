@@ -83,7 +83,7 @@ public class MockRaftClientListener implements RaftClient.Listener<ApiMessageAnd
 
     @Override
     public synchronized void handleLoadBootstrap(SnapshotReader<ApiMessageAndVersion> reader) {
-        // Mock listener does not process bootstrap snapshots.
+        // MockRaftClientListener does not process bootstrap snapshots.
         reader.close();
     }
 
