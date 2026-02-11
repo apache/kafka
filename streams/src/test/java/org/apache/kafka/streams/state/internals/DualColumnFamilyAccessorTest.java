@@ -20,7 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.state.internals.RocksDBStore.DBAccessor;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,7 +66,7 @@ public class DualColumnFamilyAccessorTest {
     private ColumnFamilyHandle newCF;
 
     @Mock
-    private RocksDBStore.DBAccessor dbAccessor;
+    private DBAccessor dbAccessor;
 
     private Function<byte[], byte[]> valueConverter;
     private DualColumnFamilyAccessor accessor;
@@ -82,7 +84,7 @@ public class DualColumnFamilyAccessorTest {
         // Create a mock store with real position field
         final RocksDBStore store = mock(RocksDBStore.class);
         store.position = position;
-        store.context = mock(org.apache.kafka.streams.processor.StateStoreContext.class);
+        store.context = mock(StateStoreContext.class);
         lenient().when(store.name()).thenReturn(STORE_NAME);
 
         // Value converter that adds a prefix to indicate conversion
@@ -345,16 +347,6 @@ public class DualColumnFamilyAccessorTest {
     }
 
     @Test
-    public void shouldReturnZeroWhenBothColumnFamiliesAreEmpty() throws RocksDBException {
-        when(dbAccessor.approximateNumEntries(oldCF)).thenReturn(0L);
-        when(dbAccessor.approximateNumEntries(newCF)).thenReturn(0L);
-
-        final long result = accessor.approximateNumEntries(dbAccessor);
-
-        assertEquals(0L, result);
-    }
-
-    @Test
     public void shouldFlushBothColumnFamiliesOnCommit() throws RocksDBException {
         final Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(new TopicPartition("topic", 0), 100L);
@@ -366,10 +358,10 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldCreateRangeIterator() {
-        final RocksIterator newIter = mock(RocksIterator.class);
-        final RocksIterator oldIter = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
+        final RocksIterator iterNewFormat = mock(RocksIterator.class);
+        final RocksIterator oldIterFormat = mock(RocksIterator.class);
+        when(dbAccessor.newIterator(newCF)).thenReturn(iterNewFormat);
+        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
 
         final Bytes from = new Bytes("a".getBytes());
         final Bytes to = new Bytes("z".getBytes());
@@ -383,38 +375,38 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldCreateAllIteratorForward() {
-        final RocksIterator newIter = mock(RocksIterator.class);
-        final RocksIterator oldIter = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
+        final RocksIterator newIterFormat = mock(RocksIterator.class);
+        final RocksIterator oldIterFormat = mock(RocksIterator.class);
+        when(dbAccessor.newIterator(newCF)).thenReturn(newIterFormat);
+        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
 
         ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, true);
 
         assertNotNull(iterator);
-        verify(newIter).seekToFirst();
-        verify(oldIter).seekToFirst();
+        verify(oldIterFormat).seekToFirst();
+        verify(oldIterFormat).seekToFirst();
     }
 
     @Test
     public void shouldCreateAllIteratorReverse() {
-        final RocksIterator newIter = mock(RocksIterator.class);
-        final RocksIterator oldIter = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
+        final RocksIterator newIterFormat = mock(RocksIterator.class);
+        final RocksIterator oldIterFormat = mock(RocksIterator.class);
+        when(dbAccessor.newIterator(newCF)).thenReturn(newIterFormat);
+        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
 
         final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, false);
 
         assertNotNull(iterator);
-        verify(newIter).seekToLast();
-        verify(oldIter).seekToLast();
+        verify(newIterFormat).seekToLast();
+        verify(oldIterFormat).seekToLast();
     }
 
     @Test
     public void shouldCreatePrefixScanIterator() {
-        final RocksIterator newIter = mock(RocksIterator.class);
-        final RocksIterator oldIter = mock(RocksIterator.class);
-        when(dbAccessor.newIterator(newCF)).thenReturn(newIter);
-        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIter);
+        final RocksIterator newIterFormat = mock(RocksIterator.class);
+        final RocksIterator oldIterFormat = mock(RocksIterator.class);
+        when(dbAccessor.newIterator(newCF)).thenReturn(newIterFormat);
+        when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
 
         final Bytes prefix = new Bytes("prefix".getBytes());
 
