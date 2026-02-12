@@ -735,6 +735,177 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     )
   }
 
+  /**
+   * Helper to set up two topics (foo with 3 partitions, bar with 2 partitions),
+   * join a consumer group, and commit offsets to both topics.
+   */
+  private def setupTopicsJoinAndCommit(): (Uuid, Uuid, String, Int) = {
+    createOffsetsTopic()
+
+    // Create two topics.
+    val fooTopicId = createTopic(topic = "foo", numPartitions = 3)
+    val barTopicId = createTopic(topic = "bar", numPartitions = 2)
+
+    // Join the consumer group.
+    val (memberId, memberEpoch) = joinConsumerGroup("grp", useNewProtocol = true)
+
+    // Commit offsets for both topics.
+    for (partitionId <- 0 to 2) {
+      commitOffset(
+        groupId = "grp",
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        topic = "foo",
+        topicId = fooTopicId,
+        partition = partitionId,
+        offset = 100L + partitionId,
+        expectedError = Errors.NONE,
+        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+      )
+    }
+    for (partitionId <- 0 to 1) {
+      commitOffset(
+        groupId = "grp",
+        memberId = memberId,
+        memberEpoch = memberEpoch,
+        topic = "bar",
+        topicId = barTopicId,
+        partition = partitionId,
+        offset = 200L + partitionId,
+        expectedError = Errors.NONE,
+        version = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+      )
+    }
+
+    (fooTopicId, barTopicId, memberId, memberEpoch)
+  }
+
+  // Validate responses to OffsetFetch when the topic is deleted and topic IDs used (version 10+)
+  // The expectation is that the response contains the deleted topic,
+  // with UNKNOWN_TOPIC_ID error at the partition level.
+  @ClusterTest
+  def testFetchOffsetWithDeletedTopicUsingTopicIds(): Unit = {
+    val (fooTopicId, barTopicId, memberId, memberEpoch) = setupTopicsJoinAndCommit()
+
+    // Delete the bar topic.
+    deleteTopic("bar")
+
+    // Wait for offsets to be deleted and reflected in the fetch response as expected.
+    // The deleted topic (bar) should return UNKNOWN_TOPIC_ID error for its partitions,
+    // while the existing topic (foo) should return the committed offsets.
+    for (version <- 10 to ApiKeys.OFFSET_FETCH.latestVersion(isUnstableApiEnabled)) {
+      TestUtils.waitUntilTrue(
+        () => {
+          val response = fetchOffsets(
+            group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp")
+              .setMemberId(memberId)
+              .setMemberEpoch(memberEpoch)
+              .setTopics(List(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setTopicId(fooTopicId)
+                  .setPartitionIndexes(List[Integer](0, 1, 2).asJava),
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setTopicId(barTopicId)
+                  .setPartitionIndexes(List[Integer](0, 1).asJava)
+              ).asJava),
+            requireStable = true,
+            version = version.toShort
+          )
+
+          // Both topics should be in the response.
+          val hasCorrectTopicCount = response.topics.size == 2
+
+          // Verify foo topic has the committed offsets.
+          val fooResponse = response.topics.asScala.find(_.topicId == fooTopicId)
+          val fooValid = fooResponse.exists { foo =>
+            foo.partitions.size == 3 && {
+              val fooPartitions = foo.partitions.asScala.sortBy(_.partitionIndex)
+              fooPartitions(0).partitionIndex == 0 && fooPartitions(0).committedOffset == 100L && fooPartitions(0).errorCode == Errors.NONE.code &&
+              fooPartitions(1).partitionIndex == 1 && fooPartitions(1).committedOffset == 101L && fooPartitions(1).errorCode == Errors.NONE.code &&
+              fooPartitions(2).partitionIndex == 2 && fooPartitions(2).committedOffset == 102L && fooPartitions(2).errorCode == Errors.NONE.code
+            }
+          }
+
+          // Verify bar topic returns UNKNOWN_TOPIC_ID error for all partitions.
+          val barResponse = response.topics.asScala.find(_.topicId == barTopicId)
+          val barValid = barResponse.exists { bar =>
+            bar.partitions.size == 2 &&
+            bar.partitions.asScala.forall(partition =>
+              partition.committedOffset == -1L && partition.errorCode == Errors.UNKNOWN_TOPIC_ID.code
+            )
+          }
+
+          hasCorrectTopicCount && fooValid && barValid
+        },
+        msg = s"Expected UNKNOWN_TOPIC_ID error for deleted topic partitions on version $version"
+      )
+    }
+  }
+
+  // Validate responses to OffsetFetch when the topic is deleted and topic names used (versions < 10)
+  // The expectation is that the response contains the deleted topic,
+  // without any error, and -1 as committed offset.
+  @ClusterTest
+  def testFetchOffsetWithDeletedTopicUsingTopicNames(): Unit = {
+    val (_, _, memberId, memberEpoch) = setupTopicsJoinAndCommit()
+
+    // Delete the bar topic.
+    deleteTopic("bar")
+
+    // Verify the behavior for all versions 1-9.
+    // The deleted topic (bar) should return -1 offset with NONE error,
+    // while the existing topic (foo) should return the committed offsets.
+    for (version <- 1 to 9) {
+      TestUtils.waitUntilTrue(
+        () => {
+          val response = fetchOffsets(
+            group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("grp")
+              .setMemberId(memberId)
+              .setMemberEpoch(memberEpoch)
+              .setTopics(List(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("foo")
+                  .setPartitionIndexes(List[Integer](0, 1, 2).asJava),
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("bar")
+                  .setPartitionIndexes(List[Integer](0, 1).asJava)
+              ).asJava),
+            requireStable = false,
+            version = version.toShort
+          )
+
+          // Both topics should be in the response.
+          val hasCorrectTopicCount = response.topics.size == 2
+
+          // Verify foo topic still has the committed offsets.
+          val fooResponse = response.topics.asScala.find(_.name == "foo")
+          val fooValid = fooResponse.exists { foo =>
+            foo.partitions.size == 3 && {
+              val fooPartitions = foo.partitions.asScala.sortBy(_.partitionIndex)
+              fooPartitions(0).partitionIndex == 0 && fooPartitions(0).committedOffset == 100L && fooPartitions(0).errorCode == Errors.NONE.code &&
+              fooPartitions(1).partitionIndex == 1 && fooPartitions(1).committedOffset == 101L && fooPartitions(1).errorCode == Errors.NONE.code &&
+              fooPartitions(2).partitionIndex == 2 && fooPartitions(2).committedOffset == 102L && fooPartitions(2).errorCode == Errors.NONE.code
+            }
+          }
+
+          // Verify bar topic returns -1 offset (no committed offset) with NONE error for all partitions.
+          val barResponse = response.topics.asScala.find(_.name == "bar")
+          val barValid = barResponse.exists { bar =>
+            bar.partitions.size == 2 &&
+            bar.partitions.asScala.forall(partition =>
+              partition.committedOffset == -1L && partition.errorCode == Errors.NONE.code
+            )
+          }
+
+          hasCorrectTopicCount && fooValid && barValid
+        },
+        msg = s"Expected -1 offset for deleted topic partitions on version $version"
+      )
+    }
+  }
+
   @ClusterTest
   def testGroupErrors(): Unit = {
     val topicId = createTopic(
