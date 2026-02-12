@@ -67,13 +67,12 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                      final ColumnFamilyOptions columnFamilyOptions) {
         // Check if we're upgrading from RocksDBTimestampedStore (which uses keyValueWithTimestamp CF)
         final List<byte[]> existingCFs;
-        try {
-            final Options options = new Options(dbOptions, new ColumnFamilyOptions());
+        try (final Options options = new Options(dbOptions, new ColumnFamilyOptions())) {
             existingCFs = RocksDB.listColumnFamilies(options, dbDir.getAbsolutePath());
-            options.close();
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error listing column families for store " + name, e);
         }
+
 
         final boolean upgradingFromTimestampedStore = existingCFs.stream()
             .anyMatch(cf -> Arrays.equals(cf, LEGACY_TIMESTAMPED_CF_NAME));
