@@ -1290,7 +1290,7 @@ public class GroupMetadataManager {
             );
         } catch (SchemaException e) {
             log.warn("Cannot downgrade the consumer group {}: fail to parse the Consumer Protocol {}.",
-                    consumerGroup.groupId(), ConsumerProtocol.PROTOCOL_TYPE, e);
+                consumerGroup.groupId(), ConsumerProtocol.PROTOCOL_TYPE, e);
 
             throw new GroupIdNotFoundException(String.format("Cannot downgrade the classic group %s: %s.",
                 consumerGroup.groupId(), e.getMessage()));
@@ -1371,7 +1371,7 @@ public class GroupMetadataManager {
             );
         } catch (SchemaException e) {
             log.warn("Cannot upgrade classic group {} to consumer group because the embedded consumer protocol is malformed: {}.",
-                    classicGroup.groupId(), e.getMessage(), e);
+                classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the embedded consumer protocol is malformed.", classicGroup.groupId())
