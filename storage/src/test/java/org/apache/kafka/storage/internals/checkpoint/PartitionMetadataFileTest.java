@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.checkpoint;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.test.TestUtils;
 
@@ -28,6 +29,7 @@ import org.mockito.Mockito;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -94,5 +96,20 @@ class PartitionMetadataFileTest  {
         PartitionMetadata metadata = partitionMetadataFile.read();
         assertEquals(0, metadata.version());
         assertEquals(topicId, metadata.topicId());
+    }
+
+    @Test
+    public void testReadMalformedFileThrowsKafkaStorageExceptionAndMarksLogDirOffline() throws IOException {
+        LogDirFailureChannel channel = Mockito.mock(LogDirFailureChannel.class);
+        PartitionMetadataFile partitionMetadataFile = new PartitionMetadataFile(file, channel);
+
+        Files.writeString(file.toPath(), "version: 0\n", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+        assertThrows(KafkaStorageException.class, partitionMetadataFile::read);
+        Mockito.verify(channel).maybeAddOfflineLogDir(
+            Mockito.anyString(),
+            Mockito.contains("Error while reading partition metadata file"),
+            Mockito.any(IOException.class)
+        );
     }
 }

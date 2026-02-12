@@ -25,6 +25,8 @@ import java.util.regex.Pattern;
 
 public class PartitionMetadataReadBuffer {
     private static final Pattern WHITE_SPACES_PATTERN = Pattern.compile(":\\s+");
+    private static final String VERSION_KEY = "version";
+    private static final String TOPIC_ID_KEY = "topic_id";
 
     private final String location;
     private final BufferedReader reader;
@@ -38,39 +40,50 @@ public class PartitionMetadataReadBuffer {
     }
 
     PartitionMetadata read() throws IOException {
-        String line = null;
-        Uuid metadataTopicId;
+        String line = reader.readLine();
+        String[] versionArr = parseLine(line, VERSION_KEY);
+        int version = parseVersion(line, versionArr[1]);
 
+        // To ensure downgrade compatibility, check if version is at least 0
+        if (version < PartitionMetadataFile.CURRENT_VERSION) {
+            throw new IOException("Unrecognized version of partition metadata file (" + location + "): " + version);
+        }
+
+        line = reader.readLine();
+        String[] topicIdArr = parseLine(line, TOPIC_ID_KEY);
+        Uuid metadataTopicId = parseTopicId(line, topicIdArr[1]);
+
+        if (metadataTopicId.equals(Uuid.ZERO_UUID)) {
+            throw new IOException("Invalid topic ID in partition metadata file (" + location + ")");
+        }
+
+        return new PartitionMetadata(version, metadataTopicId);
+    }
+
+    private String[] parseLine(String line, String expectedKey) throws IOException {
+        if (line == null) {
+            throw malformedLineException(null);
+        }
+
+        String[] parts = WHITE_SPACES_PATTERN.split(line, 2);
+        if (parts.length != 2 || !expectedKey.equals(parts[0])) {
+            throw malformedLineException(line);
+        }
+        return parts;
+    }
+
+    private int parseVersion(String line, String value) throws IOException {
         try {
-            line = reader.readLine();
-            String[] versionArr = WHITE_SPACES_PATTERN.split(line);
-
-            if (versionArr.length == 2) {
-                int version = Integer.parseInt(versionArr[1]);
-                // To ensure downgrade compatibility, check if version is at least 0
-                if (version >= PartitionMetadataFile.CURRENT_VERSION) {
-                    line = reader.readLine();
-                    String[] topicIdArr = WHITE_SPACES_PATTERN.split(line);
-
-                    if (topicIdArr.length == 2) {
-                        metadataTopicId = Uuid.fromString(topicIdArr[1]);
-
-                        if (metadataTopicId.equals(Uuid.ZERO_UUID)) {
-                            throw new IOException("Invalid topic ID in partition metadata file (" + location + ")");
-                        }
-
-                        return new PartitionMetadata(version, metadataTopicId);
-                    } else {
-                        throw malformedLineException(line);
-                    }
-                } else {
-                    throw new IOException("Unrecognized version of partition metadata file (" + location + "): " + version);
-                }
-            } else {
-                throw malformedLineException(line);
-            }
-
+            return Integer.parseInt(value);
         } catch (NumberFormatException e) {
+            throw malformedLineException(line, e);
+        }
+    }
+
+    private Uuid parseTopicId(String line, String value) throws IOException {
+        try {
+            return Uuid.fromString(value);
+        } catch (IllegalArgumentException e) {
             throw malformedLineException(line, e);
         }
     }
