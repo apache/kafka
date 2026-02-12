@@ -43,7 +43,10 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
 
     private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStoreWithHeaders.class);
 
-    // Legacy column family name - must match RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME
+    /**
+     * Legacy column family name - must match {@code RocksDBTimestampedStore#TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME} 
+     */
+
     private static final byte[] LEGACY_TIMESTAMPED_CF_NAME =
         "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
 
