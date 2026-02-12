@@ -79,7 +79,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
                     final ValueTimestampHeaders<V> value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            Headers headers = value.headers();
+            final Headers headers = value.headers();
             maybeMeasureLatency(() -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers)), time, putSensor);
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
@@ -89,7 +89,7 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     protected ValueTimestampHeaders<V> outerValue(final byte[] value) {
-        Headers headers = ValueTimestampHeadersDeserializer.headers(value);
+        final Headers headers = ValueTimestampHeadersDeserializer.headers(value);
         return value != null ? serdes.valueFrom(value, headers) : null;
     }
 

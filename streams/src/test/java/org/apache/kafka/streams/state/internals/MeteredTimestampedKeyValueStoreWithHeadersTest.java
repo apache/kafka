@@ -255,10 +255,10 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
             new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampHeadersPair).iterator()));
         init();
 
-        final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range(KEY, KEY);
-        assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
-        assertFalse(iterator.hasNext());
-        iterator.close();
+        try(final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range(KEY, KEY)) {
+            assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
+            assertFalse(iterator.hasNext());
+        }
 
         final KafkaMetric metric = metric("range-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -271,10 +271,10 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampHeadersPair).iterator()));
         init();
 
-        final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all();
-        assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
-        assertFalse(iterator.hasNext());
-        iterator.close();
+        try(final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all()) {
+            assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
+            assertFalse(iterator.hasNext());
+        }
 
         final KafkaMetric metric = metric(new MetricName("all-rate", STORE_LEVEL_GROUP, "", tags));
         assertTrue((Double) metric.metricValue() > 0);
