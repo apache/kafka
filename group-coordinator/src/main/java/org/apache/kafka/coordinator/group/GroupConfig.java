@@ -199,7 +199,7 @@ public final class GroupConfig extends AbstractConfig {
      */
     public static void validateNames(Properties props) {
         Set<String> names = configNames();
-        for (Object name : props.keySet()) {
+        for (String name : props.stringPropertyNames()) {
             if (!names.contains(name)) {
                 throw new InvalidConfigurationException("Unknown group config name: " + name);
             }

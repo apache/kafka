@@ -93,7 +93,7 @@ public class HeadersSerializer implements Serializer<Headers> {
             }
 
             return baos.toByteArray();
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new SerializationException("Failed to serialize headers", e);
         }
     }

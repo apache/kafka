@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
@@ -36,6 +37,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ValueTimestampHeadersDeserializerTest {
 
@@ -274,5 +282,26 @@ public class ValueTimestampHeadersDeserializerTest {
             deserializer.deserialize(TOPIC, malformedData),
             "Should throw SerializationException when buffer doesn't have enough data"
         );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldPassHeadersToDeserializer() {
+        final Deserializer<String> mockDeserializer = mock(Deserializer.class);
+        when(mockDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class)))
+            .thenReturn("test-value");
+
+        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
+        final ValueTimestampHeaders<String> original =
+            ValueTimestampHeaders.make("test-value", 123456789L, headers);
+
+        final byte[] serialized = serializer.serialize(TOPIC, original);
+        final ValueTimestampHeadersDeserializer<String> testDeserializer =
+            new ValueTimestampHeadersDeserializer<>(mockDeserializer);
+        testDeserializer.deserialize(TOPIC, serialized);
+
+        // we should invoke the deserialize(String, Headers, byte) instead of deserialize(String, byte)
+        verify(mockDeserializer).deserialize(eq(TOPIC), any(Headers.class), any(byte[].class));
+        verify(mockDeserializer, never()).deserialize(eq(TOPIC), any(byte[].class));
     }
 }

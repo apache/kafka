@@ -189,6 +189,12 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
 
     /**
+     * The last used assignment configurations for this streams group.
+     * This is used to determine when assignment configuration changes should trigger a rebalance.
+     */
+    private final TimelineHashMap<String, String> lastAssignmentConfigs;
+
+    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with the group epoch at the time of setting it.
      * The metadata refresh time is considered as a soft state (read that it is not stored in a timeline data structure). It is like this
      * because it is not persisted to the log. The group epoch is here to ensure that the metadata refresh deadline is invalidated if the
@@ -210,12 +216,6 @@ public class StreamsGroup implements Group {
      * updated endpoint information to members of the group.
      */
     private int endpointInformationEpoch = 0;
-
-    /**
-     * The last used assignment configurations for this streams group.
-     * This is used to determine when assignment configuration changes should trigger a rebalance.
-     */
-    private TimelineHashMap<String, String> lastAssignmentConfigs;
 
     public StreamsGroup(
         LogContext logContext,
