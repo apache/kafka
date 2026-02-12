@@ -24,6 +24,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
@@ -336,9 +337,12 @@ public class PlaintextConsumerAssignTest {
             ClientsTestUtils.consumeAndVerifyRecords(consumer, tpToDelete, numRecords, 0, 0, startingTimestamp);
             consumer.commitSync();
 
-            // Delete the topic and wait for deletion to propagate
+            // Delete the topic and wait for deletion to propagate to metadata
             admin.deleteTopics(List.of(topicToDelete)).all().get();
-            Thread.sleep(1000);
+            TestUtils.waitForCondition(
+                () -> !admin.listTopics().names().get().contains(topicToDelete),
+                10000,
+                "Topic should be removed from metadata");
 
             // Change assignment to force the consumer to fetch committed offsets on next poll()
             // The consumer still has the topic ID cached, so it will use version 10+
