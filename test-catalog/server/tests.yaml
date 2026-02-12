@@ -363,6 +363,31 @@ org.apache.kafka.server.transaction.AddPartitionsToTxnManagerTest:
 - testAddTxnData
 - testGenerateRequests
 - testTransactionCoordinatorResolution
+org.apache.kafka.server.util.NetworkPartitionMetadataClientTest:
+- testClose
+- testCloseWithoutInitialization
+- testLazyInitialization
+- testLazyInitializationOnlyOnce
+- testLazyInitializationWithEmptyPartitions
+- testLazyInitializationWithNullPartitions
+- testListLatestOffsetsAuthenticationError
+- testListLatestOffsetsEmptyPartitionLeader
+- testListLatestOffsetsEmptyPartitions
+- testListLatestOffsetsMissingPartitionInResponse
+- testListLatestOffsetsMultiplePartitionsDifferentLeaders
+- testListLatestOffsetsMultiplePartitionsSameLeader
+- testListLatestOffsetsMultipleTopics
+- testListLatestOffsetsNoNodePartitionLeader
+- testListLatestOffsetsNullPartitions
+- testListLatestOffsetsNullResponse
+- testListLatestOffsetsNullResponseBody
+- testListLatestOffsetsServerError
+- testListLatestOffsetsSuccess
+- testListLatestOffsetsVersionMismatch
+- testMaxRetryAttemptsExhaustedOnDisconnect
+- testMaxRetryAttemptsExhaustedOnTimeout
+- testRetryOnDisconnect
+- testRetryOnTimeout
 org.apache.kafka.server.util.SchedulerTest:
 - testMockSchedulerLocking
 - testMockSchedulerNonPeriodicTask
