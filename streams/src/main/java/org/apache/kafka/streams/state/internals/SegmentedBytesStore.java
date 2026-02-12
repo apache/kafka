@@ -167,7 +167,7 @@ public interface SegmentedBytesStore extends StateStore {
          * @param timestamp
          * @return  The key that represents the prefixed Segmented key in bytes.
          */
-        default Bytes toStoreBinaryKeyPrefix(final Bytes key, long timestamp) {
+        default Bytes toStoreBinaryKeyPrefix(final Bytes key, final long timestamp) {
             throw new UnsupportedOperationException();
         }
 

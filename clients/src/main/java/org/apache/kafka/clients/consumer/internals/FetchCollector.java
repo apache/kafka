@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -42,7 +42,7 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 
 /**
  * {@code FetchCollector} operates at the {@link RecordBatch} level, as that is what is stored in the
- * {@link FetchBuffer}. Each {@link org.apache.kafka.common.record.Record} in the {@link RecordBatch} is converted
+ * {@link FetchBuffer}. Each {@link org.apache.kafka.common.record.internal.Record} in the {@link RecordBatch} is converted
  * to a {@link ConsumerRecord} and added to the returned {@link Fetch}.
  *
  * @param <K> Record key type
