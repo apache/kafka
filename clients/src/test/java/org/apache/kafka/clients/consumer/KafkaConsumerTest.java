@@ -3027,7 +3027,7 @@ public class KafkaConsumerTest {
     }
 
     private AtomicBoolean prepareOffsetCommitResponse(MockClient client, Node coordinator, final Map<TopicPartition, Long> partitionOffsets) {
-        final AtomicBoolean commitReceived = new AtomicBoolean(true);
+        final AtomicBoolean commitReceived = new AtomicBoolean(false);
         Map<TopicPartition, Errors> response = new HashMap<>();
         for (TopicPartition partition : partitionOffsets.keySet())
             response.put(partition, Errors.NONE);
@@ -3039,10 +3039,10 @@ public class KafkaConsumerTest {
             for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
                 // verify that the expected offset has been committed
                 if (!commitErrors.get(partitionOffset.getKey()).equals(partitionOffset.getValue())) {
-                    commitReceived.set(false);
                     return false;
                 }
             }
+            commitReceived.set(true);
             return true;
         }, offsetCommitResponse(response), coordinator);
         return commitReceived;

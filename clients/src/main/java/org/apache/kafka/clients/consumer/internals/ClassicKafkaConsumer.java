@@ -596,6 +596,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (partitions == null) {
                 throw new IllegalArgumentException("Topic partition collection to assign to cannot be null");
             } else if (partitions.isEmpty()) {
+                // FIXME: i think this should commmit autocommitoffset
                 this.unsubscribe();
             } else {
                 for (TopicPartition tp : partitions) {
@@ -607,6 +608,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 // make sure the offsets of topic partitions the consumer is unsubscribing from
                 // are committed since there will be no following rebalance
+                // FIXME: i think this should commmit autocommitoffset, may need a force option to force commit
                 if (coordinator != null)
                     this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
 

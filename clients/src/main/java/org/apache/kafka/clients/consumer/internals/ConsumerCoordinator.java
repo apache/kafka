@@ -1195,6 +1195,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    // FIXME: autocommit
+//    public void maybeAutoCommitOffsetsAsync(long now, boolean force) {
+    // if force, then need to wait until it committed
     public void maybeAutoCommitOffsetsAsync(long now) {
         if (autoCommitEnabled) {
             nextAutoCommitTimer.update(now);

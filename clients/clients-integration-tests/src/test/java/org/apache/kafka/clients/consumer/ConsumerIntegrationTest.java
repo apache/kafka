@@ -388,6 +388,61 @@ public class ConsumerIntegrationTest {
         }
     }
 
+    /**
+     * KAFKA-20166: Proves that assign() does NOT trigger an immediate auto-commit for
+     * previously-assigned partitions when the auto-commit timer hasn't expired.
+     * The auto.commit.interval.ms is set to 5 minutes so the timer will never fire
+     * during the test. If the bug is fixed, this test should pass.
+     */
+    @ClusterTest(serverProperties = {
+        @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+    })
+    public void testAssignImmediateAutoCommitWithLongInterval(ClusterInstance clusterInstance) throws Exception {
+        String topic = "test-assign-autocommit";
+        String groupId = "test-assign-autocommit-group";
+        clusterInstance.createTopic(topic, 2, (short) 1);
+
+        TopicPartition tp0 = new TopicPartition(topic, 0);
+        TopicPartition tp1 = new TopicPartition(topic, 1);
+
+        // Produce 1 message to each partition
+        try (var producer = clusterInstance.producer()) {
+            producer.send(new ProducerRecord<>(topic, 0, "key0".getBytes(), "value0".getBytes()));
+            producer.send(new ProducerRecord<>(topic, 1, "key1".getBytes(), "value1".getBytes()));
+            producer.flush();
+        }
+
+        try (var consumer = clusterInstance.consumer(Map.of(
+                ConsumerConfig.GROUP_ID_CONFIG, groupId,
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true",
+                ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "300000",
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"
+            ));
+             var admin = clusterInstance.admin()) {
+
+            // Assign tp0 and poll until records received
+            consumer.assign(List.of(tp0));
+            TestUtils.waitForCondition(
+                () -> !consumer.poll(Duration.ofMillis(1000)).isEmpty(),
+                10000,
+                "Should have received records from tp0");
+
+            // Reassign to tp1 — should trigger immediate auto-commit for tp0
+            consumer.assign(List.of(tp1));
+
+            // Give a small window for the async commit to complete
+            Thread.sleep(2000);
+
+            // Verify that tp0 offset was committed
+            var offsets = admin.listConsumerGroupOffsets(groupId)
+                .partitionsToOffsetAndMetadata().get();
+            assertTrue(offsets.containsKey(tp0) && offsets.get(tp0) != null,
+                "tp0 offset should have been auto-committed on reassignment, but no committed offset found. " +
+                "This proves the bug: assign() does not trigger immediate auto-commit when timer hasn't expired.");
+        }
+    }
+
     private void sendMsg(ClusterInstance clusterInstance, String topic, int sendMsgNum) {
         try (var producer = clusterInstance.producer(Map.of(
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
