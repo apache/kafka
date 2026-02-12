@@ -163,6 +163,31 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
+    public void testListOffsetsSinglePartitionWithoutRetryClearsEndOffsetRequestedFlag() {
+        Map<TopicPartition, Long> timestampsToSearch = Map.of(
+            TEST_PARTITION_1, ListOffsetsRequest.EARLIEST_TIMESTAMP
+        );
+
+        // Make the LIST_OFFSETS attempt fails due to an unknown leader.
+        mockFailedRequest_MissingLeader();
+
+        requestManager.fetchOffsets(
+            timestampsToSearch,
+            false,
+            false
+        );
+        verify(subscriptionState).maybeClearPartitionEndOffsetRequested(TEST_PARTITION_1);
+
+        assertEquals(0, requestManager.requestsToSend());
+        assertEquals(0, requestManager.requestsToRetry());
+        verify(metadata).requestUpdate(true);
+        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        assertEquals(0, requestManager.requestsToSend());
+        assertEquals(0, requestManager.requestsToRetry());
+        assertEquals(0, res.unsentRequests.size());
+    }
+
+    @Test
     public void testListOffsetsRequestMultiplePartitions() throws ExecutionException,
             InterruptedException {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();

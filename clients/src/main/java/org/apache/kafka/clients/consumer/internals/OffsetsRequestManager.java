@@ -565,7 +565,17 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.of(listOffsetsRequestState));
         if (timestampsToSearchByNode.isEmpty()) {
-            throw new StaleMetadataException();
+            if (listOffsetsRequestState.shouldRetry) {
+                // This exception is caught in prepareFetchOffsetsRequests() and signals to retry this set
+                // of partitions. Only do that if the caller wants to retry LIST_OFFSETS calls, of course.
+                throw new StaleMetadataException();
+            } else {
+                // If the caller doesn't want to retry LIST_OFFSETS calls, go ahead and clear the
+                // 'end offsets requested' flag since there won't be another chance. Then return an empty
+                // list to signal that there are no requests to be sent.
+                offsetFetcherUtils.clearPartitionEndOffsetRequests(timestampsToSearch.keySet());
+                return List.of();
+            }
         }
 
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
