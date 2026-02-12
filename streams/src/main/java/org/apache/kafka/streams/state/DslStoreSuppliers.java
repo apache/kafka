@@ -50,7 +50,7 @@ import java.util.Map;
 public interface DslStoreSuppliers extends Configurable {
 
     @Override
-    default void configure(Map<String, ?> configs) {
+    default void configure(final Map<String, ?> configs) {
         // optional to configure this class
     }
 

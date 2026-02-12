@@ -249,6 +249,11 @@ in this set will be accessible in O(1) time with an automatically generated
 however.  New entries that are added to the set always show up as last in the
 ordering.
 
+Note that "mapKey" does not affect how the data is sent over the network.  It
+only affects the in-memory data structure used by the generated code.  Adding or
+removing "mapKey" on an existing field is not an incompatible change and does
+not require a new version in "validVersions".
+
 Incompatible Changes
 --------------------
 It's very important to avoid making incompatible changes to the message

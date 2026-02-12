@@ -17,7 +17,7 @@
 package org.apache.kafka.server.record;
 
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.internal.CompressionType;
 
 import java.util.List;
 import java.util.Locale;

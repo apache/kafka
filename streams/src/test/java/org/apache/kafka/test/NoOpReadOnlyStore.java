@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -24,13 +25,14 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 import java.io.File;
+import java.util.Map;
 
 public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, StateStore {
     private final String name;
     private final boolean rocksdbStore;
     private boolean open = true;
     public boolean initialized;
-    public boolean flushed;
+    public boolean committed;
 
     public NoOpReadOnlyStore() {
         this("", false);
@@ -89,8 +91,8 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     }
 
     @Override
-    public void flush() {
-        flushed = true;
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        committed = true;
     }
 
     @Override

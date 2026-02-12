@@ -119,6 +119,7 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParamet
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.PartitionMetadataClient;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
@@ -2178,11 +2179,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         short transactionVersion
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
         if (!tp.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
-            return FutureUtils.failedFuture(new IllegalStateException(
+            return CompletableFuture.failedFuture(new IllegalStateException(
                 "Completing a transaction for " + tp + " is not expected"
             ));
         }
