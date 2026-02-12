@@ -109,7 +109,8 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         // Check if legacy CF has data
         final RocksIterator legacyIter = db.newIterator(legacyCf);
         legacyIter.seekToFirst();
-        try {
+        try (final RocksIterator legacyIter = db.newIterator(legacyCf)) {
+            legacyIter.seekToFirst();
             if (legacyIter.isValid()) {
                 log.info("Opening store {} in upgrade mode", name);
                 cfAccessor = new DualColumnFamilyAccessor(legacyCf, headersCf,
@@ -119,9 +120,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                 cfAccessor = new SingleColumnFamilyAccessor(headersCf);
                 legacyCf.close();
             }
-        } finally {
-            legacyIter.close();
-        }
+        } 
     }
 
     /**
