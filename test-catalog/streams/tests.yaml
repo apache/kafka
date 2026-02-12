@@ -3727,6 +3727,8 @@ org.apache.kafka.streams.state.HostInfoTest:
 - shouldThrowConfigExceptionForNonsenseEndPoint
 org.apache.kafka.streams.state.StateSerdesTest:
 - shouldReturnSerdesForBuiltInKeyAndValueTypesForBuiltinTypes
+- shouldSerializeAndDeserializeKeyWithHeaders
+- shouldSerializeAndDeserializeValueWithHeaders
 - shouldSkipValueAndTimestampeInformationForErrorOnTimestampAndValueSerialization
 - shouldThrowForUnknownKeyTypeForBuiltinTypes
 - shouldThrowForUnknownValueTypeForBuiltinTypes
