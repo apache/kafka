@@ -98,9 +98,9 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<U> {
                         return operation.generateRecords();
                     }
                 ).exceptionally(ex -> {
-                    // Exceptions may be wrapped in CompletionException or ExecutionException
-                    // when propagated through CompletableFuture chains, so we unwrap them
-                    // before checking types with instanceof.
+                    // Exceptions may be wrapped in CompletionException when propagated
+                    // through CompletableFuture chains, so we unwrap them before
+                    // checking types with instanceof.
                     ex = Errors.maybeUnwrapException(ex);
 
                     // Remove the task after a failure.

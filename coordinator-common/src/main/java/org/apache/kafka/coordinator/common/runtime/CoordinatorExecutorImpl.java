@@ -86,9 +86,9 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
                     return operation.onComplete(result.result(), result.exception());
                 }
             ).exceptionally(exception -> {
-                // Exceptions may be wrapped in CompletionException or ExecutionException
-                // when propagated through CompletableFuture chains, so we unwrap them
-                // before checking types with instanceof.
+                // Exceptions may be wrapped in CompletionException when propagated
+                // through CompletableFuture chains, so we unwrap them before
+                // checking types with instanceof.
                 exception = Errors.maybeUnwrapException(exception);
 
                 // Remove the task after a failure.
