@@ -704,23 +704,23 @@ class TransactionsTest extends IntegrationTestHarness {
     // aborted on timeout.
     val transactionalId = "test-overflow"
     var producer = createTransactionalProducer(transactionalId, transactionTimeoutMs = 500)
-    val testRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, 0, "key".getBytes, "value".getBytes)
+    val abortedRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, 0, "key".getBytes, "aborted".getBytes)
 
-    // Step 1: Create a transaction, produce one record, and abort
+    // Create a transaction, produce one record, and abort
     producer.initTransactions()
     producer.beginTransaction()
-    producer.send(testRecord)
+    producer.send(abortedRecord)
     producer.abortTransaction()
     producer.close()
 
-    // Step 2: Find the transaction coordinator partition for this transactional ID
+    // Find the transaction coordinator partition for this transactional ID
     val adminClient = createAdminClient()
     try {
       val txnDescription = adminClient.describeTransactions(java.util.List.of(transactionalId))
         .description(transactionalId).get()
       val coordinatorId = txnDescription.coordinatorId()
 
-      // Step 3: Access the transaction coordinator and update the epoch to Short.MaxValue - 2
+      // Access the transaction coordinator and update the epoch to Short.MaxValue - 2
       val coordinatorBroker = brokers.find(_.config.brokerId == coordinatorId).get
       val txnCoordinator = coordinatorBroker.asInstanceOf[kafka.server.BrokerServer].transactionCoordinator
 
@@ -739,14 +739,14 @@ class TransactionsTest extends IntegrationTestHarness {
       adminClient.close()
     }
 
-    // Step 4: Re-initialize the producer which will bump epoch
+    // Re-initialize the producer which will bump epoch
     producer = createTransactionalProducer(transactionalId, transactionTimeoutMs = 500)
     producer.initTransactions()
 
     // Start a transaction
     producer.beginTransaction()
     // Produce one record and wait for it to complete
-    producer.send(testRecord).get()
+    producer.send(abortedRecord).get()
     producer.flush()
 
     // Check and assert that epoch of the transaction is Short.MaxValue - 1 (before timeout)
@@ -784,15 +784,32 @@ class TransactionsTest extends IntegrationTestHarness {
     // Start a transaction, it would use the state from abort
     producer.beginTransaction()
     // Produce one record and wait for it to complete
-    producer.send(testRecord).get()
+    producer.send(abortedRecord).get()
     producer.flush()
 
-    // Now init new producer and commit a transaction
+    // Now init new producer and commit a transaction with a distinct value
     val producer2 = createTransactionalProducer(transactionalId, transactionTimeoutMs = 500)
     producer2.initTransactions()
     producer2.beginTransaction()
-    producer2.send(testRecord).get()
+    val committedRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, 0, "key".getBytes, "committed".getBytes)
+    producer2.send(committedRecord).get()
     producer2.commitTransaction()
+
+    // Verify that exactly one record is visible in read-committed mode
+    val consumer = createReadCommittedConsumer("test-consumer-group")
+    try {
+      val tp = new TopicPartition(topic1, 0)
+      consumer.assign(java.util.Set.of(tp))
+      val records = consumeRecords(consumer, 1)
+
+      val record = records.head
+      assertArrayEquals("key".getBytes, record.key, "Record key should match")
+      assertArrayEquals("committed".getBytes, record.value, "Record value should be 'committed'")
+      assertEquals(0, record.partition, "Record should be in partition 0")
+      assertEquals(topic1, record.topic, "Record should be in topic1")
+    } finally {
+      consumer.close()
+    }
   }
 
   @ParameterizedTest
