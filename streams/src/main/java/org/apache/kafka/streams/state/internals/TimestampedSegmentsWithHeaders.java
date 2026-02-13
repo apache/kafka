@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
- * Manages the {@link TimestampedSegmentWithHeaders}s that are used by the * {@link RocksDBTimestampedSegmentedBytesStoreWithHeaders}.
+ * Manages the {@link TimestampedSegmentWithHeaders}s that are used by the {@link RocksDBTimestampedSegmentedBytesStoreWithHeaders}.
  */
 class TimestampedSegmentsWithHeaders extends AbstractSegments<TimestampedSegmentWithHeaders> {
 
