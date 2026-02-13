@@ -112,7 +112,7 @@ public class TopicConfig {
     public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
             "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay). " +
             "When set to -1, resolves to <code>local.retention.bytes</code> (maximum delay). " +
-            "When set to a positive value (bytes), a segment becomes eligible for upload only when the bytes of log data after the segment reach the value. " +
+            "When set to a positive value (bytes), a segment becomes eligible for upload only when the total bytes of log data after the segment reach the value. " +
             "The value should not exceed <code>local.retention.bytes</code> (local retention size).";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
