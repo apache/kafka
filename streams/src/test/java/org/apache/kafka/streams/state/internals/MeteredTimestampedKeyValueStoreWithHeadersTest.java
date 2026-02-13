@@ -81,7 +81,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     private static final RecordHeaders HEADERS = makeHeaders();
     private static final ValueTimestampHeaders<String> VALUE_TIMESTAMP_HEADERS =
         ValueTimestampHeaders.make("value", 97L, HEADERS);
-    private static final byte[] VALUE_TIMESTAMP_HEADERS_BYTES = serializeValueTimestampHeaders(VALUE_TIMESTAMP_HEADERS);
+    private static final byte[] VALUE_TIMESTAMP_HEADERS_BYTES = serializeValueTimestampHeaders();
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0, "My-Topology");
     @Mock
@@ -255,7 +255,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
             new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampHeadersPair).iterator()));
         init();
 
-        try(final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range(KEY, KEY)) {
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.range(KEY, KEY)) {
             assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
             assertFalse(iterator.hasNext());
         }
@@ -271,7 +271,7 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
             .thenReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampHeadersPair).iterator()));
         init();
 
-        try(final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all()) {
+        try (final KeyValueIterator<String, ValueTimestampHeaders<String>> iterator = metered.all()) {
             assertEquals(VALUE_TIMESTAMP_HEADERS, iterator.next().value);
             assertFalse(iterator.hasNext());
         }
@@ -452,14 +452,14 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
     }
 
     private static RecordHeaders makeHeaders() {
-        RecordHeaders headers = new RecordHeaders();
+        final RecordHeaders headers = new RecordHeaders();
         headers.add("header-key", "header-value".getBytes());
         return headers;
     }
 
-    private static byte[] serializeValueTimestampHeaders(ValueTimestampHeaders<String> vth) {
-        ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
-        return serializer.serialize("topic", vth);
+    private static byte[] serializeValueTimestampHeaders() {
+        final ValueTimestampHeadersSerializer<String> serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
+        return serializer.serialize("topic", VALUE_TIMESTAMP_HEADERS);
     }
 
     @SuppressWarnings("unchecked")
@@ -470,16 +470,10 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
         final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
         final Serializer<ValueTimestampHeaders<String>> valueSerializer = mock(Serializer.class);
         when(keySerde.serializer()).thenReturn(keySerializer);
-        // Mock both 2-arg and 3-arg versions of serialize - use lenient to avoid strict stubbing errors
-        lenient().when(keySerializer.serialize(topic, KEY)).thenReturn(KEY.getBytes());
         lenient().when(keySerializer.serialize(eq(topic), any(RecordHeaders.class), eq(KEY))).thenReturn(KEY.getBytes());
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
-        // Mock both 2-arg and 3-arg versions of deserialize - use lenient to avoid strict stubbing errors
-        lenient().when(valueDeserializer.deserialize(eq(topic), any(byte[].class))).thenReturn(VALUE_TIMESTAMP_HEADERS);
         lenient().when(valueDeserializer.deserialize(eq(topic), any(RecordHeaders.class), any(byte[].class))).thenReturn(VALUE_TIMESTAMP_HEADERS);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
-        // Mock both 2-arg and 3-arg versions of serialize - use lenient to avoid strict stubbing errors
-        lenient().when(valueSerializer.serialize(topic, VALUE_TIMESTAMP_HEADERS)).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
         lenient().when(valueSerializer.serialize(eq(topic), any(RecordHeaders.class), eq(VALUE_TIMESTAMP_HEADERS))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
         when(inner.get(any(Bytes.class))).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
         metered = new MeteredTimestampedKeyValueStoreWithHeaders<>(

@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -32,9 +29,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
-import java.util.Objects;
-
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
  * A Metered {@link TimestampedKeyValueStoreWithHeaders} wrapper that is used for recording operation metrics, and hence
@@ -70,37 +64,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     @Override
-    public ValueTimestampHeaders<V> get(final K key) {
-        Objects.requireNonNull(key, "key cannot be null");
-        try {
-            return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key, new RecordHeaders()))), time, getSensor);
-        } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key);
-            throw new ProcessorStateException(message, e);
-        }
-    }
-
-    @Override
-    public void put(final K key,
-                    final ValueTimestampHeaders<V> value) {
-        Objects.requireNonNull(key, "key cannot be null");
-        try {
-            final Headers headers = value.headers();
-            maybeMeasureLatency(() -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers)), time, putSensor);
-            maybeRecordE2ELatency();
-        } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), key, value);
-            throw new ProcessorStateException(message, e);
-        }
-    }
-
-    @Override
-    protected ValueTimestampHeaders<V> outerValue(final byte[] value) {
-        final Headers headers = ValueTimestampHeadersDeserializer.headers(value);
-        return value != null ? serdes.valueFrom(value, headers) : null;
-    }
-
-    @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
@@ -110,10 +73,6 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     @Override
     public Position getPosition() {
         throw new UnsupportedOperationException("Position is not supported for " + getClass().getSimpleName());
-    }
-
-    protected Bytes keyBytes(final K key, final Headers headers) {
-        return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
 }
