@@ -145,15 +145,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext<Object,
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Position position) {
-        throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
-    }
-
-    @Override
-    public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
                           final Headers headers,
                           final Position position) {
         throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");

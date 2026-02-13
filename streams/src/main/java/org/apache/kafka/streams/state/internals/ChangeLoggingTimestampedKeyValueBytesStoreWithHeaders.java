@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -91,9 +90,5 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
                 headers(valueTimestampHeaders)
             );
         }
-    }
-
-    void log(final Bytes key, final byte[] value, final long timestamp, final Headers headers) {
-        internalContext.logChange(name(), key, value, timestamp, headers, wrapped().getPosition());
     }
 }

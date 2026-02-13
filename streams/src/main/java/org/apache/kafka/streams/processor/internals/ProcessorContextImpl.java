@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -117,36 +116,6 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
     @Override
     public RecordCollector recordCollector() {
         return collector;
-    }
-
-    @Override
-    public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
-                          final Position position) {
-        throwUnsupportedOperationExceptionIfStandby("logChange");
-
-        final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
-
-        final Headers headers;
-        if (!consistencyEnabled) {
-            headers = null;
-        } else {
-            addVectorClockToHeaders(headers = new RecordHeaders(), position);
-        }
-
-        collector.send(
-            changelogPartition.topic(),
-            key,
-            value,
-            headers,
-            changelogPartition.partition(),
-            timestamp,
-            BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER,
-            null,
-            null);
     }
 
     @Override

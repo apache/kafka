@@ -457,33 +457,6 @@ public class InternalMockProcessorContext<KOut, VOut>
                           final Bytes key,
                           final byte[] value,
                           final long timestamp,
-                          final Position position) {
-
-        Headers headers = new RecordHeaders();
-        if (!consistencyEnabled) {
-            headers = null;
-        } else {
-            addVectorClockToHeaders(headers, position);
-        }
-
-        recordCollector().send(
-            storeName + "-changelog",
-            key,
-            value,
-            headers,
-            taskId().partition(),
-            timestamp,
-            BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER,
-            null,
-            null);
-    }
-
-    @Override
-    public void logChange(final String storeName,
-                          final Bytes key,
-                          final byte[] value,
-                          final long timestamp,
                           final Headers headers,
                           final Position position) {
 

@@ -121,12 +121,6 @@ public interface InternalProcessorContext<KOut, VOut>
                    final Bytes key,
                    final byte[] value,
                    final long timestamp,
-                   final Position position);
-
-    void logChange(final String storeName,
-                   final Bytes key,
-                   final byte[] value,
-                   final long timestamp,
                    final Headers headers,
                    final Position position);
 
