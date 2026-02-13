@@ -91,6 +91,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static kafka.server.share.ShareFetchUtils.isRenewAcknowledgeEnabled;
 import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
@@ -2299,6 +2300,11 @@ public class SharePartition {
                 byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(offsetState.getKey()) : batch.acknowledgeTypes().get(0);
 
                 if (ackType == AcknowledgeType.RENEW.id) {
+                    if (!isRenewAcknowledgeEnabled(groupConfigManager, groupId)) {
+                        log.warn("Renew acknowledge is not enabled for the group: {}", groupId);
+                        return Optional.of(new InvalidRecordStateException(
+                            "Renewing acquisition locks is not enabled for the group."));
+                    }
                     // If RENEW, renew the acquisition lock timer for this offset and continue without changing state.
                     // We do not care about recordState map here.
                     // Only valid for ACQUIRED offsets; the check above ensures this.
@@ -2372,6 +2378,11 @@ public class SharePartition {
             // Before reaching this point, it should be verified that it is full batch ack and
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
+                if (!isRenewAcknowledgeEnabled(groupConfigManager, groupId)) {
+                    log.warn("Renew acknowledge is not enabled for the group: {}", groupId);
+                    return Optional.of(new InvalidRecordStateException(
+                        "Renewing acquisition locks is not enabled for the group."));
+                }
                 // Renew the acquisition lock timer for the complete batch. We have already
                 // checked that the batchState is ACQUIRED above.
                 log.debug("Renewing acquisition lock for {}-{} with batch {}-{} for member {}.",

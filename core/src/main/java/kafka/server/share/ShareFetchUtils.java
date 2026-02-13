@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
@@ -273,6 +274,20 @@ public class ShareFetchUtils {
             return groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
         }
         return defaultValue;
+    }
+
+    /**
+     * The method is used to check if renew acknowledge is enabled for the group. If the group config
+     * is present, then the value from the group config is used. Otherwise, the default value is used.
+     *
+     * @param groupConfigManager The group config manager.
+     * @param groupId The group id for which the renew acknowledge enable is to be checked.
+     * @return true if renew acknowledge is enabled for the group, false otherwise.
+     */
+    public static boolean isRenewAcknowledgeEnabled(GroupConfigManager groupConfigManager, String groupId) {
+        return groupConfigManager.groupConfig(groupId)
+            .map(GroupConfig::shareRenewAcknowledgeEnable)
+            .orElse(GroupConfig.SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT);
     }
 
     /**
