@@ -22,10 +22,10 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.internal.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
+import org.apache.kafka.common.record.internal.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.common.TransactionVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, RecordValidationStats, VerificationGuard}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test

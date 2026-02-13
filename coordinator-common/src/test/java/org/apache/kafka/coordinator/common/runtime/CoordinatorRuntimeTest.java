@@ -1987,6 +1987,188 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testScheduleWriteOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a write after close returns a failed future instead of throwing.
+        CompletableFuture<String> future = runtime.scheduleWriteOperation("write", TP,
+            state -> new CoordinatorResult<>(List.of(), "response"));
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleReadOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a read after close returns a failed future instead of throwing.
+        CompletableFuture<String> future = runtime.scheduleReadOperation("read", TP,
+            (state, offset) -> "response");
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleTransactionalWriteOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a transactional write after close returns a failed future instead of throwing.
+        CompletableFuture<String> future = runtime.scheduleTransactionalWriteOperation(
+            "txn-write",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50,
+            state -> new CoordinatorResult<>(List.of(), "response"),
+            TXN_OFFSET_COMMIT_LATEST_VERSION
+        );
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleTransactionCompletionWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a transaction completion after close returns a failed future instead of throwing.
+        CompletableFuture<Void> future = runtime.scheduleTransactionCompletion(
+            "txn-completion",
+            TP,
+            100L,
+            (short) 50,
+            10,
+            TransactionResult.COMMIT,
+            (short) 1
+        );
+        assertFutureThrows(NotCoordinatorException.class, future);
+    }
+
+    @Test
+    public void testScheduleWriteAllOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a write all operation after close returns an empty list instead of throwing.
+        List<CompletableFuture<String>> futures = runtime.scheduleWriteAllOperation("write-all",
+            state -> new CoordinatorResult<>(List.of(), "response"));
+        assertEquals(List.of(), futures);
+    }
+
+    @Test
+    public void testScheduleReadAllOpWhenClosed() throws Exception {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withWriteTimeout(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(CoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(CoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .withExecutorService(mock(ExecutorService.class))
+                .withCachedBufferMaxBytesSupplier(() -> CACHED_BUFFER_MAX_BYTES)
+                .build();
+
+        // Close the runtime.
+        runtime.close();
+
+        // Scheduling a read all operation after close returns an empty list instead of throwing.
+        List<CompletableFuture<String>> futures = runtime.scheduleReadAllOperation("read-all",
+            (state, offset) -> "response");
+        assertEquals(List.of(), futures);
+    }
+
+    @Test
     public void testOnMetadataUpdate() {
         TopicPartition tp0 = new TopicPartition("__consumer_offsets", 0);
         TopicPartition tp1 = new TopicPartition("__consumer_offsets", 1);

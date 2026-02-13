@@ -120,7 +120,7 @@ public class DualColumnFamilyAccessorTest {
     public void shouldThrowProcessorStateExceptionWhenPutFailsOnDeleteColumnFamily() throws RocksDBException {
         doThrow(new RocksDBException("Delete failed")).when(dbAccessor).delete(oldCF, KEY);
 
-        ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, NEW_VALUE));
+        final ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, NEW_VALUE));
 
         assertEquals("Error while removing key from store " + STORE_NAME, exception.getMessage());
     }
@@ -129,7 +129,7 @@ public class DualColumnFamilyAccessorTest {
     public void shouldThrowProcessorStateExceptionWhenPutFailsOnNewColumnFamily() throws RocksDBException {
         doThrow(new RocksDBException("Put failed")).when(dbAccessor).put(newCF, KEY, NEW_VALUE);
 
-        ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, NEW_VALUE));
+        final ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, NEW_VALUE));
 
         assertEquals("Error while putting key/value into store " + STORE_NAME, exception.getMessage());
     }
@@ -138,7 +138,7 @@ public class DualColumnFamilyAccessorTest {
     public void shouldThrowProcessorStateExceptionWhenDeleteFailsOnOldColumnFamilyWithNullValue() throws RocksDBException {
         doThrow(new RocksDBException("Delete failed")).when(dbAccessor).delete(eq(oldCF), any(byte[].class));
 
-        ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, null));
+        final ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.put(dbAccessor, KEY, null));
 
         assertEquals("Error while removing key from store " + STORE_NAME, exception.getMessage());
     }
@@ -196,7 +196,7 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldGetValueWithReadOptions() throws RocksDBException {
-        ReadOptions readOptions = mock(ReadOptions.class);
+        final ReadOptions readOptions = mock(ReadOptions.class);
         when(dbAccessor.get(newCF, readOptions, KEY)).thenReturn(NEW_VALUE);
 
         final byte[] result = accessor.get(dbAccessor, KEY, readOptions);
@@ -208,7 +208,7 @@ public class DualColumnFamilyAccessorTest {
 
     @Test
     public void shouldGetFromOldColumnFamilyWithReadOptionsAndConvert() throws RocksDBException {
-        ReadOptions readOptions = mock(ReadOptions.class);
+        final ReadOptions readOptions = mock(ReadOptions.class);
         when(dbAccessor.get(newCF, readOptions, KEY)).thenReturn(null);
         when(dbAccessor.get(oldCF, readOptions, KEY)).thenReturn(OLD_VALUE);
 
@@ -317,7 +317,7 @@ public class DualColumnFamilyAccessorTest {
 
         doThrow(new RocksDBException("Delete range failed")).when(dbAccessor).deleteRange(eq(oldCF), any(byte[].class), any(byte[].class));
 
-        ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.deleteRange(dbAccessor, from, to));
+        final ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.deleteRange(dbAccessor, from, to));
 
         assertEquals("Error while removing key from store " + STORE_NAME, exception.getMessage());
     }
@@ -330,7 +330,7 @@ public class DualColumnFamilyAccessorTest {
         lenient().doNothing().when(dbAccessor).deleteRange(eq(oldCF), any(byte[].class), any(byte[].class));
         doThrow(new RocksDBException("Delete range failed")).when(dbAccessor).deleteRange(eq(newCF), any(byte[].class), any(byte[].class));
 
-        ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.deleteRange(dbAccessor, from, to));
+        final ProcessorStateException exception = assertThrows(ProcessorStateException.class, () -> accessor.deleteRange(dbAccessor, from, to));
 
         assertEquals("Error while removing key from store " + STORE_NAME, exception.getMessage());
         verify(dbAccessor).deleteRange(oldCF, from, to);
@@ -380,7 +380,7 @@ public class DualColumnFamilyAccessorTest {
         when(dbAccessor.newIterator(newCF)).thenReturn(newIterFormat);
         when(dbAccessor.newIterator(oldCF)).thenReturn(oldIterFormat);
 
-        ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, true);
+        final ManagedKeyValueIterator<Bytes, byte[]> iterator = accessor.all(dbAccessor, true);
 
         assertNotNull(iterator);
         verify(oldIterFormat).seekToFirst();

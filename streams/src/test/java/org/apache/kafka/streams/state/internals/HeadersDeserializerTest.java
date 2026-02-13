@@ -89,7 +89,7 @@ public class HeadersDeserializerTest {
         final Header[] headerArray = deserialized.toArray();
         assertEquals(3, headerArray.length);
         for (int i = 0; i < headerArray.length; i++) {
-            Header next = headerArray[i];
+            final Header next = headerArray[i];
             assertEquals("key" + i, next.key());
             assertArrayEquals(("value" + i).getBytes(), next.value());
         }
