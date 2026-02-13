@@ -2909,7 +2909,6 @@ public class KafkaConsumerTest {
             // wait is appropriate here.
             TestUtils.waitForCondition(
                 () -> !subscription.partitionEndOffsetRequested(tp0),
-                2000,
                 "endOffsetRequested flag was not cleared within allotted timeout"
             );
 

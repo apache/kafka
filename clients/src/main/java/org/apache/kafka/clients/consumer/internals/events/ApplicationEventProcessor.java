@@ -313,11 +313,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * Handles ListOffsetsEvent by fetching the offsets for the given partitions and timestamps.
      */
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future = requestManagers.offsetsRequestManager.fetchOffsets(
-            event.timestampsToSearch(),
-            event.requireTimestamps(),
-            true
-        );
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> future =
+            requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(), event.requireTimestamps());
         future.whenComplete(complete(event.future()));
     }
 
@@ -678,13 +675,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                             ListOffsetsRequest.LATEST_TIMESTAMP
                         );
 
-                        // The currentLag() API is a "best effort" attempt at calling the LIST_OFFSETS RPC. If it
-                        // fails, don't retry the attempt internally, but let the user attempt it again.
-                        requestManagers.offsetsRequestManager.fetchOffsets(
-                            timestampToSearch,
-                            false,
-                            false
-                        );
+                        requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false);
                     }
                 }
 

@@ -181,16 +181,13 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * @param timestampsToSearch Partitions and target timestamps to get offsets for
      * @param requireTimestamps  True if this should fail with an UnsupportedVersionException if the
      *                           broker does not support fetching precise timestamps for offsets
-     * @param shouldRetry        Determines if the code should attempt subsequent {@code LIST_OFFSETS} calls for
-     *                           any partitions that fail the first attempt
      * @return Future containing the map of {@link TopicPartition} and {@link OffsetAndTimestamp}
      * found. The future will complete when the requests responses are received and
      * processed, following a call to {@link #poll(long)}
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsets(
             Map<TopicPartition, Long> timestampsToSearch,
-            boolean requireTimestamps,
-            final boolean shouldRetry) {
+            boolean requireTimestamps) {
         if (timestampsToSearch.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
@@ -198,7 +195,6 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
                 timestampsToSearch,
                 requireTimestamps,
-                shouldRetry,
                 offsetFetcherUtils,
                 isolationLevel);
         listOffsetsRequestState.globalResult.whenComplete((result, error) -> {
@@ -565,17 +561,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.of(listOffsetsRequestState));
         if (timestampsToSearchByNode.isEmpty()) {
-            if (listOffsetsRequestState.shouldRetry) {
-                // This exception is caught in prepareFetchOffsetsRequests() and signals to retry this set
-                // of partitions. Only do that if the caller wants to retry LIST_OFFSETS calls, of course.
-                throw new StaleMetadataException();
-            } else {
-                // If the caller doesn't want to retry LIST_OFFSETS calls, go ahead and clear the
-                // 'end offsets requested' flag since there won't be another chance. Then return an empty
-                // list to signal that there are no requests to be sent.
-                offsetFetcherUtils.clearPartitionEndOffsetRequests(timestampsToSearch.keySet());
-                return List.of();
-            }
+            throw new StaleMetadataException();
         }
 
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
@@ -584,13 +570,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             // Done sending request to a set of known leaders
             if (error == null) {
                 listOffsetsRequestState.fetchedOffsets.putAll(multiNodeResult.fetchedOffsets);
-
-                if (listOffsetsRequestState.shouldRetry) {
-                    listOffsetsRequestState.addPartitionsToRetry(multiNodeResult.partitionsToRetry);
-                } else {
-                    offsetFetcherUtils.clearPartitionEndOffsetRequests(multiNodeRequest.partitionsToRetry);
-                }
-
+                listOffsetsRequestState.addPartitionsToRetry(multiNodeResult.partitionsToRetry);
                 offsetFetcherUtils.updateSubscriptionState(multiNodeResult.fetchedOffsets,
                         isolationLevel);
 
@@ -600,8 +580,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                     listOffsetsRequestState.remainingToSearch.keySet());
                     listOffsetsRequestState.globalResult.complete(listOffsetResult);
                 } else {
-                    if (listOffsetsRequestState.shouldRetry)
-                        requestsToRetry.add(listOffsetsRequestState);
+                    requestsToRetry.add(listOffsetsRequestState);
                     metadata.requestUpdate(false);
                 }
             } else {
@@ -845,13 +824,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         private final Map<TopicPartition, Long> remainingToSearch;
         private final CompletableFuture<ListOffsetResult> globalResult;
         final boolean requireTimestamps;
-        final boolean shouldRetry;
         final OffsetFetcherUtils offsetFetcherUtils;
         final IsolationLevel isolationLevel;
 
         private ListOffsetsRequestState(Map<TopicPartition, Long> timestampsToSearch,
                                         boolean requireTimestamps,
-                                        boolean shouldRetry,
                                         OffsetFetcherUtils offsetFetcherUtils,
                                         IsolationLevel isolationLevel) {
             remainingToSearch = new HashMap<>();
@@ -860,15 +837,11 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             this.timestampsToSearch = timestampsToSearch;
             this.requireTimestamps = requireTimestamps;
-            this.shouldRetry = shouldRetry;
             this.offsetFetcherUtils = offsetFetcherUtils;
             this.isolationLevel = isolationLevel;
         }
 
         private void addPartitionsToRetry(Set<TopicPartition> partitionsToRetry) {
-            if (!shouldRetry)
-                throw new IllegalStateException("Unexpected attempt to retry LIST_OFFSETS call for partitions (" + partitionsToRetry + ")");
-
             remainingToSearch.putAll(partitionsToRetry.stream()
                     .collect(Collectors.toMap(tp -> tp, timestampsToSearch::get)));
         }
