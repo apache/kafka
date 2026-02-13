@@ -64,7 +64,7 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{SystemTimer, TimerTask}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, HostedPartition, LogAppendResult, common}
+import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, HostedPartition, LogAppendResult, LogDeleteRecordsResult, common}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchPartitionStatus, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogReadResult, OffsetResultHolder, RecordValidationException, RecordValidationStats, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -80,13 +80,6 @@ import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
-
-case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exception: Option[Throwable] = None) {
-  def error: Errors = exception match {
-    case None => Errors.NONE
-    case Some(e) => Errors.forException(e)
-  }
-}
 
 object ReplicaManager {
   val HighWatermarkFilename = "replication-offset-checkpoint"
@@ -1067,7 +1060,7 @@ class ReplicaManager(val config: KafkaConfig,
     offsetPerPartition.map { case (topicPartition, requestedOffset) =>
       // reject delete records operation for internal topics unless allowInternalTopicDeletion is true
       if (Topic.isInternal(topicPartition.topic) && !allowInternalTopicDeletion) {
-        (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(new InvalidTopicException(s"Cannot delete records of internal topic ${topicPartition.topic}"))))
+        (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(new InvalidTopicException(s"Cannot delete records of internal topic ${topicPartition.topic}"))))
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
@@ -1078,13 +1071,13 @@ class ReplicaManager(val config: KafkaConfig,
                    _: NotLeaderOrFollowerException |
                    _: PolicyViolationException |
                    _: KafkaStorageException) =>
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
+            (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(e)))
           case e: OffsetOutOfRangeException =>
             debug("Error processing delete records operation on partition %s".format(topicPartition), e)
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(e)))
+            (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(e)))
           case t: Throwable =>
             error("Error processing delete records operation on partition %s".format(topicPartition), t)
-            (topicPartition, LogDeleteRecordsResult(-1L, -1L, Some(t)))
+            (topicPartition, new LogDeleteRecordsResult(-1L, -1L, Optional.of(t)))
         }
       }
     }
