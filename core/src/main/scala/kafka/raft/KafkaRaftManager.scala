@@ -23,7 +23,6 @@ import java.nio.file.Paths
 import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
 import java.util.concurrent.CompletableFuture
 import kafka.server.KafkaConfig
-import kafka.utils.CoreUtils
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
 import org.apache.kafka.common.KafkaException
@@ -143,13 +142,13 @@ class KafkaRaftManager[T](
   }
 
   def shutdown(): Unit = {
-    CoreUtils.swallow(expirationService.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => expirationService.shutdown())
     Utils.closeQuietly(expirationTimer, "expiration timer")
-    CoreUtils.swallow(clientDriver.shutdown(), this)
-    CoreUtils.swallow(scheduler.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => clientDriver.shutdown())
+    Utils.swallow(this.logger.underlying, () => scheduler.shutdown())
     Utils.closeQuietly(netChannel, "net channel")
     Utils.closeQuietly(raftLog, "raft log")
-    CoreUtils.swallow(dataDirLock.foreach(_.destroy()), this)
+    Utils.swallow(this.logger.underlying, () => dataDirLock.foreach(_.destroy()))
   }
 
   override def handleRequest(

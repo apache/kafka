@@ -18,7 +18,7 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.message.KRaftVersionRecord;
-import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;

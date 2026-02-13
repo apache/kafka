@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -633,14 +634,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
-    public synchronized void flush() {
+    public synchronized void commit(final Map<TopicPartition, Long> changelogOffsets) {
         if (db == null) {
             return;
         }
         try {
-            cfAccessor.flush(dbAccessor);
+            cfAccessor.commit(dbAccessor, changelogOffsets);
         } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error while executing flush from store " + name, e);
+            throw new ProcessorStateException("Error while executing commit from store " + name, e);
         }
     }
 
@@ -835,7 +836,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         long approximateNumEntries(final DBAccessor accessor) throws RocksDBException;
 
-        void flush(final DBAccessor accessor) throws RocksDBException;
+        void commit(final DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException;
 
         void addToBatch(final byte[] key,
                         final byte[] value,
@@ -951,7 +952,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void flush(final DBAccessor accessor) throws RocksDBException {
+        public void commit(final DBAccessor accessor,
+                           final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
             accessor.flush(columnFamily);
         }
 
