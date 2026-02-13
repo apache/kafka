@@ -954,11 +954,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
-                        if (copyLagMs != 0 && !hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs))
+                        if (copyLagMs > 0 && !hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs))
                             break;
                         
                         cumulativeSize += previousSeg.size();
-                        if (copyLagBytes != 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes))
+                        if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes))
                             break;
                         
                         candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
