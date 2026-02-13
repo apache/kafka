@@ -956,7 +956,7 @@ class ReplicaManager(val config: KafkaConfig,
     } else {
       // we can respond immediately
       val produceResponseStatus = new util.HashMap[TopicIdPartition, PartitionResponse]
-      initialProduceStatus.foreach { case (k, status) => k -> produceResponseStatus.put(k, status.responseStatus) }
+      initialProduceStatus.foreach { case (k, status) => produceResponseStatus.put(k, status.responseStatus) }
       responseCallback(produceResponseStatus)
     }
   }
