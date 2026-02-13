@@ -182,6 +182,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -238,7 +239,7 @@ public class KafkaConsumerTest {
 
     private final Collection<TopicPartition> singleTopicPartition = Set.of(new TopicPartition(topic, 0));
     private final Time time = new MockTime();
-    private final SubscriptionState subscription = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST);
+    private final SubscriptionState subscription = spy(new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.EARLIEST));
     private final ConsumerPartitionAssignor assignor = new RoundRobinAssignor();
 
     private KafkaConsumer<?, ?> consumer;
@@ -2769,6 +2770,7 @@ public class KafkaConsumerTest {
             assertFalse(subscription.partitionEndOffsetRequested(tp0));
             assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
+            verify(subscription).requestPartitionEndOffset(tp0);
             assertLogEmitted(
                 appender,
                 "^Requesting the log end offset for " + tp0 + " in order to compute lag$"
@@ -2786,11 +2788,15 @@ public class KafkaConsumerTest {
                 "No LIST_OFFSETS request sent within allotted timeout"
             );
 
+            clearInvocations(subscription);
+
             // Validate the state of the endOffsetRequested flag. It should still be set before the call to
-            // currentLag(), because the previous LIST_OFFSETS call has not received a response.
+            // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
+            // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
             assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
+            verify(subscription, never()).requestPartitionEndOffset(tp0);
             assertLogEmitted(
                 appender,
                 "^Not requesting the log end offset for " + tp0 + " to compute lag as an outstanding request already exists$"
@@ -2816,7 +2822,7 @@ public class KafkaConsumerTest {
 
             assertLogEmitted(
                 appender,
-                "^Clearing partition end offset requested for partition " + tp0 + "$"
+                "^Clearing end offset requested for partition " + tp0 + "$"
             );
         }
     }
@@ -2856,6 +2862,7 @@ public class KafkaConsumerTest {
             assertFalse(subscription.partitionEndOffsetRequested(tp0));
             assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
+            verify(subscription).requestPartitionEndOffset(tp0);
             assertLogEmitted(
                 appender,
                 "^Requesting the log end offset for " + tp0 + " in order to compute lag$"
@@ -2873,11 +2880,15 @@ public class KafkaConsumerTest {
                 "No LIST_OFFSETS request sent within allotted timeout"
             );
 
+            clearInvocations(subscription);
+
             // Validate the state of the endOffsetRequested flag. It should still be set before the call to
-            // currentLag(), because the previous LIST_OFFSETS call has not received a response.
+            // currentLag(), because the previous LIST_OFFSETS call has not received a response. In this case,
+            // the SubscriptionState.requestPartitionEndOffset() method should *not* have been invoked.
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
             assertEquals(OptionalLong.empty(), consumer.currentLag(tp0));
             assertTrue(subscription.partitionEndOffsetRequested(tp0));
+            verify(subscription, never()).requestPartitionEndOffset(tp0);
             assertLogEmitted(
                 appender,
                 "^Not requesting the log end offset for " + tp0 + " to compute lag as an outstanding request already exists$"
@@ -2904,7 +2915,7 @@ public class KafkaConsumerTest {
 
             assertLogEmitted(
                 appender,
-                "^Clearing partition end offset requested for partition " + tp0 + "$"
+                "^Clearing end offset requested for partition " + tp0 + "$"
             );
         }
     }

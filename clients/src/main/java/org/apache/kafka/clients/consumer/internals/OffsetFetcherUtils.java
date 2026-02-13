@@ -298,7 +298,7 @@ public class OffsetFetcherUtils {
     void clearPartitionEndOffsetRequests(Collection<TopicPartition> partitions) {
         for (final TopicPartition partition : partitions) {
             if (subscriptionState.maybeClearPartitionEndOffsetRequested(partition)) {
-                log.trace("Clearing partition end offset requested for partition {}", partition);
+                log.trace("Clearing end offset requested for partition {}", partition);
             }
         }
     }
