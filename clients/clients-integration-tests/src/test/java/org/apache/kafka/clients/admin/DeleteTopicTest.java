@@ -22,8 +22,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -166,7 +166,7 @@ public class DeleteTopicTest {
                 "Follower " + followerBrokerId + " was not shutdown");
             Map<String, NewPartitions> newPartitionSet = Map.of(DEFAULT_TOPIC, NewPartitions.increaseTo(3));
             admin.createPartitions(newPartitionSet);
-            cluster.waitForTopic(DEFAULT_TOPIC, 3);
+            cluster.waitTopicCreation(DEFAULT_TOPIC, 3);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
 
             follower.startup();
@@ -365,7 +365,8 @@ public class DeleteTopicTest {
                     0,
                     AppendOrigin.CLIENT,
                     RequestLocal.noCaching(),
-                    VerificationGuard.SENTINEL
+                    VerificationGuard.SENTINEL,
+                    (short) 0
                 );
                 counter++;
                 result.add(new int[] {key, count});

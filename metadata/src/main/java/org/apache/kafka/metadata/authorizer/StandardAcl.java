@@ -27,13 +27,13 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
-import java.util.Objects;
-
 
 /**
  * A Kafka ACLs which is identified by a UUID and stored in the metadata log.
  */
-public final class StandardAcl implements Comparable<StandardAcl> {
+public record StandardAcl(ResourceType resourceType, String resourceName, PatternType patternType, String principal,
+                          String host, AclOperation operation,
+                          AclPermissionType permissionType) implements Comparable<StandardAcl> {
     public static StandardAcl fromRecord(AccessControlEntryRecord record) {
         return new StandardAcl(
             ResourceType.fromCode(record.resourceType()),
@@ -56,47 +56,6 @@ public final class StandardAcl implements Comparable<StandardAcl> {
             acl.entry().permissionType());
     }
 
-    private final ResourceType resourceType;
-    private final String resourceName;
-    private final PatternType patternType;
-    private final String principal;
-    private final String host;
-    private final AclOperation operation;
-    private final AclPermissionType permissionType;
-
-    public StandardAcl(
-                ResourceType resourceType,
-                String resourceName,
-                PatternType patternType,
-                String principal,
-                String host,
-                AclOperation operation,
-                AclPermissionType permissionType) {
-        this.resourceType = resourceType;
-        this.resourceName = resourceName;
-        this.patternType = patternType;
-        this.principal = principal;
-        this.host = host;
-        this.operation = operation;
-        this.permissionType = permissionType;
-    }
-
-    public ResourceType resourceType() {
-        return resourceType;
-    }
-
-    public String resourceName() {
-        return resourceName;
-    }
-
-    public PatternType patternType() {
-        return patternType;
-    }
-
-    public String principal() {
-        return principal;
-    }
-
     public KafkaPrincipal kafkaPrincipal() {
         int colonIndex = principal.indexOf(":");
         if (colonIndex == -1) {
@@ -108,50 +67,12 @@ public final class StandardAcl implements Comparable<StandardAcl> {
         return new KafkaPrincipal(principalType, principalName);
     }
 
-    public String host() {
-        return host;
-    }
-
-    public AclOperation operation() {
-        return operation;
-    }
-
-    public AclPermissionType permissionType() {
-        return permissionType;
-    }
-
     public AclBinding toBinding() {
         ResourcePattern resourcePattern =
             new ResourcePattern(resourceType, resourceName, patternType);
         AccessControlEntry accessControlEntry =
             new AccessControlEntry(principal, host, operation, permissionType);
         return new AclBinding(resourcePattern, accessControlEntry);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !o.getClass().equals(StandardAcl.class)) return false;
-        if (o == this) return true;
-        StandardAcl other = (StandardAcl) o;
-        return resourceType.equals(other.resourceType) &&
-            resourceName.equals(other.resourceName) &&
-            patternType.equals(other.patternType) &&
-            principal.equals(other.principal) &&
-            host.equals(other.host) &&
-            operation.equals(other.operation) &&
-            permissionType.equals(other.permissionType);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(
-            resourceType,
-            resourceName,
-            patternType,
-            principal,
-            host,
-            operation,
-            permissionType);
     }
 
     /**
@@ -175,18 +96,5 @@ public final class StandardAcl implements Comparable<StandardAcl> {
         if (result != 0) return result;
         result = permissionType.compareTo(other.permissionType);
         return result;
-    }
-
-    @Override
-    public String toString() {
-        return "StandardAcl(" +
-            "resourceType=" + resourceType +
-            ", resourceName=" + resourceName +
-            ", patternType=" + patternType +
-            ", principal=" + principal +
-            ", host=" + host +
-            ", operation=" + operation +
-            ", permissionType=" + permissionType +
-            ")";
     }
 }

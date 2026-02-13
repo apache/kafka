@@ -143,7 +143,8 @@ public class ConnectorPluginsResource {
         synchronized (this) {
             if (connectorsOnly) {
                 return connectorPlugins.stream()
-                        .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type())).toList();
+                    .filter(p -> p.type() == PluginType.SINK || p.type() == PluginType.SOURCE)
+                    .toList();
             } else {
                 return List.copyOf(connectorPlugins);
             }

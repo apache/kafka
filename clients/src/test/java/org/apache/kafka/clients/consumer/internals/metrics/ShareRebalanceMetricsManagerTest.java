@@ -46,6 +46,6 @@ class ShareRebalanceMetricsManagerTest {
         shareRebalanceMetricsManager.recordRebalanceEnded(100);
 
         assertEquals(3.0d, metrics.metric(shareRebalanceMetricsManager.rebalanceTotal).metricValue());
-        assertEquals(360.d, metrics.metric(shareRebalanceMetricsManager.rebalanceRatePerHour).metricValue());
+        assertEquals(3.d, metrics.metric(shareRebalanceMetricsManager.rebalanceRatePerHour).metricValue());
     }
 }

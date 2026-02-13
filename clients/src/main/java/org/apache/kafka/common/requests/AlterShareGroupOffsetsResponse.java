@@ -83,11 +83,11 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
             return topicData;
         }
 
-        public Builder addPartition(String topic, int partition, Map<String, Uuid> topicIdsToNames,  Errors error) {
+        public Builder addPartition(String topic, int partition, Map<String, Uuid> topicIdsToNames, ApiError error) {
             AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic, topicIdsToNames.get(topic));
             topicData.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                 .setPartitionIndex(partition)
-                .setErrorCode(error.code())
+                .setErrorCode(error.error().code())
                 .setErrorMessage(error.message()));
             return this;
         }

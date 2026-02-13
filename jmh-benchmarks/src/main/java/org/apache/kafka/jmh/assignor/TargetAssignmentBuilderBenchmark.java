@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -29,7 +30,6 @@ import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
-import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -91,7 +91,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private List<String> allTopicNames = List.of();
 
-    private MetadataImage metadataImage;
+    private CoordinatorMetadataImage metadataImage;
 
     private TopicIds.TopicResolver topicResolver;
 
@@ -127,7 +127,7 @@ public class TargetAssignmentBuilderBenchmark {
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
 
         metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionsPerTopic);
-        topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
+        topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }

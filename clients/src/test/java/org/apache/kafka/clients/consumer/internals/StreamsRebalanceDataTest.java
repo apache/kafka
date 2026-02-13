@@ -62,7 +62,7 @@ public class StreamsRebalanceDataTest {
     public void testTaskIdCompareTo() {
         final StreamsRebalanceData.TaskId task = new StreamsRebalanceData.TaskId("subtopologyId1", 1);
 
-        assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId())) == 0);
+        assertEquals(0, task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId())));
         assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId() + "1", task.partitionId())) < 0);
         assertTrue(task.compareTo(new StreamsRebalanceData.TaskId(task.subtopologyId(), task.partitionId() + 1)) < 0);
         assertTrue(new StreamsRebalanceData.TaskId(task.subtopologyId() + "1", task.partitionId()).compareTo(task) > 0);
@@ -92,7 +92,8 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
-            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3))
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)),
+            true
         );
 
         assertThrows(
@@ -111,11 +112,11 @@ public class StreamsRebalanceDataTest {
 
     @Test
     public void assignmentShouldNotAcceptNulls() {
-        final Exception exception1 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(null, Set.of(), Set.of()));
+        final Exception exception1 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(null, Set.of(), Set.of(), true));
         assertEquals("Active tasks cannot be null", exception1.getMessage());
-        final Exception exception2 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), null, Set.of()));
+        final Exception exception2 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), null, Set.of(), true));
         assertEquals("Standby tasks cannot be null", exception2.getMessage());
-        final Exception exception3 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), Set.of(), null));
+        final Exception exception3 = assertThrows(NullPointerException.class, () -> new StreamsRebalanceData.Assignment(Set.of(), Set.of(), null, true));
         assertEquals("Warmup tasks cannot be null", exception3.getMessage());
     }
 
@@ -125,43 +126,56 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
-            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3))
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)),
+            true
         );
         final StreamsRebalanceData.Assignment assignmentEqual = new StreamsRebalanceData.Assignment(
             assignment.activeTasks(),
             assignment.standbyTasks(),
-            assignment.warmupTasks()
+            assignment.warmupTasks(),
+            assignment.isGroupReady()
         );
         Set<StreamsRebalanceData.TaskId> unequalActiveTasks = new HashSet<>(assignment.activeTasks());
         unequalActiveTasks.add(additionalTask);
         final StreamsRebalanceData.Assignment assignmentUnequalActiveTasks = new StreamsRebalanceData.Assignment(
             unequalActiveTasks,
             assignment.standbyTasks(),
-            assignment.warmupTasks()
+            assignment.warmupTasks(),
+            assignment.isGroupReady()
         );
         Set<StreamsRebalanceData.TaskId> unequalStandbyTasks = new HashSet<>(assignment.standbyTasks());
         unequalStandbyTasks.add(additionalTask);
         final StreamsRebalanceData.Assignment assignmentUnequalStandbyTasks = new StreamsRebalanceData.Assignment(
             assignment.activeTasks(),
             unequalStandbyTasks,
-            assignment.warmupTasks()
+            assignment.warmupTasks(),
+            assignment.isGroupReady()
         );
         Set<StreamsRebalanceData.TaskId> unequalWarmupTasks = new HashSet<>(assignment.warmupTasks());
         unequalWarmupTasks.add(additionalTask);
         final StreamsRebalanceData.Assignment assignmentUnequalWarmupTasks = new StreamsRebalanceData.Assignment(
             assignment.activeTasks(),
             assignment.standbyTasks(),
-            unequalWarmupTasks
+            unequalWarmupTasks,
+            assignment.isGroupReady()
+        );
+        final StreamsRebalanceData.Assignment assignmentUnequalIsGroupReady = new StreamsRebalanceData.Assignment(
+            assignment.activeTasks(),
+            assignment.standbyTasks(),
+            assignment.warmupTasks(),
+            !assignment.isGroupReady()
         );
 
         assertEquals(assignment, assignmentEqual);
         assertNotEquals(assignment, assignmentUnequalActiveTasks);
         assertNotEquals(assignment, assignmentUnequalStandbyTasks);
         assertNotEquals(assignment, assignmentUnequalWarmupTasks);
+        assertNotEquals(assignment, assignmentUnequalIsGroupReady);
         assertEquals(assignment.hashCode(), assignmentEqual.hashCode());
         assertNotEquals(assignment.hashCode(), assignmentUnequalActiveTasks.hashCode());
         assertNotEquals(assignment.hashCode(), assignmentUnequalStandbyTasks.hashCode());
         assertNotEquals(assignment.hashCode(), assignmentUnequalWarmupTasks.hashCode());
+        assertNotEquals(assignment.hashCode(), assignmentUnequalIsGroupReady.hashCode());
     }
 
     @Test
@@ -169,7 +183,8 @@ public class StreamsRebalanceDataTest {
         final StreamsRebalanceData.Assignment assignment = new StreamsRebalanceData.Assignment(
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 1)),
             Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 2)),
-            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3))
+            Set.of(new StreamsRebalanceData.TaskId("subtopologyId1", 3)),
+            true
         );
 
         final StreamsRebalanceData.Assignment copy = assignment.copy();
@@ -435,6 +450,43 @@ public class StreamsRebalanceDataTest {
         );
 
         assertTrue(streamsRebalanceData.statuses().isEmpty());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithHeartbeatIntervalMsSetToMinusOne() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new
+                StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1",
+                "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                processId,
+                endpoint,
+                subtopologies,
+                clientTags
+        );
+
+        assertEquals(-1, streamsRebalanceData.heartbeatIntervalMs());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeAbleToUpdateHeartbeatIntervalMs() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new
+                StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1",
+                "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+                processId,
+                endpoint,
+                subtopologies,
+                clientTags
+        );
+
+        streamsRebalanceData.setHeartbeatIntervalMs(1000);
+        assertEquals(1000, streamsRebalanceData.heartbeatIntervalMs());
     }
 
 }

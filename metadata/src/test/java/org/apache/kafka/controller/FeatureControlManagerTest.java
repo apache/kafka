@@ -339,7 +339,7 @@ public class FeatureControlManagerTest {
     public void testCannotUseSafeDowngradeIfMetadataChanged() {
         FeatureControlManager manager = createTestManager();
         assertEquals(ControllerResult.of(List.of(), new ApiError(Errors.INVALID_UPDATE_VERSION,
-            "Invalid metadata.version 7. Refusing to perform the requested downgrade because " +
+            "Unsupported metadata.version downgrade from 8 to 7. Refusing to perform the requested downgrade because " +
             "it might delete metadata information.")),
             manager.updateFeatures(
                 Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV3.featureLevel()),
@@ -352,7 +352,7 @@ public class FeatureControlManagerTest {
     public void testUnsafeDowngradeIsTemporarilyDisabled() {
         FeatureControlManager manager = createTestManager();
         assertEquals(ControllerResult.of(List.of(), new ApiError(Errors.INVALID_UPDATE_VERSION,
-            "Invalid metadata.version 7. Unsafe metadata downgrade is not supported in this version.")),
+            "Unsupported metadata.version downgrade from 8 to 7. Unsafe metadata downgrade is not supported in this version.")),
                 manager.updateFeatures(
                     Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV3.featureLevel()),
                     Map.of(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),

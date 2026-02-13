@@ -41,8 +41,8 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.junit.jupiter.api.Assertions;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -80,7 +80,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         String group = "missing.group";
         String topic = "foo:1";
         try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(group, topic))) {
-            Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(group, Collections.singletonList(topic));
+            Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(group, List.of(topic));
             assertEquals(Errors.GROUP_ID_NOT_FOUND, res.getKey());
         }
     }
@@ -185,7 +185,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     private static ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
         return new ConsumerGroupCommand.ConsumerGroupService(
             ConsumerGroupCommandOptions.fromArgs(args),
-            Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+            Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
     }
 
@@ -197,7 +197,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         return () -> {
             String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
             try (ConsumerGroupCommand.ConsumerGroupService consumerGroupService = consumerGroupService(getArgs(inputGroup, topic))) {
-                Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(inputGroup, Collections.singletonList(topic));
+                Entry<Errors, Map<TopicPartition, Throwable>> res = consumerGroupService.deleteOffsets(inputGroup, List.of(topic));
                 Errors topLevelError = res.getKey();
                 Map<TopicPartition, Throwable> partitions = res.getValue();
                 TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
@@ -219,7 +219,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
                                        Runnable validateRunnable) {
         produceRecord(inputTopic);
         try (Consumer<byte[], byte[]> consumer = createConsumer(inputGroup, groupProtocol)) {
-            consumer.subscribe(Collections.singletonList(inputTopic));
+            consumer.subscribe(List.of(inputTopic));
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
             Assertions.assertNotEquals(0, records.count());
             consumer.commitSync();
@@ -260,14 +260,14 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
 
     private void createTopic(String topic) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            Assertions.assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).topicId(topic).get());
         }
     }
 
     private void removeTopic(String topic) {
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(Collections.singletonList(topic)).all());
+        try (Admin admin = Admin.create(Map.of(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+            Assertions.assertDoesNotThrow(() -> admin.deleteTopics(List.of(topic)).all());
         }
     }
 }

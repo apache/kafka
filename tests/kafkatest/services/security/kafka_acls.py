@@ -27,7 +27,7 @@ class ACLs:
         :param additional_cluster_operations_to_grant may be set to ['Alter', 'Create'] if the cluster is secured since these are required
                to create SCRAM credentials and topics, respectively
         :param security_protocol set it to explicitly determine whether we use client or broker credentials, otherwise
-                we use the the client security protocol unless inter-broker security protocol is PLAINTEXT, in which case we use PLAINTEXT.
+                we use the client security protocol unless inter-broker security protocol is PLAINTEXT, in which case we use PLAINTEXT.
                 Then we use the broker's credentials if the selected security protocol matches the inter-broker security protocol,
                 otherwise we use the client's credentials.
         """
@@ -49,7 +49,7 @@ class ACLs:
         :param additional_cluster_operations_to_remove may be set to ['Alter', 'Create'] if the cluster is secured since these are required
                to create SCRAM credentials and topics, respectively
         :param security_protocol set it to explicitly determine whether we use client or broker credentials, otherwise
-                we use the the client security protocol unless inter-broker security protocol is PLAINTEXT, in which case we use PLAINTEXT.
+                we use the client security protocol unless inter-broker security protocol is PLAINTEXT, in which case we use PLAINTEXT.
                 Then we use the broker's credentials if the selected security protocol matches the inter-broker security protocol,
                 otherwise we use the client's credentials.
         """

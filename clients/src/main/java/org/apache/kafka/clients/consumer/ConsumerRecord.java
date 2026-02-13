@@ -18,8 +18,8 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
 import java.util.ConcurrentModificationException;
 import java.util.Optional;
@@ -43,6 +43,11 @@ import java.util.Optional;
  * In particular, the {@link #headers()} method returns a mutable collection of headers. If multiple
  * threads access or modify these headers concurrently, it may lead to race conditions or inconsistent
  * states. It is the responsibility of the user to ensure that multi-threaded access is properly synchronized.
+ *
+ * <p>
+ * However, each individual {@link org.apache.kafka.common.header.Header} instance
+ * is <b>read thread-safe</b>; that is, it is safe for multiple threads to read the same header's key or value concurrently
+ * as long as no thread modifies it.
  *
  * <p>
  * Refer to the {@link KafkaConsumer} documentation for more details on multi-threaded consumption and processing strategies.

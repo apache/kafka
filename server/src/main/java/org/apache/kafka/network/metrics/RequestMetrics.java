@@ -27,7 +27,6 @@ import com.yammer.metrics.core.Meter;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -208,27 +207,6 @@ public class RequestMetrics {
         }
     }
 
-    private static class DeprecatedRequestRateKey {
-
-        private final short version;
-        private final ClientInformation clientInformation;
-
-        private DeprecatedRequestRateKey(short version, ClientInformation clientInformation) {
-            this.version = version;
-            this.clientInformation = clientInformation;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            DeprecatedRequestRateKey that = (DeprecatedRequestRateKey) o;
-            return version == that.version && Objects.equals(clientInformation, that.clientInformation);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(version, clientInformation);
-        }
+    private record DeprecatedRequestRateKey(short version, ClientInformation clientInformation) {
     }
 }

@@ -17,8 +17,8 @@
 package org.apache.kafka.common.protocol.types;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.internal.BaseRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -80,6 +80,20 @@ public abstract class Type {
     }
 
     /**
+     * For annotation in the generated html protocol doc.
+     */
+    public String leftBracket() {
+        return "";
+    }
+
+    /**
+     * For annotation in the generated html protocol doc.
+     */
+    public String rightBracket() {
+        return "";
+    }
+
+    /**
      * A Type that can return its description for documentation purposes.
      */
     public abstract static class DocumentedType extends Type {
@@ -102,6 +116,30 @@ public abstract class Type {
             return typeName();
         }
     }
+
+    public static String stringRead(ByteBuffer buffer, int length) {
+        if (length > Short.MAX_VALUE)
+            throw new SchemaException("String length " + length + " is larger than the maximum string length.");
+        if (length > buffer.remaining())
+            throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
+        String result = Utils.utf8(buffer, length);
+        buffer.position(buffer.position() + length);
+        return result;
+    }
+
+    public static ByteBuffer bytesRead(ByteBuffer buffer, int size) {
+        if (size > buffer.remaining())
+            throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
+
+        int limit = buffer.limit();
+        int newPosition = buffer.position() + size;
+        buffer.limit(newPosition);
+        ByteBuffer val = buffer.slice();
+        buffer.limit(limit);
+        buffer.position(newPosition);
+        return val;
+    }
+
     /**
      * The Boolean type represents a boolean value in a byte by using
      * the value of 0 to represent false, and 1 to represent true.
@@ -456,11 +494,7 @@ public abstract class Type {
             short length = buffer.getShort();
             if (length < 0)
                 throw new SchemaException("String length " + length + " cannot be negative");
-            if (length > buffer.remaining())
-                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-            String result = Utils.utf8(buffer, length);
-            buffer.position(buffer.position() + length);
-            return result;
+            return stringRead(buffer, length);
         }
 
         @Override
@@ -504,13 +538,7 @@ public abstract class Type {
             int length = ByteUtils.readUnsignedVarint(buffer) - 1;
             if (length < 0)
                 throw new SchemaException("String length " + length + " cannot be negative");
-            if (length > Short.MAX_VALUE)
-                throw new SchemaException("String length " + length + " is larger than the maximum string length.");
-            if (length > buffer.remaining())
-                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-            String result = Utils.utf8(buffer, length);
-            buffer.position(buffer.position() + length);
-            return result;
+            return stringRead(buffer, length);
         }
 
         @Override
@@ -552,11 +580,7 @@ public abstract class Type {
                 return;
             }
 
-            byte[] bytes = Utils.utf8((String) o);
-            if (bytes.length > Short.MAX_VALUE)
-                throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
-            buffer.putShort((short) bytes.length);
-            buffer.put(bytes);
+            STRING.write(buffer, o);
         }
 
         @Override
@@ -564,11 +588,8 @@ public abstract class Type {
             short length = buffer.getShort();
             if (length < 0)
                 return null;
-            if (length > buffer.remaining())
-                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-            String result = Utils.utf8(buffer, length);
-            buffer.position(buffer.position() + length);
-            return result;
+
+            return stringRead(buffer, length);
         }
 
         @Override
@@ -613,29 +634,17 @@ public abstract class Type {
         public void write(ByteBuffer buffer, Object o) {
             if (o == null) {
                 ByteUtils.writeUnsignedVarint(0, buffer);
-            } else {
-                byte[] bytes = Utils.utf8((String) o);
-                if (bytes.length > Short.MAX_VALUE)
-                    throw new SchemaException("String length " + bytes.length + " is larger than the maximum string length.");
-                ByteUtils.writeUnsignedVarint(bytes.length + 1, buffer);
-                buffer.put(bytes);
+                return;
             }
+            COMPACT_STRING.write(buffer, o);
         }
 
         @Override
         public String read(ByteBuffer buffer) {
             int length = ByteUtils.readUnsignedVarint(buffer) - 1;
-            if (length < 0) {
+            if (length < 0)
                 return null;
-            } else if (length > Short.MAX_VALUE) {
-                throw new SchemaException("String length " + length + " is larger than the maximum string length.");
-            } else if (length > buffer.remaining()) {
-                throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-            } else {
-                String result = Utils.utf8(buffer, length);
-                buffer.position(buffer.position() + length);
-                return result;
-            }
+            return stringRead(buffer, length);
         }
 
         @Override
@@ -686,16 +695,8 @@ public abstract class Type {
             int size = buffer.getInt();
             if (size < 0)
                 throw new SchemaException("Bytes size " + size + " cannot be negative");
-            if (size > buffer.remaining())
-                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
-            int limit = buffer.limit();
-            int newPosition = buffer.position() + size;
-            buffer.limit(newPosition);
-            ByteBuffer val = buffer.slice();
-            buffer.limit(limit);
-            buffer.position(newPosition);
-            return val;
+            return bytesRead(buffer, size);
         }
 
         @Override
@@ -739,16 +740,8 @@ public abstract class Type {
             int size = ByteUtils.readUnsignedVarint(buffer) - 1;
             if (size < 0)
                 throw new SchemaException("Bytes size " + size + " cannot be negative");
-            if (size > buffer.remaining())
-                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
-            int limit = buffer.limit();
-            int newPosition = buffer.position() + size;
-            buffer.limit(newPosition);
-            ByteBuffer val = buffer.slice();
-            buffer.limit(limit);
-            buffer.position(newPosition);
-            return val;
+            return bytesRead(buffer, size);
         }
 
         @Override
@@ -774,7 +767,7 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
-                    "Then N bytes follow.";
+                    " Then N bytes follow.";
         }
     };
 
@@ -790,12 +783,7 @@ public abstract class Type {
                 buffer.putInt(-1);
                 return;
             }
-
-            ByteBuffer arg = (ByteBuffer) o;
-            int pos = arg.position();
-            buffer.putInt(arg.remaining());
-            buffer.put(arg);
-            arg.position(pos);
+            BYTES.write(buffer, o);
         }
 
         @Override
@@ -803,16 +791,8 @@ public abstract class Type {
             int size = buffer.getInt();
             if (size < 0)
                 return null;
-            if (size > buffer.remaining())
-                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
-            int limit = buffer.limit();
-            int newPosition = buffer.position() + size;
-            buffer.limit(newPosition);
-            ByteBuffer val = buffer.slice();
-            buffer.limit(limit);
-            buffer.position(newPosition);
-            return val;
+            return bytesRead(buffer, size);
         }
 
         @Override
@@ -820,8 +800,7 @@ public abstract class Type {
             if (o == null)
                 return 4;
 
-            ByteBuffer buffer = (ByteBuffer) o;
-            return 4 + buffer.remaining();
+            return BYTES.sizeOf(o);
         }
 
         @Override
@@ -857,13 +836,9 @@ public abstract class Type {
         public void write(ByteBuffer buffer, Object o) {
             if (o == null) {
                 ByteUtils.writeUnsignedVarint(0, buffer);
-            } else {
-                ByteBuffer arg = (ByteBuffer) o;
-                int pos = arg.position();
-                ByteUtils.writeUnsignedVarint(arg.remaining() + 1, buffer);
-                buffer.put(arg);
-                arg.position(pos);
+                return;
             }
+            COMPACT_BYTES.write(buffer, o);
         }
 
         @Override
@@ -871,16 +846,8 @@ public abstract class Type {
             int size = ByteUtils.readUnsignedVarint(buffer) - 1;
             if (size < 0)
                 return null;
-            if (size > buffer.remaining())
-                throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
-            int limit = buffer.limit();
-            int newPosition = buffer.position() + size;
-            buffer.limit(newPosition);
-            ByteBuffer val = buffer.slice();
-            buffer.limit(limit);
-            buffer.position(newPosition);
-            return val;
+            return bytesRead(buffer, size);
         }
 
         @Override
@@ -888,9 +855,7 @@ public abstract class Type {
             if (o == null) {
                 return 1;
             }
-            ByteBuffer buffer = (ByteBuffer) o;
-            int remaining = buffer.remaining();
-            return ByteUtils.sizeOfUnsignedVarint(remaining + 1) + remaining;
+            return COMPACT_BYTES.sizeOf(o);
         }
 
         @Override
@@ -912,11 +877,158 @@ public abstract class Type {
         @Override
         public String documentation() {
             return "Represents a raw sequence of bytes. First the length N+1 is given as an UNSIGNED_VARINT." +
-                    "Then N bytes follow. A null object is represented with a length of 0.";
+                    " Then N bytes follow. A null object is represented with a length of 0.";
+        }
+    };
+
+    public static final DocumentedType RECORDS = new DocumentedType() {
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o instanceof MemoryRecords) {
+                MemoryRecords records = (MemoryRecords) o;
+                BYTES.write(buffer, records.buffer().duplicate());
+            } else {
+                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
+            }
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) BYTES.read(buffer);
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            BaseRecords records = (BaseRecords) o;
+            return 4 + records.sizeInBytes();
+        }
+
+        @Override
+        public String typeName() {
+            return "RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item instanceof MemoryRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + MemoryRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + BYTES + ". " +
+                    "For a detailed description of records see " +
+                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
     public static final DocumentedType COMPACT_RECORDS = new DocumentedType() {
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o instanceof MemoryRecords) {
+                MemoryRecords records = (MemoryRecords) o;
+                COMPACT_BYTES.write(buffer, records.buffer().duplicate());
+            } else {
+                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
+            }
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) COMPACT_BYTES.read(buffer);
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            BaseRecords records = (BaseRecords) o;
+            int recordsSize = records.sizeInBytes();
+            return ByteUtils.sizeOfUnsignedVarint(recordsSize + 1) + recordsSize;
+        }
+
+        @Override
+        public String typeName() {
+            return "COMPACT_RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item instanceof BaseRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + COMPACT_BYTES + ". " +
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
+    };
+
+    public static final DocumentedType NULLABLE_RECORDS = new DocumentedType() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o == null) {
+                NULLABLE_BYTES.write(buffer, null);
+                return;
+            }
+            RECORDS.write(buffer, o);
+        }
+
+        @Override
+        public MemoryRecords read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
+            if (recordsBuffer == null)
+                return null;
+
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null)
+                return 4;
+
+            return RECORDS.sizeOf(o);
+        }
+
+        @Override
+        public String typeName() {
+            return "NULLABLE_RECORDS";
+        }
+
+        @Override
+        public BaseRecords validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof BaseRecords)
+                return (BaseRecords) item;
+
+            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a sequence of Kafka records as " + NULLABLE_BYTES + ". " +
+                "For a detailed description of records see " +
+                "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
+        }
+    };
+
+    public static final DocumentedType COMPACT_NULLABLE_RECORDS = new DocumentedType() {
         @Override
         public boolean isNullable() {
             return true;
@@ -926,12 +1038,9 @@ public abstract class Type {
         public void write(ByteBuffer buffer, Object o) {
             if (o == null) {
                 COMPACT_NULLABLE_BYTES.write(buffer, null);
-            } else if (o instanceof MemoryRecords) {
-                MemoryRecords records = (MemoryRecords) o;
-                COMPACT_NULLABLE_BYTES.write(buffer, records.buffer().duplicate());
-            } else {
-                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
+                return;
             }
+            COMPACT_RECORDS.write(buffer, o);
         }
 
         @Override
@@ -939,9 +1048,8 @@ public abstract class Type {
             ByteBuffer recordsBuffer = (ByteBuffer) COMPACT_NULLABLE_BYTES.read(buffer);
             if (recordsBuffer == null) {
                 return null;
-            } else {
-                return MemoryRecords.readableRecords(recordsBuffer);
             }
+            return MemoryRecords.readableRecords(recordsBuffer);
         }
 
         @Override
@@ -950,14 +1058,12 @@ public abstract class Type {
                 return 1;
             }
 
-            BaseRecords records = (BaseRecords) o;
-            int recordsSize = records.sizeInBytes();
-            return ByteUtils.sizeOfUnsignedVarint(recordsSize + 1) + recordsSize;
+            return COMPACT_RECORDS.sizeOf(o);
         }
 
         @Override
         public String typeName() {
-            return "COMPACT_RECORDS";
+            return "COMPACT_NULLABLE_RECORDS";
         }
 
         @Override
@@ -976,67 +1082,6 @@ public abstract class Type {
             return "Represents a sequence of Kafka records as " + COMPACT_NULLABLE_BYTES + ". " +
                 "For a detailed description of records see " +
                 "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
-        }
-    };
-
-    public static final DocumentedType RECORDS = new DocumentedType() {
-        @Override
-        public boolean isNullable() {
-            return true;
-        }
-
-        @Override
-        public void write(ByteBuffer buffer, Object o) {
-            if (o == null) {
-                NULLABLE_BYTES.write(buffer, null);
-            } else if (o instanceof MemoryRecords) {
-                MemoryRecords records = (MemoryRecords) o;
-                NULLABLE_BYTES.write(buffer, records.buffer().duplicate());
-            } else {
-                throw new IllegalArgumentException("Unexpected record type: " + o.getClass());
-            }
-        }
-
-        @Override
-        public MemoryRecords read(ByteBuffer buffer) {
-            ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
-            if (recordsBuffer == null) {
-                return null;
-            } else {
-                return MemoryRecords.readableRecords(recordsBuffer);
-            }
-        }
-
-        @Override
-        public int sizeOf(Object o) {
-            if (o == null)
-                return 4;
-
-            BaseRecords records = (BaseRecords) o;
-            return 4 + records.sizeInBytes();
-        }
-
-        @Override
-        public String typeName() {
-            return "RECORDS";
-        }
-
-        @Override
-        public BaseRecords validate(Object item) {
-            if (item == null)
-                return null;
-
-            if (item instanceof BaseRecords)
-                return (BaseRecords) item;
-
-            throw new SchemaException(item + " is not an instance of " + BaseRecords.class.getName());
-        }
-
-        @Override
-        public String documentation() {
-            return "Represents a sequence of Kafka records as " + NULLABLE_BYTES + ". " +
-                    "For a detailed description of records see " +
-                    "<a href=\"/documentation/#messageformat\">Message Sets</a>.";
         }
     };
 
@@ -1116,7 +1161,10 @@ public abstract class Type {
             UINT16, UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
-            RECORDS, COMPACT_RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};
+            RECORDS, COMPACT_RECORDS, NULLABLE_RECORDS, COMPACT_NULLABLE_RECORDS,
+            new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING), ArrayOf.nullable(STRING), CompactArrayOf.nullable(STRING),
+            new Schema(), new NullableSchema(new Schema())};
+
         final StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>");

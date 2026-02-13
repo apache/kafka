@@ -57,8 +57,8 @@ public final class ExpectLeaderEpochCheckpointAction implements TieredStorageTes
                 earliestEntry = leaderEpochCache.earliestEntry().orElse(null);
             }
             earliestEntryOpt.set(earliestEntry);
-            return earliestEntry != null && beginEpoch == earliestEntry.epoch
-                    && startOffset == earliestEntry.startOffset;
+            return earliestEntry != null && beginEpoch == earliestEntry.epoch()
+                    && startOffset == earliestEntry.startOffset();
         }, 2000L, "leader-epoch-checkpoint begin-epoch: " + beginEpoch + " and start-offset: "
                 + startOffset + " doesn't match with actual: " + earliestEntryOpt.get());
     }

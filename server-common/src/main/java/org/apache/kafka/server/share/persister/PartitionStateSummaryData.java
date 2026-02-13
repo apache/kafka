@@ -28,6 +28,8 @@ public interface PartitionStateSummaryData extends PartitionInfoData, PartitionI
 
     long startOffset();
 
+    int deliveryCompleteCount();
+
     short errorCode();
 
     String errorMessage();

@@ -64,7 +64,19 @@ public class RenewDelegationTokenRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return data.toString();
+            return maskData(data);
         }
+    }
+
+    private static String maskData(RenewDelegationTokenRequestData data) {
+        RenewDelegationTokenRequestData tempData = data.duplicate();
+        tempData.setHmac(new byte[0]);
+        return tempData.toString();
+    }
+
+    // Do not print Hmac, overwrite a temp copy of the data with empty content
+    @Override
+    public String toString() {
+        return maskData(data);
     }
 }

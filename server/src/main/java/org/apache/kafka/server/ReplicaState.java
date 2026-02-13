@@ -34,5 +34,5 @@ public enum ReplicaState {
         public String toString() {
             return "Fetching";
         }
-    };
+    }
 }

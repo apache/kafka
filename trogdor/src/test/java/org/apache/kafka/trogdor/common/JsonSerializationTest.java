@@ -35,7 +35,6 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,8 +62,8 @@ public class JsonSerializationTest {
         verify(new TopicsSpec());
         verify(new PartitionsSpec(0, (short) 0, null, null));
         Map<Integer, List<Integer>> partitionAssignments = new HashMap<>();
-        partitionAssignments.put(0, Arrays.asList(1, 2, 3));
-        partitionAssignments.put(1, Arrays.asList(1, 2, 3));
+        partitionAssignments.put(0, List.of(1, 2, 3));
+        partitionAssignments.put(1, List.of(1, 2, 3));
         verify(new PartitionsSpec(0, (short) 0, partitionAssignments, null));
         verify(new PartitionsSpec(0, (short) 0, null, null));
     }

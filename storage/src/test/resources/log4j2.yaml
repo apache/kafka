@@ -37,7 +37,7 @@ Configuration:
 
   Loggers:
     Root:
-      level: OFF
+      level: "OFF"
       AppenderRef:
         - ref: STDOUT
     Logger:

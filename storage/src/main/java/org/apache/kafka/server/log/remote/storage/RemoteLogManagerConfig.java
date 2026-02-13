@@ -92,6 +92,15 @@ public final class RemoteLogManagerConfig {
             "from remote storage in the local storage.";
     public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES = 1024 * 1024 * 1024L;
 
+    public static final String REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS_PROP = "remote.log.index.file.cache.ttl.ms";
+    public static final String REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS_DOC = "The maximum time in milliseconds an index file entry can remain in the cache " +
+            "after its last access. After this duration, the entry will be evicted even if there is available space. " +
+            "This helps prevent stale index files from remaining in cache indefinitely, particularly when a broker is no longer the leader " +
+            "for a partition or when read-from-replica is enabled. Evicted index files are automatically re-fetched from remote storage when needed. " +
+            "Default is 15 minutes (900000 ms), which provides sufficient time for clients to read a partition/segment while ensuring stale entries " +
+            "don't accumulate. Set to -1 to disable time-based eviction and use only size-based eviction.";
+    public static final long DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS = 900000L; // 15 minutes
+
     public static final String REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_PROP = "remote.log.manager.follower.thread.pool.size";
     public static final String REMOTE_LOG_MANAGER_FOLLOWER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in scheduling follower tasks to read " +
             "the highest-uploaded remote-offset for follower partitions.";
@@ -192,8 +201,8 @@ public final class RemoteLogManagerConfig {
     public static final int DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS = 1;
 
     public static final String REMOTE_FETCH_MAX_WAIT_MS_PROP = "remote.fetch.max.wait.ms";
-    public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the remote fetch request. " +
-        "Note that the broker currently only fetches one partition per fetch request from the remote store. (KAFKA-14915)";
+    public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the fetch request containing remote fetch partitions. " +
+        "It's important to be aware that the request will only be responded after all remote partitions have been successfully fetched, have failed, or this timeout is exceeded.";
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
     public static final String REMOTE_LIST_OFFSETS_REQUEST_TIMEOUT_MS_PROP = "remote.list.offsets.request.timeout.ms";
@@ -261,6 +270,12 @@ public final class RemoteLogManagerConfig {
                         atLeast(1),
                         LOW,
                         REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_DOC)
+                .defineInternal(REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS_PROP,
+                        LONG,
+                        DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS,
+                        atLeast(-1),
+                        LOW,
+                        REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS_DOC)
                 .define(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP,
                         INT,
                         DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE,
@@ -523,6 +538,10 @@ public final class RemoteLogManagerConfig {
 
     public long remoteLogIndexFileCacheTotalSizeBytes() {
         return config.getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP);
+    }
+
+    public long remoteLogIndexFileCacheTtlMs() {
+        return config.getLong(REMOTE_LOG_INDEX_FILE_CACHE_TTL_MS_PROP);
     }
 
     public long remoteLogManagerCopyMaxBytesPerSecond() {

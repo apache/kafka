@@ -103,6 +103,8 @@ public final class MessageGenerator {
 
     static final String SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.Schema";
 
+    static final String NULLABLE_SCHEMA_CLASS = "org.apache.kafka.common.protocol.types.NullableSchema";
+
     static final String ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.ArrayOf";
 
     static final String COMPACT_ARRAYOF_CLASS = "org.apache.kafka.common.protocol.types.CompactArrayOf";
@@ -111,9 +113,9 @@ public final class MessageGenerator {
 
     static final String UUID_CLASS = "org.apache.kafka.common.Uuid";
 
-    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.BaseRecords";
+    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.internal.BaseRecords";
 
-    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.MemoryRecords";
+    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.internal.MemoryRecords";
 
     static final String REQUEST_SUFFIX = "Request";
 
@@ -180,7 +182,7 @@ public final class MessageGenerator {
         JSON_SERDE.configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
         JSON_SERDE.configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true);
         JSON_SERDE.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
-        JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+        JSON_SERDE.setDefaultPropertyInclusion(JsonInclude.Include.NON_EMPTY);
         JSON_SERDE.registerModule(new Jdk8Module());
     }
 
@@ -269,7 +271,7 @@ public final class MessageGenerator {
                 }
             }
         }
-        System.out.printf("MessageGenerator: processed %d Kafka message JSON files(s).%n", numProcessed);
+        System.out.printf("MessageGenerator: processed %d Kafka message JSON file(s).%n", numProcessed);
     }
 
     /**

@@ -19,57 +19,12 @@ package org.apache.kafka.storage.internals.log;
 /**
  * A class used to hold useful metadata about a completed transaction. This is used to build
  * the transaction index after appending to the log.
+ *
+ * @param producerId  The ID of the producer
+ * @param firstOffset The first offset (inclusive) of the transaction
+ * @param lastOffset  The last offset (inclusive) of the transaction. This is always the offset of the
+ *                    COMMIT/ABORT control record which indicates the transaction's completion.
+ * @param isAborted   Whether the transaction was aborted
  */
-public class CompletedTxn {
-    public final long producerId;
-    public final long firstOffset;
-    public final long lastOffset;
-    public final boolean isAborted;
-
-    /**
-     * Create an instance of this class.
-     *
-     * @param producerId  The ID of the producer
-     * @param firstOffset The first offset (inclusive) of the transaction
-     * @param lastOffset  The last offset (inclusive) of the transaction. This is always the offset of the
-     *                    COMMIT/ABORT control record which indicates the transaction's completion.
-     * @param isAborted   Whether the transaction was aborted
-     */
-    public CompletedTxn(long producerId, long firstOffset, long lastOffset, boolean isAborted) {
-        this.producerId = producerId;
-        this.firstOffset = firstOffset;
-        this.lastOffset = lastOffset;
-        this.isAborted = isAborted;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        CompletedTxn that = (CompletedTxn) o;
-
-        return producerId == that.producerId
-            && firstOffset == that.firstOffset
-            && lastOffset == that.lastOffset
-            && isAborted == that.isAborted;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = Long.hashCode(producerId);
-        result = 31 * result + Long.hashCode(firstOffset);
-        result = 31 * result + Long.hashCode(lastOffset);
-        result = 31 * result + Boolean.hashCode(isAborted);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "CompletedTxn(producerId=" + producerId +
-            ", firstOffset=" + firstOffset +
-            ", lastOffset=" + lastOffset +
-            ", isAborted=" + isAborted +
-            ')';
-    }
+public record CompletedTxn(long producerId, long firstOffset, long lastOffset, boolean isAborted) {
 }

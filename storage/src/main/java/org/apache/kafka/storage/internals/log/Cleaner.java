@@ -19,11 +19,11 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
@@ -338,10 +338,10 @@ public class Cleaner {
                 //    last producer epoch, which is needed to ensure fencing.
                 boolean isBatchLastRecordOfProducer = Optional.ofNullable(lastRecordsOfActiveProducers.get(batch.producerId()))
                         .map(lastRecord -> {
-                            if (lastRecord.lastDataOffset.isPresent()) {
-                                return batch.lastOffset() == lastRecord.lastDataOffset.getAsLong();
+                            if (lastRecord.lastDataOffset().isPresent()) {
+                                return batch.lastOffset() == lastRecord.lastDataOffset().getAsLong();
                             } else {
-                                return batch.isControlBatch() && batch.producerEpoch() == lastRecord.producerEpoch;
+                                return batch.isControlBatch() && batch.producerEpoch() == lastRecord.producerEpoch();
                             }
                         })
                         .orElse(false);
@@ -702,7 +702,7 @@ public class Cleaner {
                                              int maxLogMessageSize,
                                              CleanedTransactionMetadata transactionMetadata,
                                              CleanerStats stats) throws IOException, DigestException {
-        int position = segment.offsetIndex().lookup(startOffset).position;
+        int position = segment.offsetIndex().lookup(startOffset).position();
         int maxDesiredMapSize = (int) (map.slots() * dupBufferLoadFactor);
 
         while (position < segment.log().sizeInBytes()) {

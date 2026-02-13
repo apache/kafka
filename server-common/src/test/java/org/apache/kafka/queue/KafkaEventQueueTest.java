@@ -424,4 +424,56 @@ public class KafkaEventQueueTest {
             assertEquals(InterruptedException.class, ieTrapper2.exception.get().getClass());
         }
     }
+
+    @Test
+    public void testIdleTimeCallback() throws Exception {
+        MockTime time = new MockTime();
+        AtomicLong lastIdleTimeMs = new AtomicLong(0);
+        AtomicLong lastCurrentTimeMs = new AtomicLong(0);
+
+        try (KafkaEventQueue queue = new KafkaEventQueue(
+                time,
+                logContext,
+                "testIdleTimeCallback",
+                EventQueue.VoidEvent.INSTANCE,
+                (idleDuration, currentTime) -> {
+                    lastIdleTimeMs.set(idleDuration);
+                    lastCurrentTimeMs.set(currentTime);
+                })) {
+            time.sleep(2);
+            assertEquals(0, lastIdleTimeMs.get(), "Last idle time should be 0ms");
+
+            // Test 1: Two events with a wait in between using FutureEvent
+            CompletableFuture<String> event1 = new CompletableFuture<>();
+            queue.append(new FutureEvent<>(event1, () -> {
+                time.sleep(1);
+                return "event1-processed";
+            }));
+            assertEquals("event1-processed", event1.get());
+
+            long timeBeforeWait = time.milliseconds();
+            long waitTime5Ms = 5;
+            time.sleep(waitTime5Ms);
+            CompletableFuture<String> event2 = new CompletableFuture<>();
+            queue.append(new FutureEvent<>(event2, () -> {
+                time.sleep(1);
+                return "event2-processed";
+            }));
+            assertEquals("event2-processed", event2.get());
+            assertEquals(waitTime5Ms, lastIdleTimeMs.get(), "Idle time should be " + waitTime5Ms + "ms, was: " + lastIdleTimeMs.get());
+            assertEquals(timeBeforeWait + waitTime5Ms, lastCurrentTimeMs.get(), "Current time should be " + (timeBeforeWait + waitTime5Ms) + "ms, was: " + lastCurrentTimeMs.get());
+
+            // Test 2: Deferred event
+            long timeBeforeDeferred = time.milliseconds();
+            long waitTime2Ms = 2;
+            CompletableFuture<Void> deferredEvent2 = new CompletableFuture<>();
+            queue.scheduleDeferred("deferred2",
+                    __ -> OptionalLong.of(time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(waitTime2Ms)),
+                    () -> deferredEvent2.complete(null));
+            time.sleep(waitTime2Ms);
+            deferredEvent2.get();
+            assertEquals(waitTime2Ms, lastIdleTimeMs.get(), "Idle time should be " + waitTime2Ms + "ms, was: " + lastIdleTimeMs.get());
+            assertEquals(timeBeforeDeferred + waitTime2Ms, lastCurrentTimeMs.get(), "Current time should be " + (timeBeforeDeferred + waitTime2Ms) + "ms, was: " + lastCurrentTimeMs.get());
+        }
+    }
 }

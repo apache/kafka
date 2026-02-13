@@ -23,10 +23,9 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -77,10 +76,11 @@ public class DelegatingClassLoader extends URLClassLoader {
      * Retrieve the PluginClassLoader associated with a plugin class
      *
      * @param name The fully qualified class name of the plugin
+     * @param range The version range of the plugin
+     * @param connectorLoader The ClassLoader of the connector loading this plugin
      * @return the PluginClassLoader that should be used to load this, or null if the plugin is not isolated.
      */
-    // VisibleForTesting
-    PluginClassLoader pluginClassLoader(String name, VersionRange range) {
+    PluginClassLoader pluginClassLoader(String name, VersionRange range, Optional<ClassLoader> connectorLoader) {
         if (!PluginUtils.shouldLoadInIsolation(name)) {
             return null;
         }
@@ -90,20 +90,15 @@ public class DelegatingClassLoader extends URLClassLoader {
             return null;
         }
 
-
-        ClassLoader pluginLoader = findPluginLoader(inner, name, range);
+        ClassLoader pluginLoader = findPluginLoader(inner, name, range, connectorLoader);
         return pluginLoader instanceof PluginClassLoader
             ? (PluginClassLoader) pluginLoader
             : null;
     }
 
-    PluginClassLoader pluginClassLoader(String name) {
-        return pluginClassLoader(name, null);
-    }
-
-    ClassLoader loader(String classOrAlias, VersionRange range) {
+    ClassLoader connectorLoader(String classOrAlias, VersionRange range) {
         String fullName = aliases.getOrDefault(classOrAlias, classOrAlias);
-        ClassLoader classLoader = pluginClassLoader(fullName, range);
+        ClassLoader classLoader = pluginClassLoader(fullName, range, Optional.empty());
         if (classLoader == null) {
             classLoader = this;
         }
@@ -115,12 +110,22 @@ public class DelegatingClassLoader extends URLClassLoader {
         return classLoader;
     }
 
-    ClassLoader loader(String classOrAlias) {
-        return loader(classOrAlias, null);
+    ClassLoader pluginLoader(String classOrAlias, VersionRange range, ClassLoader connectorLoader) {
+        String fullName = aliases.getOrDefault(classOrAlias, classOrAlias);
+        ClassLoader classLoader = pluginClassLoader(fullName, range, Optional.ofNullable(connectorLoader));
+        if (classLoader == null) {
+            classLoader = this;
+        }
+        log.debug(
+                "Got plugin class loader: '{}' for plugin: {}",
+                classLoader,
+                classOrAlias
+        );
+        return classLoader;
     }
 
     ClassLoader connectorLoader(String connectorClassOrAlias) {
-        return loader(connectorClassOrAlias);
+        return connectorLoader(connectorClassOrAlias, null);
     }
 
     String resolveFullClassName(String classOrAlias) {
@@ -152,42 +157,44 @@ public class DelegatingClassLoader extends URLClassLoader {
     private ClassLoader findPluginLoader(
         SortedMap<PluginDesc<?>, ClassLoader> loaders,
         String pluginName,
-        VersionRange range
+        VersionRange range,
+        Optional<ClassLoader> connectorLoader
     ) {
 
-        if (range != null) {
-
-            if (null != range.getRecommendedVersion()) {
-                throw new VersionedPluginLoadingException(String.format("A soft version range is not supported for plugin loading, "
-                        + "this is an internal error as connect should automatically convert soft ranges to hard ranges. "
-                        + "Provided soft version: %s ", range));
-            }
-
-            ClassLoader loader = null;
-            for (Map.Entry<PluginDesc<?>, ClassLoader> entry : loaders.entrySet()) {
-                // the entries should be in sorted order of versions so this should end up picking the latest version which matches the range
-                if (range.containsVersion(entry.getKey().encodedVersion())) {
-                    loader = entry.getValue();
-                }
-            }
-
-            if (loader == null) {
-                List<String> availableVersions = loaders.keySet().stream().map(PluginDesc::version).collect(Collectors.toList());
-                throw new VersionedPluginLoadingException(String.format(
-                        "Plugin %s not found that matches the version range %s, available versions: %s",
-                        pluginName,
-                        range,
-                        availableVersions
-                ), availableVersions);
-            }
-            return loader;
+        if (range != null && range.getRecommendedVersion() != null) {
+            throw new VersionedPluginLoadingException(String.format("A soft version range is not supported for plugin loading, "
+                    + "this is an internal error as connect should automatically convert soft ranges to hard ranges. "
+                    + "Provided soft version: %s ", range));
         }
 
-        return loaders.get(loaders.lastKey());
+        ClassLoader loader = null;
+        // the entries should be in sorted order of versions so this should end up picking the latest version which matches the range
+        for (Map.Entry<PluginDesc<?>, ClassLoader> entry : loaders.entrySet()) {
+            if (range == null || range.containsVersion(entry.getKey().encodedVersion())) {
+                loader = entry.getValue();
+            }
+            // if we find a plugin with the same loader as the connector, we can end our search
+            if (connectorLoader.isPresent() && connectorLoader.get().equals(loader)) {
+                break;
+            }
+        }
+
+        if (range != null && loader == null) {
+            List<String> availableVersions = loaders.keySet().stream().map(PluginDesc::version).collect(Collectors.toList());
+            throw new VersionedPluginLoadingException(String.format(
+                    "Plugin %s not found that matches the version range %s, available versions: %s",
+                    pluginName,
+                    range,
+                    availableVersions
+            ), availableVersions);
+        }
+        return loader;
     }
 
     public void installDiscoveredPlugins(PluginScanResult scanResult) {
-        pluginLoaders.putAll(computePluginLoaders(scanResult));
+        scanResult.forEach(pluginDesc ->
+            pluginLoaders.computeIfAbsent(pluginDesc.className(), k -> new TreeMap<>())
+                    .put(pluginDesc, pluginDesc.loader()));
         for (String pluginClassName : pluginLoaders.keySet()) {
             log.info("Added plugin '{}'", pluginClassName);
         }
@@ -209,7 +216,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     ) throws VersionedPluginLoadingException, ClassNotFoundException {
 
         String fullName = aliases.getOrDefault(name, name);
-        PluginClassLoader pluginLoader = pluginClassLoader(fullName, range);
+        PluginClassLoader pluginLoader = pluginClassLoader(fullName, range, Optional.empty());
         Class<?> plugin;
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", name, pluginLoader);
@@ -259,16 +266,9 @@ public class DelegatingClassLoader extends URLClassLoader {
                         fullName,
                         pluginVersion,
                         range
-                ), Collections.singletonList(pluginVersion));
+                ), List.of(pluginVersion));
             }
         }
     }
 
-    private static Map<String, SortedMap<PluginDesc<?>, ClassLoader>> computePluginLoaders(PluginScanResult plugins) {
-        Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders = new HashMap<>();
-        plugins.forEach(pluginDesc ->
-            pluginLoaders.computeIfAbsent(pluginDesc.className(), k -> new TreeMap<>())
-                .put(pluginDesc, pluginDesc.loader()));
-        return pluginLoaders;
-    }
 }

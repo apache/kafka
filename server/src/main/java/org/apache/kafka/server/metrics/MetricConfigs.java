@@ -21,6 +21,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Sensor;
 
+import java.util.List;
+
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
@@ -48,7 +50,7 @@ public class MetricConfigs {
 
     /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
     public static final String KAFKA_METRICS_REPORTER_CLASSES_CONFIG = "kafka.metrics.reporters";
-    public static final String KAFKA_METRIC_REPORTER_CLASSES_DEFAULT = "";
+    public static final List<String> KAFKA_METRIC_REPORTER_CLASSES_DEFAULT = List.of();
     public static final String KAFKA_METRICS_REPORTER_CLASSES_DOC = "A list of classes to use as Yammer metrics custom reporters." +
             " The reporters should implement <code>kafka.metrics.KafkaMetricsReporter</code> trait. If a client wants" +
             " to expose JMX operations on a custom reporter, the custom reporter needs to additionally implement an MBean" +
@@ -69,11 +71,11 @@ public class MetricConfigs {
             // Kafka Metrics Configuration
             .define(METRIC_NUM_SAMPLES_CONFIG, INT, METRIC_NUM_SAMPLES_DEFAULT, atLeast(1), LOW, METRIC_NUM_SAMPLES_DOC)
             .define(METRIC_SAMPLE_WINDOW_MS_CONFIG, LONG, METRIC_SAMPLE_WINDOW_MS_DEFAULT, atLeast(1), LOW, METRIC_SAMPLE_WINDOW_MS_DOC)
-            .define(METRIC_REPORTER_CLASSES_CONFIG, LIST, METRIC_REPORTER_CLASSES_DEFAULT, LOW, METRIC_REPORTER_CLASSES_DOC)
+            .define(METRIC_REPORTER_CLASSES_CONFIG, LIST, METRIC_REPORTER_CLASSES_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, METRIC_REPORTER_CLASSES_DOC)
             .define(METRIC_RECORDING_LEVEL_CONFIG, STRING, METRIC_RECORDING_LEVEL_DEFAULT, LOW, METRIC_RECORDING_LEVEL_DOC)
 
             // Kafka Yammer Metrics Reporter Configuration
-            .define(KAFKA_METRICS_REPORTER_CLASSES_CONFIG, LIST, KAFKA_METRIC_REPORTER_CLASSES_DEFAULT, LOW, KAFKA_METRICS_REPORTER_CLASSES_DOC)
+            .define(KAFKA_METRICS_REPORTER_CLASSES_CONFIG, LIST, KAFKA_METRIC_REPORTER_CLASSES_DEFAULT, ConfigDef.ValidList.anyNonDuplicateValues(true, false), LOW, KAFKA_METRICS_REPORTER_CLASSES_DOC)
             .define(KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG, INT, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DEFAULT, atLeast(1), LOW, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DOC)
 
             // Kafka Client Telemetry Metrics Configuration

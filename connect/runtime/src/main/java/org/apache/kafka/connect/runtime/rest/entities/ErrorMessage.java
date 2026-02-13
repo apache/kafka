@@ -16,47 +16,15 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-
-import java.util.Objects;
 
 /**
  * Standard error format for all REST API failures. These are generated automatically by
  * {@link org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper} in response to uncaught
  * {@link org.apache.kafka.connect.errors.ConnectException}s.
  */
-public class ErrorMessage {
-    private final int errorCode;
-    private final String message;
-
-    @JsonCreator
-    public ErrorMessage(@JsonProperty("error_code") int errorCode, @JsonProperty("message") String message) {
-        this.errorCode = errorCode;
-        this.message = message;
-    }
-
-    @JsonProperty("error_code")
-    public int errorCode() {
-        return errorCode;
-    }
-
-    @JsonProperty
-    public String message() {
-        return message;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ErrorMessage that = (ErrorMessage) o;
-        return Objects.equals(errorCode, that.errorCode) &&
-                Objects.equals(message, that.message);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(errorCode, message);
-    }
+public record ErrorMessage(
+    @JsonProperty("error_code") int errorCode,
+    @JsonProperty String message
+) {
 }

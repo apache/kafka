@@ -106,8 +106,7 @@ public class BrokerJwtValidator implements JwtValidator {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        List<String> expectedAudiencesList = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
-        Set<String> expectedAudiences = expectedAudiencesList != null ? Set.copyOf(expectedAudiencesList) : null;
+        Set<String> expectedAudiences = Set.copyOf(cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE));
         Integer clockSkew = cu.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
         String expectedIssuer = cu.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
         String scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
@@ -122,7 +121,7 @@ public class BrokerJwtValidator implements JwtValidator {
         if (clockSkew != null)
             jwtConsumerBuilder.setAllowedClockSkewInSeconds(clockSkew);
 
-        if (expectedAudiences != null && !expectedAudiences.isEmpty())
+        if (!expectedAudiences.isEmpty())
             jwtConsumerBuilder.setExpectedAudience(expectedAudiences.toArray(new String[0]));
 
         if (expectedIssuer != null)

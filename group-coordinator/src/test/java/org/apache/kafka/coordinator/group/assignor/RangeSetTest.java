@@ -127,9 +127,9 @@ public class RangeSetTest {
 
         assertEquals(rangeSet1, rangeSet2);
         assertNotEquals(rangeSet1, rangeSet3);
-        assertEquals(rangeSet1, set);
-        assertEquals(rangeSet3, hashSet);
-        assertNotEquals(rangeSet1, new Object());
+        assertEquals(set, rangeSet1);
+        assertEquals(hashSet, rangeSet3);
+        assertNotEquals(new Object(), rangeSet1);
 
         // Empty sets are equal.
         RangeSet emptyRangeSet1 = new RangeSet(0, 0);

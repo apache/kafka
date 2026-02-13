@@ -25,7 +25,6 @@ import java.util.Optional
 import java.util.Properties
 import java.util.stream.IntStream
 import kafka.log.LogTestUtils
-import kafka.raft.KafkaMetadataLog
 import kafka.server.KafkaRaftServer
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, ShareGroupStateMessageParser, TimeIndexDumpErrors, TransactionLogMessageParser}
 import kafka.utils.TestUtils
@@ -37,21 +36,22 @@ import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.message.{KRaftVersionRecord, LeaderChangeMessage, SnapshotFooterRecord, SnapshotHeaderRecord, VotersRecord}
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ApiMessage, ByteBufferAccessor, MessageUtil, ObjectSerializationCache}
-import org.apache.kafka.common.record.{ControlRecordType, ControlRecordUtils, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.internal.{ControlRecordType, ControlRecordUtils, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnapshotValue, ShareUpdateKey, ShareUpdateValue}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.raft.internals.KafkaRaftLog
 import org.apache.kafka.raft.{MetadataLogConfig, VoterSetTest}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, OffsetAndEpoch, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -154,7 +154,7 @@ class DumpLogSegmentsTest {
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(98323L, 99.toShort,
       new EndTransactionMarker(ControlRecordType.COMMIT, 100)
-    ), 7, AppendOrigin.COORDINATOR)
+    ), 7, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     assertDumpLogRecordMetadata(log)
   }
@@ -530,7 +530,7 @@ class DumpLogSegmentsTest {
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(0L, 0.toShort,
       new EndTransactionMarker(ControlRecordType.COMMIT, 100)
-    ), 0, AppendOrigin.COORDINATOR)
+    ), 0, AppendOrigin.COORDINATOR, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_0.featureLevel())
 
     log.appendAsLeader(MemoryRecords.withLeaderChangeMessage(0L, 0L, 0, ByteBuffer.allocate(4),
       new LeaderChangeMessage()
@@ -577,7 +577,7 @@ class DumpLogSegmentsTest {
           setPartitionId(0).setIsr(util.List.of(0, 1, 2)), 0.toShort)
     )
 
-    val metadataLog = KafkaMetadataLog(
+    val metadataLog = KafkaRaftLog.createLog(
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,

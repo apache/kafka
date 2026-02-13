@@ -49,6 +49,7 @@ public class MockConnectMetrics extends ConnectMetrics {
         DEFAULT_WORKER_CONFIG.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_WORKER_CONFIG.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_WORKER_CONFIG.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        DEFAULT_WORKER_CONFIG.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
     }
 
     public MockConnectMetrics() {

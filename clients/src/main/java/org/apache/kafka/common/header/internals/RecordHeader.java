@@ -25,9 +25,9 @@ import java.util.Objects;
 
 public class RecordHeader implements Header {
     private ByteBuffer keyBuffer;
-    private String key;
-    private ByteBuffer valueBuffer;
-    private byte[] value;
+    private volatile String key;
+    private volatile ByteBuffer valueBuffer;
+    private volatile byte[] value;
 
     public RecordHeader(String key, byte[] value) {
         Objects.requireNonNull(key, "Null header keys are not permitted");
@@ -42,16 +42,24 @@ public class RecordHeader implements Header {
     
     public String key() {
         if (key == null) {
-            key = Utils.utf8(keyBuffer, keyBuffer.remaining());
-            keyBuffer = null;
+            synchronized (this) {
+                if (key == null) {
+                    key = Utils.utf8(keyBuffer, keyBuffer.remaining());
+                    keyBuffer = null;
+                }
+            }
         }
         return key;
     }
 
     public byte[] value() {
         if (value == null && valueBuffer != null) {
-            value = Utils.toArray(valueBuffer);
-            valueBuffer = null;
+            synchronized (this) {
+                if (value == null && valueBuffer != null) {
+                    value = Utils.toArray(valueBuffer);
+                    valueBuffer = null;
+                }
+            }
         }
         return value;
     }

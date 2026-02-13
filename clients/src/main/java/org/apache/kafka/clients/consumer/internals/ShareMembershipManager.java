@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.metrics.ShareRebalanceMetricsManager;
 import org.apache.kafka.common.Uuid;
@@ -81,7 +82,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                                   String groupId,
                                   String rackId,
                                   SubscriptionState subscriptions,
-                                  ConsumerMetadata metadata,
+                                  Metadata metadata,
                                   Time time,
                                   Metrics metrics) {
         this(logContext,
@@ -98,7 +99,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                            String groupId,
                            String rackId,
                            SubscriptionState subscriptions,
-                           ConsumerMetadata metadata,
+                           Metadata metadata,
                            Time time,
                            ShareRebalanceMetricsManager metricsManager) {
         super(groupId,

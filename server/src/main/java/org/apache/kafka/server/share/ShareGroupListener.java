@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server.share;
 
-import org.apache.kafka.common.Uuid;
-
 /**
  * The ShareGroupListener is used to notify when there is a change in the share group members.
  */
@@ -29,7 +27,7 @@ public interface ShareGroupListener {
      * @param groupId  The id of the group.
      * @param memberId The id of the member.
      */
-    void onMemberLeave(String groupId, Uuid memberId);
+    void onMemberLeave(String groupId, String memberId);
 
     /**
      * Called when the group is empty.

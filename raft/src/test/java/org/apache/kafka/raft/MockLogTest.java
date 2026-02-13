@@ -22,14 +22,14 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.record.ArbitraryMemoryRecords;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.ArbitraryMemoryRecords;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
@@ -51,7 +51,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -1026,33 +1025,7 @@ public class MockLogTest {
         }
     }
 
-    private static class OffsetRange {
-        public final long startOffset;
-        public final long endOffset;
-
-        private OffsetRange(long startOffset, long endOffset) {
-            this.startOffset = startOffset;
-            this.endOffset = endOffset;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            OffsetRange that = (OffsetRange) o;
-            return startOffset == that.startOffset &&
-                endOffset == that.endOffset;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(startOffset, endOffset);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("OffsetRange(startOffset=%s, endOffset=%s)", startOffset, endOffset);
-        }
+    private record OffsetRange(long startOffset, long endOffset) {
     }
 
     private void appendAsLeader(Collection<SimpleRecord> records, int epoch) {

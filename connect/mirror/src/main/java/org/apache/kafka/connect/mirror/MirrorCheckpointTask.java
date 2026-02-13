@@ -371,7 +371,7 @@ public class MirrorCheckpointTask extends SourceTask {
                 offsetToSync.put(topicPartition, convertedOffset);
             }
 
-            if (offsetToSync.size() == 0) {
+            if (offsetToSync.isEmpty()) {
                 log.trace("skip syncing the offset for consumer group: {}", consumerGroupId);
                 continue;
             }

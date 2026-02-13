@@ -26,7 +26,6 @@ import org.apache.kafka.connect.errors.RetriableException;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -146,7 +145,7 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Set.of(), config);
         connector = spy(connector);
 
-        Collection<GroupListing> groups = List.of(
+        List<GroupListing> groups = List.of(
                 new GroupListing("g1", Optional.of(GroupType.CLASSIC), "", Optional.empty()),
                 new GroupListing("g2", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()));
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -176,7 +175,7 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Set.of(), config);
         connector = spy(connector);
 
-        Collection<GroupListing> groups = List.of(
+        List<GroupListing> groups = List.of(
                 new GroupListing("g1", Optional.of(GroupType.CLASSIC), "", Optional.empty()),
                 new GroupListing("g2", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()),
                 new GroupListing("g3", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()),

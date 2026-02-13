@@ -100,28 +100,28 @@ public class TransactionIndexTest {
         abortedTransactions.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
 
         TxnIndexSearchResult result = index.collectAbortedTxns(0L, 100L);
-        assertEquals(abortedTransactions, result.abortedTransactions);
-        assertFalse(result.isComplete);
+        assertEquals(abortedTransactions, result.abortedTransactions());
+        assertFalse(result.isComplete());
 
         result = index.collectAbortedTxns(0L, 32);
-        assertEquals(abortedTransactions.subList(0, 3), result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions.subList(0, 3), result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(0L, 35);
-        assertEquals(abortedTransactions, result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions, result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(10, 35);
-        assertEquals(abortedTransactions, result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions, result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(11, 35);
-        assertEquals(abortedTransactions.subList(1, 4), result.abortedTransactions);
-        assertTrue(result.isComplete);
+        assertEquals(abortedTransactions.subList(1, 4), result.abortedTransactions());
+        assertTrue(result.isComplete());
 
         result = index.collectAbortedTxns(20, 41);
-        assertEquals(abortedTransactions.subList(2, 4), result.abortedTransactions);
-        assertFalse(result.isComplete);
+        assertEquals(abortedTransactions.subList(2, 4), result.abortedTransactions());
+        assertFalse(result.isComplete());
     }
 
     @Test
@@ -135,13 +135,13 @@ public class TransactionIndexTest {
         abortedTransactions.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
 
         index.truncateTo(51);
-        assertEquals(abortedTransactions, index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(abortedTransactions, index.collectAbortedTxns(0L, 100L).abortedTransactions());
 
         index.truncateTo(50);
-        assertEquals(abortedTransactions.subList(0, 3), index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(abortedTransactions.subList(0, 3), index.collectAbortedTxns(0L, 100L).abortedTransactions());
 
         index.reset();
-        assertEquals(List.of(), index.collectAbortedTxns(0L, 100L).abortedTransactions);
+        assertEquals(List.of(), index.collectAbortedTxns(0L, 100L).abortedTransactions());
     }
 
     @Test
@@ -167,7 +167,7 @@ public class TransactionIndexTest {
         index.renameTo(renamed);
         index.append(new AbortedTxn(1L, 5, 15, 16));
 
-        List<AbortedTxn> abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions;
+        List<AbortedTxn> abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions();
         assertEquals(2, abortedTxns.size());
         assertEquals(0, abortedTxns.get(0).firstOffset());
         assertEquals(5, abortedTxns.get(1).firstOffset());

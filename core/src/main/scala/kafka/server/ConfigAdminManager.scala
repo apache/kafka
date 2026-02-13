@@ -151,7 +151,7 @@ class ConfigAdminManager(nodeId: Int,
         } catch {
           case t: Throwable =>
             val err = ApiError.fromThrowable(t)
-            info(s"Error preprocessing incrementalAlterConfigs request on $configResource", t)
+            error(s"Error preprocessing incrementalAlterConfigs request on $configResource", t)
             results.put(resource, err)
         }
       }
@@ -252,7 +252,7 @@ class ConfigAdminManager(nodeId: Int,
         } catch {
           case t: Throwable =>
             val err = ApiError.fromThrowable(t)
-            info(s"Error preprocessing alterConfigs request on $configResource: $err")
+            error(s"Error preprocessing alterConfigs request on ${configResource}: ${err}")
             results.put(resource, err)
         }
       }
@@ -417,10 +417,12 @@ object ConfigAdminManager {
     configKeys: Map[String, ConfigKey]
   ): Unit = {
     def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
-      val configKey = configKeys(configName)
-      if (configKey == null)
-        throw new InvalidConfigurationException(s"Unknown config name: $configName")
-      configKey.`type` == ConfigDef.Type.LIST
+      configKeys.get(configName) match {
+        case Some(configKey) =>
+          configKey.`type` == ConfigDef.Type.LIST
+        case None =>
+          throw new InvalidConfigurationException(s"Unknown config name: $configName")
+      }
     }
 
     alterConfigOps.foreach { alterConfigOp =>

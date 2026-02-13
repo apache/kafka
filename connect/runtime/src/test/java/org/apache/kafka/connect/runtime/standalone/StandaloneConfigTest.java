@@ -48,6 +48,7 @@ public class StandaloneConfigTest {
     private Map<String, String> baseWorkerProps() {
         return new HashMap<>() {
             {
+                put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
                 put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
                 put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
                 put(StandaloneConfig.OFFSET_STORAGE_FILE_FILENAME_CONFIG, "/tmp/foo");

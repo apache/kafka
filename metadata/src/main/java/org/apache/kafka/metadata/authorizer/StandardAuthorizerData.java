@@ -106,8 +106,6 @@ public class StandardAuthorizerData {
      */
     private AclCache aclCache;
 
-
-
     private static Logger createLogger(int nodeId) {
         return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
     }
@@ -172,7 +170,7 @@ public class StandardAuthorizerData {
     }
 
     StandardAuthorizerData copyWithNewAcls(AclCache aclCache) {
-        StandardAuthorizerData newData =  new StandardAuthorizerData(
+        StandardAuthorizerData newData = new StandardAuthorizerData(
             log,
             aclMutator,
             loadingComplete,
@@ -552,17 +550,7 @@ public class StandardAuthorizerData {
         }
     }
 
-    private static class DefaultRule implements MatchingRule {
-        private final AuthorizationResult result;
-
-        private DefaultRule(AuthorizationResult result) {
-            this.result = result;
-        }
-
-        @Override
-        public AuthorizationResult result() {
-            return result;
-        }
+    private record DefaultRule(AuthorizationResult result) implements MatchingRule {
 
         @Override
         public String toString() {
@@ -570,19 +558,7 @@ public class StandardAuthorizerData {
         }
     }
 
-    private static class MatchingAclRule implements MatchingRule {
-        private final StandardAcl acl;
-        private final AuthorizationResult result;
-
-        private MatchingAclRule(StandardAcl acl, AuthorizationResult result) {
-            this.acl = acl;
-            this.result = result;
-        }
-
-        @Override
-        public AuthorizationResult result() {
-            return result;
-        }
+    private record MatchingAclRule(StandardAcl acl, AuthorizationResult result) implements MatchingRule {
 
         @Override
         public String toString() {

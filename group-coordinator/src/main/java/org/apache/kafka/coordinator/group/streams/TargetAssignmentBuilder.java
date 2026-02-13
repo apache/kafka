@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
@@ -24,7 +25,6 @@ import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
-import org.apache.kafka.image.MetadataImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,7 +78,7 @@ public class TargetAssignmentBuilder {
     /**
      * The metadata image.
      */
-    private MetadataImage metadataImage = MetadataImage.EMPTY;
+    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
 
     /**
      * The existing target assignment.
@@ -164,7 +164,7 @@ public class TargetAssignmentBuilder {
      * @return This object.
      */
     public TargetAssignmentBuilder withMetadataImage(
-        MetadataImage metadataImage
+        CoordinatorMetadataImage metadataImage
     ) {
         this.metadataImage = metadataImage;
         return this;

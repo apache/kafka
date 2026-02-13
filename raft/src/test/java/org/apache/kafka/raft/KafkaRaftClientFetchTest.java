@@ -19,10 +19,10 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ArbitraryMemoryRecords;
-import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.ArbitraryMemoryRecords;
+import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import net.jqwik.api.AfterFailureMode;

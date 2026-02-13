@@ -271,14 +271,14 @@ public class Assertions {
 
         Consumer<ShareGroupStatePartitionMetadataValue> normalize = message -> {
             message.initializedTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId));
-            message.initializedTopics().forEach(topic -> {
-                topic.partitions().sort(Comparator.naturalOrder());
-            });
+            message.initializedTopics().forEach(topic ->
+                topic.partitions().sort(Comparator.naturalOrder())
+            );
 
             message.initializingTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId));
-            message.initializingTopics().forEach(topic -> {
-                topic.partitions().sort(Comparator.naturalOrder());
-            });
+            message.initializingTopics().forEach(topic ->
+                topic.partitions().sort(Comparator.naturalOrder())
+            );
 
             message.deletingTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId));
         };

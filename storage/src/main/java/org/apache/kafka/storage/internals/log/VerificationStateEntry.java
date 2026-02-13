@@ -31,9 +31,9 @@ public class VerificationStateEntry {
 
     private final long timestamp;
     private final VerificationGuard verificationGuard;
+    private final boolean supportsEpochBump;
     private int lowestSequence;
     private short epoch;
-    private boolean supportsEpochBump;
 
     public VerificationStateEntry(long timestamp, int sequence, short epoch, boolean supportsEpochBump) {
         this.timestamp = timestamp;

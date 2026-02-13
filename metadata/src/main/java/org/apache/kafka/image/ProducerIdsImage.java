@@ -20,54 +20,28 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.image.node.ProducerIdsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
-
-import java.util.Objects;
-
 
 /**
  * Stores the highest seen producer ID in the metadata image.
- *
+ * <p>
  * This class is thread-safe.
+ *
+ * @param nextProducerId The next producer ID, or -1 in the special case where no producer IDs have been issued.
  */
-public final class ProducerIdsImage {
+public record ProducerIdsImage(long nextProducerId) {
     public static final ProducerIdsImage EMPTY = new ProducerIdsImage(-1L);
 
-    /**
-     * The next producer ID, or -1 in the special case where no producer IDs have been issued.
-     */
-    private final long nextProducerId;
-
-    public ProducerIdsImage(long nextProducerId) {
-        this.nextProducerId = nextProducerId;
-    }
-
-    public long nextProducerId() {
-        return nextProducerId;
-    }
-
-    public void write(ImageWriter writer, ImageWriterOptions options) {
+    public void write(ImageWriter writer) {
         if (nextProducerId >= 0) {
             writer.write(0, new ProducerIdsRecord().
-                    setBrokerId(-1).
-                    setBrokerEpoch(-1).
-                    setNextProducerId(nextProducerId));
+                setBrokerId(-1).
+                setBrokerEpoch(-1).
+                setNextProducerId(nextProducerId));
         }
     }
 
     public boolean isEmpty() {
         return nextProducerId == EMPTY.nextProducerId;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof ProducerIdsImage other)) return false;
-        return nextProducerId == other.nextProducerId;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(nextProducerId);
     }
 
     @Override

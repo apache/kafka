@@ -82,7 +82,7 @@ public final class ExpectLeaderAction implements TieredStorageTestAction {
                 }
                 throw new RuntimeException(ex);
             }
-        }, "Leader of " + topicPartition + " was not " + replicaId + ". Actual leader: " + actualLeader);
+        }, () -> "Leader of " + topicPartition + " was not " + replicaId + ". Actual leader: " + actualLeader);
     }
 
     @Override

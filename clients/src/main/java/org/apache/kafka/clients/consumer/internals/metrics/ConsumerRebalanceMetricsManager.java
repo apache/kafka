@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
@@ -27,7 +29,9 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
+import java.util.Collection;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
@@ -44,11 +48,14 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
     public final MetricName lastRebalanceSecondsAgo;
     public final MetricName failedRebalanceTotal;
     public final MetricName failedRebalanceRate;
+    public final MetricName assignedPartitionsCount;
     private long lastRebalanceEndMs = -1L;
     private long lastRebalanceStartMs = -1L;
+    private final Metrics metrics;
 
-    public ConsumerRebalanceMetricsManager(Metrics metrics) {
+    public ConsumerRebalanceMetricsManager(Metrics metrics, SubscriptionState subscriptions) {
         super(CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX);
+        this.metrics = metrics;
 
         rebalanceLatencyAvg = createMetric(metrics, "rebalance-latency-avg",
                 "The average time in ms taken for a group to complete a rebalance");
@@ -64,17 +71,20 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
                 "The total number of failed rebalance events");
         failedRebalanceRate = createMetric(metrics, "failed-rebalance-rate-per-hour",
                 "The number of failed rebalance events per hour");
+        assignedPartitionsCount = createMetric(metrics, "assigned-partitions",
+                "The number of partitions currently assigned to this consumer");
+        registerAssignedPartitionCount(subscriptions);
 
         successfulRebalanceSensor = metrics.sensor("rebalance-latency");
         successfulRebalanceSensor.add(rebalanceLatencyAvg, new Avg());
         successfulRebalanceSensor.add(rebalanceLatencyMax, new Max());
         successfulRebalanceSensor.add(rebalanceLatencyTotal, new CumulativeSum());
         successfulRebalanceSensor.add(rebalanceTotal, new CumulativeCount());
-        successfulRebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        successfulRebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
         failedRebalanceSensor = metrics.sensor("failed-rebalance");
         failedRebalanceSensor.add(failedRebalanceTotal, new CumulativeSum());
-        failedRebalanceSensor.add(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        failedRebalanceSensor.add(failedRebalanceRate, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
 
         Measurable lastRebalance = (config, now) -> {
             if (lastRebalanceEndMs == -1L)
@@ -105,5 +115,16 @@ public final class ConsumerRebalanceMetricsManager extends RebalanceMetricsManag
 
     public boolean rebalanceStarted() {
         return lastRebalanceStartMs > lastRebalanceEndMs;
+    }
+
+    /**
+     * Register metric to track the number of assigned partitions.
+     * It will consider partitions assigned to the consumer
+     * regardless of whether they were assigned via {@link KafkaConsumer#subscribe(Pattern)} or
+     * {@link KafkaConsumer#assign(Collection)}
+     */
+    private void registerAssignedPartitionCount(SubscriptionState subscriptions) {
+        Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
+        metrics.addMetric(assignedPartitionsCount, numParts);
     }
 }

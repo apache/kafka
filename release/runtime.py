@@ -108,7 +108,7 @@ def _prefix(prefix_str, value_str):
 
 def cmd(action, cmd_arg, *args, **kwargs):
     """
-    Execute an external command. This should be preferered over execute()
+    Execute an external command. This should be preferred over execute()
     when returning the output is not necessary, as the user will be given
     the option of retrying in case of a failure.
     """
@@ -144,5 +144,3 @@ def cmd(action, cmd_arg, *args, **kwargs):
 
     print(templates.cmd_failed())
     fail("")
-
-

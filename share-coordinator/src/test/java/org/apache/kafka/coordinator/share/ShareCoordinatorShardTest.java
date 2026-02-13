@@ -38,19 +38,21 @@ import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
-import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
@@ -73,7 +75,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -97,13 +98,13 @@ class ShareCoordinatorShardTest {
         private final CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
         private final CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         private final SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        private MetadataImage metadataImage = null;
+        private CoordinatorMetadataImage metadataImage = null;
         private Map<String, String> configOverrides = new HashMap<>();
         ShareCoordinatorOffsetsManager offsetsManager = mock(ShareCoordinatorOffsetsManager.class);
         private Time time;
 
         ShareCoordinatorShard build() {
-            if (metadataImage == null) metadataImage = mock(MetadataImage.class, RETURNS_DEEP_STUBS);
+            if (metadataImage == null) metadataImage = mock(CoordinatorMetadataImage.class, RETURNS_DEEP_STUBS);
             if (config == null) {
                 config = ShareCoordinatorTestConfig.createConfig(ShareCoordinatorTestConfig.testConfigMap(configOverrides));
             }
@@ -117,9 +118,11 @@ class ShareCoordinatorShardTest {
                 offsetsManager,
                 time == null ? TIME : time
             );
-            when(metadataImage.topics().getTopic((Uuid) any())).thenReturn(mock(TopicImage.class));
-            when(metadataImage.topics().getPartition(any(), anyInt())).thenReturn(mock(PartitionRegistration.class));
-            shard.onNewMetadataImage(metadataImage, null);
+
+            var topicMetadata = mock(CoordinatorMetadataImage.TopicMetadata.class);
+            when(topicMetadata.partitionCount()).thenReturn(PARTITION + 1);
+            when(metadataImage.topicMetadata((Uuid) any())).thenReturn(Optional.of(topicMetadata));
+            shard.onMetadataUpdate(null, metadataImage);
             return shard;
         }
 
@@ -166,6 +169,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(0)
                     .setStateEpoch(0)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -205,6 +209,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
@@ -225,6 +231,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(1)
                     .setStateEpoch(1)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(13)
                     .setLeaderEpoch(leaderEpoch + 1)
                     .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
@@ -260,6 +268,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -294,6 +303,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -333,6 +343,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -348,6 +359,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(21)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -408,6 +420,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(partition)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -433,7 +446,7 @@ class ShareCoordinatorShardTest {
     public void testWriteNullMetadataImage() {
         initSharePartition(shard, SHARE_PARTITION_KEY);
 
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         WriteShareGroupStateRequestData request = new WriteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -442,6 +455,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(0)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -473,6 +487,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -503,6 +518,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(0)
+                    .setDeliveryCompleteCount(10)
                     .setStateEpoch(0)   // Lower state epoch in the second request.
                     .setLeaderEpoch(5)
                     .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
@@ -598,6 +614,7 @@ class ShareCoordinatorShardTest {
             PARTITION,
             0,
             0,
+            0,
             0
         ), result.response());
 
@@ -659,7 +676,7 @@ class ShareCoordinatorShardTest {
         initSharePartition(shard, SHARE_PARTITION_KEY);
         writeAndReplayDefaultRecord(shard);
 
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         ReadShareGroupStateRequestData request = new ReadShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -750,6 +767,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(100)
+                    .setDeliveryCompleteCount(0)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(
@@ -797,6 +815,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(-1)
+                    .setDeliveryCompleteCount(10)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(
@@ -819,6 +838,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)
                     .setStartOffset(110)    // 100 -> 110
+                    .setDeliveryCompleteCount(10)
                     .setStateEpoch(0)
                     .setLeaderEpoch(0)
                     .setStateBatches(List.of(
@@ -836,6 +856,7 @@ class ShareCoordinatorShardTest {
         WriteShareGroupStateResponseData expectedDataFinal = WriteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
         ShareGroupOffset offsetFinal = new ShareGroupOffset.Builder()
             .setStartOffset(110)
+            .setDeliveryCompleteCount(10)
             .setLeaderEpoch(0)
             .setStateEpoch(0)
             .setSnapshotEpoch(5)    // since subsequent share snapshot
@@ -896,6 +917,7 @@ class ShareCoordinatorShardTest {
         List<CoordinatorRecord> expectedRecords = List.of(ShareCoordinatorRecordHelpers.newShareUpdateRecord(
             GROUP_ID, TOPIC_ID, PARTITION, new ShareGroupOffset.Builder()
                 .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
+                .setDeliveryCompleteCount(PartitionFactory.UNINITIALIZED_DELIVERY_COMPLETE_COUNT)
                 .setLeaderEpoch(2)
                 .setStateBatches(List.of())
                 .setSnapshotEpoch(0)
@@ -1014,7 +1036,7 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testDeleteStateUnintializedRecord() {
+    public void testDeleteStateUninitializedRecord() {
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
             .setTopics(List.of(new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -1059,7 +1081,7 @@ class ShareCoordinatorShardTest {
 
     @Test
     public void testDeleteNullMetadataImage() {
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1081,7 +1103,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testDeleteTopicIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1112,7 +1134,8 @@ class ShareCoordinatorShardTest {
     @Test
     public void testDeletePartitionIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        when(image.cluster()).thenReturn(mock(ClusterImage.class));
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1123,12 +1146,10 @@ class ShareCoordinatorShardTest {
 
         // topic id found in cache
         TopicsImage topicsImage = mock(TopicsImage.class);
-        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(
-            mock(TopicImage.class)
-        );
-        when(image.topics()).thenReturn(
-            topicsImage
-        );
+        TopicImage topicImage = mock(TopicImage.class);
+        when(topicImage.partitions()).thenReturn(Map.of());
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(topicImage);
+        when(image.topics()).thenReturn(topicsImage);
 
         // partition id not found
         when(topicsImage.getPartition(eq(TOPIC_ID), eq(0))).thenReturn(
@@ -1143,7 +1164,7 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
         verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
-        verify(topicsImage, times(1)).getPartition(eq(TOPIC_ID), eq(0));
+        verify(topicImage, times(1)).partitions();
     }
 
     @Test
@@ -1231,7 +1252,7 @@ class ShareCoordinatorShardTest {
 
     @Test
     public void testInitializeNullMetadataImage() {
-        shard.onNewMetadataImage(null, null);
+        shard.onMetadataUpdate(null, null);
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1255,7 +1276,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testInitializeTopicIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1284,7 +1305,8 @@ class ShareCoordinatorShardTest {
     @Test
     public void testInitializePartitionIdNonExistentInMetadataImage() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        when(image.cluster()).thenReturn(mock(ClusterImage.class));
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
             .setGroupId(GROUP_ID)
@@ -1296,8 +1318,10 @@ class ShareCoordinatorShardTest {
             ));
 
         // topic id found in cache
+        TopicImage topicImage = mock(TopicImage.class);
+        when(topicImage.partitions()).thenReturn(Map.of());
         TopicsImage topicsImage = mock(TopicsImage.class);
-        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(mock(TopicImage.class));
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(topicImage);
         when(image.topics()).thenReturn(topicsImage);
 
         // partition id not found
@@ -1311,13 +1335,13 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
         verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
-        verify(topicsImage, times(1)).getPartition(eq(TOPIC_ID), eq(0));
+        verify(topicImage, times(1)).partitions();
     }
 
     @Test
     public void testSnapshotColdPartitionsNoEligiblePartitions() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1334,6 +1358,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1356,6 +1382,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1383,7 +1411,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsSnapshotUpdateNotConsidered() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1400,6 +1428,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1431,6 +1461,8 @@ class ShareCoordinatorShardTest {
                     new ShareSnapshotValue()
                         .setSnapshotEpoch(1)
                         .setStateEpoch(0)
+                        .setStartOffset(0)
+                        .setDeliveryCompleteCount(11)
                         .setLeaderEpoch(leaderEpoch)
                         .setCreateTimestamp(timestamp)
                         .setWriteTimestamp(timestamp + sleep)
@@ -1458,6 +1490,8 @@ class ShareCoordinatorShardTest {
             new ApiMessageAndVersion(
                 new ShareUpdateValue()
                     .setSnapshotEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setStateBatches(List.of(
                         new ShareUpdateValue.StateBatch()
@@ -1480,7 +1514,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsDoesNotPerpetuallySnapshot() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1497,6 +1531,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1526,6 +1562,8 @@ class ShareCoordinatorShardTest {
                     new ShareSnapshotValue()
                         .setSnapshotEpoch(1)
                         .setStateEpoch(0)
+                        .setStartOffset(0)
+                        .setDeliveryCompleteCount(11)
                         .setLeaderEpoch(leaderEpoch)
                         .setCreateTimestamp(timestamp)
                         .setWriteTimestamp(timestamp + sleep)
@@ -1554,7 +1592,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testSnapshotColdPartitionsPartialEligiblePartitions() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
         int offset = 0;
         int producerId = 0;
         short producerEpoch = 0;
@@ -1574,6 +1612,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(record1SnapshotEpoch)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1598,6 +1638,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp + delta)
                     .setWriteTimestamp(timestamp + delta)
@@ -1632,6 +1674,8 @@ class ShareCoordinatorShardTest {
                     new ShareSnapshotValue()
                         .setSnapshotEpoch(record1SnapshotEpoch + 1)
                         .setStateEpoch(0)
+                        .setStartOffset(0)
+                        .setDeliveryCompleteCount(11)
                         .setLeaderEpoch(leaderEpoch)
                         .setCreateTimestamp(timestamp)
                         .setWriteTimestamp(timestamp + sleep)
@@ -1668,7 +1712,7 @@ class ShareCoordinatorShardTest {
     @Test
     public void testOnTopicsDeletedTopicIds() {
         MetadataImage image = mock(MetadataImage.class);
-        shard.onNewMetadataImage(image, null);
+        shard.onMetadataUpdate(null, new KRaftCoordinatorMetadataImage(image));
 
         int offset = 0;
         int producerId = 0;
@@ -1688,6 +1732,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(record1SnapshotEpoch)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1710,6 +1756,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(record1SnapshotEpoch)
                     .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setDeliveryCompleteCount(11)
                     .setLeaderEpoch(leaderEpoch)
                     .setCreateTimestamp(timestamp)
                     .setWriteTimestamp(timestamp)
@@ -1753,7 +1801,8 @@ class ShareCoordinatorShardTest {
                 new ShareSnapshotValue()
                     .setStateEpoch(stateEpoch)
                     .setLeaderEpoch(-1)
-                    .setStartOffset(-1),
+                    .setStartOffset(-1)
+                    .setDeliveryCompleteCount(-1),
                 (short) 0
             )
         ));

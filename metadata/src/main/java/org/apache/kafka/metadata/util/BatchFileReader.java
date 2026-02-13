@@ -21,10 +21,10 @@ import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.Batch;
@@ -69,22 +69,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         }
     }
 
-    public static class BatchAndType {
-        private final Batch<ApiMessageAndVersion> batch;
-        private final boolean isControl;
-
-        public BatchAndType(Batch<ApiMessageAndVersion> batch, boolean isControl) {
-            this.batch = batch;
-            this.isControl = isControl;
-        }
-
-        public Batch<ApiMessageAndVersion> batch() {
-            return batch;
-        }
-
-        public boolean isControl() {
-            return isControl;
-        }
+    public record BatchAndType(Batch<ApiMessageAndVersion> batch, boolean isControl) {
     }
 
     private final FileRecords fileRecords;

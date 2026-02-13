@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
@@ -327,7 +327,7 @@ public class GroupCoordinatorRecordHelpers {
         String regex,
         ResolvedRegularExpression resolvedRegularExpression
     ) {
-        List<String> topics = new ArrayList<>(resolvedRegularExpression.topics);
+        List<String> topics = new ArrayList<>(resolvedRegularExpression.topics());
         Collections.sort(topics);
 
         return CoordinatorRecord.record(
@@ -337,8 +337,8 @@ public class GroupCoordinatorRecordHelpers {
             new ApiMessageAndVersion(
                 new ConsumerGroupRegularExpressionValue()
                     .setTopics(topics)
-                    .setVersion(resolvedRegularExpression.version)
-                    .setTimestamp(resolvedRegularExpression.timestamp),
+                    .setVersion(resolvedRegularExpression.version())
+                    .setTimestamp(resolvedRegularExpression.timestamp()),
                 (short) 0
             )
         );

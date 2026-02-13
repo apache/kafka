@@ -69,7 +69,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode<?, ?, ?, ?>> {
     public PunctuationSchedule next(final long currTimestamp) {
         long nextPunctuationTime = timestamp + interval;
         if (currTimestamp >= nextPunctuationTime) {
-            // we missed one ore more punctuations
+            // we missed one or more punctuations
             // avoid scheduling a new punctuations immediately, this can happen:
             // - when using STREAM_TIME punctuation and there was a gap i.e., no data was
             //   received for at least 2*interval

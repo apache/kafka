@@ -106,31 +106,23 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             buffer.incrementIndent();
             Versions mandatoryVersions = field.versions().subtract(field.taggedVersions());
             VersionConditional.forVersions(mandatoryVersions, curVersions).
-                ifMember(__ -> {
-                    buffer.printf("throw new RuntimeException(\"%s: unable to locate " +
-                            "field '%s', which is mandatory in version \" + _version);%n",
-                        className, field.camelCaseName());
-                }).
-                ifNotMember(__ -> {
-                    buffer.printf("_object.%s = %s;%n", field.camelCaseName(),
-                        field.fieldDefault(headerGenerator, structRegistry));
-                }).
+                ifMember(__ -> buffer.printf("throw new RuntimeException(\"%s: unable to locate " +
+                        "field '%s', which is mandatory in version \" + _version);%n",
+                    className, field.camelCaseName())).
+                ifNotMember(__ -> buffer.printf("_object.%s = %s;%n", field.camelCaseName(),
+                    field.fieldDefault(headerGenerator, structRegistry))).
                 generate(buffer);
             buffer.decrementIndent();
             buffer.printf("} else {%n");
             buffer.incrementIndent();
             VersionConditional.forVersions(struct.versions(), curVersions).
-                ifMember(presentVersions -> {
-                    generateTargetFromJson(new Target(field,
-                            sourceVariable,
-                            className,
-                        input -> String.format("_object.%s = %s", field.camelCaseName(), input)),
-                        curVersions);
-                }).ifNotMember(__ -> {
-                    buffer.printf("throw new RuntimeException(\"%s: field '%s' is not " +
+                ifMember(presentVersions -> generateTargetFromJson(new Target(field,
+                        sourceVariable,
+                        className,
+                    input -> String.format("_object.%s = %s", field.camelCaseName(), input)),
+                    curVersions)).ifNotMember(__ -> buffer.printf("throw new RuntimeException(\"%s: field '%s' is not " +
                         "supported in version \" + _version);%n",
-                        className, field.camelCaseName());
-                }).generate(buffer);
+                        className, field.camelCaseName())).generate(buffer);
             buffer.decrementIndent();
             buffer.printf("}%n");
         }
@@ -202,12 +194,8 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 possibleVersions(curVersions).
                 conditionalGenerator((name, negated) ->
                     String.format("%s%s.isNull()", negated ? "!" : "", name)).
-                ifNull(() -> {
-                    buffer.printf("%s;%n", target.assignmentStatement("null"));
-                }).
-                ifShouldNotBeNull(() -> {
-                    generateVariableLengthTargetFromJson(target, curVersions);
-                }).
+                ifNull(() -> buffer.printf("%s;%n", target.assignmentStatement("null"))).
+                ifShouldNotBeNull(() -> generateVariableLengthTargetFromJson(target, curVersions)).
                 generate(buffer);
         }
     }
@@ -262,7 +250,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         } else if (target.field().type().isStruct()) {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("%s%s.read(%s, _version)",
-                target.field().type().toString(), SUFFIX, target.sourceVariable())));
+                    target.field().type(), SUFFIX, target.sourceVariable())));
         } else {
             throw new RuntimeException("Unexpected type " + target.field().type());
         }
@@ -302,32 +290,26 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                 field.camelCaseName(),
                 input -> String.format("_node.set(\"%s\", %s)", field.camelCaseName(), input));
             VersionConditional cond = VersionConditional.forVersions(field.versions(), curVersions).
-                ifMember(presentVersions -> {
-                    VersionConditional.forVersions(field.taggedVersions(), presentVersions).
-                        ifMember(presentAndTaggedVersions -> {
-                            field.generateNonDefaultValueCheck(headerGenerator,
-                                structRegistry, buffer, "_object.", field.nullableVersions());
-                            buffer.incrementIndent();
-                            if (field.defaultString().equals("null")) {
-                                // If the default was null, and we already checked that this field was not
-                                // the default, we can omit further null checks.
-                                generateTargetToJson(target.nonNullableCopy(), presentAndTaggedVersions);
-                            } else {
-                                generateTargetToJson(target, presentAndTaggedVersions);
-                            }
-                            buffer.decrementIndent();
-                            buffer.printf("}%n");
-                        }).
-                        ifNotMember(presentAndNotTaggedVersions -> {
-                            generateTargetToJson(target, presentAndNotTaggedVersions);
-                        }).
-                        generate(buffer);
-                });
+                ifMember(presentVersions -> VersionConditional.forVersions(field.taggedVersions(), presentVersions).
+                    ifMember(presentAndTaggedVersions -> {
+                        field.generateNonDefaultValueCheck(headerGenerator,
+                            structRegistry, buffer, "_object.", field.nullableVersions());
+                        buffer.incrementIndent();
+                        if (field.defaultString().equals("null")) {
+                            // If the default was null, and we already checked that this field was not
+                            // the default, we can omit further null checks.
+                            generateTargetToJson(target.nonNullableCopy(), presentAndTaggedVersions);
+                        } else {
+                            generateTargetToJson(target, presentAndTaggedVersions);
+                        }
+                        buffer.decrementIndent();
+                        buffer.printf("}%n");
+                    }).
+                    ifNotMember(presentAndNotTaggedVersions -> generateTargetToJson(target, presentAndNotTaggedVersions)).
+                    generate(buffer));
             if (!field.ignorable()) {
-                cond.ifNotMember(__ -> {
-                    field.generateNonIgnorableFieldCheck(headerGenerator,
-                        structRegistry, "_object.", buffer);
-                });
+                cond.ifNotMember(__ -> field.generateNonIgnorableFieldCheck(headerGenerator,
+                    structRegistry, "_object.", buffer));
             }
             cond.generate(buffer);
         }
@@ -376,9 +358,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                     headerGenerator.addImport(MessageGenerator.NULL_NODE_CLASS);
                     buffer.printf("%s;%n", target.assignmentStatement("NullNode.instance"));
                 }).
-                ifShouldNotBeNull(() -> {
-                    generateVariableLengthTargetToJson(target, versions);
-                }).
+                ifShouldNotBeNull(() -> generateVariableLengthTargetToJson(target, versions)).
                 generate(buffer);
         }
     }
@@ -439,7 +419,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         } else if (target.field().type().isStruct()) {
             buffer.printf("%s;%n", target.assignmentStatement(
                 String.format("%sJsonConverter.write(%s, _version, _serializeRecords)",
-                    target.field().type().toString(), target.sourceVariable())));
+                    target.field().type(), target.sourceVariable())));
         } else {
             throw new RuntimeException("unknown type " + target.field().type());
         }

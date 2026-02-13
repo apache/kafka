@@ -46,11 +46,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -165,7 +165,16 @@ public class StateDirectory implements AutoCloseable {
     private void configurePermissions(final File file) {
         final Path path = file.toPath();
         if (path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
-            final Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rwxr-x---");
+            final Set<PosixFilePermission> perms = EnumSet.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE,
+                    PosixFilePermission.GROUP_READ,
+                    PosixFilePermission.GROUP_EXECUTE
+            );
+            if (config.getBoolean(StreamsConfig.ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG)) {
+                perms.add(PosixFilePermission.GROUP_WRITE);
+            }
             try {
                 Files.setPosixFilePermissions(path, perms);
             } catch (final IOException e) {
@@ -204,7 +213,6 @@ public class StateDirectory implements AutoCloseable {
         if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
             final ThreadCache dummyCache = new ThreadCache(logContext, 0, streamsMetrics);
             final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
-            final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.stateUpdaterEnabled(config.originals());
 
             // discover all non-empty task directories in StateDirectory
             for (final TaskDirectory taskDirectory : nonEmptyTaskDirectories) {
@@ -226,8 +234,7 @@ public class StateDirectory implements AutoCloseable {
                         logContext,
                         this,
                         subTopology.storeToChangelogTopic(),
-                        inputPartitions,
-                        stateUpdaterEnabled
+                        inputPartitions
                     );
 
                     final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(

@@ -19,20 +19,10 @@ package org.apache.kafka.server.purgatory;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Objects;
-
 /**
  * Used by delayed-produce and delayed-fetch operations
  */
-public class TopicPartitionOperationKey implements DelayedOperationKey {
-
-    public final String topic;
-    public final int partition;
-
-    public TopicPartitionOperationKey(String topic, int partition) {
-        this.topic = topic;
-        this.partition = partition;
-    }
+public record TopicPartitionOperationKey(String topic, int partition) implements DelayedOperationKey {
 
     public TopicPartitionOperationKey(TopicPartition tp) {
         this(tp.topic(), tp.partition());
@@ -45,18 +35,5 @@ public class TopicPartitionOperationKey implements DelayedOperationKey {
     @Override
     public String keyLabel() {
         return topic + "-" + partition;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        TopicPartitionOperationKey that = (TopicPartitionOperationKey) o;
-        return partition == that.partition && Objects.equals(topic, that.topic);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topic, partition);
     }
 }

@@ -109,14 +109,15 @@ public class PartitionChangeBuilder {
         int partitionId,
         IntPredicate isAcceptableLeader,
         MetadataVersion metadataVersion,
-        int minISR
+        int minISR,
+        boolean eligibleLeaderReplicasEnabled
     ) {
         this.partition = partition;
         this.topicId = topicId;
         this.partitionId = partitionId;
         this.isAcceptableLeader = isAcceptableLeader;
         this.metadataVersion = metadataVersion;
-        this.eligibleLeaderReplicasEnabled = false;
+        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         this.minISR = minISR;
 
         this.targetIsr = Replicas.toList(partition.isr);
@@ -173,11 +174,6 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setTargetLeaderRecoveryState(LeaderRecoveryState targetLeaderRecoveryState) {
         this.targetLeaderRecoveryState = targetLeaderRecoveryState;
-        return this;
-    }
-
-    public PartitionChangeBuilder setEligibleLeaderReplicasEnabled(boolean eligibleLeaderReplicasEnabled) {
-        this.eligibleLeaderReplicasEnabled = eligibleLeaderReplicasEnabled;
         return this;
     }
 
@@ -311,9 +307,10 @@ public class PartitionChangeBuilder {
                     topicId, partitionId, Arrays.toString(partition.lastKnownElr));
             return false;
         }
-        if (isAcceptableLeader.test(partition.lastKnownElr[0])) {
+        if (!isAcceptableLeader.test(partition.lastKnownElr[0])) {
             log.trace("Try to elect last known leader for {}-{} but last known leader is not alive. last known leader={}",
                     topicId, partitionId, partition.lastKnownElr[0]);
+            return false;
         }
         return true;
     }
@@ -420,8 +417,8 @@ public class PartitionChangeBuilder {
 
         PartitionReassignmentReplicas.CompletedReassignment completedReassignment = completedReassignmentOpt.get();
 
-        targetIsr = completedReassignment.isr;
-        targetReplicas = completedReassignment.replicas;
+        targetIsr = completedReassignment.isr();
+        targetReplicas = completedReassignment.replicas();
         targetRemoving = List.of();
         targetAdding = List.of();
     }
@@ -493,12 +490,10 @@ public class PartitionChangeBuilder {
 
     private void maybeUpdateLastKnownLeader(PartitionChangeRecord record) {
         if (!useLastKnownLeaderInBalancedRecovery || !eligibleLeaderReplicasEnabled) return;
-        if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
-            partition.lastKnownElr[0] != partition.leader)) {
+        if (record.leader() == NO_LEADER && partition.lastKnownElr.length == 0) {
             // Only update the last known leader when the first time the partition becomes leaderless.
             record.setLastKnownElr(List.of(partition.leader));
-        } else if ((record.leader() >= 0 || (partition.leader != NO_LEADER && record.leader() != NO_LEADER))
-            && partition.lastKnownElr.length > 0) {
+        } else if (record.leader() >= 0 && partition.lastKnownElr.length > 0) {
             // Clear the LastKnownElr field if the partition will have or continues to have a valid leader.
             record.setLastKnownElr(List.of());
         }

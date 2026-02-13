@@ -71,5 +71,3 @@ def replace(path, pattern, replacement, **kwargs):
     with open(path, "w") as f:
         for line in updated:
             f.write(line)
-
-

@@ -17,10 +17,12 @@
   "apiKey": 79,
   "type": "response",
   "name": "ShareAcknowledgeResponse",
-  // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apacke Kafka 4.1.
+  // Version 0 was used for early access of KIP-932 in Apache Kafka 4.0 but removed in Apache Kafka 4.1.
   //
   // Version 1 is the initial stable version (KIP-932).
-  "validVersions": "1",
+  //
+  // Version 2 introduces Renew acknowledgements (KIP-1222).
+  "validVersions": "1-2",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -41,6 +43,8 @@
       "about": "The top level response error code." },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The top-level error message, or null if there was no error." },
+    { "name": "AcquisitionLockTimeoutMs", "type": "int32", "versions": "2+", "ignorable": true,
+      "about": "The time in milliseconds for which the acquired records are locked." },
     { "name": "Responses", "type": "[]ShareAcknowledgeTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+", "mapKey": true,

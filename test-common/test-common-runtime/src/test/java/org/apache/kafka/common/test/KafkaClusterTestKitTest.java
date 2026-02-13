@@ -17,16 +17,22 @@
 
 package org.apache.kafka.common.test;
 
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -87,37 +93,56 @@ public class KafkaClusterTestKitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) throws Exception {
+    @CsvSource({
+        "true,1,1,2", /* 1 combined node */
+        "true,5,7,2", /* 5 combined nodes + 2 controllers */
+        "true,7,5,2", /* 7 combined nodes */
+        "false,1,1,2", /* 1 broker + 1 controller */
+        "false,5,7,2", /* 5 brokers + 7 controllers */
+        "false,7,5,2", /* 7 brokers + 5 controllers */
+    })
+    public void testCreateClusterFormatAndCloseWithMultipleLogDirs(boolean combined, int numBrokers, int numControllers, int numDisks) throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder().
-                setNumBrokerNodes(5).
-                setNumDisksPerBroker(2).
+                setNumBrokerNodes(numBrokers).
+                setNumDisksPerBroker(numDisks).
                 setCombined(combined).
-                setNumControllerNodes(3).build()).build()) {
+                setNumControllerNodes(numControllers).build()).build()) {
 
             TestKitNodes nodes = cluster.nodes();
-            assertEquals(5, nodes.brokerNodes().size());
-            assertEquals(3, nodes.controllerNodes().size());
+            assertEquals(numBrokers, nodes.brokerNodes().size());
+            assertEquals(numControllers, nodes.controllerNodes().size());
 
+            Set<String> logDirs = new HashSet<>();
             nodes.brokerNodes().forEach((brokerId, node) -> {
-                assertEquals(2, node.logDataDirectories().size());
-                Set<String> expected = Set.of(String.format("broker_%d_data0", brokerId), String.format("broker_%d_data1", brokerId));
-                if (nodes.isCombined(node.id())) {
-                    expected = Set.of(String.format("combined_%d_0", brokerId), String.format("combined_%d_1", brokerId));
-                }
+                assertEquals(numDisks, node.logDataDirectories().size());
+                Set<String> expectedDisks = IntStream.range(0, numDisks)
+                        .mapToObj(i -> {
+                            if (nodes.isCombined(node.id())) {
+                                return String.format("combined_%d_%d", brokerId, i);
+                            } else {
+                                return String.format("broker_%d_data%d", brokerId, i);
+                            }
+                        }).collect(Collectors.toSet());
                 assertEquals(
-                    expected,
+                    expectedDisks,
                     node.logDataDirectories().stream()
                         .map(p -> Paths.get(p).getFileName().toString())
                         .collect(Collectors.toSet())
                 );
+                logDirs.addAll(node.logDataDirectories());
             });
 
             nodes.controllerNodes().forEach((controllerId, node) -> {
-                String expected = combined ? String.format("combined_%d_0", controllerId) : String.format("controller_%d", controllerId);
+                String expected = nodes.isCombined(node.id()) ? String.format("combined_%d_0", controllerId) : String.format("controller_%d", controllerId);
                 assertEquals(expected, Paths.get(node.metadataDirectory()).getFileName().toString());
+                logDirs.addAll(node.logDataDirectories());
             });
+
+            cluster.format();
+            logDirs.forEach(logDir ->
+                assertTrue(Files.exists(Paths.get(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME)))
+            );
         }
     }
 

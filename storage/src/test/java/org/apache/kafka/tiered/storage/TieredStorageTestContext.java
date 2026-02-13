@@ -93,7 +93,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     private void initClients() {
-        // rediscover the new bootstrap-server port incase of broker restarts
+        // rediscover the new bootstrap-server port in case of broker restarts
         ListenerName listenerName = harness.listenerName();
         Properties commonOverrideProps = new Properties();
         commonOverrideProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, harness.bootstrapServers(listenerName));
@@ -117,35 +117,35 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     public void createTopic(TopicSpec spec) throws ExecutionException, InterruptedException {
         NewTopic newTopic;
-        if (spec.getAssignment() == null || spec.getAssignment().isEmpty()) {
-            newTopic = new NewTopic(spec.getTopicName(), spec.getPartitionCount(), (short) spec.getReplicationFactor());
+        if (spec.assignment() == null || spec.assignment().isEmpty()) {
+            newTopic = new NewTopic(spec.topicName(), spec.partitionCount(), (short) spec.replicationFactor());
         } else {
-            Map<Integer, List<Integer>> replicasAssignments = spec.getAssignment();
-            newTopic = new NewTopic(spec.getTopicName(), replicasAssignments);
+            Map<Integer, List<Integer>> replicasAssignments = spec.assignment();
+            newTopic = new NewTopic(spec.topicName(), replicasAssignments);
         }
-        newTopic.configs(spec.getProperties());
+        newTopic.configs(spec.properties());
         admin.createTopics(List.of(newTopic)).all().get();
-        TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.getTopicName(), spec.getPartitionCount());
+        TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.topicName(), spec.partitionCount());
         synchronized (this) {
-            topicSpecs.put(spec.getTopicName(), spec);
+            topicSpecs.put(spec.topicName(), spec);
         }
     }
 
     public void createPartitions(ExpandPartitionCountSpec spec) throws ExecutionException, InterruptedException {
         NewPartitions newPartitions;
-        if (spec.getAssignment() == null || spec.getAssignment().isEmpty()) {
-            newPartitions = NewPartitions.increaseTo(spec.getPartitionCount());
+        if (spec.assignment() == null || spec.assignment().isEmpty()) {
+            newPartitions = NewPartitions.increaseTo(spec.partitionCount());
         } else {
-            Map<Integer, List<Integer>> assignment = spec.getAssignment();
+            Map<Integer, List<Integer>> assignment = spec.assignment();
             List<List<Integer>> newAssignments = assignment.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .map(Map.Entry::getValue)
                     .toList();
-            newPartitions = NewPartitions.increaseTo(spec.getPartitionCount(), newAssignments);
+            newPartitions = NewPartitions.increaseTo(spec.partitionCount(), newAssignments);
         }
-        Map<String, NewPartitions> partitionsMap = Map.of(spec.getTopicName(), newPartitions);
+        Map<String, NewPartitions> partitionsMap = Map.of(spec.topicName(), newPartitions);
         admin.createPartitions(partitionsMap).all().get();
-        TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.getTopicName(), spec.getPartitionCount());
+        TestUtils.waitForAllPartitionsMetadata(harness.brokers(), spec.topicName(), spec.partitionCount());
     }
 
     public void updateTopicConfig(String topic,

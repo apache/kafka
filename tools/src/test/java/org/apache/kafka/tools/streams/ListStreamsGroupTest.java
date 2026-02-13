@@ -42,10 +42,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import joptsimple.OptionException;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -108,7 +109,7 @@ public class ListStreamsGroupTest {
             TestUtils.waitForCondition(() -> {
                 foundGroups.set(new HashSet<>(service.listStreamsGroups()));
                 return Objects.equals(expectedGroups, foundGroups.get());
-            }, "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
 
         }
     }
@@ -133,9 +134,9 @@ public class ListStreamsGroupTest {
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
 
             TestUtils.waitForCondition(() -> {
-                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Collections.emptySet())));
+                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
@@ -153,55 +154,55 @@ public class ListStreamsGroupTest {
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
 
             TestUtils.waitForCondition(() -> {
-                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Collections.emptySet())));
+                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of())));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
 
         try (StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "PreparingRebalance"})) {
-            Set<GroupListing> expectedListing = Collections.emptySet();
+            Set<GroupListing> expectedListing = Set.of();
 
             final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
 
             TestUtils.waitForCondition(() -> {
-                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Collections.singleton(GroupState.PREPARING_REBALANCE))));
+                foundListing.set(new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.PREPARING_REBALANCE))));
                 return Objects.equals(expectedListing, foundListing.get());
-            }, "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
+            }, () -> "Expected --list to show streams groups " + expectedListing + ", but found " + foundListing.get() + ".");
         }
     }
 
     @Test
     public void testListStreamsGroupOutput() throws Exception {
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list"),
-            Collections.emptyList(),
-            Set.of(Collections.singletonList(APP_ID))
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list"),
+            List.of(),
+            Set.of(List.of(APP_ID))
         );
 
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"),
-            Arrays.asList("GROUP", "STATE"),
-            Set.of(Arrays.asList(APP_ID, "Stable"))
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state"),
+            List.of("GROUP", "STATE"),
+            Set.of(List.of(APP_ID, "Stable"))
         );
 
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "Stable"),
-            Arrays.asList("GROUP", "STATE"),
-            Set.of(Arrays.asList(APP_ID, "Stable"))
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "Stable"),
+            List.of("GROUP", "STATE"),
+            Set.of(List.of(APP_ID, "Stable"))
         );
 
         // Check case-insensitivity in state filter.
         validateListOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"),
-            Arrays.asList("GROUP", "STATE"),
-            Set.of(Arrays.asList(APP_ID, "Stable"))
+            List.of("--bootstrap-server", cluster.bootstrapServers(), "--list", "--state", "stable"),
+            List.of("GROUP", "STATE"),
+            Set.of(List.of(APP_ID, "Stable"))
         );
     }
 
     private static Topology topology() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.String(), Serdes.String()))
-            .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .flatMapValues(value -> List.of(value.toLowerCase(Locale.getDefault()).split("\\W+")))
             .groupBy((key, value) -> value)
             .count()
             .toStream().to(OUTPUT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
@@ -212,7 +213,7 @@ public class ListStreamsGroupTest {
         StreamsGroupCommandOptions opts = StreamsGroupCommandOptions.fromArgs(args);
         return new StreamsGroupCommand.StreamsGroupService(
             opts,
-            Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
+            Map.of(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );
     }
 
@@ -223,19 +224,19 @@ public class ListStreamsGroupTest {
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
+            String output = ToolsTestUtils.grabConsoleOutput(() -> assertEquals(0, StreamsGroupCommand.execute(args.toArray(new String[0]))));
             out.set(output);
 
             String[] lines = output.split("\n");
             if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
             if (!expectedHeader.isEmpty() && lines.length > 0) {
-                List<String> header = Arrays.asList(lines[0].split("\\s+"));
+                List<String> header = List.of(lines[0].split("\\s+"));
                 if (!expectedHeader.equals(header)) return false;
             }
 
             Set<List<String>> groups = Arrays.stream(lines, expectedHeader.isEmpty() ? 0 : 1, lines.length)
-                .map(line -> Arrays.asList(line.split("\\s+")))
+                .map(line -> List.of(line.split("\\s+")))
                 .collect(Collectors.toSet());
             return expectedRows.equals(groups);
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));

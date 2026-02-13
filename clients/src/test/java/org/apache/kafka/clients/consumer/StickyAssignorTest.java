@@ -313,6 +313,7 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
+    @SuppressWarnings("removal")
     @ParameterizedTest(name = TEST_NAME_WITH_RACK_CONFIG)
     @EnumSource(RackConfig.class)
     public void testMemberDataWithInconsistentData(RackConfig rackConfig) {

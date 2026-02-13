@@ -20,7 +20,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.GroupMetadataManager;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.modern.consumer.TopicRegexResolver;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -118,13 +119,15 @@ public class RegexResolutionBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void run() {
-        GroupMetadataManager.refreshRegularExpressions(
+        TopicRegexResolver resolver = new TopicRegexResolver(
+            Optional::empty,
+            TIME
+        );
+        resolver.resolveRegularExpressions(
             null,
             GROUP_ID,
             LOG,
-            TIME,
-            image,
-            Optional.empty(),
+            new KRaftCoordinatorMetadataImage(image),
             regexes
         );
     }

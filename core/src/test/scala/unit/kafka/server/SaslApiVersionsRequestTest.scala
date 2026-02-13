@@ -35,7 +35,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestBeforeSaslHandshakeRequest(): Unit = {
-    val socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
+    val socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
     try {
       val apiVersionsResponse = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
         new ApiVersionsRequest.Builder().build(0), socket)
@@ -56,7 +56,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestAfterSaslHandshakeRequest(): Unit = {
-    val socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
+    val socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
     try {
       sendSaslHandshakeRequestValidateResponse(socket)
       val response = IntegrationTestUtils.sendAndReceive[ApiVersionsResponse](
@@ -72,7 +72,7 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
     controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT
   )
   def testApiVersionsRequestWithUnsupportedVersion(): Unit = {
-    val socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
+    val socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
     try {
       val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0)
       val apiVersionsResponse = sendUnsupportedApiVersionRequest(apiVersionsRequest)

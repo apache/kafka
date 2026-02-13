@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -31,7 +32,6 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
-import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -136,8 +136,8 @@ public class ShareGroupAssignorBenchmark {
     private void setupTopics() {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
-        MetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
-        topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
+        CoordinatorMetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
+        topicResolver = new TopicIds.CachedTopicResolver(metadataImage);
 
         subscribedTopicDescriber = new SubscribedTopicDescriberImpl(metadataImage);
     }

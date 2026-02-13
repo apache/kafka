@@ -152,7 +152,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
     @BeforeEach
     public void startClusters() throws Exception {
-        startClusters(new HashMap<String, String>() {{
+        startClusters(new HashMap<>() {{
                 put("topics", "test-topic-.*, primary.test-topic-.*, backup.test-topic-.*");
             }});
     }
@@ -491,7 +491,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         produceMessages(primaryProducer, "test-topic-1");
         String backupTopic1 = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
         String consumerGroupName = "consumer-group-testOneWayReplicationWithAutoOffsetSync";
-        Map<String, Object> consumerProps  = new HashMap<String, Object>() {{
+        Map<String, Object> consumerProps  = new HashMap<>() {{
                 put("group.id", consumerGroupName);
                 put("auto.offset.reset", "earliest");
             }};

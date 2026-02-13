@@ -25,8 +25,8 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -364,7 +364,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(new Bytes("existingKey".getBytes(UTF_8)), "existingValue".getBytes(UTF_8));
-        rocksDBStore.flush();
+        rocksDBStore.commit(Map.of());
 
         final List<KeyValue<byte[], byte[]>> restoreBytes = new ArrayList<>();
 
@@ -427,7 +427,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(Map.of());
 
         assertEquals(
             "a",
@@ -486,7 +486,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(Map.of());
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("prefix", stringSerializer)) {
             final List<String> valuesWithPrefix = new ArrayList<>();
@@ -521,7 +521,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(Map.of());
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = rocksDBStore.prefixScan("abcd", stringSerializer)) {
             int numberOfKeysReturned = 0;
@@ -619,7 +619,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(Map.of());
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan(prefix, stringSerializer)) {
             final List<String> valuesWithPrefix = new ArrayList<>();
@@ -654,7 +654,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             stringSerializer.serialize(null, "e")));
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.putAll(entries);
-        rocksDBStore.flush();
+        rocksDBStore.commit(Map.of());
 
         try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = rocksDBStore.prefixScan("d", stringSerializer)) {
             int numberOfKeysReturned = 0;
@@ -868,7 +868,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         rocksDBStore.put(
             new Bytes(stringSerializer.serialize(null, "anyKey")),
             stringSerializer.serialize(null, "anyValue"));
-        assertThrows(ProcessorStateException.class, () -> rocksDBStore.flush());
+        assertThrows(ProcessorStateException.class, () -> rocksDBStore.commit(Map.of()));
     }
 
     @Test
@@ -923,7 +923,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
+            new StreamsMetricsImpl(metrics, "test-application", time);
 
         context = mock(InternalMockProcessorContext.class);
         when(context.metrics()).thenReturn(streamsMetrics);
@@ -956,7 +956,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
+            new StreamsMetricsImpl(metrics, "test-application", time);
 
         context = mock(InternalMockProcessorContext.class);
         when(context.metrics()).thenReturn(streamsMetrics);
@@ -988,7 +988,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", "processId", time);
+            new StreamsMetricsImpl(metrics, "test-application", time);
 
         final Properties props = StreamsTestUtils.getStreamsConfig();
         context = mock(InternalMockProcessorContext.class);

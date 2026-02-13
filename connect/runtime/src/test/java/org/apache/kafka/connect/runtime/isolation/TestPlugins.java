@@ -298,7 +298,7 @@ public class TestPlugins {
                 if (pluginJars.containsKey(testPackage)) {
                     log.debug("Skipping recompilation of {}", testPackage.resourceDir());
                 }
-                pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses(), Collections.emptyMap()));
+                pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses(), Map.of()));
             }
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
@@ -372,7 +372,7 @@ public class TestPlugins {
                 .filter(Objects::nonNull)
                 .map(TestPlugin::className)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
@@ -458,11 +458,11 @@ public class TestPlugins {
                     .map(Path::toFile)
                     .filter(file -> file.getName().endsWith(".java"))
                     .map(file -> replacements.isEmpty() ? file : copyAndReplace(file, replacements))
-                    .collect(Collectors.toList());
+                    .toList();
         }
 
         StringWriter writer = new StringWriter();
-        List<String> options = Arrays.asList(
+        List<String> options = List.of(
             "-d", binDir.toString() // Write class output to a different directory.
         );
         try (StandardJavaFileManager fileManager = compiler.getStandardFileManager(null, null, null)) {

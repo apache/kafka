@@ -18,55 +18,71 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class ShareInFlightBatch<K, V> {
     private final int nodeId;
-    final TopicIdPartition partition;
+    private final TopicIdPartition partition;
     private final Map<Long, ConsumerRecord<K, V>> inFlightRecords;
+    private Map<Long, ConsumerRecord<K, V>> renewingRecords;
+    private Map<Long, ConsumerRecord<K, V>> renewedRecords;
     private final Set<Long> acknowledgedRecords;
     private Acknowledgements acknowledgements;
-    private KafkaException exception;
+    private final Optional<Integer> acquisitionLockTimeoutMs;
+    private ShareInFlightBatchException exception;
     private boolean hasCachedException = false;
+    private boolean checkForRenewAcknowledgements = false;
 
-    public ShareInFlightBatch(int nodeId, TopicIdPartition partition) {
+    public ShareInFlightBatch(int nodeId, TopicIdPartition partition, Optional<Integer> acquisitionLockTimeoutMs) {
         this.nodeId = nodeId;
         this.partition = partition;
-        inFlightRecords = new TreeMap<>();
-        acknowledgedRecords = new TreeSet<>();
-        acknowledgements = Acknowledgements.empty();
+        this.inFlightRecords = new TreeMap<>();
+        this.acknowledgedRecords = new TreeSet<>();
+        this.acknowledgements = Acknowledgements.empty();
+        this.acquisitionLockTimeoutMs = acquisitionLockTimeoutMs;
     }
 
-    public void addAcknowledgement(long offset, AcknowledgeType acknowledgeType) {
-        acknowledgements.add(offset, acknowledgeType);
+    public void addAcknowledgement(long offset, AcknowledgeType type) {
+        acknowledgements.add(offset, type);
+        if (type == AcknowledgeType.RENEW) {
+            checkForRenewAcknowledgements = true;
+        }
     }
 
     public void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type) {
         if (inFlightRecords.get(record.offset()) != null) {
             acknowledgements.add(record.offset(), type);
             acknowledgedRecords.add(record.offset());
+            if (type == AcknowledgeType.RENEW) {
+                checkForRenewAcknowledgements = true;
+            }
             return;
         }
         throw new IllegalStateException("The record cannot be acknowledged.");
     }
 
-    public int acknowledgeAll(AcknowledgeType type) {
-        int recordsAcknowledged = 0;
+    public void acknowledgeAll(AcknowledgeType type) {
         for (Map.Entry<Long, ConsumerRecord<K, V>> entry : inFlightRecords.entrySet()) {
             if (acknowledgements.addIfAbsent(entry.getKey(), type)) {
                 acknowledgedRecords.add(entry.getKey());
-                recordsAcknowledged++;
             }
         }
-        return recordsAcknowledged;
+        if (type == AcknowledgeType.RENEW) {
+            checkForRenewAcknowledgements = true;
+        }
+    }
+
+    public boolean checkAllInFlightAreAcknowledged() {
+        return inFlightRecords.size() == acknowledgedRecords.size();
     }
 
     public void addRecord(ConsumerRecord<K, V> record) {
@@ -79,6 +95,9 @@ public class ShareInFlightBatch<K, V> {
 
     public void merge(ShareInFlightBatch<K, V> other) {
         inFlightRecords.putAll(other.inFlightRecords);
+        if (other.checkForRenewAcknowledgements) {
+            checkForRenewAcknowledgements = true;
+        }
     }
 
     List<ConsumerRecord<K, V>> getInFlightRecords() {
@@ -94,6 +113,21 @@ public class ShareInFlightBatch<K, V> {
     }
 
     Acknowledgements takeAcknowledgedRecords() {
+        if (checkForRenewAcknowledgements) {
+            if (renewingRecords == null) {
+                renewingRecords = new HashMap<>();
+            }
+            if (renewedRecords == null) {
+                renewedRecords = new HashMap<>();
+            }
+            Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
+            acknowledgedRecords.forEach(offset -> {
+                if (ackTypeMap.get(offset) == AcknowledgeType.RENEW) {
+                    renewingRecords.put(offset, inFlightRecords.get(offset));
+                }
+            });
+        }
+
         // Usually, all records will be acknowledged, so we can just clear the in-flight records leaving
         // an empty batch, which will trigger more fetching
         if (acknowledgedRecords.size() == inFlightRecords.size()) {
@@ -102,25 +136,70 @@ public class ShareInFlightBatch<K, V> {
             acknowledgedRecords.forEach(inFlightRecords::remove);
         }
         acknowledgedRecords.clear();
+        exception = null;
 
         Acknowledgements currentAcknowledgements = acknowledgements;
         acknowledgements = Acknowledgements.empty();
+        checkForRenewAcknowledgements = false;
         return currentAcknowledgements;
+    }
+
+    int renew(Acknowledgements acknowledgements) {
+        int recordsRenewed = 0;
+        boolean isCompletedExceptionally = acknowledgements.isCompletedExceptionally();
+        if (acknowledgements.isCompleted()) {
+            if (renewingRecords != null) {
+                Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
+                for (Map.Entry<Long, AcknowledgeType> ackTypeEntry : ackTypeMap.entrySet()) {
+                    long offset = ackTypeEntry.getKey();
+                    AcknowledgeType ackType = ackTypeEntry.getValue();
+                    ConsumerRecord<K, V> record = renewingRecords.remove(offset);
+                    if (ackType == AcknowledgeType.RENEW) {
+                        if (record != null && !isCompletedExceptionally) {
+                            // The record is moved into renewed state, and will then become in-flight later.
+                            renewedRecords.put(offset, record);
+                            recordsRenewed++;
+                        }
+                    }
+                }
+            }
+        } else {
+            throw new IllegalStateException("Renewing with uncompleted acknowledgements");
+        }
+        return recordsRenewed;
+    }
+
+    boolean hasRenewals() {
+        if (renewingRecords == null) {
+            return false;
+        }
+        return !renewingRecords.isEmpty() || !renewedRecords.isEmpty();
+    }
+
+    void takeRenewals() {
+        if (renewedRecords != null) {
+            inFlightRecords.putAll(renewedRecords);
+            renewedRecords.clear();
+        }
     }
 
     Acknowledgements getAcknowledgements() {
         return acknowledgements;
     }
 
+    Optional<Integer> getAcquisitionLockTimeoutMs() {
+        return acquisitionLockTimeoutMs;
+    }
+
     public boolean isEmpty() {
         return inFlightRecords.isEmpty() && acknowledgements.isEmpty();
     }
 
-    public void setException(KafkaException exception) {
+    public void setException(ShareInFlightBatchException exception) {
         this.exception = exception;
     }
 
-    public KafkaException getException() {
+    public ShareInFlightBatchException getException() {
         return exception;
     }
 

@@ -184,9 +184,8 @@ public class ProducerSendWhileDeletionTest {
             try (var producer = createProducer()) {
                 for (int i = 1; i <= numRecords; i++) {
                     producer.send(new ProducerRecord<>(topic, null, ("value" + i).getBytes()),
-                            (metadata, exception) -> {
-                                numAcks.incrementAndGet();
-                            });
+                            (metadata, exception) -> numAcks.incrementAndGet()
+                    );
                 }
                 producer.flush();
             }

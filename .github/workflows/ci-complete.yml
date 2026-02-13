@@ -43,8 +43,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Make sure these match build.yml
-        java: [ 23, 17 ]
+        # Make sure these match build.yml and also keep in mind that GitHub Actions build will always use this file from the trunk branch.
+        java: [ 25, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
         exclude:
@@ -61,7 +61,7 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials:
             false
@@ -72,7 +72,7 @@ jobs:
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Download build scan archive
         id: download-build-scan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         continue-on-error: true  # Don't want this step to fail the overall workflow
         with:
           github-token: ${{ github.token }}
@@ -89,7 +89,7 @@ jobs:
           url: '${{ github.event.workflow_run.html_url }}'
           description: 'Could not find build scan'
           context: Gradle Build Scan / ${{ env.status-context }}
-          state: 'error'
+          state: 'success' # Always mark as successful as a temporary fix; non-trunk branches will miss build scan. Real fix in KAFKA-19768
       - name: Publish Scan
         id: publish-build-scan
         if: ${{ steps.download-build-scan.outcome == 'success' }}

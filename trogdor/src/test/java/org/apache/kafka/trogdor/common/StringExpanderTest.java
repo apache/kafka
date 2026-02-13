@@ -20,7 +20,6 @@ package org.apache.kafka.trogdor.common;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,9 +29,9 @@ public class StringExpanderTest {
 
     @Test
     public void testNoExpansionNeeded() {
-        assertEquals(Collections.singleton("foo"), StringExpander.expand("foo"));
-        assertEquals(Collections.singleton("bar"), StringExpander.expand("bar"));
-        assertEquals(Collections.singleton(""), StringExpander.expand(""));
+        assertEquals(Set.of("foo"), StringExpander.expand("foo"));
+        assertEquals(Set.of("bar"), StringExpander.expand("bar"));
+        assertEquals(Set.of(""), StringExpander.expand(""));
     }
 
     @Test

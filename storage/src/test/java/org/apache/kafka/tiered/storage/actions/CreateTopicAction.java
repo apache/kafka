@@ -38,11 +38,11 @@ public final class CreateTopicAction implements TieredStorageTestAction {
     public void doExecute(TieredStorageTestContext context) throws ExecutionException, InterruptedException {
         boolean enableRemoteStorage = true;
         Map<String, String> topicConfigs = createTopicConfigForRemoteStorage(
-                enableRemoteStorage, spec.getMaxBatchCountPerSegment());
-        topicConfigs.putAll(spec.getProperties());
+                enableRemoteStorage, spec.maxBatchCountPerSegment());
+        topicConfigs.putAll(spec.properties());
 
-        spec.getProperties().clear();
-        spec.getProperties().putAll(topicConfigs);
+        spec.properties().clear();
+        spec.properties().putAll(topicConfigs);
         context.createTopic(spec);
     }
 

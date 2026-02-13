@@ -119,6 +119,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final CommitRequestManager commitRequestManager,
+                                 final PositionsValidator positionsValidator,
                                  final LogContext logContext) {
         requireNonNull(subscriptionState);
         requireNonNull(metadata);
@@ -140,7 +141,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
         this.offsetFetcherUtils = new OffsetFetcherUtils(logContext, metadata, subscriptionState,
-                time, retryBackoffMs, apiVersions);
+                time, retryBackoffMs, apiVersions, positionsValidator);
         // Register the cluster metadata update callback. Note this only relies on the
         // requestsToRetry initialized above, and won't be invoked until all managers are
         // initialized and the network thread started.
@@ -231,8 +232,8 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * on {@link SubscriptionState#hasAllFetchPositions()}). It will complete immediately, with true, if all positions
      * are already available. If some positions are missing, the future will complete once the offsets are retrieved and positions are updated.
      */
-    public CompletableFuture<Boolean> updateFetchPositions(long deadlineMs) {
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
+    public CompletableFuture<Void> updateFetchPositions(long deadlineMs) {
+        CompletableFuture<Void> result = new CompletableFuture<>();
 
         try {
             if (maybeCompleteWithPreviousException(result)) {
@@ -243,7 +244,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
 
             if (subscriptionState.hasAllFetchPositions()) {
                 // All positions are already available
-                result.complete(true);
+                result.complete(null);
                 return result;
             }
 
@@ -252,7 +253,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
                 if (error != null) {
                     result.completeExceptionally(error);
                 } else {
-                    result.complete(subscriptionState.hasAllFetchPositions());
+                    result.complete(null);
                 }
             });
 
@@ -262,7 +263,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
         return result;
     }
 
-    private boolean maybeCompleteWithPreviousException(CompletableFuture<Boolean> result) {
+    private boolean maybeCompleteWithPreviousException(CompletableFuture<Void> result) {
         Throwable cachedException = cachedUpdatePositionsException.getAndSet(null);
         if (cachedException != null) {
             result.completeExceptionally(cachedException);
@@ -501,7 +502,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * next call to this function.
      */
     void validatePositionsIfNeeded() {
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = offsetFetcherUtils.getPartitionsToValidate();
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = offsetFetcherUtils.refreshAndGetPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
             return;
         }

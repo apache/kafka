@@ -305,6 +305,101 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
+     * Takes the current currentAssignment and the targetAssignment, and generates three
+     * collections:
+     *
+     * - the resultAssignedTasks: the tasks that are assigned in both the current and target
+     * assignments.
+     * - the resultTasksPendingRevocation: the tasks that are assigned in the current
+     * assignment but not in the target assignment.
+     * - the resultTasksPendingAssignment: the tasks that are assigned in the target assignment but
+     * not in the current assignment, and can be assigned currently (i.e., they are not owned by
+     * another member, as defined by the `isUnreleasedTask` predicate).
+     *
+     * Epoch Handling:
+     * - For tasks in resultAssignedTasks and resultTasksPendingRevocation, the epoch from currentAssignment is preserved.
+     * - For tasks in resultTasksPendingAssignment, the targetAssignmentEpoch is used.
+     */
+    private boolean computeAssignmentDifferenceWithEpoch(Map<String, Map<Integer, Integer>> currentAssignment,
+                                                         Map<String, Set<Integer>> targetAssignment,
+                                                         int targetAssignmentEpoch,
+                                                         Map<String, Map<Integer, Integer>> resultAssignedTasks,
+                                                         Map<String, Map<Integer, Integer>> resultTasksPendingRevocation,
+                                                         Map<String, Map<Integer, Integer>> resultTasksPendingAssignment,
+                                                         BiPredicate<String, Integer> isUnreleasedTask) {
+        boolean hasUnreleasedTasks = false;
+
+        Set<String> allSubtopologyIds = new HashSet<>(targetAssignment.keySet());
+        allSubtopologyIds.addAll(currentAssignment.keySet());
+
+        for (String subtopologyId : allSubtopologyIds) {
+            hasUnreleasedTasks |= computeAssignmentDifferenceForOneSubtopologyWithEpoch(
+                subtopologyId,
+                currentAssignment.getOrDefault(subtopologyId, Map.of()),
+                targetAssignment.getOrDefault(subtopologyId, Set.of()),
+                targetAssignmentEpoch,
+                resultAssignedTasks,
+                resultTasksPendingRevocation,
+                resultTasksPendingAssignment,
+                isUnreleasedTask
+            );
+        }
+        return hasUnreleasedTasks;
+    }
+
+    private static boolean computeAssignmentDifferenceForOneSubtopologyWithEpoch(final String subtopologyId,
+                                                                                 final Map<Integer, Integer> currentTasksForThisSubtopology,
+                                                                                 final Set<Integer> targetTasksForThisSubtopology,
+                                                                                 final int targetAssignmentEpoch,
+                                                                                 final Map<String, Map<Integer, Integer>> resultAssignedTasks,
+                                                                                 final Map<String, Map<Integer, Integer>> resultTasksPendingRevocation,
+                                                                                 final Map<String, Map<Integer, Integer>> resultTasksPendingAssignment,
+                                                                                 final BiPredicate<String, Integer> isUnreleasedTask) {
+        // Result Assigned Tasks = Current Tasks ∩ Target Tasks
+        // i.e. we remove all tasks from the current assignment that are not in the target
+        //         assignment
+        Map<Integer, Integer> resultAssignedTasksForThisSubtopology = new HashMap<>();
+        for (Map.Entry<Integer, Integer> entry : currentTasksForThisSubtopology.entrySet()) {
+            if (targetTasksForThisSubtopology.contains(entry.getKey())) {
+                resultAssignedTasksForThisSubtopology.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        // Result Tasks Pending Revocation = Current Tasks - Result Assigned Tasks
+        // i.e. we will ask the member to revoke all tasks in its current assignment that
+        //      are not in the target assignment
+        Map<Integer, Integer> resultTasksPendingRevocationForThisSubtopology = new HashMap<>(currentTasksForThisSubtopology);
+        resultTasksPendingRevocationForThisSubtopology.keySet().removeAll(resultAssignedTasksForThisSubtopology.keySet());
+
+        // Result Tasks Pending Assignment = Target Tasks - Result Assigned Tasks - Unreleased Tasks
+        // i.e. we will ask the member to assign all tasks in its target assignment,
+        //      except those that are already assigned, and those that are unreleased
+        Map<Integer, Integer> resultTasksPendingAssignmentForThisSubtopology = new HashMap<>();
+        for (Integer taskId : targetTasksForThisSubtopology) {
+            if (!resultAssignedTasksForThisSubtopology.containsKey(taskId)) {
+                resultTasksPendingAssignmentForThisSubtopology.put(taskId, targetAssignmentEpoch);
+            }
+        }
+        boolean hasUnreleasedTasks = resultTasksPendingAssignmentForThisSubtopology.keySet().removeIf(taskId ->
+            isUnreleasedTask.test(subtopologyId, taskId)
+        );
+
+        if (!resultAssignedTasksForThisSubtopology.isEmpty()) {
+            resultAssignedTasks.put(subtopologyId, resultAssignedTasksForThisSubtopology);
+        }
+
+        if (!resultTasksPendingRevocationForThisSubtopology.isEmpty()) {
+            resultTasksPendingRevocation.put(subtopologyId, resultTasksPendingRevocationForThisSubtopology);
+        }
+
+        if (!resultTasksPendingAssignmentForThisSubtopology.isEmpty()) {
+            resultTasksPendingAssignment.put(subtopologyId, resultTasksPendingAssignmentForThisSubtopology);
+        }
+
+        return hasUnreleasedTasks;
+    }
+
+    /**
      * Computes the next assignment.
      *
      * @param memberEpoch         The epoch of the member to use. This may be different from
@@ -313,10 +408,10 @@ public class CurrentAssignmentBuilder {
      * @return A new StreamsGroupMember.
      */
     private StreamsGroupMember computeNextAssignment(int memberEpoch,
-                                                     TasksTuple memberAssignedTasks) {
-        Map<String, Set<Integer>> newActiveAssignedTasks = new HashMap<>();
-        Map<String, Set<Integer>> newActiveTasksPendingRevocation = new HashMap<>();
-        Map<String, Set<Integer>> newActiveTasksPendingAssignment = new HashMap<>();
+                                                     TasksTupleWithEpochs memberAssignedTasks) {
+        Map<String, Map<Integer, Integer>> newActiveAssignedTasks = new HashMap<>();
+        Map<String, Map<Integer, Integer>> newActiveTasksPendingRevocation = new HashMap<>();
+        Map<String, Map<Integer, Integer>> newActiveTasksPendingAssignment = new HashMap<>();
         Map<String, Set<Integer>> newStandbyAssignedTasks = new HashMap<>();
         Map<String, Set<Integer>> newStandbyTasksPendingRevocation = new HashMap<>();
         Map<String, Set<Integer>> newStandbyTasksPendingAssignment = new HashMap<>();
@@ -324,9 +419,10 @@ public class CurrentAssignmentBuilder {
         Map<String, Set<Integer>> newWarmupTasksPendingRevocation = new HashMap<>();
         Map<String, Set<Integer>> newWarmupTasksPendingAssignment = new HashMap<>();
 
-        boolean hasUnreleasedActiveTasks = computeAssignmentDifference(
-            memberAssignedTasks.activeTasks(),
+        boolean hasUnreleasedActiveTasks = computeAssignmentDifferenceWithEpoch(
+            memberAssignedTasks.activeTasksWithEpochs(),
             targetAssignment.activeTasks(),
+            targetAssignmentEpoch,
             newActiveAssignedTasks,
             newActiveTasksPendingRevocation,
             newActiveTasksPendingAssignment,
@@ -370,17 +466,17 @@ public class CurrentAssignmentBuilder {
 
         return buildNewMember(
             memberEpoch,
-            new TasksTuple(
+            new TasksTupleWithEpochs(
                 newActiveTasksPendingRevocation,
                 newStandbyTasksPendingRevocation,
                 newWarmupTasksPendingRevocation
             ),
-            new TasksTuple(
+            new TasksTupleWithEpochs(
                 newActiveAssignedTasks,
                 newStandbyAssignedTasks,
                 newWarmupAssignedTasks
             ),
-            new TasksTuple(
+            new TasksTupleWithEpochs(
                 newActiveTasksPendingAssignment,
                 newStandbyTasksPendingAssignment,
                 newWarmupTasksPendingAssignment
@@ -390,9 +486,9 @@ public class CurrentAssignmentBuilder {
     }
 
     private StreamsGroupMember buildNewMember(final int memberEpoch,
-                                              final TasksTuple newTasksPendingRevocation,
-                                              final TasksTuple newAssignedTasks,
-                                              final TasksTuple newTasksPendingAssignment,
+                                              final TasksTupleWithEpochs newTasksPendingRevocation,
+                                              final TasksTupleWithEpochs newAssignedTasks,
+                                              final TasksTupleWithEpochs newTasksPendingAssignment,
                                               final boolean hasUnreleasedTasks) {
 
         final boolean hasTasksToBeRevoked =
@@ -424,7 +520,7 @@ public class CurrentAssignmentBuilder {
                 .setState(newState)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks.merge(newTasksPendingAssignment))
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build();
         } else if (hasUnreleasedTasks) {
             // If there are no tasks to be revoked nor to be assigned but some
@@ -434,7 +530,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.UNRELEASED_TASKS)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -443,7 +539,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.STABLE)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedTasks(newAssignedTasks)
-                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTupleWithEpochs.EMPTY)
                 .build();
         }
     }

@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -185,13 +186,29 @@ public class AdminClientTestUtils {
         return new ListConfigResourcesResult(future);
     }
 
-    public static ListShareGroupOffsetsResult createListShareGroupOffsetsResult(Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> groupOffsets) {
-        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> coordinatorFutures = groupOffsets.entrySet().stream()
+    public static ListShareGroupOffsetsResult createListShareGroupOffsetsResult(Map<String, KafkaFuture<Map<TopicPartition, SharePartitionOffsetInfo>>> groupOffsets) {
+        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, SharePartitionOffsetInfo>>> coordinatorFutures = groupOffsets.entrySet().stream()
             .collect(Collectors.toMap(
                 entry -> CoordinatorKey.byGroupId(entry.getKey()),
                 Map.Entry::getValue
             ));
         return new ListShareGroupOffsetsResult(coordinatorFutures);
+    }
+
+    public static ListOffsetsResult createListOffsetsResult(Map<TopicPartition, OffsetAndMetadata> partitionOffsets) {
+        Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures =
+            partitionOffsets.entrySet().stream()
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    entry -> KafkaFuture.completedFuture(
+                        new ListOffsetsResult.ListOffsetsResultInfo(
+                            entry.getValue().offset(),
+                            System.currentTimeMillis(),
+                            Optional.of(1)
+                        )
+                    )
+                ));
+        return new ListOffsetsResult(futures);
     }
 
     /**

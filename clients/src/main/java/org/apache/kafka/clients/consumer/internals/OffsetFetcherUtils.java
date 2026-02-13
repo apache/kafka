@@ -47,10 +47,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -62,22 +60,15 @@ class OffsetFetcherUtils {
     private final Time time;
     private final long retryBackoffMs;
     private final ApiVersions apiVersions;
+    private final PositionsValidator positionsValidator;
     private final Logger log;
 
-    /**
-     * Exception that occurred while validating positions, that will be propagated on the next
-     * call to validate positions. This could be an error received in the
-     * OffsetsForLeaderEpoch response, or a LogTruncationException detected when using a
-     * successful response to validate the positions. It will be cleared when thrown.
-     */
-    private final AtomicReference<RuntimeException> cachedValidatePositionsException = new AtomicReference<>();
     /**
      * Exception that occurred while resetting positions, that will be propagated on the next
      * call to reset positions. This will have the error received in the response to the
      * ListOffsets request. It will be cleared when thrown on the next call to reset.
      */
     private final AtomicReference<RuntimeException> cachedResetPositionsException = new AtomicReference<>();
-    private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
 
     OffsetFetcherUtils(LogContext logContext,
                        ConsumerMetadata metadata,
@@ -85,12 +76,25 @@ class OffsetFetcherUtils {
                        Time time,
                        long retryBackoffMs,
                        ApiVersions apiVersions) {
+        this(logContext, metadata, subscriptionState,
+            time, retryBackoffMs, apiVersions,
+            new PositionsValidator(logContext, time, subscriptionState, metadata));
+    }
+
+    OffsetFetcherUtils(LogContext logContext,
+                       ConsumerMetadata metadata,
+                       SubscriptionState subscriptionState,
+                       Time time,
+                       long retryBackoffMs,
+                       ApiVersions apiVersions,
+                       PositionsValidator positionsValidator) {
         this.log = logContext.logger(getClass());
         this.metadata = metadata;
         this.subscriptionState = subscriptionState;
         this.time = time;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
+        this.positionsValidator = positionsValidator;
     }
 
     /**
@@ -168,27 +172,8 @@ class OffsetFetcherUtils {
                         Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
-    Map<TopicPartition, SubscriptionState.FetchPosition> getPartitionsToValidate() {
-        RuntimeException exception = cachedValidatePositionsException.getAndSet(null);
-        if (exception != null)
-            throw exception;
-
-        // Validate each partition against the current leader and epoch
-        // If we see a new metadata version, check all partitions
-        validatePositionsOnMetadataChange();
-
-        // Collect positions needing validation, with backoff
-        return subscriptionState
-                .partitionsNeedingValidation(time.milliseconds())
-                .stream()
-                .filter(tp -> subscriptionState.position(tp) != null)
-                .collect(Collectors.toMap(Function.identity(), subscriptionState::position));
-    }
-
-    void maybeSetValidatePositionsException(RuntimeException e) {
-        if (!cachedValidatePositionsException.compareAndSet(null, e)) {
-            log.error("Discarding error validating positions because another error is pending", e);
-        }
+    Map<TopicPartition, SubscriptionState.FetchPosition> refreshAndGetPartitionsToValidate() {
+        return positionsValidator.refreshAndGetPartitionsToValidate(apiVersions);
     }
 
     /**
@@ -196,13 +181,7 @@ class OffsetFetcherUtils {
      * we should check that all the assignments have a valid position.
      */
     void validatePositionsOnMetadataChange() {
-        int newMetadataUpdateVersion = metadata.updateVersion();
-        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
-            subscriptionState.assignedPartitions().forEach(topicPartition -> {
-                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
-                subscriptionState.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
-            });
-        }
+        positionsValidator.validatePositionsOnMetadataChange(apiVersions);
     }
 
     /**
@@ -357,7 +336,7 @@ class OffsetFetcherUtils {
         });
 
         if (!truncations.isEmpty()) {
-            maybeSetValidatePositionsException(buildLogTruncationException(truncations));
+            positionsValidator.maybeSetError(buildLogTruncationException(truncations));
         }
     }
 
@@ -367,7 +346,7 @@ class OffsetFetcherUtils {
         metadata.requestUpdate(false);
 
         if (!(error instanceof RetriableException)) {
-            maybeSetValidatePositionsException(error);
+            positionsValidator.maybeSetError(error);
         }
     }
 

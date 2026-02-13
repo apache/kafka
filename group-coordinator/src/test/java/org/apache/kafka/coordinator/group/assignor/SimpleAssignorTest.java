@@ -17,7 +17,9 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -70,7 +72,7 @@ public class SimpleAssignorTest {
     @Test
     public void testAssignWithEmptyMembers() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            MetadataImage.EMPTY
+            CoordinatorMetadataImage.EMPTY
         );
 
         GroupSpec groupSpec = new GroupSpecImpl(
@@ -104,7 +106,7 @@ public class SimpleAssignorTest {
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -137,7 +139,7 @@ public class SimpleAssignorTest {
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, 3)
             .build();
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
@@ -193,7 +195,7 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -243,7 +245,7 @@ public class SimpleAssignorTest {
             )
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -291,7 +293,7 @@ public class SimpleAssignorTest {
         );
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -345,7 +347,7 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -408,7 +410,7 @@ public class SimpleAssignorTest {
         );
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -470,7 +472,7 @@ public class SimpleAssignorTest {
         );
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -524,7 +526,7 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         GroupAssignment computedAssignment = assignor.assign(
@@ -553,7 +555,7 @@ public class SimpleAssignorTest {
             .build();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Set<Uuid> topicsSubscription = new LinkedHashSet<>();
@@ -600,7 +602,7 @@ public class SimpleAssignorTest {
             .build();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            metadataImage
+            new KRaftCoordinatorMetadataImage(metadataImage)
         );
 
         Set<Uuid> topicsSubscription = new LinkedHashSet<>();
@@ -705,7 +707,7 @@ public class SimpleAssignorTest {
             Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata1 = new SubscribedTopicDescriberImpl(
-            metadataImage1
+            new KRaftCoordinatorMetadataImage(metadataImage1)
         );
 
         GroupAssignment computedAssignment1 = assignor.assign(
@@ -759,7 +761,7 @@ public class SimpleAssignorTest {
         );
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata2 = new SubscribedTopicDescriberImpl(
-            metadataImage2
+            new KRaftCoordinatorMetadataImage(metadataImage2)
         );
 
         GroupAssignment computedAssignment2 = assignor.assign(
@@ -775,11 +777,11 @@ public class SimpleAssignorTest {
         final int numPartitions = 24;
         final int numMembers = 101;
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, numPartitions / 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, numPartitions / 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, numPartitions / 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage
@@ -843,11 +845,11 @@ public class SimpleAssignorTest {
         final int numPartitions = 24;
         final int numMembers = 101;
 
-        MetadataImage metadataImage = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(TOPIC_1_UUID, TOPIC_1_NAME, numPartitions / 2)
             .addTopic(TOPIC_2_UUID, TOPIC_2_NAME, numPartitions / 3)
             .addTopic(TOPIC_3_UUID, TOPIC_3_NAME, numPartitions / 6)
-            .build();
+            .buildCoordinatorMetadataImage();
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             metadataImage

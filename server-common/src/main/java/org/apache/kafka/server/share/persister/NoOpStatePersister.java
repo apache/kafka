@@ -93,7 +93,8 @@ public class NoOpStatePersister implements Persister {
             resultArgs.add(new TopicData<>(topicData.topicId(), topicData.partitions().stream().
                 map(partitionIdData -> PartitionFactory.newPartitionStateSummaryData(
                     partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.UNINITIALIZED_START_OFFSET,
-                    PartitionFactory.DEFAULT_LEADER_EPOCH, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE))
+                    PartitionFactory.UNINITIALIZED_DELIVERY_COMPLETE_COUNT, PartitionFactory.DEFAULT_LEADER_EPOCH,
+                    PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE))
                 .collect(Collectors.toList())));
         }
         return CompletableFuture.completedFuture(new ReadShareGroupStateSummaryResult.Builder().setTopicsData(resultArgs).build());

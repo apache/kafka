@@ -17,8 +17,8 @@
 package org.apache.kafka.tiered.storage.utils;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.FileLogInputStream;
-import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.internal.FileLogInputStream;
+import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -46,10 +46,10 @@ public final class BrokerLocalStorage {
     private final Time time = Time.SYSTEM;
 
     public BrokerLocalStorage(Integer brokerId,
-                              Set<String> storageDirnames,
+                              Set<String> storageDirNames,
                               Integer storageWaitTimeoutSec) {
         this.brokerId = brokerId;
-        this.brokerStorageDirectories = storageDirnames.stream().map(File::new).collect(Collectors.toSet());
+        this.brokerStorageDirectories = storageDirNames.stream().map(File::new).collect(Collectors.toSet());
         this.storageWaitTimeoutSec = storageWaitTimeoutSec;
     }
 
@@ -220,13 +220,6 @@ public final class BrokerLocalStorage {
                 .toList();
     }
 
-    private static final class OffsetHolder {
-        private final long firstLogFileBaseOffset;
-        private final List<String> partitionFiles;
-
-        public OffsetHolder(long firstLogFileBaseOffset, List<String> partitionFiles) {
-            this.firstLogFileBaseOffset = firstLogFileBaseOffset;
-            this.partitionFiles = partitionFiles;
-        }
+    private record OffsetHolder(long firstLogFileBaseOffset, List<String> partitionFiles) {
     }
 }

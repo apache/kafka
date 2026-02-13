@@ -17,7 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.errors.InvalidOffsetException;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -116,8 +116,8 @@ public class TimeIndexTest {
             @Override
             public TimestampOffset lastEntry() {
                 TimestampOffset superLastEntry = super.lastEntry();
-                long offset = shouldCorruptOffset ? this.baseOffset() - 1 : superLastEntry.offset;
-                long timestamp = shouldCorruptTimestamp ? firstEntry.timestamp - 1 : superLastEntry.timestamp;
+                long offset = shouldCorruptOffset ? this.baseOffset() - 1 : superLastEntry.offset();
+                long timestamp = shouldCorruptTimestamp ? firstEntry.timestamp() - 1 : superLastEntry.timestamp();
                 return new TimestampOffset(timestamp, offset);
             }
             @Override
@@ -193,7 +193,7 @@ public class TimeIndexTest {
     }
 
     private void appendEntries(Integer numEntries) {
-        IntStream.rangeClosed(1, numEntries).forEach(i -> idx.maybeAppend(i * 10, i * 10 + baseOffset));
+        IntStream.rangeClosed(1, numEntries).forEach(i -> idx.maybeAppend(i * 10L, i * 10L + baseOffset));
     }
 
     private File nonExistentTempFile() throws IOException {

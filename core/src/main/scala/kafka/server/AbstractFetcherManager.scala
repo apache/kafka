@@ -30,7 +30,10 @@ import scala.jdk.OptionConverters._
 
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging {
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.server"
+  private val metricsClassName = this.getClass.getSimpleName
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test

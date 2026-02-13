@@ -23,8 +23,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -1350,7 +1350,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
@@ -1386,7 +1386,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
@@ -1425,7 +1425,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
@@ -1466,7 +1466,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
                 dir,
                 Serdes.String(),
                 Serdes.String(),
-                new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
+                new StreamsMetricsImpl(new Metrics(), "mock", new MockTime()),
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),

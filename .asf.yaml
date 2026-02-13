@@ -30,14 +30,14 @@ notifications:
 github:
   collaborators:
     - brandboat
-    - FrankYang0529
-    - gongxuanzhang
+    - chirag-wadhwa5
+    - DL1231
     - m1a2st
     - mingyen066
-    - ShivsundarR
+    - Rancho-7
+    - sjhajharia
     - smjn
     - TaiJuWu
-    - xijiu
     - Yunyung
   enabled_merge_buttons:
     squash: true

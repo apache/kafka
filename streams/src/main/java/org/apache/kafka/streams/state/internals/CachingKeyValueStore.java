@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -452,13 +453,13 @@ public class CachingKeyValueStore
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         validateStoreOpen();
         lock.writeLock().lock();
         try {
             validateStoreOpen();
             internalContext.cache().flush(cacheName);
-            wrapped().flush();
+            wrapped().commit(changelogOffsets);
         } finally {
             lock.writeLock().unlock();
         }

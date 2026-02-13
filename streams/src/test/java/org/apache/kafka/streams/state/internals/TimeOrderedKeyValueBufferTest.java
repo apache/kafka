@@ -47,6 +47,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
@@ -98,7 +99,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     private static MockInternalProcessorContext<?, ?> makeContext() {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock:localhost:9092");
 
         final TaskId taskId = new TaskId(0, 0);
 
@@ -311,7 +312,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldFlush(final String testName, final Function<String, B> bufferSupplier) {
+    public void shouldCommit(final String testName, final Function<String, B> bufferSupplier) {
         setup(testName, bufferSupplier);
         final TimeOrderedKeyValueBuffer<String, String, Change<String>> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext<?, ?> context = makeContext();
@@ -323,8 +324,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         // replace "deleteme" with a tombstone
         buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
 
-        // flush everything to the changelog
-        buffer.flush();
+        // commit everything to the changelog
+        buffer.commit(Map.of());
 
         // the buffer should serialize the buffer time and the value as byte[],
         // which we can't compare for equality using ProducerRecord.

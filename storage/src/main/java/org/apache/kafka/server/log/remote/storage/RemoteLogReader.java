@@ -51,7 +51,7 @@ public class RemoteLogReader implements Callable<Void> {
         this.rlm = rlm;
         this.brokerTopicStats = brokerTopicStats;
         this.callback = callback;
-        this.brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchRequestRate().mark();
+        this.brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).remoteFetchRequestRate().mark();
         this.brokerTopicStats.allTopicsStats().remoteFetchRequestRate().mark();
         this.quotaManager = quotaManager;
         this.remoteReadTimer = remoteReadTimer;
@@ -61,21 +61,21 @@ public class RemoteLogReader implements Callable<Void> {
     public Void call() {
         RemoteLogReadResult result;
         try {
-            LOGGER.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
+            LOGGER.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicIdPartition());
             FetchDataInfo fetchDataInfo = remoteReadTimer.time(() -> rlm.read(fetchInfo));
-            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+            brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
             brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
         } catch (OffsetOutOfRangeException e) {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         } catch (Exception e) {
-            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).failedRemoteFetchRequestRate().mark();
+            brokerTopicStats.topicStats(fetchInfo.topicIdPartition().topic()).failedRemoteFetchRequestRate().mark();
             brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().mark();
-            LOGGER.error("Error occurred while reading the remote data for {}", fetchInfo.topicPartition, e);
+            LOGGER.error("Error occurred while reading the remote data for {}", fetchInfo.topicIdPartition(), e);
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
-        LOGGER.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
-        quotaManager.record(result.fetchDataInfo.map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
+        LOGGER.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicIdPartition());
+        quotaManager.record(result.fetchDataInfo().map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
         callback.accept(result);
         return null;
     }

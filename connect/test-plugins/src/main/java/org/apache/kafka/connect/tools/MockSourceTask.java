@@ -23,7 +23,6 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -67,7 +66,7 @@ public class MockSourceTask extends SourceTask {
                 throw new RuntimeException();
             }
         }
-        return Collections.emptyList();
+        return List.of();
     }
 
     @Override

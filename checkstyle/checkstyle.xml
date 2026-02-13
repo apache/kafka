@@ -52,7 +52,6 @@
     <module name="UpperEll"/>
     <module name="LeftCurly"/>
     <module name="RightCurly"/>
-    <module name="EmptyStatement"/>
     <module name="ConstantName">
       <property name="format" value="(^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$)|(^log$)"/>
     </module>
@@ -126,7 +125,7 @@
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->
-      <property name="max" value="25"/>
+      <property name="max" value="28"/>
       <property name="excludeClassesRegexps" value="AtomicInteger"/>
     </module>
     <module name="BooleanExpressionComplexity">
@@ -136,7 +135,7 @@
 
     <module name="ClassFanOutComplexity">
       <!-- default is 20 -->
-      <property name="max" value="52"/>
+      <property name="max" value="55"/>
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->

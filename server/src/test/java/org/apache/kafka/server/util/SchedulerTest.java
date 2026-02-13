@@ -177,9 +177,9 @@ public class SchedulerTest {
                 leaderEpochCache,
                 producerStateManager,
                 new ConcurrentHashMap<>(), false).load();
-        LocalLog localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
-                offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel);
-        UnifiedLog log = new UnifiedLog(offsets.logStartOffset,
+        LocalLog localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint(),
+                offsets.nextOffsetMetadata(), scheduler, mockTime, topicPartition, logDirFailureChannel);
+        UnifiedLog log = new UnifiedLog(offsets.logStartOffset(),
                 localLog,
                 brokerTopicStats,
                 producerIdExpirationCheckIntervalMs,

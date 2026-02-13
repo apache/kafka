@@ -19,7 +19,6 @@ package org.apache.kafka.server.share.context;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
@@ -49,7 +48,7 @@ public class ShareSessionContext extends ShareFetchContext {
 
     private static final Logger log = LoggerFactory.getLogger(ShareSessionContext.class);
 
-    private final ShareRequestMetadata reqMetadata;
+    private final int epoch;
     private final boolean isSubsequent;
     private List<TopicIdPartition> shareFetchData;
     private ShareSession session;
@@ -57,12 +56,12 @@ public class ShareSessionContext extends ShareFetchContext {
     /**
      * The share fetch context for the first request that starts a share session.
      *
-     * @param reqMetadata        The request metadata.
+     * @param epoch              The epoch of share session received in the share fetch request.
      * @param shareFetchData     The share partition data from the share fetch request.
      */
-    public ShareSessionContext(ShareRequestMetadata reqMetadata,
+    public ShareSessionContext(int epoch,
                                List<TopicIdPartition> shareFetchData) {
-        this.reqMetadata = reqMetadata;
+        this.epoch = epoch;
         this.shareFetchData = shareFetchData;
         this.isSubsequent = false;
     }
@@ -70,11 +69,11 @@ public class ShareSessionContext extends ShareFetchContext {
     /**
      * The share fetch context for a subsequent request that utilizes an existing share session.
      *
-     * @param reqMetadata  The request metadata.
+     * @param epoch        The epoch of share session received in the share fetch request.
      * @param session      The subsequent fetch request session.
      */
-    public ShareSessionContext(ShareRequestMetadata reqMetadata, ShareSession session) {
-        this.reqMetadata = reqMetadata;
+    public ShareSessionContext(int epoch, ShareSession session) {
+        this.epoch = epoch;
         this.session = session;
         this.isSubsequent = true;
     }
@@ -104,7 +103,7 @@ public class ShareSessionContext extends ShareFetchContext {
         if (!isSubsequent) {
             return ShareFetchResponse.of(Errors.NONE, throttleTimeMs, new LinkedHashMap<>(), List.of(), 0);
         }
-        int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
+        int expectedEpoch = ShareRequestMetadata.nextEpoch(epoch);
         int sessionEpoch;
         synchronized (session) {
             sessionEpoch = session.epoch;
@@ -179,7 +178,7 @@ public class ShareSessionContext extends ShareFetchContext {
         if (!isSubsequent)
             return ShareFetchResponse.sizeOf(version, updates.entrySet().iterator());
         synchronized (session) {
-            int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
+            int expectedEpoch = ShareRequestMetadata.nextEpoch(epoch);
             if (session.epoch != expectedEpoch) {
                 return ShareFetchResponse.sizeOf(version, Collections.emptyIterator());
             }
@@ -189,12 +188,12 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     @Override
-    public ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
+    public ShareFetchResponse updateAndGenerateResponseData(String groupId, String memberId,
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         if (!isSubsequent) {
             return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of(), 0);
         } else {
-            int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
+            int expectedEpoch = ShareRequestMetadata.nextEpoch(epoch);
             int sessionEpoch;
             synchronized (session) {
                 sessionEpoch = session.epoch;

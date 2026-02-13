@@ -23,16 +23,15 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.MemoryRecordsBuilder.RecordsInfo;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordValidationStats;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.AbstractRecords;
+import org.apache.kafka.common.record.internal.CompressionType;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder.RecordsInfo;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -60,32 +59,11 @@ public class LogValidator {
         void recordNoKeyCompactedTopic();
     }
 
-    public static class ValidationResult {
-        public final long logAppendTimeMs;
-        public final MemoryRecords validatedRecords;
-        public final long maxTimestampMs;
-        public final boolean messageSizeMaybeChanged;
-        public final RecordValidationStats recordValidationStats;
-
-        public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                                boolean messageSizeMaybeChanged,
-                                RecordValidationStats recordValidationStats) {
-            this.logAppendTimeMs = logAppendTimeMs;
-            this.validatedRecords = validatedRecords;
-            this.maxTimestampMs = maxTimestampMs;
-            this.messageSizeMaybeChanged = messageSizeMaybeChanged;
-            this.recordValidationStats = recordValidationStats;
-        }
+    public record ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
+                                   boolean messageSizeMaybeChanged, RecordValidationStats recordValidationStats) {
     }
 
-    private static class ApiRecordError {
-        final Errors apiError;
-        final RecordError recordError;
-
-        private ApiRecordError(Errors apiError, RecordError recordError) {
-            this.apiError = apiError;
-            this.recordError = recordError;
-        }
+    private record ApiRecordError(Errors apiError, RecordError recordError) {
     }
 
     private final MemoryRecords records;
@@ -204,7 +182,7 @@ public class LogValidator {
                 Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition,
                     record, recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic,
                     metricsRecorder);
-                recordError.ifPresent(e -> recordErrors.add(e));
+                recordError.ifPresent(recordErrors::add);
                 // we fail the batch if any record fails, so we stop appending if any record fails
                 if (recordErrors.isEmpty())
                     builder.appendWithOffset(offsetCounter.value++, record);

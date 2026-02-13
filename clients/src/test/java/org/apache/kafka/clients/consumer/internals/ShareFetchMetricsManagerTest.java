@@ -30,8 +30,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class ShareFetchMetricsManagerTest {
     private static final double EPSILON = 0.0001;
@@ -112,6 +116,41 @@ class ShareFetchMetricsManagerTest {
 
         assertEquals(9, (double) getMetric(shareFetchMetricsRegistry.recordsPerRequestMax).metricValue());
         assertEquals(8, (double) getMetric(shareFetchMetricsRegistry.recordsPerRequestAvg).metricValue(), EPSILON);
+    }
+
+    @Test
+    public void testAcknowledgements() {
+        shareFetchMetricsManager.recordAcknowledgementSent(5);
+        shareFetchMetricsManager.recordFailedAcknowledgements(2);
+
+        assertEquals(5, (double) getMetric(shareFetchMetricsRegistry.acknowledgementSendTotal).metricValue());
+        assertEquals(2, (double) getMetric(shareFetchMetricsRegistry.acknowledgementErrorTotal).metricValue());
+    }
+
+    @Test
+    public void testCloseRemovesAllSensors() throws IOException {
+        // Define all sensor names that should be created and removed
+        String[] sensorNames = {
+            "fetch-throttle-time",
+            "bytes-fetched", 
+            "records-fetched",
+            "fetch-latency",
+            "sent-acknowledgements",
+            "failed-acknowledgements"
+        };
+        
+        // Verify that sensors exist before closing
+        for (String sensorName : sensorNames) {
+            assertNotNull(metrics.getSensor(sensorName), "Sensor " + sensorName + " should exist before closing");
+        }
+
+        // Close the metrics manager
+        shareFetchMetricsManager.close();
+
+        // Verify that all sensors are removed
+        for (String sensorName : sensorNames) {
+            assertNull(metrics.getSensor(sensorName), "Sensor " + sensorName + " should be removed after closing");
+        }
     }
 
     private KafkaMetric getMetric(MetricNameTemplate name) {

@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
-import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class SubscribedTopicMetadataTest {
 
     private SubscribedTopicDescriberImpl subscribedTopicMetadata;
-    private MetadataImage metadataImage;
+    private CoordinatorMetadataImage metadataImage;
     private final int numPartitions = 5;
 
     @BeforeEach
@@ -43,7 +43,7 @@ public class SubscribedTopicMetadataTest {
             String topicName = "topic" + i;
             metadataImageBuilder.addTopic(topicId, topicName, numPartitions);
         }
-        metadataImage = metadataImageBuilder.addRacks().build();
+        metadataImage = metadataImageBuilder.addRacks().buildCoordinatorMetadataImage();
 
         subscribedTopicMetadata = new SubscribedTopicDescriberImpl(metadataImage);
     }
@@ -61,7 +61,7 @@ public class SubscribedTopicMetadataTest {
         assertEquals(-1, subscribedTopicMetadata.numPartitions(topicId));
 
         // Test that the correct number of partitions are returned for a given topic ID.
-        metadataImage.topics().topicsById().forEach((id, name) ->
+        metadataImage.topicIds().forEach(id ->
             // Test that the correct number of partitions are returned for a given topic ID.
             assertEquals(numPartitions, subscribedTopicMetadata.numPartitions(id))
         );
@@ -73,7 +73,7 @@ public class SubscribedTopicMetadataTest {
 
         // Test empty set is returned when the topic ID doesn't exist.
         assertEquals(Set.of(), subscribedTopicMetadata.racksForPartition(topicId, 0));
-        metadataImage.topics().topicsById().forEach((id, name) -> {
+        metadataImage.topicIds().forEach(id -> {
             // Test empty set is returned when the partition ID doesn't exist.
             assertEquals(Set.of(), subscribedTopicMetadata.racksForPartition(id, 10));
 
@@ -87,10 +87,10 @@ public class SubscribedTopicMetadataTest {
         assertEquals(new SubscribedTopicDescriberImpl(metadataImage), subscribedTopicMetadata);
 
         Uuid topicId = Uuid.randomUuid();
-        MetadataImage metadataImage2 = new MetadataImageBuilder()
+        CoordinatorMetadataImage metadataImage2 = new MetadataImageBuilder()
             .addTopic(topicId, "newTopic", 5)
             .addRacks()
-            .build();
+            .buildCoordinatorMetadataImage();
         assertNotEquals(new SubscribedTopicDescriberImpl(metadataImage2), subscribedTopicMetadata);
     }
 }

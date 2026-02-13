@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.types.Type;
 
 import java.nio.ByteBuffer;
 
-public class OffsetSync {
+public record OffsetSync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
     public static final String TOPIC_KEY = "topic";
     public static final String PARTITION_KEY = "partition";
     public static final String UPSTREAM_OFFSET_KEY = "upstreamOffset";
@@ -38,28 +38,6 @@ public class OffsetSync {
     public static final Schema KEY_SCHEMA = new Schema(
             new Field(TOPIC_KEY, Type.STRING),
             new Field(PARTITION_KEY, Type.INT32));
-
-    private final TopicPartition topicPartition;
-    private final long upstreamOffset;
-    private final long downstreamOffset;
-
-    public OffsetSync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
-        this.topicPartition = topicPartition;
-        this.upstreamOffset = upstreamOffset;
-        this.downstreamOffset = downstreamOffset;
-    }
-
-    public TopicPartition topicPartition() {
-        return topicPartition;
-    }
-
-    public long upstreamOffset() {
-        return upstreamOffset;
-    }
-
-    public long downstreamOffset() {
-        return downstreamOffset;
-    }
 
     @Override
     public String toString() {

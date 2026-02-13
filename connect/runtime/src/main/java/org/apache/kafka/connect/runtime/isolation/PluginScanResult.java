@@ -26,7 +26,6 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -67,7 +66,7 @@ public class PluginScanResult {
         this.restExtensions = restExtensions;
         this.connectorClientConfigPolicies = connectorClientConfigPolicies;
         this.allPlugins =
-            Arrays.asList(sinkConnectors, sourceConnectors, converters, headerConverters, transformations, predicates,
+            List.of(sinkConnectors, sourceConnectors, converters, headerConverters, transformations, predicates,
                     configProviders, restExtensions, connectorClientConfigPolicies);
     }
 

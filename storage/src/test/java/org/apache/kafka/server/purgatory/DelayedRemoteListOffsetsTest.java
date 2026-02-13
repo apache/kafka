@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.internal.FileRecords;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
@@ -100,7 +100,7 @@ public class DelayedRemoteListOffsetsTest {
         assertEquals(numResponse.get(), listOffsetsRequestKeys.size());
         assertEquals(listOffsetsRequestKeys.size(), DelayedRemoteListOffsets.AGGREGATE_EXPIRATION_METER.count());
         listOffsetsRequestKeys.forEach(key -> {
-            TopicPartition tp = new TopicPartition(key.topic, key.partition);
+            TopicPartition tp = new TopicPartition(key.topic(), key.partition());
             assertEquals(1, DelayedRemoteListOffsets.PARTITION_EXPIRATION_METERS.get(tp).count());
         });
     }

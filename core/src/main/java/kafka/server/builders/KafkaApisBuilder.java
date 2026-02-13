@@ -20,7 +20,6 @@ package kafka.server.builders;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
@@ -36,15 +35,15 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.security.DelegationTokenManager;
 import org.apache.kafka.server.ApiVersionManager;
 import org.apache.kafka.server.ClientMetricsManager;
-import org.apache.kafka.server.DelegationTokenManager;
+import org.apache.kafka.server.FetchManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import scala.jdk.javaapi.OptionConverters;
 
@@ -72,7 +71,6 @@ public class KafkaApisBuilder {
     private ClientMetricsManager clientMetricsManager = null;
     private ShareCoordinator shareCoordinator = null;
     private GroupConfigManager groupConfigManager = null;
-    private Supplier<Long> brokerEpochSupplier = () -> -1L;
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -189,11 +187,6 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setBrokerEpochSupplier(Supplier<Long> brokerEpochSupplier) {
-        this.brokerEpochSupplier = brokerEpochSupplier;
-        return this;
-    }
-
     @SuppressWarnings({"CyclomaticComplexity"})
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
@@ -237,7 +230,6 @@ public class KafkaApisBuilder {
                              tokenManager,
                              apiVersionManager,
                              clientMetricsManager,
-                             groupConfigManager,
-                             brokerEpochSupplier);
+                             groupConfigManager);
     }
 }

@@ -67,6 +67,7 @@ public class LogDirDescription {
     /**
      * The total size of the volume this log directory is on or empty if the broker did not return a value.
      * For volumes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     * This value does not include the size of data stored in remote storage.
      */
     public OptionalLong totalBytes() {
         return totalBytes;
@@ -75,6 +76,7 @@ public class LogDirDescription {
     /**
      * The usable size on the volume this log directory is on or empty if the broker did not return a value.
      * For usable sizes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     * This value does not include the size of data stored in remote storage.
      */
     public OptionalLong usableBytes() {
         return usableBytes;

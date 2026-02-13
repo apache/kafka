@@ -38,7 +38,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
   def sendUnsupportedApiVersionRequest(request: ApiVersionsRequest): ApiVersionsResponse = {
     val overrideHeader = IntegrationTestUtils.nextRequestHeader(ApiKeys.API_VERSIONS, Short.MaxValue)
-    val socket = IntegrationTestUtils.connect(cluster.boundPorts().get(0))
+    val socket = IntegrationTestUtils.connect(cluster.brokerBoundPorts().get(0))
     try {
       val serializedBytes = Utils.toArray(
         RequestUtils.serialize(overrideHeader.data, overrideHeader.headerVersion, request.data, request.version))

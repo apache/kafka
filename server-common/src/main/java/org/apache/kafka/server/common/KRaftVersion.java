@@ -72,12 +72,7 @@ public enum KRaftVersion implements FeatureVersion {
 
     @Override
     public Map<String, Short> dependencies() {
-        if (this.featureLevel == 0) {
-            return Map.of();
-        } else {
-            return Map.of(
-                MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_9_IV0.featureLevel());
-        }
+        return Map.of();
     }
 
     public boolean isAtLeast(KRaftVersion otherVersion) {

@@ -22,10 +22,10 @@ import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ControlRecordUtils;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordUtils;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -186,6 +186,29 @@ public class LeaderState<T> implements EpochState {
     public void resetBeginQuorumEpochTimer(long currentTimeMs) {
         beginQuorumEpochTimer.update(currentTimeMs);
         beginQuorumEpochTimer.reset(beginQuorumEpochTimeoutMs);
+    }
+
+    /**
+     * Determines the set of replicas that should receive a {@code BeginQuorumEpoch} request
+     * based on the elapsed time since their last fetch.
+     * <p>
+     * For each remote voter (excluding the local node), if the time since the last
+     * fetch exceeds the configured {@code beginQuorumEpochTimeoutMs}, the replica
+     * is considered to need a new quorum epoch request.
+     *
+     * @param currentTimeMs the current system time in milliseconds
+     * @return an unmodifiable set of {@link ReplicaKey} objects representing replicas
+     *         that need to receive a {@code BeginQuorumEpoch} request
+     */
+    public Set<ReplicaKey> needToSendBeginQuorumRequests(long currentTimeMs) {
+        return voterStates.values()
+            .stream()
+            .filter(
+                state -> state.replicaKey.id() != localVoterNode.voterKey().id() &&
+                currentTimeMs - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
+            )
+            .map(ReplicaState::replicaKey)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     /**

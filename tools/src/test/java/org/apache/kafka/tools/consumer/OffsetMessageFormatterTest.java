@@ -25,7 +25,7 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 
 import org.junit.jupiter.params.provider.Arguments;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.stream.Stream;
 
 public class OffsetMessageFormatterTest extends CoordinatorRecordMessageFormatterTest {
@@ -46,7 +46,7 @@ public class OffsetMessageFormatterTest extends CoordinatorRecordMessageFormatte
         .setGeneration(1)
         .setProtocol("range")
         .setLeader("leader")
-        .setMembers(Collections.emptyList());
+        .setMembers(List.of());
 
     @Override
     protected CoordinatorRecordMessageFormatter formatter() {
