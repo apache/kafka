@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server;
 
+import kafka.cluster.Partition;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterClientQuotasResult;
@@ -776,9 +777,9 @@ public class KRaftClusterTest {
                 TopicPartition topicPartition = new TopicPartition("foo", partitionId);
                 var partition = broker.replicaManager().getPartition(topicPartition);
                 if (isHosted) {
-                    assertNotEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertNotEquals(new None<Partition>(), partition, "topicPartition = " + topicPartition);
                 } else {
-                    assertEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertEquals(new None<Partition>(), partition, "topicPartition = " + topicPartition);
                 }
             }
         }
