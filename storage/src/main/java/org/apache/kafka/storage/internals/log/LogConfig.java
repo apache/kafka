@@ -412,11 +412,21 @@ public class LogConfig extends AbstractConfig {
 
 
     public long remoteCopyLagMs() {
-        return remoteLogConfig.remoteCopyLagMs == MAX_REMOTE_COPY_LAG_MS ? localRetentionMs() : remoteLogConfig.remoteCopyLagMs;
+        if (remoteLogConfig.remoteCopyLagMs != MAX_REMOTE_COPY_LAG_MS) {
+            return remoteLogConfig.remoteCopyLagMs;
+        }
+        // MAX_REMOTE_COPY_LAG_MS (-1): use local retention; if local is to save forever (-1), return 0 (no delay).
+        long localRetentionMs = localRetentionMs();
+        return localRetentionMs == -1 ? 0 : localRetentionMs;
     }
 
     public long remoteCopyLagBytes() {
-        return remoteLogConfig.remoteCopyLagBytes == MAX_REMOTE_COPY_LAG_BYTES ? localRetentionBytes() : remoteLogConfig.remoteCopyLagBytes;
+        if (remoteLogConfig.remoteCopyLagBytes != MAX_REMOTE_COPY_LAG_BYTES) {
+            return remoteLogConfig.remoteCopyLagBytes;
+        }
+        // MAX_REMOTE_COPY_LAG_BYTES (-1): use local retention; if local is to save forever (-1), return 0 (no delay).
+        long localRetentionBytes = localRetentionBytes();
+        return localRetentionBytes == -1 ? 0 : localRetentionBytes;
     }
 
     public long localRetentionMs() {
