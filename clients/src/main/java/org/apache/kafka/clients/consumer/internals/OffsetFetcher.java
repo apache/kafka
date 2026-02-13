@@ -122,12 +122,6 @@ public class OffsetFetcher {
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                    Timer timer) {
-        return offsetsForTimes(timestampsToSearch, timer, false);
-    }
-
-    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
-                                                                   Timer timer,
-                                                                   boolean shouldClearPartitionEndOffsets) {
         metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
 
         try {
@@ -135,7 +129,7 @@ public class OffsetFetcher {
                 timestampsToSearch,
                 timer,
                 true,
-                shouldClearPartitionEndOffsets
+                false
             ).fetchedOffsets;
 
             return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
@@ -219,11 +213,11 @@ public class OffsetFetcher {
     }
 
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Timer timer) {
-        return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timer, true);
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timer, false);
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer) {
-        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer, true);
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer, false);
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer, boolean shouldClearPartitionEndOffsets) {
