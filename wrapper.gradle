@@ -40,7 +40,7 @@ task bootstrapWrapper() {
         // of curl (built against OpenSSL library that doesn't support TLSv1.2) would fail to
         // fetch the jar.
         // IMPORTANT: This checksum **must** be updated whenever the Gradle version changes.
-        String wrapperChecksum = "b3a875ddc1f044746e1b1a55f645584505f4a10438c1afea9f15e92a7c42ec13"
+        String wrapperChecksum = "423cb469ccc0ecc31f0e4e1c309976198ccb734cdcbb7029d4bda0f18f57e8d9"
         def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/v$versions.gradle/gradle/wrapper/gradle-wrapper.jar"
 
         def bootstrapString = """
