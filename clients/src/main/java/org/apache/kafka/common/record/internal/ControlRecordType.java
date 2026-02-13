@@ -57,6 +57,7 @@ public enum ControlRecordType {
     UNKNOWN((short) -1);
 
     private static final Logger log = LoggerFactory.getLogger(ControlRecordType.class);
+    private static final int CONTROL_RECORD_KEY_SIZE = 4;
 
     private final short type;
     private final ByteBuffer buffer;
@@ -85,6 +86,10 @@ public enum ControlRecordType {
         // We should duplicate the original buffer since it will be read again in some cases, for example,
         // read by KafkaRaftClient and RaftClient.Listener
         ByteBuffer buffer = key.duplicate();
+        if (buffer.remaining() < CONTROL_RECORD_KEY_SIZE)
+            throw new InvalidRecordException("Invalid value size found for control record key. " +
+                    "Must have at least " + CONTROL_RECORD_KEY_SIZE + " bytes, but found only " + buffer.remaining());
+
         short version = buffer.getShort();
         if (version < ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION)
             throw new InvalidRecordException("Invalid version found for control record: " + version +
