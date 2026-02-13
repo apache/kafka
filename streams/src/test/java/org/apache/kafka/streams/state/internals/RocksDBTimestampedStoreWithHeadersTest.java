@@ -69,9 +69,11 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
     @Test
     public void shouldOpenExistingStoreInRegularMode() throws Exception {
+        final String key = "key";
+        final String value = "timestampedWithHeaders";
         // prepare store
         rocksDBStore.init(context, rocksDBStore);
-        rocksDBStore.put(new Bytes("key".getBytes()), "timestampedWithHeaders".getBytes());
+        rocksDBStore.put(new Bytes(key.getBytes()), value.getBytes());
         rocksDBStore.close();
 
         // re-open store
@@ -106,7 +108,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
 
             assertNull(db.get(defaultColumnFamily, "key".getBytes()));
             assertEquals(0L, db.getLongProperty(defaultColumnFamily, "rocksdb.estimate-num-keys"));
-            assertEquals(22, db.get(headersColumnFamily, "key".getBytes()).length);
+            assertEquals(value.getBytes().length, db.get(headersColumnFamily, "key".getBytes()).length);
             assertEquals(1L, db.getLongProperty(headersColumnFamily, "rocksdb.estimate-num-keys"));
         } finally {
             // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
