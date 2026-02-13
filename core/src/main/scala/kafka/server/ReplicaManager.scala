@@ -63,7 +63,7 @@ import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{SystemTimer, TimerTask}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
-import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, HostedPartition, Online, Offline, None => JNone, common}
+import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, HostedPartition, common}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchPartitionStatus, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, LogReadResult, OffsetResultHolder, RecordValidationException, RecordValidationStats, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -314,9 +314,9 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
     val topicHasNonOfflinePartition = allPartitions.values.asScala.exists {
-      case online: Online[Partition] => topic == online.partition.topic
-      case _: Offline[Partition] => false
-      case _: JNone[Partition] => false
+      case online: HostedPartition.Online[Partition] => topic == online.partition.topic
+      case _: HostedPartition.Offline[Partition] => false
+      case _: HostedPartition.None[Partition] => false
     }
     if (!topicHasNonOfflinePartition) // nothing online or deferred
       brokerTopicStats.removeMetrics(topic)
@@ -375,7 +375,7 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def maybeAddListener(partition: TopicPartition, listener: PartitionListener): Boolean = {
     getPartition(partition) match {
-      case online: Online[Partition] =>
+      case online: HostedPartition.Online[Partition] =>
         online.partition.maybeAddListener(listener)
       case _ =>
         false
@@ -387,7 +387,7 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def removeListener(partition: TopicPartition, listener: PartitionListener): Unit = {
     getPartition(partition) match {
-      case online: Online[Partition] =>
+      case online: HostedPartition.Online[Partition] =>
         online.partition.removeListener(listener)
       case _ => // Ignore
     }
@@ -416,7 +416,7 @@ class ReplicaManager(val config: KafkaConfig,
       var topicId: Option[Uuid] = None
       if (stopPartition.deleteLocalLog) {
         getPartition(topicPartition) match {
-          case hostedPartition: Online[Partition] =>
+          case hostedPartition: HostedPartition.Online[Partition] =>
             if (allPartitions.remove(topicPartition, hostedPartition)) {
               maybeRemoveTopicMetrics(topicPartition.topic)
               // Logs are not deleted here. They are deleted in a single batch later on.
@@ -459,12 +459,12 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def getPartition(topicPartition: TopicPartition): HostedPartition[Partition] = {
-    Option(allPartitions.get(topicPartition)).getOrElse(new JNone)
+    Option(allPartitions.get(topicPartition)).getOrElse(new HostedPartition.None[Partition])
   }
 
   def isAddingReplica(topicPartition: TopicPartition, replicaId: Int): Boolean = {
     getPartition(topicPartition) match {
-      case online: Online[Partition] => online.partition.isAddingReplica(replicaId)
+      case online: HostedPartition.Online[Partition] => online.partition.isAddingReplica(replicaId)
       case _ => false
     }
   }
@@ -478,12 +478,12 @@ class ReplicaManager(val config: KafkaConfig,
 
   // Visible for testing
   private[server] def addOnlinePartition(topicPartition: TopicPartition, partition: Partition): Unit = {
-    allPartitions.put(topicPartition, new Online(partition))
+    allPartitions.put(topicPartition, new HostedPartition.Online(partition))
   }
 
   def onlinePartition(topicPartition: TopicPartition): Option[Partition] = {
     getPartition(topicPartition) match {
-      case online: Online[Partition] => Some(online.partition)
+      case online: HostedPartition.Online[Partition] => Some(online.partition)
       case _ => None
     }
   }
@@ -492,13 +492,13 @@ class ReplicaManager(val config: KafkaConfig,
   // the iterator has been constructed could still be returned by this iterator.
   private def onlinePartitionsIterator: Iterator[Partition] = {
     allPartitions.values.asScala.iterator.flatMap {
-      case online: Online[Partition] => Some(online.partition)
+      case online: HostedPartition.Online[Partition] => Some(online.partition)
       case _ => None
     }
   }
 
   private def offlinePartitionCount: Int = {
-    allPartitions.values.asScala.iterator.count(_.getClass == classOf[Offline[Partition]])
+    allPartitions.values.asScala.iterator.count(_.getClass == classOf[HostedPartition.Offline[Partition]])
   }
 
   def getPartitionOrException(topicPartition: TopicPartition): Partition = {
@@ -536,20 +536,20 @@ class ReplicaManager(val config: KafkaConfig,
 
   def getPartitionOrError(topicPartition: TopicPartition): Either[Errors, Partition] = {
     getPartition(topicPartition) match {
-      case online: Online[Partition] =>
+      case online: HostedPartition.Online[Partition] =>
         Right(online.partition)
 
-      case _: Offline[Partition] =>
+      case _: HostedPartition.Offline[Partition] =>
         Left(Errors.KAFKA_STORAGE_ERROR)
 
-      case _: JNone[Partition] if metadataCache.contains(topicPartition) =>
+      case _: HostedPartition.None[Partition] if metadataCache.contains(topicPartition) =>
         // The topic exists, but this broker is no longer a replica of it, so we return NOT_LEADER_OR_FOLLOWER which
         // forces clients to refresh metadata to find the new location. This can happen, for example,
         // during a partition reassignment if a produce request from the client is sent to a broker after
         // the local replica has been deleted.
         Left(Errors.NOT_LEADER_OR_FOLLOWER)
 
-      case _: JNone[Partition] =>
+      case _: HostedPartition.None[Partition] =>
         Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
     }
   }
@@ -1137,7 +1137,7 @@ class ReplicaManager(val config: KafkaConfig,
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
 
           getPartition(topicPartition) match {
-            case online: Online[Partition] =>
+            case online: HostedPartition.Online[Partition] =>
               val partition = online.partition
               // Stop current replica movement if the destinationDir is different from the existing destination log directory
               if (partition.futureReplicaDirChanged(destinationDir)) {
@@ -1152,10 +1152,10 @@ class ReplicaManager(val config: KafkaConfig,
                   logManager.resumeCleaning(topicPartition)
                 }
               }
-            case _: Offline[Partition] =>
+            case _: HostedPartition.Offline[Partition] =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
-            case _: JNone[Partition] => // Do nothing
+            case _: HostedPartition.None[Partition] => // Do nothing
           }
 
           // If the log for this partition has not been created yet:
@@ -1307,7 +1307,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
       def onAcks(topicPartition: TopicPartition, status: DeleteRecordsPartitionStatus): Unit = {
         val (lowWatermarkReached, error, lw) = getPartition(topicPartition) match {
-          case online: Online[Partition] =>
+          case online: HostedPartition.Online[Partition] =>
             val partition = online.partition
             partition.leaderLogIfLocal match {
               case Some(_) =>
@@ -1317,10 +1317,10 @@ class ReplicaManager(val config: KafkaConfig,
                 (false, Errors.NOT_LEADER_OR_FOLLOWER, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             }
 
-          case _: Offline[Partition] =>
+          case _: HostedPartition.Offline[Partition] =>
             (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
 
-          case _: JNone[Partition] =>
+          case _: HostedPartition.None[Partition] =>
             (false, Errors.UNKNOWN_TOPIC_OR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
         }
         if (error != Errors.NONE || lowWatermarkReached) {
@@ -2129,12 +2129,12 @@ class ReplicaManager(val config: KafkaConfig,
 
   def markPartitionOffline(tp: TopicPartition): Unit = replicaStateChangeLock synchronized {
     allPartitions.get(tp) match {
-      case online: Online[Partition] =>
+      case online: HostedPartition.Online[Partition] =>
         val partition = online.partition
-        allPartitions.put(tp, new Offline(Optional.of(partition)))
+        allPartitions.put(tp, new HostedPartition.Offline(Optional.of(partition)))
         partition.markOffline()
       case _ =>
-        allPartitions.put(tp, new Offline(Optional.empty()))
+        allPartitions.put(tp, new HostedPartition.Offline(Optional.empty()))
     }
   }
 
@@ -2252,7 +2252,7 @@ class ReplicaManager(val config: KafkaConfig,
       val partitions = offsetForLeaderTopic.partitions.asScala.map { offsetForLeaderPartition =>
         val tp = new TopicPartition(offsetForLeaderTopic.topic, offsetForLeaderPartition.partition)
         getPartition(tp) match {
-          case online: Online[Partition] =>
+          case online: HostedPartition.Online[Partition] =>
             val currentLeaderEpochOpt =
               if (offsetForLeaderPartition.currentLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
                 Optional.empty[Integer]
@@ -2264,17 +2264,17 @@ class ReplicaManager(val config: KafkaConfig,
               offsetForLeaderPartition.leaderEpoch,
               fetchOnlyFromLeader = true)
 
-          case _: Offline[Partition] =>
+          case _: HostedPartition.Offline[Partition] =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
 
-          case _: JNone[Partition] if metadataCache.contains(tp) =>
+          case _: HostedPartition.None[Partition] if metadataCache.contains(tp) =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
 
-          case _: JNone[Partition] =>
+          case _: HostedPartition.None[Partition] =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -2300,7 +2300,7 @@ class ReplicaManager(val config: KafkaConfig,
                                           delta: TopicsDelta,
                                           topicId: Uuid): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
-      case offline: Offline[Partition] =>
+      case offline: HostedPartition.Offline[Partition] =>
         val offlinePartition = offline.partition
         if (offlinePartition.toScala.flatMap(p => p.topicId).contains(topicId)) {
           stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
@@ -2312,11 +2312,11 @@ class ReplicaManager(val config: KafkaConfig,
             s"A topic with the same name but different id exists but it resides in an offline log " +
             s"directory.")
           val partition = Partition(new TopicIdPartition(topicId, tp), time, this)
-          allPartitions.put(tp, new Online(partition))
+          allPartitions.put(tp, new HostedPartition.Online(partition))
           Some(partition, true)
         }
 
-      case online: Online[Partition] =>
+      case online: HostedPartition.Online[Partition] =>
         val partition = online.partition
         if (partition.topicId.exists(_ != topicId)) {
           // Note: Partition#topicId will be None here if the Log object for this partition
@@ -2326,7 +2326,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
         Some(partition, false)
 
-      case _: JNone[Partition] =>
+      case _: HostedPartition.None[Partition] =>
         if (delta.image().topicsById().containsKey(topicId)) {
           stateChangeLogger.error(s"Expected partition $tp with topic id " +
             s"$topicId to exist, but it was missing. Creating...")
@@ -2336,7 +2336,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
         // it's a partition that we don't know about yet, so create it and mark it online
         val partition = Partition(new TopicIdPartition(topicId, tp), time, this)
-        allPartitions.put(tp, new Online(partition))
+        allPartitions.put(tp, new HostedPartition.Online(partition))
         Some(partition, true)
     }
   }

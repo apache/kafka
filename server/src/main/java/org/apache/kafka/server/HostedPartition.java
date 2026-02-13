@@ -17,10 +17,17 @@
 
 package org.apache.kafka.server;
 
+import java.util.Optional;
+
 /**
  * Sealed interface to represent the state of hosted partitions. We create a concrete (active) Partition
  * instance when the broker receives a LeaderAndIsr request from the controller or a metadata
  * log record from the Quorum controller indicating that the broker should be either a leader
  * or follower of a partition.
  */
-public sealed interface HostedPartition<T> permits None, Online, Offline { }
+public sealed interface HostedPartition<T> {
+    public record None<T>() implements HostedPartition<T> { }
+    public record Online<T>(T partition) implements HostedPartition<T> { }
+    public record Offline<T>(Optional<T> partition) implements HostedPartition<T> { }
+}
+

@@ -65,7 +65,7 @@ import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.{HostedPartition, None => JNone, Offline, Online, PartitionFetchState}
+import org.apache.kafka.server.{HostedPartition, PartitionFetchState}
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteFetch, DelayedRemoteListOffsets}
 import org.apache.kafka.server.share.SharePartitionKey
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchGroupKey, DelayedShareFetchKey, ShareFetch}
@@ -1230,7 +1230,7 @@ class ReplicaManagerTest {
       val localLog = replicaManager.localLog(topicPartition)
       assertTrue(localLog.isDefined, "Log should be created for follower after applyDelta")
       val hostedPartition = replicaManager.getPartition(topicPartition)
-      assertTrue(hostedPartition.isInstanceOf[Online[Partition]])
+      assertTrue(hostedPartition.isInstanceOf[HostedPartition.Online[Partition]])
 
       // Make local partition a follower - because epoch increased by more than 1, truncation should
       // trigger even though leader does not change
@@ -4029,7 +4029,7 @@ class ReplicaManagerTest {
       val leaderImage = imageFromTopics(leaderDelta.apply())
       replicaManager.applyDelta(leaderDelta, leaderImage)
 
-      assertTrue(replicaManager.getPartition(topicPartition).isInstanceOf[Online[Partition]])
+      assertTrue(replicaManager.getPartition(topicPartition).isInstanceOf[HostedPartition.Online[Partition]])
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds(topicPartition.topic)
       val log = replicaManager.localLog(topicPartition).get
@@ -4133,12 +4133,12 @@ class ReplicaManagerTest {
 
       val hostedPartition = replicaManager.getPartition(topicPartition)
       assertEquals(
-        classOf[Offline[Partition]],
+        classOf[HostedPartition.Offline[Partition]],
         hostedPartition.getClass
       )
       assertEquals(
         topicId,
-        hostedPartition.asInstanceOf[Offline[Partition]].partition.toScala.flatMap(p => p.topicId).get
+        hostedPartition.asInstanceOf[HostedPartition.Offline[Partition]].partition.toScala.flatMap(p => p.topicId).get
       )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -4453,7 +4453,7 @@ class ReplicaManagerTest {
   }
 
   def getOnlinePartition(hostedPartition: HostedPartition[Partition]): Partition = {
-    hostedPartition.asInstanceOf[Online[Partition]].partition()
+    hostedPartition.asInstanceOf[HostedPartition.Online[Partition]].partition()
   }
 
   @ParameterizedTest
@@ -4674,7 +4674,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(new JNone, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4722,7 +4722,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(new JNone, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4769,7 +4769,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(new JNone, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4816,7 +4816,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(new JNone, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4963,12 +4963,12 @@ class ReplicaManagerTest {
 
       val hostedPartition = replicaManager.getPartition(topicPartition)
       assertEquals(
-        classOf[Offline[Partition]],
+        classOf[HostedPartition.Offline[Partition]],
         hostedPartition.getClass
       )
       assertEquals(
         FOO_UUID,
-        hostedPartition.asInstanceOf[Offline[Partition]].partition.toScala.flatMap(p => p.topicId).get
+        hostedPartition.asInstanceOf[HostedPartition.Offline[Partition]].partition.toScala.flatMap(p => p.topicId).get
       )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -5030,7 +5030,7 @@ class ReplicaManagerTest {
         Set(topicPartition))
       ).thenAnswer { _ =>
         replicaManager.getPartition(topicPartition) match {
-          case online: Online[Partition] =>
+          case online: HostedPartition.Online[Partition] =>
             val partition = online.partition()
             partition.appendRecordsToFollowerOrFutureReplica(
               records = MemoryRecords.withRecords(
@@ -5737,9 +5737,9 @@ class ReplicaManagerTest {
     topicIdPartition: TopicIdPartition
   ): Unit = {
     val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
-    assertTrue(partition.isInstanceOf[Online[Partition]],
+    assertTrue(partition.isInstanceOf[HostedPartition.Online[Partition]],
       s"Expected ${topicIdPartition} to be in state: HostedPartition.Online. But was in state: ${partition}")
-    val hostedPartition = partition.asInstanceOf[Online[Partition]]
+    val hostedPartition = partition.asInstanceOf[HostedPartition.Online[Partition]]
     assertTrue(hostedPartition.partition.log.isDefined,
       s"Expected ${topicIdPartition} to have a log set in ReplicaManager, but it did not.")
     assertTrue(hostedPartition.partition.log.get.topicId.isPresent,
@@ -5753,7 +5753,7 @@ class ReplicaManagerTest {
     topicIdPartition: TopicIdPartition
   ): Unit = {
     val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
-    assertEquals(new JNone, partition, s"Expected ${topicIdPartition} to be offline, but it was: ${partition}")
+    assertEquals(new HostedPartition.None[Partition], partition, s"Expected ${topicIdPartition} to be offline, but it was: ${partition}")
   }
 
   @Test
