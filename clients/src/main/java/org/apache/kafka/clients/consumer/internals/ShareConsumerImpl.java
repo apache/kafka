@@ -1114,9 +1114,6 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             throw new InvalidGroupIdException(
                     "You must provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }
-        if (groupId.contains(":")) {
-            throw new InvalidGroupIdException("Group ID must not contain ':' for share consumers.");
-        }
     }
 
     /**

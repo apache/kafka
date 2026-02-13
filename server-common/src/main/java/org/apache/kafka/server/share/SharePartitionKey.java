@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -73,12 +74,11 @@ public class SharePartitionKey {
      * @throws IllegalArgumentException if the key is empty or has invalid format
      */
     public static SharePartitionKey getInstance(String key) {
-        validate(key);
-        String[] tokens = key.split(":");
+        String[] parsed = parseKey(key);
         return new SharePartitionKey(
-                tokens[0].trim(),
-                Uuid.fromString(tokens[1]),
-                Integer.parseInt(tokens[2])
+                parsed[0],
+                Uuid.fromString(parsed[1]),
+                Integer.parseInt(parsed[2])
         );
     }
 
@@ -88,31 +88,49 @@ public class SharePartitionKey {
      * @throws IllegalArgumentException if the key is empty or has invalid format
      */
     public static void validate(String key) {
+        parseKey(key);
+    }
+
+    /**
+     * Parses a key string of format groupId:topicId:partition from the right.
+     * Since topicId and partition have fixed formats but groupId may contain colons,
+     * parsing from the right correctly handles all valid group IDs.
+     *
+     * @return a 3-element array: [groupId, topicId, partition]
+     */
+    private static String[] parseKey(String key) {
         Objects.requireNonNull(key, "Share partition key cannot be null");
         if (key.isEmpty()) {
             throw new IllegalArgumentException("Share partition key cannot be empty");
         }
 
         String[] tokens = key.split(":");
-        if (tokens.length != 3) {
-            throw new IllegalArgumentException("Invalid key format: expected - groupId:topicId:partition, found -  " + key);
+        if (tokens.length < 3) {
+            throw new IllegalArgumentException("Invalid key format: expected - groupId:topicId:partition, found - " + key);
         }
 
-        if (tokens[0].trim().isEmpty()) {
-            throw new IllegalArgumentException("GroupId must be alphanumeric string");
+        int last = tokens.length - 1;
+        String partitionStr = tokens[last];
+        String topicIdStr = tokens[last - 1];
+        String groupId = String.join(":", Arrays.copyOfRange(tokens, 0, last - 1));
+
+        if (groupId.trim().isEmpty()) {
+            throw new IllegalArgumentException("GroupId must not be empty");
         }
 
         try {
-            Uuid.fromString(tokens[1]);
+            Uuid.fromString(topicIdStr);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid topic ID: " + tokens[1], e);
+            throw new IllegalArgumentException("Invalid topic ID: " + topicIdStr, e);
         }
 
         try {
-            Integer.parseInt(tokens[2]);
+            Integer.parseInt(partitionStr);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid partition: " + tokens[2], e);
+            throw new IllegalArgumentException("Invalid partition: " + partitionStr, e);
         }
+
+        return new String[]{groupId, topicIdStr, partitionStr};
     }
 
     public static SharePartitionKey getInstance(String groupId, Uuid topicId, int partition) {

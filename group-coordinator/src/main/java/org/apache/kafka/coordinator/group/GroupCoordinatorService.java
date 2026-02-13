@@ -649,9 +649,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) throws InvalidRequestException {
         throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
-        if (request.groupId().contains(":")) {
-            throw new InvalidRequestException("GroupId must not contain ':'.");
-        }
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
 
         if (request.memberEpoch() == 0) {
