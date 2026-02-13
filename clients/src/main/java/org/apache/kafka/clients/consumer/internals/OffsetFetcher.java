@@ -217,7 +217,7 @@ public class OffsetFetcher {
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer) {
-        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer, false);
+        return endOffsets(partitions, timer, false);
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer, boolean shouldClearPartitionEndOffsets) {
