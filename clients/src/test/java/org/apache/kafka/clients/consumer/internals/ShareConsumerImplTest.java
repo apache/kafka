@@ -224,7 +224,6 @@ public class ShareConsumerImplTest {
         assertInstanceOf(InvalidGroupIdException.class, e.getCause());
     }
 
-
     @Test
     public void testFailConstructor() {
         final Properties props = requiredConsumerProperties();
