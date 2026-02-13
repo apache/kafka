@@ -182,7 +182,7 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
      * @param requireTimestamps  True if this should fail with an UnsupportedVersionException if the
      *                           broker does not support fetching precise timestamps for offsets
      * @return Future containing the map of {@link TopicPartition} and {@link OffsetAndTimestamp}
-     * found. The future will complete when the requests responses are received and
+     * found .The future will complete when the requests responses are received and
      * processed, following a call to {@link #poll(long)}
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndTimestampInternal>> fetchOffsets(
@@ -202,11 +202,9 @@ public final class OffsetsRequestManager implements RequestManager, ClusterResou
             if (error != null) {
                 log.debug("Fetch offsets completed with error for partitions and timestamps {}.",
                         timestampsToSearch, error);
-                offsetFetcherUtils.clearPartitionEndOffsetRequests(timestampsToSearch.keySet());
             } else {
                 log.debug("Fetch offsets completed successfully for partitions and timestamps {}." +
                         " Result {}", timestampsToSearch, result);
-                offsetFetcherUtils.clearPartitionEndOffsetRequests(result.partitionsToRetry);
             }
         });
 
