@@ -103,17 +103,17 @@ public class TopicConfig {
 
     public static final String REMOTE_COPY_LAG_MS_CONFIG = "remote.copy.lag.ms";
     public static final String REMOTE_COPY_LAG_MS_DOC = "Controls how long to delay uploading segments to remote storage. " +
-            "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay). " +
-            "When set to -1, resolves to the effective <code>local.retention.ms</code> (maximum delay, or upload immediately when <code>local.retention.ms</code> is -1). " +
-            "When set to a positive value (ms), a segment becomes eligible for upload only after the time since the latest record in the segment reaches the value. " +
-            "The value should not exceed the effective <code>local.retention.ms</code> when the latter is non-negative.";
+            "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay check). " +
+            "When set to -1, resolves to the effective local retention ms (maximum delay, or no delay check when local retention ms is -1). " +
+            "When set to a positive value (ms), a segment can become eligible for upload only after the time since the latest record in the segment reaches the value. " +
+            "The value should not exceed the effective local retention ms when the latter is non-negative.";
 
     public static final String REMOTE_COPY_LAG_BYTES_CONFIG = "remote.copy.lag.bytes";
     public static final String REMOTE_COPY_LAG_BYTES_DOC = "Controls size-based delay for uploading segments to remote storage. " +
-            "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay). " +
-            "When set to -1, resolves to the effective <code>local.retention.bytes</code> (maximum delay, or upload immediately when <code>local.retention.bytes</code> is -1). " +
-            "When set to a positive value (bytes), a segment becomes eligible for upload only when the total bytes of log data after the segment reach the value. " +
-            "The value should not exceed the effective <code>local.retention.bytes</code> when the latter is non-negative.";
+            "When set to 0 (default), segments are uploaded as soon as they are eligible (no delay check). " +
+            "When set to -1, resolves to the effective local retention bytes (maximum delay, or no delay check when local retention bytes is -1). " +
+            "When set to a positive value (bytes), a segment can become eligible for upload only when the total bytes of log data after the segment reach the value. " +
+            "The value should not exceed the effective local retention bytes when the latter is non-negative.";
 
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
     public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
