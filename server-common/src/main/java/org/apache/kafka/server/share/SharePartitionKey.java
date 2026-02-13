@@ -68,37 +68,15 @@ public class SharePartitionKey {
 
 
     /**
-     * Returns a SharePartitionKey from input string of format - groupId:topicId:partition
+     * Returns a SharePartitionKey from input string of format - groupId:topicId:partition.
+     * The key is parsed from the right: partition is the last segment, topicId is
+     * the second-to-last, and groupId is everything before (which may contain colons).
+     *
      * @param key - String in format groupId:topicId:partition
      * @return object representing SharePartitionKey
      * @throws IllegalArgumentException if the key is empty or has invalid format
      */
     public static SharePartitionKey getInstance(String key) {
-        String[] parsed = parseKey(key);
-        return new SharePartitionKey(
-                parsed[0],
-                Uuid.fromString(parsed[1]),
-                Integer.parseInt(parsed[2])
-        );
-    }
-
-    /**
-     * Validates whether the String argument has a valid SharePartitionKey format - groupId:topicId:partition
-     * @param key - String in format groupId:topicId:partition
-     * @throws IllegalArgumentException if the key is empty or has invalid format
-     */
-    public static void validate(String key) {
-        parseKey(key);
-    }
-
-    /**
-     * Parses a key string of format groupId:topicId:partition from the right.
-     * Since topicId and partition have fixed formats but groupId may contain colons,
-     * parsing from the right correctly handles all valid group IDs.
-     *
-     * @return a 3-element array: [groupId, topicId, partition]
-     */
-    private static String[] parseKey(String key) {
         Objects.requireNonNull(key, "Share partition key cannot be null");
         if (key.isEmpty()) {
             throw new IllegalArgumentException("Share partition key cannot be empty");
@@ -118,19 +96,32 @@ public class SharePartitionKey {
             throw new IllegalArgumentException("GroupId must not be empty");
         }
 
+        Uuid topicId;
         try {
-            Uuid.fromString(topicIdStr);
+            topicId = Uuid.fromString(topicIdStr);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid topic ID: " + topicIdStr, e);
         }
 
+        int partition;
         try {
-            Integer.parseInt(partitionStr);
+            partition = Integer.parseInt(partitionStr);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid partition: " + partitionStr, e);
         }
 
-        return new String[]{groupId, topicIdStr, partitionStr};
+        return new SharePartitionKey(groupId, topicId, partition);
+    }
+
+    /**
+     * Validates whether the String argument has a valid SharePartitionKey format - groupId:topicId:partition.
+     * The key is parsed from the right since groupId may contain colons.
+     *
+     * @param key - String in format groupId:topicId:partition
+     * @throws IllegalArgumentException if the key is empty or has invalid format
+     */
+    public static void validate(String key) {
+        getInstance(key);
     }
 
     public static SharePartitionKey getInstance(String groupId, Uuid topicId, int partition) {
