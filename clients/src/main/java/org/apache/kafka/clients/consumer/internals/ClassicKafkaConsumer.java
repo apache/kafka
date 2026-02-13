@@ -1066,7 +1066,11 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     } else {
                         log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
                         subscriptions.requestPartitionEndOffset(topicPartition);
-                        offsetFetcher.endOffsets(Collections.singleton(topicPartition), time.timer(0L));
+                        offsetFetcher.endOffsets(
+                            Collections.singleton(topicPartition),
+                            time.timer(0L),
+                            true
+                        );
                     }
                 }
 

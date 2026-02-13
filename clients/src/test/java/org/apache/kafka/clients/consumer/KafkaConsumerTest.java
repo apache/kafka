@@ -29,9 +29,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.OffsetFetcherUtils;
-import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -2735,18 +2733,15 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
+    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
+    //       in the CONSUMER group protocol (see KAFKA-20187).
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testCurrentLagClearsFlagOnFatalPartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(OffsetFetcherUtils.class, Level.TRACE);
-
-            if (groupProtocol == GroupProtocol.CLASSIC) {
-                appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
-            } else {
-                appender.setClassLogger(ApplicationEventProcessor.class, Level.INFO);
-                appender.setClassLogger(OffsetsRequestManager.class, Level.TRACE);
-            }
+            appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
 
             final ConsumerMetadata metadata = createMetadata(subscription);
             final MockClient client = new MockClient(time, metadata);
@@ -2827,18 +2822,15 @@ public class KafkaConsumerTest {
         }
     }
 
+    // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
+    //       in the CONSUMER group protocol (see KAFKA-20187).
+    //       Once it is implemented, this should use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testCurrentLagClearsFlagOnRetriablePartitionError(GroupProtocol groupProtocol) throws InterruptedException {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(OffsetFetcherUtils.class, Level.TRACE);
-
-            if (groupProtocol == GroupProtocol.CLASSIC) {
-                appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
-            } else {
-                appender.setClassLogger(ApplicationEventProcessor.class, Level.INFO);
-                appender.setClassLogger(OffsetsRequestManager.class, Level.TRACE);
-            }
+            appender.setClassLogger(ClassicKafkaConsumer.class, Level.INFO);
 
             final ConsumerMetadata metadata = createMetadata(subscription);
             final MockClient client = new MockClient(time, metadata);

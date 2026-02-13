@@ -122,11 +122,21 @@ public class OffsetFetcher {
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                    Timer timer) {
+        return offsetsForTimes(timestampsToSearch, timer, false);
+    }
+
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
+                                                                   Timer timer,
+                                                                   boolean shouldClearPartitionEndOffsets) {
         metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
 
         try {
-            Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
-                    timer, true).fetchedOffsets;
+            Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(
+                timestampsToSearch,
+                timer,
+                true,
+                shouldClearPartitionEndOffsets
+            ).fetchedOffsets;
 
             return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
         } finally {
@@ -136,18 +146,21 @@ public class OffsetFetcher {
 
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                  Timer timer,
-                                                 boolean requireTimestamps) {
+                                                 boolean requireTimestamps,
+                                                 boolean shouldClearPartitionEndOffsets) {
         ListOffsetResult result = new ListOffsetResult();
         if (timestampsToSearch.isEmpty())
             return result;
 
         // In the case that the user supplied a zero timeout to this method, only a single pass of the loop below will
         // be performed before exiting. No TimeoutException will be thrown in that case. In the case that the single
-        // pass did not yield a response (either transient or fatal error), make sure to clear the relevant partitions'
-        // respective 'end offset requested' flags so that another attempt can be made by the user.
+        // pass did not yield a response (either transient or fatal error) AND shouldClearPartitionEndOffsets is set,
+        // clear the relevant partitions' respective 'end offset requested' flag so that another attempt can be made
+        // by the user.
         //
         // If the timeout is not zero, the loop will be executed at least once. In the case that not all the partitions
-        // were found, a TimeoutException will be thrown.
+        // were found, we exit the loop and can clear the 'end offset requested' flag before the TimeoutException
+        // is thrown.
         boolean isZeroTimestamp = timer.timeoutMs() == 0L;
 
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
@@ -162,13 +175,16 @@ public class OffsetFetcher {
                         remainingToSearch.keySet().retainAll(value.partitionsToRetry);
 
                         offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
-                        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
+
+                        if (isZeroTimestamp && shouldClearPartitionEndOffsets)
+                            offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
                     }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
+                    if (isZeroTimestamp && shouldClearPartitionEndOffsets)
+                        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
 
                     if (!(e instanceof RetriableException)) {
                         throw future.exception();
@@ -179,7 +195,7 @@ public class OffsetFetcher {
             // if timeout is set to zero, do not try to poll the network client at all
             // and return empty immediately; otherwise try to get the results synchronously
             // and throw timeout exception if it cannot complete in time
-            if (isZeroTimestamp)
+            if (timer.timeoutMs() == 0L)
                 return result;
 
             client.poll(future, timer);
@@ -193,31 +209,43 @@ public class OffsetFetcher {
             }
         } while (timer.notExpired());
 
-        // If there are any remaining partitions that have not received responses, clear their respective
-        // 'end offset requested' flags so that another attempt can be made.
-        offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
+        if (shouldClearPartitionEndOffsets) {
+            // If there are any remaining partitions that have not received responses, clear their respective
+            // 'end offset requested' flags so that another attempt can be made.
+            offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
+        }
 
         throw new TimeoutException("Failed to get offsets by times in " + timer.elapsedMs() + "ms");
     }
 
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Timer timer) {
-        return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timer);
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timer, true);
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer) {
-        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer);
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer, true);
+    }
+
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer, boolean shouldClearPartitionEndOffsets) {
+        return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer, shouldClearPartitionEndOffsets);
     }
 
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
-                                                           Timer timer) {
+                                                           Timer timer,
+                                                           boolean shouldClearPartitionEndOffsets) {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
                     .distinct()
                     .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
 
-            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false);
+            ListOffsetResult result = fetchOffsetsByTimes(
+                timestampsToSearch,
+                timer,
+                false,
+                shouldClearPartitionEndOffsets
+            );
 
             return result.fetchedOffsets.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
