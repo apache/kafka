@@ -521,7 +521,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             boolean hasHeadersAware = false;
             boolean hasLegacy = false;
 
-            for (byte[] cf : existingCFs) {
+            for (final byte[] cf : existingCFs) {
                 if (java.util.Arrays.equals(cf, RocksDB.DEFAULT_COLUMN_FAMILY)) {
                     hasDefault = true;
                 } else if (java.util.Arrays.equals(cf, "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8))) {

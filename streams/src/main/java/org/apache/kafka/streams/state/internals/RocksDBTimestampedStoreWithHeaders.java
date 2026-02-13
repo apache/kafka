@@ -113,7 +113,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                 cfAccessor = new SingleColumnFamilyAccessor(headersCf);
                 try {
                     db.dropColumnFamily(legacyCf);
-                } catch (RocksDBException e) {
+                } catch (final RocksDBException e) {
                     throw new RuntimeException(e);
                 } finally {
                     legacyCf.close();
@@ -138,7 +138,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         cfAccessor = new SingleColumnFamilyAccessor(headersCf);
     }
 
-    private void verifyAndCloseEmptyDefaultColumnFamily(ColumnFamilyHandle columnFamilyHandle) {
+    private void verifyAndCloseEmptyDefaultColumnFamily(final ColumnFamilyHandle columnFamilyHandle) {
         try (final RocksIterator defaultIter = db.newIterator(columnFamilyHandle)) {
             defaultIter.seekToFirst();
             if (defaultIter.isValid()) {
