@@ -65,6 +65,16 @@ public class SharePartitionKeyTest {
     }
 
     @Test
+    public void testGetInstanceFromKeyWithGroupIdEndingWithColon() {
+        Uuid topicId = Uuid.randomUuid();
+        String key = "mygroup::" + topicId + ":4";
+        SharePartitionKey spk = SharePartitionKey.getInstance(key);
+        assertEquals("mygroup:", spk.groupId());
+        assertEquals(topicId, spk.topicId());
+        assertEquals(4, spk.partition());
+    }
+
+    @Test
     public void testValidateSimpleKey() {
         Uuid topicId = Uuid.randomUuid();
         SharePartitionKey.validate("group:" + topicId + ":0");
