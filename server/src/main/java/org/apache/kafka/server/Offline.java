@@ -22,4 +22,4 @@ import java.util.Optional;
 /**
  * This broker hosts the partition, but it is in an offline log directory.
  */
-public record Offline<T>(Optional<T> partition) implements HostedPartition<T> {}
+public record Offline<T>(Optional<T> partition) implements HostedPartition<T> { }

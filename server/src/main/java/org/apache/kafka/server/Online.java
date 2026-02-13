@@ -20,4 +20,4 @@ package org.apache.kafka.server;
 /**
  * This broker hosts the partition and it is online.
  */
-public record Online<T>(T partition) implements HostedPartition<T> {}
+public record Online<T>(T partition) implements HostedPartition<T> { }

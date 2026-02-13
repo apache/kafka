@@ -20,4 +20,4 @@ package org.apache.kafka.server;
 /**
  * This broker does not have any state for this partition locally.
  */
-public record None<T>() implements HostedPartition<T> {}
+public record None<T>() implements HostedPartition<T> { }

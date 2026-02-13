@@ -23,4 +23,4 @@ package org.apache.kafka.server;
  * log record from the Quorum controller indicating that the broker should be either a leader
  * or follower of a partition.
  */
-public sealed interface HostedPartition<T> permits None, Online, Offline {}
+public sealed interface HostedPartition<T> permits None, Online, Offline { }

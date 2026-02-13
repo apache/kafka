@@ -17,10 +17,11 @@
 package org.apache.kafka.tiered.storage.integration;
 
 import kafka.api.TransactionsTest;
-import kafka.server.HostedPartition;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.server.HostedPartition;
+import org.apache.kafka.server.Online;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 
@@ -113,7 +114,7 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
         boolean isAssigned = false;
         if (brokerOpt.isPresent()) {
             HostedPartition hostedPartition = brokerOpt.get().replicaManager().getPartition(topicPartition);
-            if (hostedPartition instanceof HostedPartition.Online) {
+            if (hostedPartition instanceof Online) {
                 isAssigned = true;
             }
         }

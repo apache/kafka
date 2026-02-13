@@ -129,8 +129,7 @@
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.apache.kafka.storage"/>
 
-        <allow pkg="org.apache.kafka.server.log" />
-        <allow pkg="org.apache.kafka.server.config" />
+        <allow pkg="org.apache.kafka.server" />
 
         <allow pkg="org.apache.kafka.test" />
     </subpackage>
