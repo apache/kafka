@@ -26,8 +26,8 @@ import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -40,7 +40,7 @@ public class OffsetUtilsTest {
     private static final JsonConverter CONVERTER = new JsonConverter();
 
     static {
-        CONVERTER.configure(Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), true);
+        CONVERTER.configure(Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"), true);
     }
 
     @Test
@@ -60,18 +60,18 @@ public class OffsetUtilsTest {
 
     @Test
     public void testValidateFormatMapWithNonPrimitiveKeys() {
-        Map<Object, Object> offsetData = Collections.singletonMap("key", new Object());
+        Map<Object, Object> offsetData = Map.of("key", new Object());
         DataException e = assertThrows(DataException.class, () -> OffsetUtils.validateFormat(offsetData));
         assertTrue(e.getMessage().contains("Offsets may only contain primitive types as values"));
 
-        Map<Object, Object> offsetData2 = Collections.singletonMap("key", new ArrayList<>());
+        Map<Object, Object> offsetData2 = Map.of("key", new ArrayList<>());
         e = assertThrows(DataException.class, () -> OffsetUtils.validateFormat(offsetData2));
         assertTrue(e.getMessage().contains("Offsets may only contain primitive types as values"));
     }
 
     @Test
     public void testValidateFormatWithValidFormat() {
-        Map<Object, Object> offsetData = Collections.singletonMap("key", 1);
+        Map<Object, Object> offsetData = Map.of("key", 1);
         // Expect no exception to be thrown
         OffsetUtils.validateFormat(offsetData);
     }
@@ -99,17 +99,17 @@ public class OffsetUtilsTest {
     @Test
     public void testProcessPartitionKeyListWithOneElement() {
         assertInvalidPartitionKey(
-                serializePartitionKey(Collections.singletonList("")),
+                serializePartitionKey(List.of("")),
                 "Ignoring offset partition key with an unexpected number of elements");
     }
 
     @Test
     public void testProcessPartitionKeyListWithElementsOfWrongType() {
         assertInvalidPartitionKey(
-                serializePartitionKey(Arrays.asList(1, new HashMap<>())),
+                serializePartitionKey(List.of(1, new HashMap<>())),
                 "Ignoring offset partition key with an unexpected format for the first element in the partition key list");
         assertInvalidPartitionKey(
-                serializePartitionKey(Arrays.asList("connector-name", new ArrayList<>())),
+                serializePartitionKey(List.of("connector-name", new ArrayList<>())),
                 "Ignoring offset partition key with an unexpected format for the second element in the partition key list");
     }
 
@@ -128,7 +128,7 @@ public class OffsetUtilsTest {
     public void testProcessPartitionKeyValidList() {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
             Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
-            OffsetUtils.processPartitionKey(serializePartitionKey(Arrays.asList("connector-name", new HashMap<>())), new byte[0], CONVERTER, connectorPartitions);
+            OffsetUtils.processPartitionKey(serializePartitionKey(List.of("connector-name", new HashMap<>())), new byte[0], CONVERTER, connectorPartitions);
             assertEquals(1, connectorPartitions.size());
             assertEquals(0, logCaptureAppender.getMessages().size());
         }
@@ -139,7 +139,7 @@ public class OffsetUtilsTest {
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
             Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
             OffsetUtils.processPartitionKey(serializePartitionKey(Arrays.asList("connector-name", null)), new byte[0], CONVERTER, connectorPartitions);
-            assertEquals(Collections.emptyMap(), connectorPartitions);
+            assertEquals(Map.of(), connectorPartitions);
             assertEquals(0, logCaptureAppender.getMessages().size());
         }
     }

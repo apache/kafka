@@ -572,28 +572,6 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void shouldThrowOnEagerSubscription(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source1", "source2");
-
-        final Set<TaskId> prevTasks = Set.of(
-            new TaskId(0, 1), new TaskId(1, 1), new TaskId(2, 1)
-        );
-        final Set<TaskId> standbyTasks = Set.of(
-            new TaskId(0, 2), new TaskId(1, 2), new TaskId(2, 2)
-        );
-
-        createMockTaskManager(prevTasks, standbyTasks);
-        assertThrows(
-            ConfigException.class,
-            () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig)
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
     public void testCooperativeSubscription(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
 
@@ -893,8 +871,8 @@ public class StreamsPartitionAssignorTest {
         // then metadata gets populated
         assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         // check assigned partitions
-        assertEquals(Set.of(new HashSet<>(List.of(t1p0, t2p0, t1p0, t2p0, t1p1, t2p1, t1p2, t2p2))),
-                     Set.of(new HashSet<>(assignments.get("consumer10").partitions())));
+        assertEquals(Set.of(t1p0, t2p0, t1p1, t2p1, t1p2, t2p2),
+                     new HashSet<>(assignments.get("consumer10").partitions()));
 
         // the first consumer
         info10 = checkAssignment(allTopics, assignments.get("consumer10"));
@@ -2085,7 +2063,7 @@ public class StreamsPartitionAssignorTest {
 
     private void shouldReturnLowestAssignmentVersionForDifferentSubscriptionVersions(final int smallestVersion,
                                                                                      final int otherVersion,
-                                                                                     final Map<String, Object> paramterizedObject) {
+                                                                                     final Map<String, Object> parameterizedObject) {
         subscriptions.put("consumer1",
                           new Subscription(
                               Collections.singletonList("topic1"),
@@ -2105,7 +2083,7 @@ public class StreamsPartitionAssignorTest {
                           )
         );
 
-        configureDefault(paramterizedObject);
+        configureDefault(parameterizedObject);
 
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
@@ -2622,7 +2600,7 @@ public class StreamsPartitionAssignorTest {
         builder = new CorruptedInternalTopologyBuilder();
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps(parameterizedConfig)));
 
-        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder);
+        final InternalStreamsBuilder streamsBuilder = new InternalStreamsBuilder(builder, false);
 
         final KStream<String, String> inputTopic = streamsBuilder.stream(singleton("topic1"), new ConsumedInternal<>(Consumed.with(null, null)));
         final KTable<String, String> inputTable = streamsBuilder.table("topic2", new ConsumedInternal<>(Consumed.with(null, null)), new MaterializedInternal<>(Materialized.as("store")));

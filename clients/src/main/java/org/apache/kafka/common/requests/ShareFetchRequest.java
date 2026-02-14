@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.consumer.internals.ShareAcquireMode;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -43,7 +45,8 @@ public class ShareFetchRequest extends AbstractRequest {
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
                                           int maxWait, int minBytes, int maxBytes, int maxRecords,
-                                          int batchSize, List<TopicIdPartition> send, List<TopicIdPartition> forget,
+                                          int batchSize, byte shareAcquireMode, boolean isRenewAck,
+                                          List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
@@ -60,17 +63,28 @@ public class ShareFetchRequest extends AbstractRequest {
             data.setMaxBytes(maxBytes);
             data.setMaxRecords(maxRecords);
             data.setBatchSize(batchSize);
+            data.setShareAcquireMode(shareAcquireMode);
+            data.setIsRenewAck(isRenewAck);
 
             // Build a map of topics to fetch keyed by topic ID, and within each a map of partitions keyed by index
-            Map<Uuid, Map<Integer, ShareFetchRequestData.FetchPartition>> fetchMap = new HashMap<>();
+            ShareFetchRequestData.FetchTopicCollection fetchTopics = new ShareFetchRequestData.FetchTopicCollection();
 
             // First, start by adding the list of topic-partitions we are fetching
             if (!isClosingShareSession) {
                 for (TopicIdPartition tip : send) {
-                    Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
-                    ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
+                    ShareFetchRequestData.FetchTopic fetchTopic = fetchTopics.find(tip.topicId());
+                    if (fetchTopic == null) {
+                        fetchTopic = new ShareFetchRequestData.FetchTopic()
+                                .setTopicId(tip.topicId())
+                                .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
+                        fetchTopics.add(fetchTopic);
+                    }
+                    ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().find(tip.partition());
+                    if (fetchPartition == null) {
+                        fetchPartition = new ShareFetchRequestData.FetchPartition()
                             .setPartitionIndex(tip.partition());
-                    partMap.put(tip.partition(), fetchPartition);
+                        fetchTopic.partitions().add(fetchPartition);
+                    }
                 }
             }
 
@@ -78,27 +92,24 @@ public class ShareFetchRequest extends AbstractRequest {
             // topic-partitions will be a subset, but if the assignment changes, there might be new entries to add
             for (Map.Entry<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgeEntry : acknowledgementsMap.entrySet()) {
                 TopicIdPartition tip = acknowledgeEntry.getKey();
-                Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
-                ShareFetchRequestData.FetchPartition fetchPartition = partMap.get(tip.partition());
+                ShareFetchRequestData.FetchTopic fetchTopic = fetchTopics.find(tip.topicId());
+                if (fetchTopic == null) {
+                    fetchTopic = new ShareFetchRequestData.FetchTopic()
+                            .setTopicId(tip.topicId())
+                            .setPartitions(new ShareFetchRequestData.FetchPartitionCollection());
+                    fetchTopics.add(fetchTopic);
+                }
+                ShareFetchRequestData.FetchPartition fetchPartition = fetchTopic.partitions().find(tip.partition());
                 if (fetchPartition == null) {
                     fetchPartition = new ShareFetchRequestData.FetchPartition()
                             .setPartitionIndex(tip.partition());
-                    partMap.put(tip.partition(), fetchPartition);
+                    fetchTopic.partitions().add(fetchPartition);
                 }
                 fetchPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
             }
 
             // Build up the data to fetch
-            if (!fetchMap.isEmpty()) {
-                data.setTopics(new ArrayList<>());
-                fetchMap.forEach((topicId, partMap) -> {
-                    ShareFetchRequestData.FetchTopic fetchTopic = new ShareFetchRequestData.FetchTopic()
-                            .setTopicId(topicId)
-                            .setPartitions(new ArrayList<>());
-                    partMap.forEach((index, fetchPartition) -> fetchTopic.partitions().add(fetchPartition));
-                    data.topics().add(fetchTopic);
-                });
-            }
+            data.setTopics(fetchTopics);
 
             Builder builder = new Builder(data);
             // And finally, forget the topic-partitions that are no longer in the session
@@ -131,6 +142,16 @@ public class ShareFetchRequest extends AbstractRequest {
 
         @Override
         public ShareFetchRequest build(short version) {
+            if (version < 2) {
+                // The v1 does not support AcknowledgeType RENEW.
+                if (data.isRenewAck()) {
+                    throw new UnsupportedVersionException("The v1 ShareFetch does not support AcknowledgeType.RENEW");
+                }
+                // The v1 only supports ShareAcquireMode.BATCH_OPTIMIZED.
+                if (data.shareAcquireMode() != ShareAcquireMode.BATCH_OPTIMIZED.id()) {
+                    throw new UnsupportedVersionException("The v1 ShareFetch only supports ShareAcquireMode.BATCH_OPTIMIZED");
+                }
+            }
             return new ShareFetchRequest(data, version);
         }
 

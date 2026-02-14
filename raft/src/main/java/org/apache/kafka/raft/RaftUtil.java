@@ -48,7 +48,6 @@ import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -65,6 +64,8 @@ public class RaftUtil {
             case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
             case API_VERSIONS -> new ApiVersionsResponseData().setErrorCode(error.code());
             case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            case ADD_RAFT_VOTER -> new AddRaftVoterResponseData().setErrorCode(error.code());
+            case REMOVE_RAFT_VOTER -> new RemoveRaftVoterResponseData().setErrorCode(error.code());
             default -> throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         };
     }
@@ -525,22 +526,26 @@ public class RaftUtil {
         String clusterId,
         int timeoutMs,
         ReplicaKey voter,
-        Endpoints listeners
+        Endpoints listeners,
+        boolean ackWhenCommitted
     ) {
         return new AddRaftVoterRequestData()
             .setClusterId(clusterId)
             .setTimeoutMs(timeoutMs)
             .setVoterId(voter.id())
             .setVoterDirectoryId(voter.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
-            .setListeners(listeners.toAddVoterRequest());
+            .setListeners(listeners.toAddVoterRequest())
+            .setAckWhenCommitted(ackWhenCommitted);
     }
 
     public static AddRaftVoterResponseData addVoterResponse(
         Errors error,
         String errorMessage
     ) {
-        errorMessage = errorMessage == null ? error.message() : errorMessage;
-
+        // return the provided errorMessage if it exists, Errors.NONE should have a null message
+        if (errorMessage == null && error != Errors.NONE) {
+            errorMessage = error.message();
+        }
         return new AddRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
@@ -560,8 +565,10 @@ public class RaftUtil {
         Errors error,
         String errorMessage
     ) {
-        errorMessage = errorMessage == null ? error.message() : errorMessage;
-
+        // return the provided errorMessage if it exists, Errors.NONE should have a null message
+        if (errorMessage == null && error != Errors.NONE) {
+            errorMessage = error.message();
+        }
         return new RemoveRaftVoterResponseData()
             .setErrorCode(error.code())
             .setErrorMessage(errorMessage);
@@ -755,19 +762,5 @@ public class RaftUtil {
                    data.topics().get(0).topicName().equals(topicPartition.topic()) &&
                    data.topics().get(0).partitions().size() == 1 &&
                    data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
-    }
-
-    static int binaryExponentialElectionBackoffMs(int backoffMaxMs, int backoffBaseMs, int retries, Random random) {
-        if (retries <= 0) {
-            throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
-        }
-        // Takes minimum of the following:
-        // 1. exponential backoff calculation (maxes out at 102.4 seconds)
-        // 2. configurable electionBackoffMaxMs + jitter
-        // The jitter is added to prevent livelock of elections.
-        return Math.min(
-            backoffBaseMs * random.nextInt(1, 2 << Math.min(10, retries - 1)),
-            backoffMaxMs + random.nextInt(backoffBaseMs)
-        );
     }
 }

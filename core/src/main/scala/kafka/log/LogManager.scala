@@ -23,8 +23,7 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.server.{KafkaConfig, KafkaRaftServer}
-import kafka.utils.threadsafe
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
@@ -57,8 +56,9 @@ import java.util.stream.Collectors
  * size or I/O rate.
  *
  * A background thread handles log retention by periodically truncating excess log segments.
+ *
+ * This class is thread-safe.
  */
-@threadsafe
 class LogManager(logDirs: Seq[File],
                  initialOfflineDirs: Seq[File],
                  configRepository: ConfigRepository,
@@ -77,9 +77,14 @@ class LogManager(logDirs: Seq[File],
                  logDirFailureChannel: LogDirFailureChannel,
                  time: Time,
                  remoteStorageSystemEnable: Boolean,
-                 val initialTaskDelayMs: Long) extends Logging {
-
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+                 val initialTaskDelayMs: Long,
+                 cleanerFactory: (CleanerConfig, util.List[File], ConcurrentMap[TopicPartition, UnifiedLog], LogDirFailureChannel, Time) => LogCleaner =
+                  (cleanerConfig, files, map, logDirFailureChannel, time) => new LogCleaner(cleanerConfig, files, map, logDirFailureChannel, time)
+                ) extends Logging {
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.log"
+  private val metricsClassName = "LogManager"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val logCreationOrDeletionLock = new Object
   private val currentLogs = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
@@ -248,7 +253,7 @@ class LogManager(logDirs: Seq[File],
 
       warn(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
-      dirLocks.filter(_.file.getParent == dir).foreach(dir => CoreUtils.swallow(dir.destroy(), this))
+      dirLocks.filter(_.file.getParent == dir).foreach(dir => Utils.swallow(this.logger.underlying, () => dir.destroy()))
     }
   }
 
@@ -627,8 +632,11 @@ class LogManager(logDirs: Seq[File],
                          initialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
-      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs.asJava, currentLogs, logDirFailureChannel, time)
+      _cleaner = cleanerFactory(cleanerConfig, liveLogDirs.asJava, currentLogs, logDirFailureChannel, time)
       _cleaner.startup()
+    } else {
+      warn("The config `log.cleaner.enable` is deprecated and will be removed in Kafka 5.0. Starting from Kafka 5.0, the log cleaner will always be enabled, and this config will be ignored.")
+
     }
   }
 
@@ -648,7 +656,7 @@ class LogManager(logDirs: Seq[File],
 
     // stop the cleaner first
     if (cleaner != null) {
-      CoreUtils.swallow(cleaner.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => cleaner.shutdown())
     }
 
     val localLogsByDir = logsByDir
@@ -696,7 +704,7 @@ class LogManager(logDirs: Seq[File],
               loadLogsCompletedFlags.getOrDefault(logDirAbsolutePath, false)) {
             val cleanShutdownFileHandler = new CleanShutdownFileHandler(dir.getPath)
             debug(s"Writing clean shutdown marker at $dir with broker epoch=$brokerEpoch")
-            CoreUtils.swallow(cleanShutdownFileHandler.write(brokerEpoch), this)
+            Utils.swallow(this.logger.underlying, () => cleanShutdownFileHandler.write(brokerEpoch))
           }
         }
       }
@@ -890,7 +898,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Resume cleaning of the provided partition and log a message about it.
    */
-  private def resumeCleaning(topicPartition: TopicPartition): Unit = {
+  def resumeCleaning(topicPartition: TopicPartition): Unit = {
     if (cleaner != null) {
       cleaner.resumeCleaning(util.Set.of(topicPartition))
       info(s"Cleaning for partition $topicPartition is resumed")
@@ -1239,9 +1247,13 @@ class LogManager(logDirs: Seq[File],
     try {
       sourceLog.foreach { srcLog =>
         srcLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), true)
-        // Now that replica in source log directory has been successfully renamed for deletion.
-        // Close the log, update checkpoint files, and enqueue this log to be deleted.
-        srcLog.close()
+        // Now that replica in source log directory has been successfully renamed for deletion,
+        // update checkpoint files and enqueue this log to be deleted.
+        // Note: We intentionally do NOT close the log here to avoid race conditions where concurrent
+        // operations (e.g., log flusher, fetch requests) might encounter ClosedChannelException.
+        // The log will be deleted asynchronously by the background delete-logs thread.
+        // File handles are intentionally left open; Unix semantics allow the renamed files
+        // to remain accessible until all handles are closed.
         val logDir = srcLog.parentDirFile
         val logsToCheckpoint = logsInDir(logDir)
         checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
@@ -1533,7 +1545,7 @@ object LogManager {
     val cleanerConfig = new CleanerConfig(config)
     val transactionLogConfig = new TransactionLogConfig(config)
 
-    new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
+    new LogManager(logDirs = config.logDirs.asScala.map(new File(_).getAbsoluteFile),
       initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile),
       configRepository = configRepository,
       initialDefaultConfig = defaultLogConfig,

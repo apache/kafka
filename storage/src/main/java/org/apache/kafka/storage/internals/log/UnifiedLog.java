@@ -23,6 +23,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InconsistentTopicIdException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -47,6 +48,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.RequestLocal;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.record.BrokerCompressionType;
@@ -361,13 +363,13 @@ public class UnifiedLog implements AutoCloseable {
                 dir,
                 config,
                 segments,
-                offsets.recoveryPoint,
-                offsets.nextOffsetMetadata,
+                offsets.recoveryPoint(),
+                offsets.nextOffsetMetadata(),
                 scheduler,
                 time,
                 topicPartition,
                 logDirFailureChannel);
-        return new UnifiedLog(offsets.logStartOffset,
+        return new UnifiedLog(offsets.logStartOffset(),
                 localLog,
                 brokerTopicStats,
                 producerIdExpirationCheckIntervalMs,
@@ -390,7 +392,7 @@ public class UnifiedLog implements AutoCloseable {
         return logStartOffset;
     }
 
-    long highestOffsetInRemoteStorage() {
+    public long highestOffsetInRemoteStorage() {
         return highestOffsetInRemoteStorage;
     }
 
@@ -483,7 +485,7 @@ public class UnifiedLog implements AutoCloseable {
 
         if (partMetadataFile.exists()) {
             Uuid fileTopicId = partMetadataFile.read().topicId();
-            if (topicId.isPresent() && !topicId.get().equals(fileTopicId)) {
+            if (topicId.filter(x -> !x.equals(fileTopicId)).isPresent()) {
                 throw new InconsistentTopicIdException("Tried to assign topic ID " + topicId + " to log for topic partition " + topicPartition() + "," +
                         "but log already contained topic ID " + fileTopicId);
             }
@@ -645,10 +647,12 @@ public class UnifiedLog implements AutoCloseable {
     private LogOffsetMetadata fetchLastStableOffsetMetadata() throws IOException {
         localLog.checkIfMemoryMappedBufferClosed();
 
-        // cache the current high watermark to avoid a concurrent update invalidating the range check
+        // cache the current high watermark and the first unstable offset metadata to avoid a concurrent update
+        // invalidating the range check breaking the isPresent check
         LogOffsetMetadata highWatermarkMetadata = fetchHighWatermarkMetadata();
-        if (firstUnstableOffsetMetadata.isPresent() && firstUnstableOffsetMetadata.get().messageOffset < highWatermarkMetadata.messageOffset) {
-            LogOffsetMetadata lom = firstUnstableOffsetMetadata.get();
+        Optional<LogOffsetMetadata> firstUnstableOffsetMetadataCopy = firstUnstableOffsetMetadata;
+        if (firstUnstableOffsetMetadataCopy.isPresent() && firstUnstableOffsetMetadataCopy.get().messageOffset < highWatermarkMetadata.messageOffset) {
+            LogOffsetMetadata lom = firstUnstableOffsetMetadataCopy.get();
             if (lom.messageOffsetOnly()) {
                 synchronized (lock) {
                     LogOffsetMetadata fullOffset = maybeConvertToOffsetMetadata(lom.messageOffset);
@@ -671,8 +675,10 @@ public class UnifiedLog implements AutoCloseable {
      * beyond the high watermark.
      */
     public long lastStableOffset() {
-        if (firstUnstableOffsetMetadata.isPresent() && firstUnstableOffsetMetadata.get().messageOffset < highWatermark()) {
-            return firstUnstableOffsetMetadata.get().messageOffset;
+        // cache the first unstable offset metadata to avoid a concurrent update breaking the isPresent check
+        Optional<LogOffsetMetadata> firstUnstableOffsetMetadataCopy = firstUnstableOffsetMetadata;
+        if (firstUnstableOffsetMetadataCopy.isPresent() && firstUnstableOffsetMetadataCopy.get().messageOffset < highWatermark()) {
+            return firstUnstableOffsetMetadataCopy.get().messageOffset;
         } else {
             return highWatermark();
         }
@@ -750,15 +756,15 @@ public class UnifiedLog implements AutoCloseable {
             }
         } else {
             this.topicId = Optional.of(topicId);
-            if (partitionMetadataFile.isPresent()) {
-                PartitionMetadataFile file = partitionMetadataFile.get();
-                if (!file.exists()) {
-                    file.record(topicId);
-                    scheduler().scheduleOnce("flush-metadata-file", this::maybeFlushMetadataFile);
-                }
-            } else {
-                logger.warn("The topic id {} will not be persisted to the partition metadata file since the partition is deleted", topicId);
-            }
+            partitionMetadataFile.ifPresentOrElse(
+                file -> {
+                    if (!file.exists()) {
+                        file.record(topicId);
+                        scheduler().scheduleOnce("flush-metadata-file", this::maybeFlushMetadataFile);
+                    }
+                },
+                () -> logger.warn("The topic id {} will not be persisted to the partition metadata file since the partition is deleted", topicId)
+            );
         }
     }
 
@@ -860,6 +866,14 @@ public class UnifiedLog implements AutoCloseable {
      */
     public VerificationGuard maybeStartTransactionVerification(long producerId, int sequence, short epoch, boolean supportsEpochBump) {
         synchronized (lock) {
+            // Check if the producer epoch is lower than the stored one, and reject early if it is
+            ProducerStateEntry entry = producerStateManager.activeProducers().get(producerId);
+            if (entry != null && epoch < entry.producerEpoch()) {
+                String message = "Epoch of producer " + producerId + " is " + epoch + ", " +
+                        "which is smaller than the last seen epoch " + entry.producerEpoch();
+                throw new InvalidProducerEpochException(message);
+            }
+
             if (hasOngoingTransaction(producerId, epoch)) {
                 return VerificationGuard.SENTINEL;
             } else {
@@ -984,7 +998,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param leaderEpoch the epoch of the replica appending
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch) throws IOException {
-        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL);
+        return appendAsLeader(records, leaderEpoch, AppendOrigin.CLIENT, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -995,7 +1009,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param origin Declares the origin of the append which affects required validations
      */
     public LogAppendInfo appendAsLeader(MemoryRecords records, int leaderEpoch, AppendOrigin origin) throws IOException {
-        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL);
+        return appendAsLeader(records, leaderEpoch, origin, RequestLocal.noCaching(), VerificationGuard.SENTINEL, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1005,6 +1019,10 @@ public class UnifiedLog implements AutoCloseable {
      * @param leaderEpoch the epoch of the replica appending
      * @param origin Declares the origin of the append which affects required validations
      * @param requestLocal request local instance
+     * @param verificationGuard verification guard for transaction verification
+     * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+     *                           Defaults to TV_UNKNOWN (-1) to force explicit specification.
+     *                           Used for epoch validation of transaction markers (KIP-1228).
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @return Information about the appended messages including the first and last offset.
      */
@@ -1012,9 +1030,11 @@ public class UnifiedLog implements AutoCloseable {
                                         int leaderEpoch,
                                         AppendOrigin origin,
                                         RequestLocal requestLocal,
-                                        VerificationGuard verificationGuard) {
+                                        VerificationGuard verificationGuard,
+                                        short transactionVersion) {
         boolean validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER;
-        return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal), verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE);
+        return append(records, origin, validateAndAssignOffsets, leaderEpoch, Optional.of(requestLocal),
+            verificationGuard, false, RecordBatch.CURRENT_MAGIC_VALUE, transactionVersion);
     }
 
     /**
@@ -1026,7 +1046,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public LogAppendInfo appendAsLeaderWithRecordVersion(MemoryRecords records, int leaderEpoch, RecordVersion recordVersion) {
         return append(records, AppendOrigin.CLIENT, true, leaderEpoch, Optional.of(RequestLocal.noCaching()),
-                VerificationGuard.SENTINEL, false, recordVersion.value);
+                VerificationGuard.SENTINEL, false, recordVersion.value, TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1045,7 +1065,8 @@ public class UnifiedLog implements AutoCloseable {
                       Optional.empty(),
                       VerificationGuard.SENTINEL,
                       true,
-                      RecordBatch.CURRENT_MAGIC_VALUE);
+                      RecordBatch.CURRENT_MAGIC_VALUE,
+                      TransactionVersion.TV_UNKNOWN);
     }
 
     /**
@@ -1059,7 +1080,13 @@ public class UnifiedLog implements AutoCloseable {
      * @param validateAndAssignOffsets Should the log assign offsets to this message set or blindly apply what it is given
      * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
      * @param requestLocal The request local instance if validateAndAssignOffsets is true
+     * @param verificationGuard verification guard for transaction verification
      * @param ignoreRecordSize true to skip validation of record size.
+     * @param toMagic the record version magic value
+     * @param transactionVersion the transaction version for the records (1 for TV1, 2 for TV2, etc.).
+     *                           Defaults to TV_UNKNOWN (-1) to force explicit specification.
+     *                           Used for epoch validation of transaction markers (KIP-1228).
+     *
      * @throws KafkaStorageException If the append fails due to an I/O error.
      * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
      * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
@@ -1072,7 +1099,8 @@ public class UnifiedLog implements AutoCloseable {
                                  Optional<RequestLocal> requestLocal,
                                  VerificationGuard verificationGuard,
                                  boolean ignoreRecordSize,
-                                 byte toMagic) {
+                                 byte toMagic,
+                                 short transactionVersion) {
         // We want to ensure the partition metadata file is written to the log dir before any log data is written to disk.
         // This will ensure that any log data can be recovered with the correct topic ID in the case of failure.
         maybeFlushMetadataFile();
@@ -1115,17 +1143,17 @@ public class UnifiedLog implements AutoCloseable {
                                         requestLocal.orElseThrow(() -> new IllegalArgumentException(
                                                 "requestLocal should be defined if assignOffsets is true")).bufferSupplier());
 
-                                validRecords = validateAndOffsetAssignResult.validatedRecords;
-                                appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs);
+                                validRecords = validateAndOffsetAssignResult.validatedRecords();
+                                appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs());
                                 appendInfo.setLastOffset(offset.value - 1);
-                                appendInfo.setRecordValidationStats(validateAndOffsetAssignResult.recordValidationStats);
+                                appendInfo.setRecordValidationStats(validateAndOffsetAssignResult.recordValidationStats());
                                 if (config().messageTimestampType == TimestampType.LOG_APPEND_TIME) {
-                                    appendInfo.setLogAppendTime(validateAndOffsetAssignResult.logAppendTimeMs);
+                                    appendInfo.setLogAppendTime(validateAndOffsetAssignResult.logAppendTimeMs());
                                 }
 
                                 // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
                                 // format conversion)
-                                if (!ignoreRecordSize && validateAndOffsetAssignResult.messageSizeMaybeChanged) {
+                                if (!ignoreRecordSize && validateAndOffsetAssignResult.messageSizeMaybeChanged()) {
                                     validRecords.batches().forEach(batch -> {
                                         if (batch.sizeInBytes() > config().maxMessageSize()) {
                                             // we record the original message set size instead of the trimmed size
@@ -1177,9 +1205,9 @@ public class UnifiedLog implements AutoCloseable {
                             });
 
                             // check messages size does not exceed config.segmentSize
-                            if (validRecords.sizeInBytes() > config().segmentSize) {
+                            if (validRecords.sizeInBytes() > config().segmentSize()) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
-                                        "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize + ".");
+                                        "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize() + ".");
                             }
 
                             // maybe roll the log if this segment is full
@@ -1193,14 +1221,17 @@ public class UnifiedLog implements AutoCloseable {
                             // now that we have valid records, offsets assigned, and timestamps updated, we need to
                             // validate the idempotent/transactional state of the producers and collect some metadata
                             AnalyzeAndValidateProducerStateResult result = analyzeAndValidateProducerState(
-                                    logOffsetMetadata, validRecords, origin, verificationGuard);
+                                logOffsetMetadata, validRecords, origin, verificationGuard, transactionVersion
+                            );
 
                             if (result.maybeDuplicate.isPresent()) {
                                 BatchMetadata duplicate = result.maybeDuplicate.get();
                                 appendInfo.setFirstOffset(duplicate.firstOffset());
-                                appendInfo.setLastOffset(duplicate.lastOffset);
-                                appendInfo.setLogAppendTime(duplicate.timestamp);
+                                appendInfo.setLastOffset(duplicate.lastOffset());
+                                appendInfo.setLogAppendTime(duplicate.timestamp());
                                 appendInfo.setLogStartOffset(logStartOffset);
+                                logger.trace("Duplicate batch detected, returning AppendInfo from duplicate batch with last offset: {}, first offset: {}, next offset: {}, skipped messages: {}",
+                                        appendInfo.lastOffset(), appendInfo.firstOffset(), localLog.logEndOffset(), validRecords);
                             } else {
                                 // Append the records, and increment the local log end offset immediately after the append because a
                                 // write to the transaction index below may fail, and we want to ensure that the offsets
@@ -1337,7 +1368,8 @@ public class UnifiedLog implements AutoCloseable {
     private AnalyzeAndValidateProducerStateResult analyzeAndValidateProducerState(LogOffsetMetadata appendOffsetMetadata,
                                                                                   MemoryRecords records,
                                                                                   AppendOrigin origin,
-                                                                                  VerificationGuard requestVerificationGuard) {
+                                                                                  VerificationGuard requestVerificationGuard,
+                                                                                  short transactionVersion) {
         Map<Long, ProducerAppendInfo> updatedProducers = new HashMap<>();
         List<CompletedTxn> completedTxns = new ArrayList<>();
         int relativePositionInSegment = appendOffsetMetadata.relativePositionInSegment;
@@ -1372,10 +1404,19 @@ public class UnifiedLog implements AutoCloseable {
                     // transaction is completed or aborted. We can guarantee the transaction coordinator knows about the transaction given step 1 and that the transaction is still
                     // ongoing. If the transaction is expected to be ongoing, we will not set a VerificationGuard. If the transaction is aborted, hasOngoingTransaction is false and
                     // requestVerificationGuard is the sentinel, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
-                    if (batch.isTransactional()
-                            && !hasOngoingTransaction(batch.producerId(), batch.producerEpoch())
-                            && batchMissingRequiredVerification(batch, requestVerificationGuard)) {
-                        throw new InvalidTxnStateException("Record was not part of an ongoing transaction");
+                    if (batch.isTransactional() && !hasOngoingTransaction(batch.producerId(), batch.producerEpoch())) {
+                        // Check epoch first: if producer epoch is stale, throw recoverable InvalidProducerEpochException.
+                        ProducerStateEntry entry = producerStateManager.activeProducers().get(batch.producerId());
+                        if (entry != null && batch.producerEpoch() < entry.producerEpoch()) {
+                            String message = "Epoch of producer " + batch.producerId() + " is " + batch.producerEpoch() + 
+                                ", which is smaller than the last seen epoch " + entry.producerEpoch();
+                            throw new InvalidProducerEpochException(message);
+                        }
+                        
+                        // Only check verification if epoch is current
+                        if (batchMissingRequiredVerification(batch, requestVerificationGuard)) {
+                            throw new InvalidTxnStateException("Record was not part of an ongoing transaction");
+                        }
                     }
                 }
 
@@ -1385,7 +1426,13 @@ public class UnifiedLog implements AutoCloseable {
                     ? Optional.of(new LogOffsetMetadata(batch.baseOffset(), appendOffsetMetadata.segmentBaseOffset, relativePositionInSegment))
                     : Optional.empty();
 
-                Optional<CompletedTxn> maybeCompletedTxn = UnifiedLog.updateProducers(producerStateManager, batch, updatedProducers, firstOffsetMetadata, origin);
+                Optional<CompletedTxn> maybeCompletedTxn = UnifiedLog.updateProducers(
+                    producerStateManager,
+                    batch, updatedProducers,
+                    firstOffsetMetadata,
+                    origin,
+                    transactionVersion
+                );
                 maybeCompletedTxn.ifPresent(completedTxns::add);
             }
 
@@ -1625,8 +1672,8 @@ public class UnifiedLog implements AutoCloseable {
                         // it may not be true following a message format version bump as the epoch will not be available for
                         // log entries written in the older format.
                         Optional<EpochEntry> earliestEpochEntry = leaderEpochCache.earliestEntry();
-                        Optional<Integer> epochOpt = (earliestEpochEntry.isPresent() && earliestEpochEntry.get().startOffset <= logStartOffset)
-                            ? Optional.of(earliestEpochEntry.get().epoch)
+                        Optional<Integer> epochOpt = (earliestEpochEntry.isPresent() && earliestEpochEntry.get().startOffset() <= logStartOffset)
+                            ? Optional.of(earliestEpochEntry.get().epoch())
                             : Optional.empty();
 
                         return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt));
@@ -1654,6 +1701,8 @@ public class UnifiedLog implements AutoCloseable {
                         } else {
                             return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)));
                         }
+                    } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+                        return fetchEarliestPendingUploadOffset(remoteOffsetReader);
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                         // Cache to avoid race conditions.
                         List<LogSegment> segments = logSegments();
@@ -1668,10 +1717,10 @@ public class UnifiedLog implements AutoCloseable {
                         // cache the timestamp and offset
                         TimestampOffset maxTimestampSoFar = latestTimestampSegment.readMaxTimestampAndOffsetSoFar();
                         // lookup the position of batch to avoid extra I/O
-                        OffsetPosition position = latestTimestampSegment.offsetIndex().lookup(maxTimestampSoFar.offset);
+                        OffsetPosition position = latestTimestampSegment.offsetIndex().lookup(maxTimestampSoFar.offset());
                         Optional<FileRecords.TimestampAndOffset> timestampAndOffsetOpt = findFirst(
-                                latestTimestampSegment.log().batchesFrom(position.position),
-                                item -> item.maxTimestamp() == maxTimestampSoFar.timestamp)
+                                latestTimestampSegment.log().batchesFrom(position.position()),
+                                item -> item.maxTimestamp() == maxTimestampSoFar.timestamp())
                                     .flatMap(batch -> batch.offsetOfMaxTimestamp()
                                         .map(offset -> new FileRecords.TimestampAndOffset(
                                             batch.maxTimestamp(),
@@ -1694,6 +1743,31 @@ public class UnifiedLog implements AutoCloseable {
                         }
                     }
                 });
+    }
+
+    private OffsetResultHolder fetchEarliestPendingUploadOffset(Optional<AsyncOffsetReader> remoteOffsetReader) {
+        if (remoteLogEnabled()) {
+            long curHighestRemoteOffset = highestOffsetInRemoteStorage();
+
+            if (curHighestRemoteOffset == -1L) {
+                if (localLogStartOffset() == logStartOffset()) {
+                    // No segments have been uploaded yet
+                    return fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, remoteOffsetReader);
+                } else {
+                    // Leader currently does not know about the already uploaded segments
+                    return new OffsetResultHolder(Optional.of(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1))));
+                }
+            } else {
+                long earliestPendingUploadOffset = Math.max(curHighestRemoteOffset + 1, logStartOffset());
+                OptionalInt epochForOffset = leaderEpochCache.epochForOffset(earliestPendingUploadOffset);
+                Optional<Integer> epochResult = epochForOffset.isPresent()
+                    ? Optional.of(epochForOffset.getAsInt())
+                    : Optional.empty();
+                return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, earliestPendingUploadOffset, epochResult));
+            }
+        } else {
+            return new OffsetResultHolder(new FileRecords.TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)));
+        }
     }
 
     /**
@@ -1866,16 +1940,29 @@ public class UnifiedLog implements AutoCloseable {
 
     /**
      * If topic deletion is enabled, delete any local log segments that have either expired due to time based
-     * retention or because the log size is > retentionSize. Whether or not deletion is enabled, delete any local
-     * log segments that are before the log start offset
+     * retention or because the log size is > retentionSize. Empty cleanup.policy is the same as delete with 
+     * infinite retention, so we only need to delete local segments if remote storage is enabled. Whether or 
+     * not deletion is enabled, delete any local log segments that are before the log start offset
      */
     public int deleteOldSegments() throws IOException {
         if (config().delete) {
             return deleteLogStartOffsetBreachedSegments() +
                     deleteRetentionSizeBreachedSegments() +
                     deleteRetentionMsBreachedSegments();
-        } else {
+        } else if (config().compact) {
             return deleteLogStartOffsetBreachedSegments();
+        } else {
+            // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
+            // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
+            if (remoteLogEnabledAndRemoteCopyEnabled()) {
+                return deleteLogStartOffsetBreachedSegments() +
+                        deleteRetentionSizeBreachedSegments() +
+                        deleteRetentionMsBreachedSegments();
+            } else {
+                // If cleanup.policy is empty and remote storage is disabled, we should not delete any local log segments 
+                // unless the log start offset advances through deleteRecords
+                return deleteLogStartOffsetBreachedSegments();
+            }
         }
     }
 
@@ -2034,12 +2121,12 @@ public class UnifiedLog implements AutoCloseable {
             long maxTimestampInMessages = appendInfo.maxTimestamp();
             long maxOffsetInMessages = appendInfo.lastOffset();
 
-            if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize, appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
+            if (segment.shouldRoll(new RollParams(config().maxSegmentMs(), config().segmentSize(), appendInfo.maxTimestamp(), appendInfo.lastOffset(), messagesSize, now))) {
                 logger.debug("Rolling new log segment (log_size = {}/{}}, " +
                           "offset_index_size = {}/{}, " +
                           "time_index_size = {}/{}, " +
                           "inactive_time_ms = {}/{}).",
-                        segment.size(), config().segmentSize,
+                        segment.size(), config().segmentSize(),
                         segment.offsetIndex().entries(), segment.offsetIndex().maxEntries(),
                         segment.timeIndex().entries(), segment.timeIndex().maxEntries(),
                         segment.timeWaitedForRoll(now, maxTimestampInMessages), config().segmentMs - segment.rollJitterMs());
@@ -2225,6 +2312,12 @@ public class UnifiedLog implements AutoCloseable {
                     if (targetOffset < 0) {
                         throw new IllegalArgumentException("Cannot truncate partition " + topicPartition() + " to a negative offset (" + targetOffset + ").");
                     }
+
+                    long hwm = highWatermark();
+                    if (targetOffset < hwm) {
+                        logger.warn("Truncating {}{} to offset {} below high watermark {}", isFuture() ? "future " : "", topicPartition(), targetOffset, hwm);
+                    }
+
                     if (targetOffset >= localLog.logEndOffset()) {
                         logger.info("Truncating to {} has no effect as the largest offset in the log is {}", targetOffset, localLog.logEndOffset() - 1);
                         // Always truncate epoch cache since we may have a conflicting epoch entry at the
@@ -2378,8 +2471,8 @@ public class UnifiedLog implements AutoCloseable {
     public List<LogSegment> splitOverflowedSegment(LogSegment segment) throws IOException {
         synchronized (lock) {
             LocalLog.SplitSegmentResult result = LocalLog.splitOverflowedSegment(segment, localLog.segments(), dir(), topicPartition(), config(), scheduler(), logDirFailureChannel(), logIdent);
-            deleteProducerSnapshots(result.deletedSegments, true);
-            return result.newSegments;
+            deleteProducerSnapshots(result.deletedSegments(), true);
+            return result.newSegments();
         }
     }
 
@@ -2532,7 +2625,8 @@ public class UnifiedLog implements AutoCloseable {
                         batch,
                         loadedProducers,
                         Optional.empty(),
-                        AppendOrigin.REPLICATION);
+                        AppendOrigin.REPLICATION,
+                        (short) 0);
                 maybeCompletedTxn.ifPresent(completedTxns::add);
             }
         });
@@ -2544,10 +2638,11 @@ public class UnifiedLog implements AutoCloseable {
                                                          RecordBatch batch,
                                                          Map<Long, ProducerAppendInfo> producers,
                                                          Optional<LogOffsetMetadata> firstOffsetMetadata,
-                                                         AppendOrigin origin) {
+                                                         AppendOrigin origin,
+                                                         short transactionVersion) {
         long producerId = batch.producerId();
         ProducerAppendInfo appendInfo = producers.computeIfAbsent(producerId, __ -> producerStateManager.prepareUpdate(producerId, origin));
-        Optional<CompletedTxn> completedTxn = appendInfo.append(batch, firstOffsetMetadata);
+        Optional<CompletedTxn> completedTxn = appendInfo.append(batch, firstOffsetMetadata, transactionVersion);
         // Whether we wrote a control marker or a data batch, we may be able to remove VerificationGuard since either the transaction is complete or we have a first offset.
         if (batch.isTransactional()) {
             VerificationStateEntry entry = producerStateManager.verificationStateEntry(producerId);

@@ -69,7 +69,7 @@ public class LoggingSignalHandler {
         for (String signal : SIGNALS) {
             register(signal, jvmSignalHandlers);
         }
-        log.info("Registered signal handlers for " + String.join(", ", SIGNALS));
+        log.info("Registered signal handlers for {}", String.join(", ", SIGNALS));
     }
 
     private Object createSignalHandler(final Map<String, Object> jvmSignalHandlers) {

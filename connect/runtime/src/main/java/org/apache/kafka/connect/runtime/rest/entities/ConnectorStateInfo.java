@@ -23,43 +23,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 
-public class ConnectorStateInfo {
-
-    private final String name;
-    private final ConnectorState connector;
-    private final List<TaskState> tasks;
-    private final ConnectorType type;
-
-    @JsonCreator
-    public ConnectorStateInfo(@JsonProperty("name") String name,
-                              @JsonProperty("connector") ConnectorState connector,
-                              @JsonProperty("tasks") List<TaskState> tasks,
-                              @JsonProperty("type") ConnectorType type) {
-        this.name = name;
-        this.connector = connector;
-        this.tasks = tasks;
-        this.type = type;
-    }
-
-    @JsonProperty
-    public String name() {
-        return name;
-    }
-
-    @JsonProperty
-    public ConnectorState connector() {
-        return connector;
-    }
-
-    @JsonProperty
-    public List<TaskState> tasks() {
-        return tasks;
-    }
-
-    @JsonProperty
-    public ConnectorType type() {
-        return type;
-    }
+public record ConnectorStateInfo(
+    @JsonProperty String name,
+    @JsonProperty ConnectorState connector,
+    @JsonProperty List<TaskState> tasks,
+    @JsonProperty ConnectorType type
+) {
 
     public abstract static class AbstractState {
         private final String state;
@@ -98,7 +67,6 @@ public class ConnectorStateInfo {
     }
 
     public static class ConnectorState extends AbstractState {
-
         @JsonCreator
         public ConnectorState(@JsonProperty("state") String state,
                               @JsonProperty("worker_id") String worker,
@@ -145,5 +113,4 @@ public class ConnectorStateInfo {
             return Objects.hash(id);
         }
     }
-
 }

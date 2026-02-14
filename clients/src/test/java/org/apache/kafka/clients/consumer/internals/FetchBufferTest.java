@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
@@ -178,7 +177,7 @@ public class FetchBufferTest {
         try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
             final Thread waitingThread = new Thread(() -> {
                 final Timer timer = time.timer(Duration.ofMinutes(1));
-                fetchBuffer.awaitNotEmpty(timer);
+                fetchBuffer.awaitWakeup(timer);
             });
             waitingThread.start();
             fetchBuffer.wakeup();
@@ -204,6 +203,6 @@ public class FetchBufferTest {
      * This is a handy utility method for returning a set from a varargs array.
      */
     private static Set<TopicPartition> partitions(TopicPartition... partitions) {
-        return new HashSet<>(Arrays.asList(partitions));
+        return Set.of(partitions);
     }
 }

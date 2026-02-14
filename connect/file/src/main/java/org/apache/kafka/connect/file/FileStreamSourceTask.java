@@ -90,7 +90,7 @@ public class FileStreamSourceTask extends SourceTask {
         if (stream == null) {
             try {
                 stream = Files.newInputStream(Paths.get(filename));
-                Map<String, Object> offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
+                Map<String, Object> offset = context.offsetStorageReader().offset(Map.of(FILENAME_FIELD, filename));
                 if (offset != null) {
                     Object lastRecordedOffset = offset.get(POSITION_FIELD);
                     if (lastRecordedOffset != null && !(lastRecordedOffset instanceof Long))

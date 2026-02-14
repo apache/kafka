@@ -31,11 +31,10 @@ import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.network.Session
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
-import org.apache.kafka.network.RequestConvertToJson
+import org.apache.kafka.network.{RequestConvertToJson, Session}
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -227,6 +226,8 @@ object RequestChannel extends Logging {
           Seq(specifiedMetricName, header.apiKey.name)
         } else if (header.apiKey == ApiKeys.ADD_PARTITIONS_TO_TXN && body[AddPartitionsToTxnRequest].allVerifyOnlyRequest) {
             Seq(RequestMetrics.VERIFY_PARTITIONS_IN_TXN_METRIC_NAME)
+        } else if (header.apiKey == ApiKeys.LIST_CONFIG_RESOURCES && header.apiVersion == 0) {
+          Seq(RequestMetrics.LIST_CLIENT_METRICS_RESOURCES_METRIC_NAME, header.apiKey.name)
         } else {
           Seq(header.apiKey.name)
         }
@@ -344,7 +345,10 @@ class RequestChannel(val queueSize: Int,
                      val metrics: RequestChannelMetrics) {
   import RequestChannel._
 
-  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  // Changing the package or class name may cause incompatibility with existing code and metrics configuration
+  private val metricsPackage = "kafka.network"
+  private val metricsClassName = "RequestChannel"
+  private val metricsGroup = new KafkaMetricsGroup(metricsPackage, metricsClassName)
 
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()

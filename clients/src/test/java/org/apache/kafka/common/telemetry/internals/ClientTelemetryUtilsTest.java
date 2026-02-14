@@ -30,10 +30,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import io.opentelemetry.proto.metrics.v1.Metric;
@@ -69,12 +68,12 @@ public class ClientTelemetryUtilsTest {
     @Test
     public void testGetSelectorFromRequestedMetrics() {
         // no metrics selector
-        assertEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(Collections.emptyList()));
+        assertEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(List.of()));
         assertEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(null));
         // all metrics selector
-        assertEquals(ClientTelemetryUtils.SELECTOR_ALL_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(Collections.singletonList("*")));
+        assertEquals(ClientTelemetryUtils.SELECTOR_ALL_METRICS, ClientTelemetryUtils.getSelectorFromRequestedMetrics(List.of("*")));
         // specific metrics selector
-        Predicate<? super MetricKeyable> selector = ClientTelemetryUtils.getSelectorFromRequestedMetrics(Arrays.asList("metric1", "metric2"));
+        Predicate<? super MetricKeyable> selector = ClientTelemetryUtils.getSelectorFromRequestedMetrics(List.of("metric1", "metric2"));
         assertNotEquals(ClientTelemetryUtils.SELECTOR_NO_METRICS, selector);
         assertNotEquals(ClientTelemetryUtils.SELECTOR_ALL_METRICS, selector);
         assertTrue(selector.test(new MetricKey("metric1.test")));
@@ -86,7 +85,7 @@ public class ClientTelemetryUtilsTest {
     @Test
     public void testGetCompressionTypesFromAcceptedList() {
         assertEquals(0, ClientTelemetryUtils.getCompressionTypesFromAcceptedList(null).size());
-        assertEquals(0, ClientTelemetryUtils.getCompressionTypesFromAcceptedList(Collections.emptyList()).size());
+        assertEquals(0, ClientTelemetryUtils.getCompressionTypesFromAcceptedList(List.of()).size());
 
         List<Byte> compressionTypes = new ArrayList<>();
         compressionTypes.add(CompressionType.GZIP.id);
@@ -123,10 +122,24 @@ public class ClientTelemetryUtilsTest {
 
     @Test
     public void testPreferredCompressionType() {
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList()));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null));
-        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP)));
-        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE)));
+        // Test with no unsupported types
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(List.of(), Set.of()));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.NONE, CompressionType.GZIP), Set.of()));
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.NONE), Set.of()));
+
+        // Test unsupported type filtering (returns first available type, or NONE if all are unsupported)
+        assertEquals(CompressionType.LZ4, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP)));
+        assertEquals(CompressionType.SNAPPY, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.GZIP, CompressionType.LZ4)));
+        
+        // Test edge case: no match between requested and supported types
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.LZ4), Set.of(CompressionType.SNAPPY)));
+
+        // Test NullPointerException for null parameters
+        assertThrows(NullPointerException.class, () ->
+            ClientTelemetryUtils.preferredCompressionType(null, Set.of()));
+        assertThrows(NullPointerException.class, () ->
+            ClientTelemetryUtils.preferredCompressionType(List.of(CompressionType.GZIP, CompressionType.NONE), null));
     }
 
     @ParameterizedTest
@@ -150,19 +163,19 @@ public class ClientTelemetryUtilsTest {
     private MetricsData getMetricsData() {
         List<Metric> metricsList = new ArrayList<>();
         metricsList.add(SinglePointMetric.sum(
-                        new MetricKey("metricName"), 1.0, true, Instant.now(), null, Collections.emptySet())
+                        new MetricKey("metricName"), 1.0, true, Instant.now(), null, Set.of())
                 .builder().build());
         metricsList.add(SinglePointMetric.sum(
-                        new MetricKey("metricName1"), 100.0, false, Instant.now(),  Instant.now(), Collections.emptySet())
+                        new MetricKey("metricName1"), 100.0, false, Instant.now(),  Instant.now(), Set.of())
                 .builder().build());
         metricsList.add(SinglePointMetric.deltaSum(
-                        new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Collections.emptySet())
+                        new MetricKey("metricName2"), 1.0, true, Instant.now(), Instant.now(), Set.of())
                 .builder().build());
         metricsList.add(SinglePointMetric.gauge(
-                        new MetricKey("metricName3"), 1.0, Instant.now(), Collections.emptySet())
+                        new MetricKey("metricName3"), 1.0, Instant.now(), Set.of())
                 .builder().build());
         metricsList.add(SinglePointMetric.gauge(
-                        new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Collections.emptySet())
+                        new MetricKey("metricName4"), Long.valueOf(100), Instant.now(), Set.of())
                 .builder().build());
 
         MetricsData.Builder builder = MetricsData.newBuilder();

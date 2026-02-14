@@ -71,6 +71,8 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -125,7 +127,7 @@ public class ConsumerMembershipManagerTest {
         time = new MockTime(0);
         backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
         metrics = new Metrics(time);
-        rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics);
+        rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics, subscriptionState);
 
         when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
     }
@@ -142,17 +144,20 @@ public class ConsumerMembershipManagerTest {
 
     private ConsumerMembershipManager createMembershipManager(String groupInstanceId) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-            GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
+            GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
             subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
             backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
         return manager;
     }
 
-    private ConsumerMembershipManager createMembershipManagerJoiningGroup(String groupInstanceId,
-                                                                      String serverAssignor) {
+    private ConsumerMembershipManager createMembershipManagerJoiningGroup(
+        String groupInstanceId,
+        String serverAssignor,
+        String rackId
+    ) {
         ConsumerMembershipManager manager = spy(new ConsumerMembershipManager(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(rackId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
                 metadata, LOG_CONTEXT, backgroundEventHandler, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
@@ -165,8 +170,26 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
         assertEquals(Optional.empty(), membershipManager.serverAssignor());
 
-        membershipManager = createMembershipManagerJoiningGroup("instance1", "Uniform");
+        membershipManager = createMembershipManagerJoiningGroup("instance1", "Uniform", null);
         assertEquals(Optional.of("Uniform"), membershipManager.serverAssignor());
+    }
+
+    @Test
+    public void testMembershipManagerRackId() {
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        assertEquals(Optional.empty(), membershipManager.rackId());
+
+        membershipManager = createMembershipManagerJoiningGroup(null, null, "rack1");
+        assertEquals(Optional.of("rack1"), membershipManager.rackId());
+    }
+
+    @Test
+    public void testAssignedPartitionCountMetricRegistered() {
+        MetricName metricName = metrics.metricName(
+                "assigned-partitions",
+                CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
+        );
+        assertNotNull(metrics.metric(metricName), "Metric assigned-partitions should have been registered");
     }
 
     @Test
@@ -231,7 +254,7 @@ public class ConsumerMembershipManagerTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         ConsumerMembershipManager membershipManager = new ConsumerMembershipManager(
-                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
+                GROUP_ID, Optional.empty(), Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, LOG_CONTEXT,
             backgroundEventHandler, time, rebalanceMetricsManager, true);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
@@ -424,6 +447,10 @@ public class ConsumerMembershipManagerTest {
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(new Assignment(), membershipManager.memberId()));
+
+        assertFalse(sendLeave.isDone(), "Send leave operation should not complete until a leave response is received");
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
 
         assertSendLeaveCompleted(membershipManager, sendLeave);
     }
@@ -955,6 +982,9 @@ public class ConsumerMembershipManagerTest {
         assertFalse(leaveResult.isDone());
 
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(createAssignment(true), membershipManager.memberId()));
+        assertFalse(leaveResult.isDone());
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
         assertSendLeaveCompleted(membershipManager, leaveResult);
     }
 
@@ -998,16 +1028,43 @@ public class ConsumerMembershipManagerTest {
 
         assertEquals(state, membershipManager.state());
         verify(responseData, never()).memberId();
-        verify(responseData, never()).memberEpoch();
+        // In unsubscribed, we check if we received a leave group response, so we do verify member epoch.
+        if (state != MemberState.UNSUBSCRIBED) {
+            verify(responseData, never()).memberEpoch();
+        }
         verify(responseData, never()).assignment();
     }
 
     @Test
-    public void testLeaveGroupWhenStateIsReconciling() {
-        ConsumerMembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
+    public void testIgnoreLeaveResponseWhenNotLeavingGroup() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
 
-        testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+
+        // Send leave request, transitioning to UNSUBSCRIBED state
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Receive a previous heartbeat response, which should be ignored
+        membershipManager.onHeartbeatSuccess(new ConsumerGroupHeartbeatResponse(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(MEMBER_EPOCH)
+        ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
+        // Consumer unblocks and updates subscription
+        membershipManager.onSubscriptionUpdated();
+        membershipManager.onConsumerPoll();
+
+        membershipManager.onHeartbeatSuccess(createConsumerGroupLeaveResponse(membershipManager.memberId()));
+
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        assertEquals(0, membershipManager.memberEpoch());
     }
 
     @Test
@@ -2339,10 +2396,20 @@ public class ConsumerMembershipManagerTest {
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyAvg));
         assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyMax));
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, 1d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        time.sleep(windowLength - reconciliationDurationMs - 1);
+        assertEquals(1d / metrics.config().samples(), (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour), 0.1d);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
+
+        // WindowLength have passed, triggering metric reset
+        time.sleep(windowLength);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour));
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
     }
 
     @Test
@@ -2437,9 +2504,17 @@ public class ConsumerMembershipManagerTest {
 
         assertEquals((double) 0, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(120d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
+        assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
         assertEquals(1d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
         assertEquals(-1d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
+
+        long windowLength = metrics.config().samples() * 3600_000L;
+        time.sleep(windowLength - 2300 - 1);
+        assertEquals(1d / metrics.config().samples(), (double) getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate), 0.1d);
+
+        // WindowLength have passed, triggering metric reset
+        time.sleep(windowLength);
+        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
     }
 
     @Test
@@ -2703,7 +2778,7 @@ public class ConsumerMembershipManagerTest {
     }
 
     private ConsumerMembershipManager createMemberInStableState(String groupInstanceId) {
-        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup(groupInstanceId, null);
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup(groupInstanceId, null, null);
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(new Assignment(), membershipManager.memberId());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
@@ -2899,6 +2974,13 @@ public class ConsumerMembershipManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(MEMBER_EPOCH)
                 .setAssignment(assignment));
+    }
+
+    private ConsumerGroupHeartbeatResponse createConsumerGroupLeaveResponse(String memberId) {
+        return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setMemberId(memberId)
+            .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
     }
 
     /**

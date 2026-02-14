@@ -64,6 +64,17 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         version = version.toShort
       )
 
+      // Sync with empty group id.
+      verifySyncGroupWithOldProtocol(
+        groupId = "",
+        memberId = "member-id",
+        generationId = -1,
+        expectedProtocolType = null,
+        expectedProtocolName = null,
+        expectedError = Errors.INVALID_GROUP_ID,
+        version = version.toShort
+      )
+
       val metadata = ConsumerProtocol.serializeSubscription(
         new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
       ).array

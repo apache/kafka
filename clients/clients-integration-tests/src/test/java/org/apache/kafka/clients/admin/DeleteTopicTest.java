@@ -25,7 +25,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -37,6 +36,7 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -70,7 +70,7 @@ public class DeleteTopicTest {
         try (Admin admin = cluster.admin()) {
             admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
         }
     }
 
@@ -93,7 +93,7 @@ public class DeleteTopicTest {
                 "Online replicas have not deleted log.");
 
             follower.startup();
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
         }
     }
 
@@ -119,7 +119,7 @@ public class DeleteTopicTest {
             }
 
             follower.startup();
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
         }
     }
 
@@ -147,7 +147,7 @@ public class DeleteTopicTest {
             }
 
             follower.startup();
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
         }
     }
 
@@ -166,12 +166,12 @@ public class DeleteTopicTest {
                 "Follower " + followerBrokerId + " was not shutdown");
             Map<String, NewPartitions> newPartitionSet = Map.of(DEFAULT_TOPIC, NewPartitions.increaseTo(3));
             admin.createPartitions(newPartitionSet);
-            cluster.waitForTopic(DEFAULT_TOPIC, 3);
+            cluster.waitTopicCreation(DEFAULT_TOPIC, 3);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
 
             follower.startup();
             // test if topic deletion is resumed
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
             waitForReplicaDeleted(cluster.brokers(), newTopicPartition, "Replica logs not for new partition [" + DEFAULT_TOPIC + ",1] not deleted after delete topic is complete.");
         }
     }
@@ -185,7 +185,7 @@ public class DeleteTopicTest {
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
             Map<String, NewPartitions> newPartitionSet = Map.of(DEFAULT_TOPIC, NewPartitions.increaseTo(3));
             admin.createPartitions(newPartitionSet);
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
             waitForReplicaDeleted(cluster.brokers(), newTopicPartition, "Replica logs not deleted after delete topic is complete");
         }
     }
@@ -196,12 +196,13 @@ public class DeleteTopicTest {
             admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
             TopicPartition topicPartition = new TopicPartition(DEFAULT_TOPIC, 0);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
             // re-create topic on same replicas
             admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic " + DEFAULT_TOPIC + " not created.");
         }
     }
+
     @ClusterTest
     public void testDeleteNonExistingTopic(ClusterInstance cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
@@ -217,10 +218,10 @@ public class DeleteTopicTest {
                 }
             }, "Topic test2 should not exist.");
 
-            cluster.waitForTopic(topic, 0);
+            cluster.waitTopicDeletion(topic);
 
             waitForReplicaCreated(cluster.brokers(), topicPartition, "Replicas for topic test not created.");
-            TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000);
+            cluster.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, DEFAULT_TOPIC, 0, 1000);
         }
     }
 
@@ -245,7 +246,7 @@ public class DeleteTopicTest {
             server.logManager().cleaner().awaitCleaned(topicPartition, 0, 60000);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
 
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
         }
     }
 
@@ -264,7 +265,7 @@ public class DeleteTopicTest {
                 }
             }, "Topic " + DEFAULT_TOPIC + " should be marked for deletion or already deleted.");
 
-            cluster.waitForTopic(DEFAULT_TOPIC, 0);
+            cluster.waitTopicDeletion(DEFAULT_TOPIC);
         }
     }
 
@@ -364,7 +365,8 @@ public class DeleteTopicTest {
                     0,
                     AppendOrigin.CLIENT,
                     RequestLocal.noCaching(),
-                    VerificationGuard.SENTINEL
+                    VerificationGuard.SENTINEL,
+                    (short) 0
                 );
                 counter++;
                 result.add(new int[] {key, count});

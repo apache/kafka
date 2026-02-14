@@ -37,6 +37,7 @@ public class ShareCoordinatorRecordHelpers {
                 .setStateEpoch(offsetData.stateEpoch())
                 .setLeaderEpoch(offsetData.leaderEpoch())
                 .setStartOffset(offsetData.startOffset())
+                .setDeliveryCompleteCount(offsetData.deliveryCompleteCount())
                 .setStateBatches(offsetData.stateBatches().stream()
                     .map(batch -> new ShareSnapshotValue.StateBatch()
                         .setFirstOffset(batch.firstOffset())
@@ -51,7 +52,7 @@ public class ShareCoordinatorRecordHelpers {
         );
     }
 
-    public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
+    public static CoordinatorRecord newShareUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return CoordinatorRecord.record(
             new ShareUpdateKey()
                 .setGroupId(groupId)
@@ -61,6 +62,7 @@ public class ShareCoordinatorRecordHelpers {
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setLeaderEpoch(offsetData.leaderEpoch())
                 .setStartOffset(offsetData.startOffset())
+                .setDeliveryCompleteCount(offsetData.deliveryCompleteCount())
                 .setStateBatches(offsetData.stateBatches().stream()
                     .map(batch -> new ShareUpdateValue.StateBatch()
                         .setFirstOffset(batch.firstOffset())

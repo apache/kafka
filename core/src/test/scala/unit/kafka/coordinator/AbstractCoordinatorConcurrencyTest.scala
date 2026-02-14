@@ -20,7 +20,6 @@ package kafka.coordinator
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
 import kafka.log.LogManager
@@ -33,8 +32,9 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidat
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.MetadataCache
-import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets, TopicPartitionOperationKey}
+import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteFetch, DelayedRemoteListOffsets, TopicPartitionOperationKey}
+import org.apache.kafka.server.transaction.AddPartitionsToTxnManager.TransactionSupportedOperation
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog, VerificationGuard}
@@ -69,11 +69,11 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
 
   @AfterEach
   def tearDown(): Unit = {
-    CoreUtils.swallow(replicaManager.shutdown(false), this)
-    CoreUtils.swallow(executor.shutdownNow(), this)
+    Utils.swallow(this.logger.underlying, () => replicaManager.shutdown(false))
+    Utils.swallow(this.logger.underlying, () => executor.shutdownNow())
     Utils.closeQuietly(timer, "mock timer")
-    CoreUtils.swallow(scheduler.shutdown(), this)
-    CoreUtils.swallow(time.scheduler.shutdown(), this)
+    Utils.swallow(this.logger.underlying, () => scheduler.shutdown())
+    Utils.swallow(this.logger.underlying, () => time.scheduler.shutdown())
   }
 
   /**
@@ -190,8 +190,7 @@ object AbstractCoordinatorConcurrencyTest {
       delayedFetchPurgatoryParam = Some(delayedFetchPurgatoryParam),
       delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
       delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
-      delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam),
-      threadNamePrefix = Option(this.getClass.getName)) {
+      delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
 
@@ -216,10 +215,10 @@ object AbstractCoordinatorConcurrencyTest {
                                origin: AppendOrigin,
                                entriesPerPartition: Map[TopicIdPartition, MemoryRecords],
                                responseCallback: Map[TopicIdPartition, PartitionResponse] => Unit,
-                               delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicIdPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.noCaching,
-                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                               transactionVersion: Short = TransactionVersion.TV_UNKNOWN): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
@@ -227,7 +226,7 @@ object AbstractCoordinatorConcurrencyTest {
         case (tp, _) =>
           (tp, ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
       })
-      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback, delayedProduceLock) {
+      val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
         val completeAttempts = new AtomicInteger
         override def tryComplete(): Boolean = {

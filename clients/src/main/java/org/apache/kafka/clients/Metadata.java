@@ -508,7 +508,7 @@ public class Metadata implements Closeable {
                 topicId = null;
             }
 
-            if (!retainTopic(topicName, metadata.isInternal(), nowMs))
+            if (!retainTopic(topicName, topicId, metadata.isInternal(), nowMs))
                 continue;
 
             if (metadata.isInternal())
@@ -758,8 +758,18 @@ public class Metadata implements Closeable {
         return metadataSnapshot.topicNames();
     }
 
+    /**
+     * Based on the topic name, check if the topic metadata should be kept when received in a metadata response.
+     */
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
+    }
+
+    /**
+     * Based on the topic name and topic ID, check if the topic metadata should be kept when received in a metadata response.
+     */
+    protected boolean retainTopic(String topicName, Uuid topicId, boolean isInternal, long nowMs) {
+        return retainTopic(topicName, isInternal, nowMs);
     }
 
     public static class MetadataRequestAndVersion {

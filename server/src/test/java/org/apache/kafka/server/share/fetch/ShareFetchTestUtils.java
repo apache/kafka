@@ -79,7 +79,7 @@ public class ShareFetchTestUtils {
     public static FileRecords createFileRecords(Map<Long, Integer> recordsPerOffset) throws IOException {
         FileRecords fileRecords = FileRecords.open(tempFile());
         for (Entry<Long, Integer> entry : recordsPerOffset.entrySet()) {
-            try (MemoryRecordsBuilder records = memoryRecordsBuilder(entry.getValue(), entry.getKey())) {
+            try (MemoryRecordsBuilder records = memoryRecordsBuilder(entry.getKey(), entry.getValue())) {
                 fileRecords.append(records.build());
             }
         }
@@ -89,23 +89,23 @@ public class ShareFetchTestUtils {
     /**
      * Create a memory records builder with the given number of records and start offset.
      *
-     * @param numOfRecords The number of records to create.
      * @param startOffset The start offset of the records.
+     * @param numOfRecords The number of records to create.
      * @return The memory records builder.
      */
-    public static MemoryRecordsBuilder memoryRecordsBuilder(int numOfRecords, long startOffset) {
-        return memoryRecordsBuilder(ByteBuffer.allocate(1024), numOfRecords, startOffset);
+    public static MemoryRecordsBuilder memoryRecordsBuilder(long startOffset, int numOfRecords) {
+        return memoryRecordsBuilder(ByteBuffer.allocate(1024), startOffset, numOfRecords);
     }
 
     /**
      * Create a memory records builder with the number of records and start offset, in the given buffer.
      *
      * @param buffer The buffer to write the records to.
-     * @param numOfRecords The number of records to create.
      * @param startOffset The start offset of the records.
+     * @param numOfRecords The number of records to create.
      * @return The memory records builder.
      */
-    public static MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, int numOfRecords, long startOffset) {
+    public static MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, long startOffset, int numOfRecords) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
             TimestampType.CREATE_TIME, startOffset, 2);
         for (int i = 0; i < numOfRecords; i++) {

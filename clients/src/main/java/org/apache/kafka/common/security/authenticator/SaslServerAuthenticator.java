@@ -318,7 +318,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public Optional<KafkaPrincipalSerde> principalSerde() {
-        return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
+        return Optional.of(principalBuilder);
     }
 
     @Override
@@ -681,7 +681,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 else
                     retvalSessionLifetimeMs = zeroIfNegative(Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
 
-                sessionExpirationTimeNanos = authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs;
+                sessionExpirationTimeNanos = Math.addExact(authenticationEndNanos, Utils.msToNs(retvalSessionLifetimeMs));
             }
 
             if (credentialExpirationMs != null) {

@@ -36,7 +36,6 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -229,9 +228,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         if (skipAssignment)
             throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
-        return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
-               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
-               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+        ConnectProtocolCompatibility protocolCompatibility = ConnectProtocolCompatibility.fromProtocol(protocol);
+        return protocolCompatibility == EAGER
+               ? eagerAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this)
+               : incrementalAssignor.performAssignment(leaderId, protocolCompatibility, allMemberMetadata, this);
     }
 
     @Override
@@ -459,7 +459,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     public static class ConnectorsAndTasks {
         public static final ConnectorsAndTasks EMPTY =
-                new ConnectorsAndTasks(Collections.emptyList(), Collections.emptyList());
+                new ConnectorsAndTasks(List.of(), List.of());
 
         private final Collection<String> connectors;
         private final Collection<ConnectorTaskId> tasks;

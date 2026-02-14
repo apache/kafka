@@ -250,7 +250,7 @@ class SubmittedRecords {
         /**
          * An "empty" snapshot that contains no offsets to commit and whose metadata contains no committable or uncommitable messages.
          */
-        public static final CommittableOffsets EMPTY = new CommittableOffsets(Collections.emptyMap(), 0, 0, 0, 0, null);
+        public static final CommittableOffsets EMPTY = new CommittableOffsets(Map.of(), 0, 0, 0, 0, null);
 
         CommittableOffsets {
             offsets = Collections.unmodifiableMap(offsets);

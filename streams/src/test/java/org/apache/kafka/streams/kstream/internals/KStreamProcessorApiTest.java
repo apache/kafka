@@ -86,9 +86,9 @@ public class KStreamProcessorApiTest {
             final KeyValueStore<String, String> stateStore = testDriver.getKeyValueStore("store");
 
             Assertions.assertEquals(expectedOutput, actualOutput);
-            Assertions.assertEquals(stateStore.get("a"), "fooUpdated");
-            Assertions.assertEquals(stateStore.get("b"), "barUpdated");
-            Assertions.assertEquals(stateStore.get("c"), "bazUpdated");
+            Assertions.assertEquals("fooUpdated", stateStore.get("a"));
+            Assertions.assertEquals("barUpdated", stateStore.get("b"));
+            Assertions.assertEquals("bazUpdated", stateStore.get("c"));
         }
     }
     

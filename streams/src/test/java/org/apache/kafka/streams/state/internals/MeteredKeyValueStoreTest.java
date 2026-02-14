@@ -58,7 +58,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -123,7 +122,7 @@ public class MeteredKeyValueStoreTest {
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         when(context.applicationId()).thenReturn(APPLICATION_ID);
         when(context.metrics()).thenReturn(
-            new StreamsMetricsImpl(metrics, "test", "processId", mockTime)
+            new StreamsMetricsImpl(metrics, "test", mockTime)
         );
         when(context.taskId()).thenReturn(taskId);
         when(context.changelogFor(STORE_NAME)).thenReturn(CHANGELOG_TOPIC);
@@ -210,16 +209,19 @@ public class MeteredKeyValueStoreTest {
     }
 
     @Test
-    public void shouldRecordRestoreLatencyOnInit() {
+    public void shouldRecordRestoreLatencyOnRecordRestoreTime() {
         setUp();
         doNothing().when(inner).init(context, metered);
 
         init();
 
+        final long restoreTimeNs = 1000L;
+        metered.recordRestoreTime(restoreTimeNs);
+
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
-        final KafkaMetric metric = metric("restore-rate");
-        assertThat((Double) metric.metricValue(), greaterThan(0.0));
+        final KafkaMetric metric = metric("restore-latency-max");
+        assertThat((Double) metric.metricValue(), equalTo((double) restoreTimeNs));
     }
 
     @Test
@@ -528,7 +530,7 @@ public class MeteredKeyValueStoreTest {
         final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
         assertThat(oldestIteratorTimestampMetric, not(nullValue()));
 
-        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
 
         KeyValueIterator<String, String> second = null;
         final long secondTimestamp;
@@ -546,14 +548,14 @@ public class MeteredKeyValueStoreTest {
             }
 
             // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
-            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+            assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
         } finally {
             if (second != null) {
                 second.close();
             }
         }
-
-        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
+        // no open iterators left, timestamp should be reset to 0
+        assertThat(oldestIteratorTimestampMetric.metricValue(), equalTo(0L));
     }
 
     private KafkaMetric metric(final MetricName metricName) {

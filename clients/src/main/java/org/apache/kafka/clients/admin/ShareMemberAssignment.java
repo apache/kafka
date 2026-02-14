@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -27,7 +26,6 @@ import java.util.stream.Collectors;
 /**
  * A description of the assignments of a specific share group member.
  */
-@InterfaceStability.Evolving
 public class ShareMemberAssignment {
     private final Set<TopicPartition> topicPartitions;
 

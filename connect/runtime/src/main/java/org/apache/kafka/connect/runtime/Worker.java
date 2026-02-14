@@ -108,7 +108,6 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -197,7 +196,7 @@ public final class Worker {
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.workerMetricsGroup = new WorkerMetricsGroup(this.connectors, this.tasks, metrics);
 
-        Map<String, String> internalConverterConfig = Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false");
+        Map<String, String> internalConverterConfig = Map.of(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false");
         this.internalKeyConverter = plugins.newInternalConverter(true, JsonConverter.class.getName(), internalConverterConfig);
         this.internalValueConverter = plugins.newInternalConverter(false, JsonConverter.class.getName(), internalConverterConfig);
 
@@ -539,7 +538,7 @@ public final class Worker {
      */
     public void stopAndAwaitConnector(String connName) {
         stopConnector(connName);
-        awaitStopConnectors(Collections.singletonList(connName));
+        awaitStopConnectors(List.of(connName));
     }
 
     /**
@@ -1149,7 +1148,7 @@ public final class Worker {
      */
     public void stopAndAwaitTask(ConnectorTaskId taskId) {
         stopTask(taskId);
-        awaitStopTasks(Collections.singletonList(taskId));
+        awaitStopTasks(List.of(taskId));
     }
 
     /**
@@ -1249,7 +1248,7 @@ public final class Worker {
         final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
 
         try {
-            return plugins.pluginLoader(klass, PluginUtils.connectorVersionRequirement(version));
+            return plugins.connectorLoader(klass, PluginUtils.connectorVersionRequirement(version));
         } catch (InvalidVersionSpecificationException  | VersionedPluginLoadingException e) {
             throw new ConnectException(
                     String.format("Failed to get class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
@@ -1562,7 +1561,7 @@ public final class Worker {
     private void resetSinkConnectorOffsets(String connName, String groupId, Admin admin, Callback<Message> cb, boolean alterOffsetsResult, Timer timer) {
         DeleteConsumerGroupsOptions deleteConsumerGroupsOptions = new DeleteConsumerGroupsOptions().timeoutMs((int) timer.remainingMs());
 
-        admin.deleteConsumerGroups(Collections.singleton(groupId), deleteConsumerGroupsOptions)
+        admin.deleteConsumerGroups(Set.of(groupId), deleteConsumerGroupsOptions)
                 .all()
                 .whenComplete((ignored, error) -> {
                     // We treat GroupIdNotFoundException as a non-error here because resetting a connector's offsets is expected to be an idempotent operation

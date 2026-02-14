@@ -20,6 +20,7 @@ package org.apache.kafka.metadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -30,7 +31,7 @@ public final class LeaderAndIsrTest {
         LeaderAndIsr recoveringLeaderAndIsr = leaderAndIsr.newRecoveringLeaderAndIsr(3, List.of(3));
 
         assertEquals(3, recoveringLeaderAndIsr.leader());
-        assertEquals(List.of(3), recoveringLeaderAndIsr.isr());
+        assertEquals(Set.of(3), recoveringLeaderAndIsr.isr());
         assertEquals(LeaderRecoveryState.RECOVERING, recoveringLeaderAndIsr.leaderRecoveryState());
     }
 
@@ -40,7 +41,7 @@ public final class LeaderAndIsrTest {
         LeaderAndIsr newLeaderAndIsr = leaderAndIsr.newLeaderAndIsr(2, List.of(1, 2));
 
         assertEquals(2, newLeaderAndIsr.leader());
-        assertEquals(List.of(1, 2), newLeaderAndIsr.isr());
+        assertEquals(Set.of(1, 2), newLeaderAndIsr.isr());
         assertEquals(LeaderRecoveryState.RECOVERED, newLeaderAndIsr.leaderRecoveryState());
     }
 
@@ -49,12 +50,12 @@ public final class LeaderAndIsrTest {
         LeaderAndIsr leaderAndIsr = new LeaderAndIsr(2, List.of(1, 2, 3));
 
         assertEquals(2, leaderAndIsr.leader());
-        assertEquals(List.of(1, 2, 3), leaderAndIsr.isr());
+        assertEquals(Set.of(1, 2, 3), leaderAndIsr.isr());
 
         LeaderAndIsr newLeaderAndIsr = leaderAndIsr.newLeader(3);
 
         assertEquals(3, newLeaderAndIsr.leader());
-        assertEquals(List.of(1, 2, 3), newLeaderAndIsr.isr());
+        assertEquals(Set.of(1, 2, 3), newLeaderAndIsr.isr());
     }
 
     @Test

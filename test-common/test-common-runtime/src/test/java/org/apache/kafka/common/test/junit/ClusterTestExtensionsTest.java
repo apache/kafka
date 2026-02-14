@@ -18,6 +18,7 @@
 package org.apache.kafka.common.test.junit;
 
 import kafka.server.ControllerServer;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -44,7 +45,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.AutoStart;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -55,26 +55,28 @@ import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.metadata.properties.MetaProperties;
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
+import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Assertions;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
@@ -88,6 +90,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(types = {Type.KRAFT}, serverProperties = {
     @ClusterConfigProperty(key = "default.key", value = "default.value"),
@@ -105,10 +108,10 @@ public class ClusterTestExtensionsTest {
     static List<ClusterConfig> generate1() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
-        return singletonList(ClusterConfig.defaultBuilder()
-                .setTypes(singleton(Type.KRAFT))
+        return List.of(ClusterConfig.defaultBuilder()
+                .setTypes(Set.of(Type.KRAFT))
                 .setServerProperties(serverProperties)
-                .setTags(singletonList("Generated Test"))
+                .setTags(List.of("Generated Test"))
                 .build());
     }
 
@@ -126,7 +129,7 @@ public class ClusterTestExtensionsTest {
         assertEquals(Type.KRAFT, clusterInstance.type(),
             "generate1 provided a KRAFT cluster, so we should see that here");
         assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
-        assertEquals(singletonList("Generated Test"), clusterInstance.config().tags());
+        assertEquals(List.of("Generated Test"), clusterInstance.config().tags());
     }
 
     // Multiple @ClusterTest can be used with @ClusterTests
@@ -157,22 +160,22 @@ public class ClusterTestExtensionsTest {
         assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
         assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
         assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
-        assertEquals(Arrays.asList("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
+        assertEquals(List.of("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
 
         // assert broker server 0 contains property queued.max.requests 200 from ClusterTest which overrides
         // the value 100 in server property in ClusterTestDefaults
         try (Admin admin = clusterInstance.admin()) {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
-            Map<ConfigResource, Config> configs = admin.describeConfigs(singletonList(configResource)).all().get();
+            Map<ConfigResource, Config> configs = admin.describeConfigs(List.of(configResource)).all().get();
             assertEquals(1, configs.size());
             assertEquals("200", configs.get(configResource).get("queued.max.requests").value());
         }
         // In KRaft cluster non-combined mode, assert the controller server 3000 contains the property queued.max.requests 300
         if (clusterInstance.type() == Type.KRAFT) {
-            try (Admin admin = Admin.create(Collections.singletonMap(
+            try (Admin admin = Admin.create(Map.of(
                     AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()))) {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
-                Map<ConfigResource, Config> configs = admin.describeConfigs(singletonList(configResource)).all().get();
+                Map<ConfigResource, Config> configs = admin.describeConfigs(List.of(configResource)).all().get();
                 assertEquals(1, configs.size());
                 assertEquals("300", configs.get(configResource).get("queued.max.requests").value());
             }
@@ -183,19 +186,37 @@ public class ClusterTestExtensionsTest {
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}),
         @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, disksPerBroker = 2),
     })
-    public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
+    public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException, IOException {
         try (Admin admin = clusterInstance.admin()) {
             DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
             result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) ->
                 assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size()));
         }
+        for (Map.Entry<Integer, KafkaBroker> entry : clusterInstance.brokers().entrySet()) {
+            int brokerId = entry.getKey();
+            KafkaBroker broker = entry.getValue();
+            List<String> logDirs = broker.config().logDirs();
+            for (String logDir : logDirs) {
+                Properties props = Utils.loadProps(new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath());
+                MetaProperties metaProps = new MetaProperties.Builder(props).build();
+
+                assertTrue(metaProps.clusterId().isPresent(), "Cluster ID missing in " + logDir);
+                assertTrue(metaProps.nodeId().isPresent(), "Node ID missing in " + logDir);
+                assertTrue(metaProps.directoryId().isPresent(), "Directory ID missing in " + logDir);
+
+                assertEquals(MetaPropertiesVersion.V1, metaProps.version(), "MetaProperties version mismatch in " + logDir);
+                assertEquals(clusterInstance.clusterId(), metaProps.clusterId().get(), "Cluster ID mismatch in " + logDir);
+                assertEquals(brokerId, metaProps.nodeId().getAsInt(), "Node ID mismatch in " + logDir);
+                assertEquals(metaProps.directoryId().get(), broker.logManager().directoryId(logDir).get(), "Directory ID mismatch in " + logDir);
+            }
+        }
     }
 
     @ClusterTest(autoStart = AutoStart.NO)
     public void testNoAutoStart() {
-        Assertions.assertThrows(RuntimeException.class, clusterInstance::anyBrokerSocketServer);
+        Assertions.assertThrows(RuntimeException.class, () -> clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst());
         clusterInstance.start();
-        assertNotNull(clusterInstance.anyBrokerSocketServer());
+        assertTrue(clusterInstance.brokers().values().stream().map(KafkaBroker::socketServer).findFirst().isPresent());
     }
 
     @ClusterTest
@@ -217,7 +238,7 @@ public class ClusterTestExtensionsTest {
         })
     })
     public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
-        assertEquals(singleton(CLASSIC), clusterInstance.supportedGroupProtocols());
+        assertEquals(Set.of(CLASSIC), clusterInstance.supportedGroupProtocols());
     }
 
 
@@ -231,7 +252,7 @@ public class ClusterTestExtensionsTest {
 
         try (Admin admin = clusterInstance.admin()) {
             Assertions.assertTrue(admin.listTopics().listings().get().stream().anyMatch(s -> s.name().equals(topicName)));
-            List<TopicPartitionInfo> partitions = admin.describeTopics(singleton(topicName)).allTopicNames().get()
+            List<TopicPartitionInfo> partitions = admin.describeTopics(Set.of(topicName)).allTopicNames().get()
                     .get(topicName).partitions();
             assertEquals(numPartition, partitions.size());
             Assertions.assertTrue(partitions.stream().allMatch(partition -> partition.replicas().size() == numReplicas));
@@ -245,7 +266,7 @@ public class ClusterTestExtensionsTest {
         short numReplicas = 3;
         clusterInstance.createTopic(topicName, numPartition, numReplicas);
         clusterInstance.shutdownBroker(0);
-        clusterInstance.waitForTopic(topicName, numPartition);
+        clusterInstance.waitTopicCreation(topicName, numPartition);
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
@@ -275,9 +296,9 @@ public class ClusterTestExtensionsTest {
     public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
         try (Admin admin = clusterInstance.admin()) {
             String testTopic = "testTopic";
-            admin.createTopics(singletonList(new NewTopic(testTopic, 1, (short) 1)));
-            clusterInstance.waitForTopic(testTopic, 1);
-            admin.deleteTopics(singletonList(testTopic));
+            admin.createTopics(List.of(new NewTopic(testTopic, 1, (short) 1)));
+            clusterInstance.waitTopicCreation(testTopic, 1);
+            admin.deleteTopics(List.of(testTopic));
             clusterInstance.waitTopicDeletion(testTopic);
             Assertions.assertTrue(admin.listTopics().listings().get().stream().noneMatch(
                     topic -> topic.name().equals(testTopic)
@@ -299,14 +320,14 @@ public class ClusterTestExtensionsTest {
                  KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
                  VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()))
         ) {
-            adminClient.createTopics(singleton(new NewTopic(topic, 1, (short) 1)));
+            adminClient.createTopics(Set.of(new NewTopic(topic, 1, (short) 1)));
             assertNotNull(producer);
             assertNotNull(consumer);
             producer.send(new ProducerRecord<>(topic, key, value));
             producer.flush();
-            consumer.subscribe(singletonList(topic));
+            consumer.subscribe(List.of(topic));
             List<ConsumerRecord<String, String>> records = new ArrayList<>();
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
                 return records.size() == 1;
             }, "Failed to receive message");
@@ -327,14 +348,14 @@ public class ClusterTestExtensionsTest {
              Producer<byte[], byte[]> producer = cluster.producer();
              Consumer<byte[], byte[]> consumer = cluster.consumer()
         ) {
-            adminClient.createTopics(singleton(new NewTopic(topic, 1, (short) 1)));
+            adminClient.createTopics(Set.of(new NewTopic(topic, 1, (short) 1)));
             assertNotNull(producer);
             assertNotNull(consumer);
             producer.send(new ProducerRecord<>(topic, key, value));
             producer.flush();
-            consumer.subscribe(singletonList(topic));
+            consumer.subscribe(List.of(topic));
             List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 consumer.poll(Duration.ofMillis(100)).forEach(records::add);
                 return records.size() == 1;
             }, "Failed to receive message");
@@ -345,7 +366,7 @@ public class ClusterTestExtensionsTest {
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, controllerListener = "FOO")
     public void testControllerListenerName(ClusterInstance cluster) throws ExecutionException, InterruptedException {
-        assertEquals("FOO", cluster.controllerListenerName().get().value());
+        assertEquals("FOO", cluster.controllerListenerName().value());
         try (Admin admin = cluster.admin(Map.of(), true)) {
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
         }
@@ -360,7 +381,7 @@ public class ClusterTestExtensionsTest {
                  ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
             admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
 
-            cluster.waitForTopic(topicName, 1);
+            cluster.waitTopicCreation(topicName, 1);
 
             cluster.brokers().values().forEach(broker -> {
                 broker.shutdown();
@@ -411,7 +432,7 @@ public class ClusterTestExtensionsTest {
         }
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer()) {
             consumer.subscribe(List.of(topic));
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                 return records.count() == 1;
             }, "Failed to receive message");
@@ -442,7 +463,7 @@ public class ClusterTestExtensionsTest {
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(nonAdminConfig)) {
             consumer.subscribe(List.of(topic));
             AtomicBoolean hasException = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 if (hasException.get()) {
                     return true;
                 }
@@ -480,7 +501,7 @@ public class ClusterTestExtensionsTest {
         try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(unknownUserConfig)) {
             consumer.subscribe(List.of(topic));
             AtomicBoolean hasException = new AtomicBoolean(false);
-            TestUtils.waitForCondition(() -> {
+            RaftClusterInvocationContext.waitForCondition(() -> {
                 if (hasException.get()) {
                     return true;
                 }

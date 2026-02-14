@@ -23,7 +23,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +47,7 @@ public final class SinkUtils {
             partition.put(KAFKA_TOPIC_KEY, topicPartitionOffset.getKey().topic());
             partition.put(KAFKA_PARTITION_KEY, topicPartitionOffset.getKey().partition());
             connectorOffsets.add(new ConnectorOffset(partition,
-                    Collections.singletonMap(KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
+                   Map.of(KAFKA_OFFSET_KEY, topicPartitionOffset.getValue().offset())));
         }
 
         return new ConnectorOffsets(connectorOffsets);

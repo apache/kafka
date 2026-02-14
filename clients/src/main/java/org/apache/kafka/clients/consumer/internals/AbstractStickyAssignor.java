@@ -965,8 +965,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             super(partitionsPerTopic, rackInfo, currentAssignment);
             this.subscriptions = subscriptions;
 
-            topic2AllPotentialConsumers = new HashMap<>(partitionsPerTopic.keySet().size());
-            consumer2AllPotentialTopics = new HashMap<>(subscriptions.keySet().size());
+            topic2AllPotentialConsumers = new HashMap<>(partitionsPerTopic.size());
+            consumer2AllPotentialTopics = new HashMap<>(subscriptions.size());
 
             // initialize topic2AllPotentialConsumers and consumer2AllPotentialTopics
             partitionsPerTopic.keySet().forEach(

@@ -59,16 +59,16 @@ public class ReadShareGroupStateRequest extends AbstractRequest {
     public ReadShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<ReadShareGroupStateResponseData.ReadStateResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new ReadShareGroupStateResponseData.ReadStateResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new ReadShareGroupStateResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code())
-                                        .setErrorMessage(Errors.forException(e).message()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new ReadShareGroupStateResponseData.ReadStateResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new ReadShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code())
+                        .setErrorMessage(Errors.forException(e).message()))
+                    .collect(Collectors.toList()))));
         return new ReadShareGroupStateResponse(new ReadShareGroupStateResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -78,8 +78,8 @@ public class ReadShareGroupStateRequest extends AbstractRequest {
 
     public static ReadShareGroupStateRequest parse(Readable readable, short version) {
         return new ReadShareGroupStateRequest(
-                new ReadShareGroupStateRequestData(readable, version),
-                version
+            new ReadShareGroupStateRequestData(readable, version),
+            version
         );
     }
 }

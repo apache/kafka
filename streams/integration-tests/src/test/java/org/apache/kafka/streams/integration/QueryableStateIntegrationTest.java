@@ -747,7 +747,7 @@ public class QueryableStateIntegrationTest {
                 new KeyValue<>(keys[4], 2L))
         );
         final Set<KeyValue<String, Long>> expectedBatch1 =
-            new HashSet<>(Collections.singleton(new KeyValue<>(keys[4], 2L)));
+            Set.of(new KeyValue<>(keys[4], 2L));
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,
@@ -919,7 +919,7 @@ public class QueryableStateIntegrationTest {
                 new KeyValue<>(keys[4], "2"))
         );
         final Set<KeyValue<String, Long>> expectedBatch1 =
-            new HashSet<>(Collections.singleton(new KeyValue<>(keys[4], 2L)));
+            Set.of(new KeyValue<>(keys[4], 2L));
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,

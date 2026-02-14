@@ -1122,15 +1122,15 @@ public class KStreamAggregationIntegrationTest {
             final String[] args = new String[] {
                 "--bootstrap-server", CLUSTER.bootstrapServers(),
                 "--from-beginning",
-                "--property", "print.key=true",
-                "--property", "print.timestamp=" + printTimestamp,
+                "--formatter-property", "print.key=true",
+                "--formatter-property", "print.timestamp=" + printTimestamp,
                 "--topic", outputTopic,
                 "--max-messages", String.valueOf(numMessages),
-                "--property", "key.deserializer=" + keyDeserializer.getClass().getName(),
-                "--property", "value.deserializer=" + valueDeserializer.getClass().getName(),
-                "--property", "key.separator=" + keySeparator,
-                "--property", "key.deserializer." + TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS + "=" + Serdes.serdeFrom(innerClass).getClass().getName(),
-                "--property", "key.deserializer.window.size.ms=500",
+                "--formatter-property", "key.deserializer=" + keyDeserializer.getClass().getName(),
+                "--formatter-property", "value.deserializer=" + valueDeserializer.getClass().getName(),
+                "--formatter-property", "key.separator=" + keySeparator,
+                "--formatter-property", "key.deserializer." + TimeWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS + "=" + Serdes.serdeFrom(innerClass).getClass().getName(),
+                "--formatter-property", "key.deserializer.window.size.ms=500",
             };
 
             ConsoleConsumer.run(new ConsoleConsumerOptions(args));

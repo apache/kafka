@@ -55,11 +55,6 @@ public class TaskAndAction {
         return new TaskAndAction(null, taskId, Action.REMOVE, future);
     }
 
-    public static TaskAndAction createRemoveTask(final TaskId taskId) {
-        Objects.requireNonNull(taskId, "Task ID of task to remove is null!");
-        return new TaskAndAction(null, taskId, Action.REMOVE, null);
-    }
-
     public Task task() {
         if (action != Action.ADD) {
             throw new IllegalStateException("Action type " + action + " cannot have a task!");

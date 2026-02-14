@@ -74,9 +74,7 @@ import org.mockito.stubbing.OngoingStubbing;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -91,8 +89,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
 import static org.apache.kafka.connect.runtime.WorkerTestUtils.getTransformationChain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -135,7 +131,7 @@ public class WorkerSinkTaskTest {
     private static final TopicPartition TOPIC_PARTITION3 = new TopicPartition(TOPIC, PARTITION3);
 
     private static final Set<TopicPartition> INITIAL_ASSIGNMENT =
-            new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2));
+            Set.of(TOPIC_PARTITION, TOPIC_PARTITION2);
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
 
@@ -183,6 +179,7 @@ public class WorkerSinkTaskTest {
     public void setUp() {
         time = new MockTime();
         Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
@@ -197,11 +194,11 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState, TransformationChain transformationChain, RetryWithToleranceOperator toleranceOperator) {
-        createTask(initialState, keyConverter, valueConverter, headerConverter, toleranceOperator, Collections::emptyList, transformationChain);
+        createTask(initialState, keyConverter, valueConverter, headerConverter, toleranceOperator, List::of, transformationChain);
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noneOperator(), Collections::emptyList, transformationChain);
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noneOperator(), List::of, transformationChain);
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
@@ -318,7 +315,7 @@ public class WorkerSinkTaskTest {
         verify(consumer).wakeup();
 
         // Offset commit as requested when pausing; No records returned by consumer.poll()
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+        when(sinkTask.preCommit(anyMap())).thenReturn(Map.of());
 
         workerTask.iteration(); // now paused
         time.sleep(30000L);
@@ -340,7 +337,7 @@ public class WorkerSinkTaskTest {
         // And unpause
         verify(statusListener).onResume(taskId);
         verify(consumer, times(2)).wakeup();
-        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(singleton(tp)));
+        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(Set.of(tp)));
         verify(sinkTask, times(4)).put(anyList());
     }
 
@@ -363,7 +360,7 @@ public class WorkerSinkTaskTest {
         sinkTaskContext.getValue().requestCommit(); // Force an offset commit
 
         // second iteration
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+        when(sinkTask.preCommit(anyMap())).thenReturn(Map.of());
 
         workerTask.iteration();
         verify(sinkTask, times(2)).put(anyList());
@@ -441,7 +438,7 @@ public class WorkerSinkTaskTest {
         time.sleep(30000L);
 
         verify(sinkTask, times(3)).put(anyList());
-        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(Collections.singleton(tp)));
+        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(Set.of(tp)));
 
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
@@ -483,14 +480,14 @@ public class WorkerSinkTaskTest {
         workerTask.initializeAndStart();
         verifyInitializeTask();
 
-        Set<TopicPartition> newAssignment = new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
+        Set<TopicPartition> newAssignment = Set.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
 
         when(consumer.assignment())
                 .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
                 .thenReturn(newAssignment, newAssignment, newAssignment)
-                .thenReturn(Collections.singleton(TOPIC_PARTITION3),
-                        Collections.singleton(TOPIC_PARTITION3),
-                        Collections.singleton(TOPIC_PARTITION3));
+                .thenReturn(Set.of(TOPIC_PARTITION3),
+                        Set.of(TOPIC_PARTITION3),
+                        Set.of(TOPIC_PARTITION3));
 
         INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
         when(consumer.position(TOPIC_PARTITION3)).thenReturn(FIRST_OFFSET);
@@ -503,8 +500,8 @@ public class WorkerSinkTaskTest {
                 .thenAnswer(expectConsumerPoll(1))
                 // Empty consumer poll (all partitions are paused) with rebalance; one new partition is assigned
                 .thenAnswer(invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of());
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3));
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer(expectConsumerPoll(0))
@@ -513,7 +510,7 @@ public class WorkerSinkTaskTest {
                     ConsumerRecord<byte[], byte[]> newRecord = new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET, RAW_KEY, RAW_VALUE);
 
                     rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptyList());
+                    rebalanceListener.getValue().onPartitionsAssigned(List.of());
                     return new ConsumerRecords<>(Map.of(TOPIC_PARTITION3, List.of(newRecord)),
                         Map.of(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 1, Optional.empty(), "")));
                 });
@@ -534,7 +531,7 @@ public class WorkerSinkTaskTest {
         verify(consumer).pause(INITIAL_ASSIGNMENT);
 
         workerTask.iteration();
-        verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION3));
+        verify(sinkTask).open(Set.of(TOPIC_PARTITION3));
         // All partitions are re-paused in order to pause any newly-assigned partitions so that redelivery efforts can continue
         verify(consumer).pause(newAssignment);
 
@@ -543,13 +540,13 @@ public class WorkerSinkTaskTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = INITIAL_ASSIGNMENT.stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(FIRST_OFFSET)));
         when(sinkTask.preCommit(offsets)).thenReturn(offsets);
-        newAssignment = Collections.singleton(TOPIC_PARTITION3);
+        newAssignment = Set.of(TOPIC_PARTITION3);
 
         workerTask.iteration();
         verify(sinkTask).close(INITIAL_ASSIGNMENT);
 
         // All partitions are resumed, as all previously paused-for-redelivery partitions were revoked
-        newAssignment.forEach(tp -> verify(consumer).resume(Collections.singleton(tp)));
+        newAssignment.forEach(tp -> verify(consumer).resume(Set.of(tp)));
     }
 
     @Test
@@ -636,10 +633,10 @@ public class WorkerSinkTaskTest {
         when(consumer.assignment())
                 .thenReturn(INITIAL_ASSIGNMENT)
                 .thenReturn(INITIAL_ASSIGNMENT)
-                .thenReturn(Collections.singleton(TOPIC_PARTITION2))
-                .thenReturn(Collections.singleton(TOPIC_PARTITION2))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
                 .thenReturn(INITIAL_ASSIGNMENT)
                 .thenReturn(INITIAL_ASSIGNMENT)
                 .thenReturn(INITIAL_ASSIGNMENT);
@@ -656,18 +653,18 @@ public class WorkerSinkTaskTest {
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(singleton(TOPIC_PARTITION));
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptySet());
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of());
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
-                    rebalanceListener.getValue().onPartitionsAssigned(singleton(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of());
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3));
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsLost(singleton(TOPIC_PARTITION3));
-                    rebalanceListener.getValue().onPartitionsAssigned(singleton(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsLost(Set.of(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION));
                     return ConsumerRecords.empty();
                 });
 
@@ -683,19 +680,19 @@ public class WorkerSinkTaskTest {
 
         // Second iteration--second call to poll, partial consumer revocation
         workerTask.iteration();
-        verify(sinkTask).close(singleton(TOPIC_PARTITION));
-        verify(sinkTask, times(2)).put(Collections.emptyList());
+        verify(sinkTask).close(Set.of(TOPIC_PARTITION));
+        verify(sinkTask, times(2)).put(List.of());
 
         // Third iteration--third call to poll, partial consumer assignment
         workerTask.iteration();
-        verify(sinkTask).open(singleton(TOPIC_PARTITION3));
-        verify(sinkTask, times(3)).put(Collections.emptyList());
+        verify(sinkTask).open(Set.of(TOPIC_PARTITION3));
+        verify(sinkTask, times(3)).put(List.of());
 
         // Fourth iteration--fourth call to poll, one partition lost; can't commit offsets for it, one new partition assigned
         workerTask.iteration();
-        verify(sinkTask).close(singleton(TOPIC_PARTITION3));
-        verify(sinkTask).open(singleton(TOPIC_PARTITION));
-        verify(sinkTask, times(4)).put(Collections.emptyList());
+        verify(sinkTask).close(Set.of(TOPIC_PARTITION3));
+        verify(sinkTask).open(Set.of(TOPIC_PARTITION));
+        verify(sinkTask, times(4)).put(List.of());
     }
 
     @Test
@@ -710,12 +707,12 @@ public class WorkerSinkTaskTest {
 
         when(consumer.assignment())
                 .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)));
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3))
+                .thenReturn(Set.of(TOPIC_PARTITION2, TOPIC_PARTITION3));
 
         INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
         when(consumer.position(TOPIC_PARTITION3)).thenReturn(FIRST_OFFSET);
@@ -730,14 +727,14 @@ public class WorkerSinkTaskTest {
                 .thenAnswer(expectConsumerPoll(1))
                 // Third poll; assignment changes to [TP2]
                 .thenAnswer(invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Collections.singleton(TOPIC_PARTITION));
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptySet());
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of());
                     return ConsumerRecords.empty();
                 })
                 // Fourth poll; assignment changes to [TP2, TP3]
                 .thenAnswer(invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsRevoked(Set.of());
+                    rebalanceListener.getValue().onPartitionsAssigned(Set.of(TOPIC_PARTITION3));
                     return ConsumerRecords.empty();
                 })
                 // Fifth poll; an offset commit takes place
@@ -756,13 +753,13 @@ public class WorkerSinkTaskTest {
         doNothing().when(consumer).commitSync(offsets);
 
         workerTask.iteration();
-        verify(sinkTask).close(Collections.singleton(TOPIC_PARTITION));
-        verify(sinkTask, times(2)).put(Collections.emptyList());
+        verify(sinkTask).close(Set.of(TOPIC_PARTITION));
+        verify(sinkTask, times(2)).put(List.of());
 
         // Fourth iteration--fourth call to poll, partial consumer assignment
         workerTask.iteration();
 
-        verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION3));
+        verify(sinkTask).open(Set.of(TOPIC_PARTITION3));
 
         final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
         workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
@@ -819,7 +816,7 @@ public class WorkerSinkTaskTest {
         verify(sinkTask).close(INITIAL_ASSIGNMENT);
         verify(sinkTask, times(2)).open(INITIAL_ASSIGNMENT);
 
-        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(Collections.singleton(tp)));
+        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(Set.of(tp)));
 
         verify(statusListener).onResume(taskId);
 
@@ -905,7 +902,7 @@ public class WorkerSinkTaskTest {
     @Test
     public void testSkipsFailedRetriableExceptionFromConvert() {
         createTask(initialState, keyConverter, valueConverter, headerConverter,
-                RetryWithToleranceOperatorTest.allOperator(), Collections::emptyList, transformationChain);
+                RetryWithToleranceOperatorTest.allOperator(), List::of, transformationChain);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -923,7 +920,7 @@ public class WorkerSinkTaskTest {
         workerTask.iteration();
         workerTask.execute();
 
-        verify(sinkTask, times(3)).put(Collections.emptyList());
+        verify(sinkTask, times(3)).put(List.of());
     }
 
     @Test
@@ -974,7 +971,7 @@ public class WorkerSinkTaskTest {
         workerTask.iteration();
         workerTask.execute();
 
-        verify(sinkTask, times(3)).put(Collections.emptyList());
+        verify(sinkTask, times(3)).put(List.of());
     }
 
     @Test
@@ -1273,7 +1270,7 @@ public class WorkerSinkTaskTest {
                 .when(sinkTask).put(anyList());
 
         Throwable closeException = new RuntimeException();
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+        when(sinkTask.preCommit(anyMap())).thenReturn(Map.of());
 
         // Throw another exception while closing the task's assignment
         doThrow(closeException).when(sinkTask).close(any(Collection.class));
@@ -1310,7 +1307,7 @@ public class WorkerSinkTaskTest {
                 .doThrow(putException)
                 .when(sinkTask).put(anyList());
 
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+        when(sinkTask.preCommit(anyMap())).thenReturn(Map.of());
 
         // Throw another exception while closing the task's assignment
         doThrow(closeException).when(sinkTask).close(any(Collection.class));
@@ -1390,7 +1387,7 @@ public class WorkerSinkTaskTest {
         workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
 
         final List<TopicPartition> originalPartitions = new ArrayList<>(INITIAL_ASSIGNMENT);
-        final List<TopicPartition> rebalancedPartitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
+        final List<TopicPartition> rebalancedPartitions = List.of(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
         final Map<TopicPartition, OffsetAndMetadata> rebalanceOffsets = new HashMap<>();
         rebalanceOffsets.put(TOPIC_PARTITION, workerCurrentOffsets.get(TOPIC_PARTITION));
         rebalanceOffsets.put(TOPIC_PARTITION2, workerCurrentOffsets.get(TOPIC_PARTITION2));
@@ -1532,7 +1529,10 @@ public class WorkerSinkTaskTest {
         assertEquals(rebalanceOffsets, workerTask.lastCommittedOffsets());
 
         // onPartitionsRevoked
-        verify(sinkTask).close(new ArrayList<>(workerCurrentOffsets.keySet()));
+        ArgumentCaptor<Collection<TopicPartition>> closeCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask).close(closeCaptor.capture());
+        Collection<TopicPartition> actualClosePartitions = closeCaptor.getValue();
+        assertEquals(workerCurrentOffsets.keySet(), new HashSet<>(actualClosePartitions));
         verify(consumer).commitSync(anyMap());
 
         // onPartitionsAssigned - step 2
@@ -1816,7 +1816,7 @@ public class WorkerSinkTaskTest {
 
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+                    List<ConsumerRecord<byte[], byte[]>> records = List.of(
                             new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
                                     0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA, Optional.empty()),
                             new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
@@ -1880,7 +1880,7 @@ public class WorkerSinkTaskTest {
         createTask(taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, mockConsumer, pluginLoader, time,
-                RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore, Collections::emptyList);
+                RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore, List::of);
         mockConsumer.updateBeginningOffsets(
                 new HashMap<>() {{
                     put(TOPIC_PARTITION, 0L);
@@ -1893,7 +1893,7 @@ public class WorkerSinkTaskTest {
         mockConsumer.rebalance(INITIAL_ASSIGNMENT);
         assertSinkMetricValue("partition-count", 2);
         // Revoked "TOPIC_PARTITION" and second re-balance with "TOPIC_PARTITION2"
-        mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
+        mockConsumer.rebalance(Set.of(TOPIC_PARTITION2));
         assertSinkMetricValue("partition-count", 1);
         // Closing the Worker Sink Task which will update the partition count as 0.
         workerTask.close();
@@ -1901,12 +1901,12 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectRebalanceRevocationError(RuntimeException e) {
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+        when(sinkTask.preCommit(anyMap())).thenReturn(Map.of());
         doThrow(e).when(sinkTask).close(INITIAL_ASSIGNMENT);
     }
 
     private void expectRebalanceAssignmentError(RuntimeException e) {
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+        when(sinkTask.preCommit(anyMap())).thenReturn(Map.of());
         when(consumer.position(TOPIC_PARTITION)).thenReturn(FIRST_OFFSET);
         when(consumer.position(TOPIC_PARTITION2)).thenReturn(FIRST_OFFSET);
 
@@ -1914,7 +1914,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void verifyInitializeTask() {
-        verify(consumer).subscribe(eq(Collections.singletonList(TOPIC)), rebalanceListener.capture());
+        verify(consumer).subscribe(eq(List.of(TOPIC)), rebalanceListener.capture());
         verify(sinkTask).initialize(sinkTaskContext.capture());
         verify(sinkTask).start(TASK_PROPS);
     }
@@ -1934,7 +1934,7 @@ public class WorkerSinkTaskTest {
     private void verifyPollInitialAssignment() {
         verify(sinkTask).open(INITIAL_ASSIGNMENT);
         verify(consumer, atLeastOnce()).assignment();
-        verify(sinkTask).put(Collections.emptyList());
+        verify(sinkTask).put(List.of());
     }
 
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages) {

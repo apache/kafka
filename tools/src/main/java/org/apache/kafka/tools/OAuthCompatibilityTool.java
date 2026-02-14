@@ -24,12 +24,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetrieverFactory;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.Exit;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -42,6 +39,8 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS_DOC;
@@ -115,6 +114,8 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_DOC;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_DOC;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils.getConfiguredInstance;
 
 public class OAuthCompatibilityTool {
 
@@ -132,34 +133,38 @@ public class OAuthCompatibilityTool {
         ConfigHandler configHandler = new ConfigHandler(namespace);
 
         Map<String, ?> configs = configHandler.getConfigs();
-        Map<String, Object> jaasConfigs = configHandler.getJaasOptions();
+        List<AppConfigurationEntry> jaasConfigEntries = List.of(
+            new AppConfigurationEntry(
+                OAuthBearerLoginModule.class.getName(),
+                AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+                configHandler.getJaasOptions()
+            )
+        );
 
         try {
-            String accessToken;
+            String jwt;
 
             {
                 // Client side...
-                try (AccessTokenRetriever atr = AccessTokenRetrieverFactory.create(configs, jaasConfigs)) {
-                    atr.init();
-                    AccessTokenValidator atv = AccessTokenValidatorFactory.create(configs);
-                    System.out.println("PASSED 1/5: client configuration");
+                try (JwtRetriever retriever = createRetriever(configs, jaasConfigEntries)) {
+                    try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
+                        System.out.println("PASSED 1/5: client configuration");
 
-                    accessToken = atr.retrieve();
-                    System.out.println("PASSED 2/5: client JWT retrieval");
+                        jwt = retriever.retrieve();
+                        System.out.println("PASSED 2/5: client JWT retrieval");
 
-                    atv.validate(accessToken);
-                    System.out.println("PASSED 3/5: client JWT validation");
+                        validator.validate(jwt);
+                        System.out.println("PASSED 3/5: client JWT validation");
+                    }
                 }
             }
 
             {
                 // Broker side...
-                try (CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs, jaasConfigs)) {
-                    vkr.init();
-                    AccessTokenValidator atv = AccessTokenValidatorFactory.create(configs, vkr);
+                try (JwtValidator validator = createValidator(configs, jaasConfigEntries)) {
                     System.out.println("PASSED 4/5: broker configuration");
 
-                    atv.validate(accessToken);
+                    validator.validate(jwt);
                     System.out.println("PASSED 5/5: broker JWT validation");
                 }
             }
@@ -179,6 +184,25 @@ public class OAuthCompatibilityTool {
         }
     }
 
+    private static JwtRetriever createRetriever(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
+        return getConfiguredInstance(
+            configs,
+            OAUTHBEARER_MECHANISM,
+            jaasConfigEntries,
+            SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
+            JwtRetriever.class
+        );
+    }
+
+    private static JwtValidator createValidator(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
+        return getConfiguredInstance(
+            configs,
+            OAUTHBEARER_MECHANISM,
+            jaasConfigEntries,
+            SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+            JwtValidator.class
+        );
+    }
 
     private static class ArgsHandler {
 
@@ -268,14 +292,7 @@ public class OAuthCompatibilityTool {
 
     }
 
-    private static class ConfigHandler {
-
-        private final Namespace namespace;
-
-
-        private ConfigHandler(Namespace namespace) {
-            this.namespace = namespace;
-        }
+    private record ConfigHandler(Namespace namespace) {
 
         private Map<String, ?> getConfigs() {
             Map<String, Object> m = new HashMap<>();

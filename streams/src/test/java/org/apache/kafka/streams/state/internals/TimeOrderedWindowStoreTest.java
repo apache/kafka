@@ -944,7 +944,9 @@ public class TimeOrderedWindowStoreTest {
                 context.recordContext().offset(),
                 context.recordContext().timestamp(),
                 context.recordContext().partition(),
-                ""
+                "",
+                context.recordContext().sourceRawKey(),
+                context.recordContext().sourceRawValue()
             )
         );
 

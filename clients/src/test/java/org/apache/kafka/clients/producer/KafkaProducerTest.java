@@ -32,6 +32,7 @@ import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
+import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -46,6 +47,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -92,6 +94,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockPartitioner;
@@ -162,6 +165,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -170,6 +174,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
+
+    private static final String INIT_TXN_TIMEOUT_MSG =
+            "InitTransactions timed out - " +
+                    "did not complete coordinator discovery or " +
+                    "receive the InitProducerId response within max.block.ms.";
+    
     private final String topic = "topic";
     private final Collection<Node> nodes = Collections.singletonList(NODE);
     private final Cluster emptyCluster = new Cluster(
@@ -215,7 +225,7 @@ public class KafkaProducerTest {
     }
 
     @AfterEach
-    public void detectLeaks() {
+    public void detectLeaks() throws InterruptedException {
         // Assert no thread leakage of Kafka producer.
         TestUtils.assertNoLeakedThreadsWithNameAndDaemonStatus(NETWORK_THREAD_PREFIX, Boolean.TRUE);
     }
@@ -231,7 +241,7 @@ public class KafkaProducerTest {
         ProducerConfig config = new ProducerConfig(props);
         assertTrue(config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertTrue(Stream.of("-1", "all").anyMatch(each -> each.equalsIgnoreCase(config.getString(ProducerConfig.ACKS_CONFIG))));
-        assertEquals((int) config.getInt(ProducerConfig.RETRIES_CONFIG), Integer.MAX_VALUE);
+        assertEquals(Integer.MAX_VALUE, (int) config.getInt(ProducerConfig.RETRIES_CONFIG));
         assertTrue(config.getString(ProducerConfig.CLIENT_ID_CONFIG).equalsIgnoreCase("producer-" +
                 config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG)));
     }
@@ -575,7 +585,7 @@ public class KafkaProducerTest {
         ConfigException ce = assertThrows(
             ConfigException.class,
             () -> new KafkaProducer<>(props, new StringSerializer(), new StringSerializer()));
-        assertTrue(ce.getMessage().contains("not string key"), "Unexpected exception message: " + ce.getMessage());
+        assertTrue(ce.getMessage().contains("One or more keys is not a string."), "Unexpected exception message: " + ce.getMessage());
     }
 
     @Test
@@ -600,12 +610,11 @@ public class KafkaProducerTest {
         final int oldInitCount = MockSerializer.INIT_COUNT.get();
         final int oldCloseCount = MockSerializer.CLOSE_COUNT.get();
 
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
-                configs, new MockSerializer(), new MockSerializer());
-        assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
-        assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
+        try (var ignored = new KafkaProducer<>(configs, new MockSerializer(), new MockSerializer())) {
+            assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
+            assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
+        }
 
-        producer.close();
         assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
         assertEquals(oldCloseCount + 2, MockSerializer.CLOSE_COUNT.get());
     }
@@ -634,15 +643,15 @@ public class KafkaProducerTest {
             MockProducerInterceptor.resetCounters();
         }
     }
+
     @Test
     public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
-        final int targetInterceptor = 3;
+        final int targetInterceptor = 1;
         try {
             Properties props = new Properties();
             props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-            props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
-                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName() + ", "
-                    +  org.apache.kafka.test.MockProducerInterceptor.class.getName());
+            props.setProperty(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    CloseInterceptor.class.getName() + "," + MockProducerInterceptor.class.getName());
             props.setProperty(MockProducerInterceptor.APPEND_STRING_PROP, "something");
 
             MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
@@ -651,13 +660,16 @@ public class KafkaProducerTest {
                 new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())
             );
 
-            assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
-            assertEquals(3, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.CONFIG_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, CloseInterceptor.CLOSE_COUNT.get());
 
         } finally {
             MockProducerInterceptor.resetCounters();
+            CloseInterceptor.resetCounters();
         }
     }
+
     @Test
     public void testPartitionerClose() {
         try {
@@ -1316,7 +1328,7 @@ public class KafkaProducerTest {
                 "Timed out while waiting for expected `InitProducerId` request to be sent");
 
             time.sleep(maxBlockMs);
-            TestUtils.assertFutureThrows(TimeoutException.class, future);
+            TestUtils.assertFutureThrowsWithMessageContaining(TimeoutException.class, future, INIT_TXN_TIMEOUT_MSG);
 
             client.respond(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
@@ -1346,7 +1358,8 @@ public class KafkaProducerTest {
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
-            assertThrows(TimeoutException.class, producer::initTransactions);
+            var timeoutEx = assertThrows(TimeoutException.class, producer::initTransactions);
+            assertTrue(timeoutEx.getMessage().contains(INIT_TXN_TIMEOUT_MSG));
 
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
@@ -1409,12 +1422,12 @@ public class KafkaProducerTest {
 
         // Capture flags from the InitProducerIdRequest
         boolean[] requestFlags = new boolean[2]; // [keepPreparedTxn, enable2Pc]
-        
+
         client.prepareResponse(
             request -> request instanceof FindCoordinatorRequest &&
                 ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
             FindCoordinatorResponse.prepareResponse(Errors.NONE, "test-txn-id", NODE));
-            
+
         client.prepareResponse(
             request -> {
                 if (request instanceof InitProducerIdRequest) {
@@ -1426,19 +1439,258 @@ public class KafkaProducerTest {
                 return false;
             },
             initProducerIdResponse(1L, (short) 5, Errors.NONE));
-            
+
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions(keepPreparedTxn);
-            
+
             // Verify request flags match expected values
-            assertEquals(keepPreparedTxn, requestFlags[0], 
+            assertEquals(keepPreparedTxn, requestFlags[0],
                 "keepPreparedTxn flag should match input parameter");
-            assertEquals(enable2PC, requestFlags[1], 
+            assertEquals(enable2PC, requestFlags[1],
                 "enable2Pc flag should match producer configuration");
         }
     }
-    
+
+    @Test
+    public void testPrepareTransactionSuccess() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.transactionManager.isTransactionV2Enabled()).thenReturn(true);
+        when(ctx.transactionManager.is2PCEnabled()).thenReturn(true);
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        doNothing().when(ctx.transactionManager).prepareTransaction();
+
+        long expectedProducerId = 12345L;
+        short expectedEpoch = 5;
+        ProducerIdAndEpoch expectedProducerIdAndEpoch = new ProducerIdAndEpoch(expectedProducerId, expectedEpoch);
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(expectedProducerIdAndEpoch);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            PreparedTxnState returned = producer.prepareTransaction();
+            assertEquals(expectedProducerId, returned.producerId());
+            assertEquals(expectedEpoch, returned.epoch());
+
+            verify(ctx.transactionManager).prepareTransaction();
+            verify(ctx.accumulator).beginFlush();
+            verify(ctx.accumulator).awaitFlushCompletion();
+        }
+    }
+
+    @Test
+    public void testSendNotAllowedInPreparedTransactionState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        String topic = "foo";
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+        when(ctx.metadata.fetch()).thenReturn(cluster);
+
+        // Mock transaction manager to simulate being in a prepared state
+        when(ctx.transactionManager.isTransactional()).thenReturn(true);
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
+
+        // Create record to send
+        long timestamp = ctx.time.milliseconds();
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 0, timestamp, "key", "value");
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Verify that sending a record throws IllegalStateException with the correct message
+            IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> producer.send(record)
+            );
+
+            assertTrue(exception.getMessage().contains("Cannot perform operation while the transaction is in a prepared state"));
+
+            // Verify transactionManager methods were called
+            verify(ctx.transactionManager).isTransactional();
+            verify(ctx.transactionManager).isPrepared();
+
+            // Verify that no message was actually sent (accumulator was not called)
+            verify(ctx.accumulator, never()).append(
+                eq(topic),
+                anyInt(),
+                anyLong(),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyLong(),
+                anyLong(),
+                any()
+            );
+        }
+    }
+
+    @SuppressWarnings("removal")
+    @Test
+    public void testSendOffsetsNotAllowedInPreparedTransactionState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        String topic = "foo";
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+        when(ctx.metadata.fetch()).thenReturn(cluster);
+
+        // Mock transaction manager to simulate being in a prepared state
+        when(ctx.transactionManager.isTransactional()).thenReturn(true);
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
+
+        // Create consumer group metadata
+        String groupId = "test-group";
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(new TopicPartition(topic, 0), new OffsetAndMetadata(100L));
+        ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata(groupId);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Verify that sending offsets throws IllegalStateException with the correct message
+            IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> producer.sendOffsetsToTransaction(offsets, groupMetadata)
+            );
+
+            assertTrue(exception.getMessage().contains("Cannot perform operation while the transaction is in a prepared state"));
+
+            // Verify transactionManager methods were called
+            verify(ctx.transactionManager).isTransactional();
+            verify(ctx.transactionManager).isPrepared();
+
+            // Verify that no offsets were actually sent
+            verify(ctx.transactionManager, never()).sendOffsetsToTransaction(
+                eq(offsets),
+                eq(groupMetadata)
+            );
+        }
+    }
+
+    @Test
+    public void testBeginTransactionNotAllowedInPreparedTransactionState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        // Mock transaction manager to simulate being in a prepared state
+        when(ctx.transactionManager.isTransactional()).thenReturn(true);
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Verify that calling beginTransaction throws IllegalStateException with the correct message
+            IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                producer::beginTransaction
+            );
+
+            assertTrue(exception.getMessage().contains("Cannot perform operation while the transaction is in a prepared state"));
+
+            // Verify transactionManager methods were called
+            verify(ctx.transactionManager).isTransactional();
+            verify(ctx.transactionManager).isPrepared();
+        }
+    }
+
+    @Test
+    public void testPrepareTransactionFailsWhen2PCDisabled() {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        // Disable 2PC
+        when(ctx.transactionManager.isTransactionV2Enabled()).thenReturn(true);
+        when(ctx.transactionManager.is2PCEnabled()).thenReturn(false);
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            assertThrows(
+                InvalidTxnStateException.class,
+                producer::prepareTransaction,
+                "prepareTransaction() should fail if 2PC is disabled"
+            );
+        }
+    }
+
+    @Test
+    public void testCompleteTransactionWithMatchingState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        // Create prepared states with matching values
+        long producerId = 12345L;
+        short epoch = 5;
+        PreparedTxnState inputState = new PreparedTxnState(producerId, epoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+
+        // Set up the transaction manager to return the prepared state
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
+
+        // Should trigger commit when states match
+        TransactionalRequestResult commitResult = mock(TransactionalRequestResult.class);
+        when(ctx.transactionManager.beginCommit()).thenReturn(commitResult);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Call completeTransaction with the matching state
+            producer.completeTransaction(inputState);
+
+            // Verify methods called in order
+            verify(ctx.transactionManager).isPrepared();
+            verify(ctx.transactionManager).preparedTransactionState();
+            verify(ctx.transactionManager).beginCommit();
+
+            // Verify abort was never called
+            verify(ctx.transactionManager, never()).beginAbort();
+
+            // Verify sender was woken up
+            verify(ctx.sender).wakeup();
+        }
+    }
+
+    @Test
+    public void testCompleteTransactionWithNonMatchingState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.transactionManager.isPrepared()).thenReturn(true);
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        // Create txn prepared states with different values
+        long producerId = 12345L;
+        short epoch = 5;
+        PreparedTxnState inputState = new PreparedTxnState(producerId + 1, epoch);
+        ProducerIdAndEpoch currentProducerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+
+        // Set up the transaction manager to return the prepared state
+        when(ctx.transactionManager.preparedTransactionState()).thenReturn(currentProducerIdAndEpoch);
+
+        // Should trigger abort when states don't match
+        TransactionalRequestResult abortResult = mock(TransactionalRequestResult.class);
+        when(ctx.transactionManager.beginAbort()).thenReturn(abortResult);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Call completeTransaction with the non-matching state
+            producer.completeTransaction(inputState);
+
+            // Verify methods called in order
+            verify(ctx.transactionManager).isPrepared();
+            verify(ctx.transactionManager).preparedTransactionState();
+            verify(ctx.transactionManager).beginAbort();
+
+            // Verify commit was never called
+            verify(ctx.transactionManager, never()).beginCommit();
+
+            // Verify sender was woken up
+            verify(ctx.sender).wakeup();
+        }
+    }
+
     @Test
     public void testClusterAuthorizationFailure() throws Exception {
         int maxBlockMs = 500;
@@ -1725,6 +1977,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupId() {
         Map<String, Object> configs = new HashMap<>();
@@ -1762,6 +2015,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupIdTransactionV2() {
         Properties properties = new Properties();
@@ -1888,6 +2142,7 @@ public class KafkaProducerTest {
         return value;
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testMeasureTransactionDurations() {
         Map<String, Object> configs = new HashMap<>();
@@ -1940,6 +2195,7 @@ public class KafkaProducerTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testSendTxnOffsetsWithGroupMetadata() {
         final short maxVersion = (short) 3;
@@ -1994,6 +2250,7 @@ public class KafkaProducerTest {
         verifyInvalidGroupMetadata(null);
     }
 
+    @SuppressWarnings("removal")
     @Test
     public void testInvalidGenerationIdAndMemberIdCombinedInSendOffsets() {
         verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
@@ -2114,7 +2371,8 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 metadata, client, null, time);
-        assertThrows(TimeoutException.class, producer::initTransactions);
+        var timeoutEx1 = assertThrows(TimeoutException.class, producer::initTransactions);
+        assertTrue(timeoutEx1.getMessage().contains(INIT_TXN_TIMEOUT_MSG));
         // other transactional operations should not be allowed if we catch the error after initTransactions failed
         try {
             assertThrows(IllegalStateException.class, producer::beginTransaction);
@@ -2961,6 +3219,40 @@ public class KafkaProducerTest {
         public void withPluginMetrics(PluginMetrics metrics) {
             MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
             metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class CloseInterceptor implements ProducerInterceptor<String, String> {
+
+        public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+
+        @Override
+        public ProducerRecord<String, String> onSend(ProducerRecord<String, String> record) {
+            return null;
+        }
+
+        @Override
+        public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+            ProducerInterceptor.super.onAcknowledgement(metadata, exception);
+        }
+
+        @Override
+        public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
+            ProducerInterceptor.super.onAcknowledgement(metadata, exception, headers);
+        }
+
+        @Override
+        public void close() {
+            CLOSE_COUNT.incrementAndGet();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            // no-op
+        }
+
+        public static void resetCounters() {
+            CLOSE_COUNT.set(0);
         }
     }
 }

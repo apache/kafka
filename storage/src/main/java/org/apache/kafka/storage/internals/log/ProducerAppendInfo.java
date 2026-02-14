@@ -36,6 +36,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import static org.apache.kafka.server.common.TransactionVersion.TV_UNKNOWN;
+
 /**
  * This class is used to validate the records appended by a given producer before they are written to the log.
  * It is initialized with the producer's state after the last successful append, and transitively validates the
@@ -79,7 +81,7 @@ public class ProducerAppendInfo {
         this.origin = origin;
         this.verificationStateEntry = verificationStateEntry;
 
-        updatedEntry = currentEntry.withProducerIdAndBatchMetadata(producerId, Optional.empty());
+        updatedEntry = currentEntry.withProducerId(producerId);
     }
 
     public long producerId() {
@@ -87,16 +89,56 @@ public class ProducerAppendInfo {
     }
 
     private void maybeValidateDataBatch(short producerEpoch, int firstSeq, long offset) {
-        checkProducerEpoch(producerEpoch, offset);
+        // Default transaction version TV_UNKNOWN is passed for data batches.
+        checkProducerEpoch(producerEpoch, offset, TV_UNKNOWN);
         if (origin == AppendOrigin.CLIENT) {
             checkSequence(producerEpoch, firstSeq, offset);
         }
     }
 
-    private void checkProducerEpoch(short producerEpoch, long offset) {
-        if (producerEpoch < updatedEntry.producerEpoch()) {
+    /**
+     * Validates the producer epoch for transaction markers based on the transaction version.
+     * 
+     * <p>For Transaction Version 2 (TV2) and above, the coordinator always increments
+     * the producer epoch by one before writing the final transaction marker. This establishes a
+     * clear invariant: a valid TV2 marker must have an epoch strictly greater than the producer's
+     * current epoch at the leader. Any marker with markerEpoch <= currentEpoch is a late or duplicate
+     * marker and must be rejected to prevent conflating multiple transactions under the same epoch,
+     * which would threaten exactly-once semantics (EOS) guarantees.
+     * 
+     * <p>For legacy transaction versions (TV0/TV1), markers were written with the same epoch as
+     * the transactional records, so we accept markers when markerEpoch >= currentEpoch. This
+     * preserves backward compatibility but cannot distinguish between active and stale markers.
+     * 
+     * @param producerEpoch the epoch from the transaction marker
+     * @param offset the offset where the marker will be written
+     * @param transactionVersion the transaction version (0/1 = legacy, 2 = TV2)
+     */
+    private void checkProducerEpoch(short producerEpoch, long offset, short transactionVersion) {
+        short current = updatedEntry.producerEpoch();
+        boolean invalidEpoch = (transactionVersion >= 2) ? (producerEpoch <= current) : (producerEpoch < current);
+
+        if (invalidEpoch) {
+            // TV2 Idempotent Marker Retry Detection (KAFKA-19999):
+            // When markerEpoch == currentEpoch and no transaction is ongoing, this indicates
+            // a retry of a marker that was already successfully written. Common scenarios:
+            // 1. Coordinator recovery: reloading PREPARE_COMMIT/ABORT from transaction log
+            // 2. Network retry: marker was written but response was lost due to disconnection
+            // In both cases, the transaction has already ended (currentTxnFirstOffset is empty).
+            // We suppress the InvalidProducerEpochException and allow the duplicate marker to
+            // be written to the log.
+            if (transactionVersion >= 2 &&
+                    producerEpoch == current &&
+                    updatedEntry.currentTxnFirstOffset().isEmpty()) {
+                log.info("Idempotent transaction marker retry detected for producer {} epoch {}. " +
+                                "Transaction already completed, allowing duplicate marker write.",
+                        producerId, producerEpoch);
+                return;
+            }
+            String comparison = (transactionVersion >= 2) ? "<=" : "<";
             String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
-                    " is " + producerEpoch + ", " + "which is smaller than the last seen epoch " + updatedEntry.producerEpoch();
+                    " is " + producerEpoch + ", which is " + comparison + " the last seen epoch " + current +
+                    " (TV" + transactionVersion + ")";
 
             if (origin == AppendOrigin.REPLICATION) {
                 log.warn(message);
@@ -110,6 +152,13 @@ public class ProducerAppendInfo {
     }
 
     private void checkSequence(short producerEpoch, int appendFirstSeq, long offset) {
+        // For transactions v2 idempotent producers, reject non-zero sequences when there is no producer ID state
+        if (verificationStateEntry != null && verificationStateEntry.supportsEpochBump() &&
+            appendFirstSeq != 0 && currentEntry.isEmpty()) {
+            throw new OutOfOrderSequenceException("Invalid sequence number for producer " + producerId + " at " +
+                "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
+                " (incoming seq. number). Expected sequence 0 for transactions v2 idempotent producer with no existing state.");
+        }
         if (verificationStateEntry != null && appendFirstSeq > verificationStateEntry.lowestSequence()) {
             throw new OutOfOrderSequenceException("Out of order sequence number for producer " + producerId + " at " +
                     "offset " + offset + " in partition " + topicPartition + ": " + appendFirstSeq +
@@ -147,12 +196,16 @@ public class ProducerAppendInfo {
     }
 
     public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt) {
+        return append(batch, firstOffsetMetadataOpt, TV_UNKNOWN);
+    }
+
+    public Optional<CompletedTxn> append(RecordBatch batch, Optional<LogOffsetMetadata> firstOffsetMetadataOpt, short transactionVersion) {
         if (batch.isControlBatch()) {
             Iterator<Record> recordIterator = batch.iterator();
             if (recordIterator.hasNext()) {
                 Record record = recordIterator.next();
                 EndTransactionMarker endTxnMarker = EndTransactionMarker.deserialize(record);
-                return appendEndTxnMarker(endTxnMarker, batch.producerEpoch(), batch.baseOffset(), record.timestamp());
+                return appendEndTxnMarker(endTxnMarker, batch.producerEpoch(), batch.baseOffset(), record.timestamp(), transactionVersion);
             } else {
                 // An empty control batch means the entire transaction has been cleaned from the log, so no need to append
                 return Optional.empty();
@@ -201,12 +254,26 @@ public class ProducerAppendInfo {
         }
     }
 
-    public Optional<CompletedTxn> appendEndTxnMarker(
-            EndTransactionMarker endTxnMarker,
-            short producerEpoch,
-            long offset,
-            long timestamp) {
-        checkProducerEpoch(producerEpoch, offset);
+    public Optional<CompletedTxn> appendEndTxnMarker(EndTransactionMarker endTxnMarker,
+                                                     short producerEpoch,
+                                                     long offset,
+                                                     long timestamp,
+                                                     short transactionVersion) {
+        // For replication (REPLICATION origin), TV_UNKNOWN is allowed because:
+        // 1. transactionVersion is not stored in MemoryRecords - it's only metadata in WriteTxnMarkersRequest
+        // 2. When records are replicated, followers only see MemoryRecords without transactionVersion
+        // 3. The leader already validated the marker with the correct transactionVersion (e.g., TV2 strict validation)
+        // 4. Using TV_0 validation (markerEpoch >= currentEpoch) is safe because it's more permissive than TV2
+        //    (markerEpoch > currentEpoch), so any marker that passed TV2 validation will pass TV_0 validation
+        // For all other origins (CLIENT, COORDINATOR), transactionVersion must be explicitly specified.
+        if (transactionVersion == TV_UNKNOWN && origin != AppendOrigin.REPLICATION) {
+            throw new IllegalArgumentException("transactionVersion must be explicitly specified, " +
+                    "cannot use default value TV_UNKNOWN for origin " + origin);
+        }
+        // For replication with TV_UNKNOWN, use legacy validation (TV_0 behavior) since the leader already
+        // performed strict validation and the follower doesn't have access to the original transactionVersion
+        short effectiveTransactionVersion = (transactionVersion == TV_UNKNOWN) ? 0 : transactionVersion;
+        checkProducerEpoch(producerEpoch, offset, effectiveTransactionVersion);
         checkCoordinatorEpoch(endTxnMarker, offset);
 
         // Only emit the `CompletedTxn` for non-empty transactions. A transaction marker

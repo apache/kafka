@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
 import java.util.Collections;
@@ -32,7 +31,9 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORDS_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_TIME_UNIT_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.WINDOWED_RATIO_DESCRIPTION_PREFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addRateOfSumAndSumMetricsToSensor;
@@ -83,13 +84,17 @@ public class ThreadMetrics {
     private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = "The average punctuate latency";
     private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = "The maximum punctuate latency";
     private static final String PROCESS_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on processing active tasks";
+        WINDOWED_RATIO_DESCRIPTION_PREFIX + THREAD_TIME_UNIT_DESCRIPTION +
+            "processing active tasks to the total elapsed time in that window.";
     private static final String PUNCTUATE_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on punctuating active tasks";
+        WINDOWED_RATIO_DESCRIPTION_PREFIX + THREAD_TIME_UNIT_DESCRIPTION +
+            "punctuating active tasks to the total elapsed time in that window.";
     private static final String POLL_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on polling records from consumer";
+        WINDOWED_RATIO_DESCRIPTION_PREFIX + THREAD_TIME_UNIT_DESCRIPTION +
+            "polling records from the consumer to the total elapsed time in that window.";
     private static final String COMMIT_RATIO_DESCRIPTION =
-        "The fraction of time the thread spent on committing all tasks";
+        WINDOWED_RATIO_DESCRIPTION_PREFIX + THREAD_TIME_UNIT_DESCRIPTION +
+            "committing all tasks to the total elapsed time in that window.";
     private static final String BLOCKED_TIME_DESCRIPTION =
         "The total time the thread spent blocked on kafka in nanoseconds";
     private static final String THREAD_START_TIME_DESCRIPTION =
@@ -313,7 +318,7 @@ public class ThreadMetrics {
 
     public static void addThreadStateMetric(final String threadId,
                                             final StreamsMetricsImpl streamsMetrics,
-                                            final Gauge<StreamThread.State> threadStateProvider) {
+                                            final Gauge<String> threadStateProvider) {
         streamsMetrics.addThreadLevelMutableMetric(
             STATE,
             THREAD_STATE_DESCRIPTION,

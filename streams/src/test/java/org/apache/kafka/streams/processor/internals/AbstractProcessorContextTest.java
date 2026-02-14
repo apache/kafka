@@ -44,6 +44,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Properties;
 
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
@@ -218,6 +219,14 @@ public class AbstractProcessorContextTest {
         public Cancellable schedule(final Duration interval,
                                     final PunctuationType type,
                                     final Punctuator callback) throws IllegalArgumentException {
+            return null;
+        }
+
+        @Override
+        public Cancellable schedule(final Instant startTime,
+                                    final Duration interval,
+                                    final PunctuationType type,
+                                    final Punctuator callback) {
             return null;
         }
 

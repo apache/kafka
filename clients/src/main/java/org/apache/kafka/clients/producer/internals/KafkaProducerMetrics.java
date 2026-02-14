@@ -33,6 +33,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
     private static final String TXN_SEND_OFFSETS = "txn-send-offsets";
     private static final String TXN_COMMIT = "txn-commit";
     private static final String TXN_ABORT = "txn-abort";
+    private static final String TXN_PREPARE = "txn-prepare";
     private static final String TOTAL_TIME_SUFFIX = "-time-ns-total";
     private static final String METADATA_WAIT = "metadata-wait";
 
@@ -44,6 +45,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
     private final Sensor sendOffsetsSensor;
     private final Sensor commitTxnSensor;
     private final Sensor abortTxnSensor;
+    private final Sensor prepareTxnSensor;
     private final Sensor metadataWaitSensor;
 
     public KafkaProducerMetrics(Metrics metrics) {
@@ -73,6 +75,10 @@ public class KafkaProducerMetrics implements AutoCloseable {
             TXN_ABORT,
             "Total time producer has spent in abortTransaction in nanoseconds."
         );
+        prepareTxnSensor = newLatencySensor(
+            TXN_PREPARE,
+            "Total time producer has spent in prepareTransaction in nanoseconds."
+        );
         metadataWaitSensor = newLatencySensor(
             METADATA_WAIT,
             "Total time producer has spent waiting on topic metadata in nanoseconds."
@@ -87,6 +93,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
         removeMetric(TXN_SEND_OFFSETS);
         removeMetric(TXN_COMMIT);
         removeMetric(TXN_ABORT);
+        removeMetric(TXN_PREPARE);
         removeMetric(METADATA_WAIT);
     }
 
@@ -112,6 +119,10 @@ public class KafkaProducerMetrics implements AutoCloseable {
 
     public void recordAbortTxn(long duration) {
         abortTxnSensor.record(duration);
+    }
+
+    public void recordPrepareTxn(long duration) {
+        prepareTxnSensor.record(duration);
     }
 
     public void recordMetadataWait(long duration) {

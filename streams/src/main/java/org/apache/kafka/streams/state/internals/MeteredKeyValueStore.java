@@ -53,6 +53,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
@@ -73,7 +74,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  */
 public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
-    implements KeyValueStore<K, V> {
+    implements KeyValueStore<K, V>, MeteredStateStore {
 
     final Serde<K> keySerde;
     final Serde<V> valueSerde;
@@ -95,9 +96,11 @@ public class MeteredKeyValueStore<K, V>
     protected InternalProcessorContext<?, ?> internalContext;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
+    private Sensor restoreSensor;
 
     protected LongAdder numOpenIterators = new LongAdder();
     protected NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
@@ -133,11 +136,10 @@ public class MeteredKeyValueStore<K, V>
         streamsMetrics = (StreamsMetricsImpl) stateStoreContext.metrics();
 
         registerMetrics();
-        final Sensor restoreSensor =
-            StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
 
-        // register and possibly restore the state from the logs
-        maybeMeasureLatency(() -> super.init(stateStoreContext, root), time, restoreSensor);
+        restoreSensor = StateStoreMetrics.restoreSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+
+        super.init(stateStoreContext, root);
     }
 
     private void registerMetrics() {
@@ -155,11 +157,19 @@ public class MeteredKeyValueStore<K, V>
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                (config, now) -> {
-                    final Iterator<MeteredIterator> openIteratorsIterator = openIterators.iterator();
-                    return openIteratorsIterator.hasNext() ? openIteratorsIterator.next().startTimestamp() : null;
+            (config, now) -> {
+                try {
+                    final Iterator<MeteredIterator> iter = openIterators.iterator();
+                    return iter.hasNext() ? iter.next().startTimestamp() : 0L;
+                } catch (final NoSuchElementException e) {
+                    return 0L;
                 }
-        );
+            });
+    }
+
+    @Override
+    public void recordRestoreTime(final long restoreTimeNs) {
+        restoreSensor.record(restoreTimeNs);
     }
 
     protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {
@@ -494,9 +504,11 @@ public class MeteredKeyValueStore<K, V>
         private final long startTimestamp;
         private final Function<byte[], V> valueDeserializer;
 
-        private MeteredKeyValueTimestampedIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                        final Sensor sensor,
-                                        final Function<byte[], V> valueDeserializer) {
+        private MeteredKeyValueTimestampedIterator(
+            final KeyValueIterator<Bytes, byte[]> iter,
+            final Sensor sensor,
+            final Function<byte[], V> valueDeserializer
+        ) {
             this.iter = iter;
             this.sensor = sensor;
             this.valueDeserializer = valueDeserializer;

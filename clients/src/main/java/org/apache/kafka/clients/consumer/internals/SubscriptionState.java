@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.utils.LogContext;
@@ -38,6 +39,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -90,6 +92,13 @@ public class SubscriptionState {
 
     /* the list of topics the user has requested */
     private Set<String> subscription;
+
+    /**
+     * Topic IDs received in an assignment from the coordinator when using the Consumer rebalance protocol.
+     * This will be used to include assigned topic IDs in metadata requests when the consumer
+     * does not know the topic names (ex. when the user subscribes to a RE2J regex computed on the broker)
+     */
+    private Set<Uuid> assignedTopicIds;
 
     /* The list of topics the group has subscribed to. This may include some topics which are not part
      * of `subscription` for the leader of a group since it is responsible for detecting metadata changes
@@ -149,6 +158,7 @@ public class SubscriptionState {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new TreeSet<>(); // use a sorted set for better logging
+        this.assignedTopicIds = new TreeSet<>();
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
@@ -306,7 +316,7 @@ public class SubscriptionState {
         if (!this.hasAutoAssignedPartitions())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
-        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new HashMap<>(assignments.size());
+        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = new LinkedHashMap<>(assignments.size());
         for (TopicPartition tp : assignments) {
             TopicPartitionState state = this.assignment.stateValue(tp);
             if (state == null)
@@ -338,6 +348,7 @@ public class SubscriptionState {
         this.subscription = Collections.emptySet();
         this.groupSubscription = Collections.emptySet();
         this.assignment.clear();
+        this.assignedTopicIds = Collections.emptySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
         this.assignmentId++;
@@ -467,7 +478,7 @@ public class SubscriptionState {
      * Provides the number of assigned partitions in a thread safe manner.
      * @return the number of assigned partitions.
      */
-    synchronized int numAssignedPartitions() {
+    public synchronized int numAssignedPartitions() {
         return this.assignment.size();
     }
 
@@ -477,7 +488,7 @@ public class SubscriptionState {
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
-            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || topicPartitionState.isFetchable())
+            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || isFetchableAndSubscribed(topicPartition, topicPartitionState))
                     && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
@@ -485,23 +496,34 @@ public class SubscriptionState {
         return result;
     }
 
+    /**
+     * Check if the partition is fetchable.
+     * If the consumer has explicitly subscribed to a list of topic names,
+     * this will also check that the partition is contained in the subscription.
+     */
+    private synchronized boolean isFetchableAndSubscribed(TopicPartition topicPartition, TopicPartitionState topicPartitionState) {
+        if (subscriptionType.equals(SubscriptionType.AUTO_TOPICS) && !subscription.contains(topicPartition.topic())) {
+            log.trace("Assigned partition {} is not in the subscription {} so will be considered not fetchable.", topicPartition, subscription);
+            return false;
+        }
+        return topicPartitionState.isFetchable();
+    }
+
     public synchronized boolean hasAutoAssignedPartitions() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
                 || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
     }
 
-    public synchronized boolean isAssignedFromRe2j(String topic) {
-        if (!hasRe2JPatternSubscription()) {
+    /**
+     * Check if the topic ID has been received in an assignment
+     * from the coordinator after subscribing to a broker-side regex.
+     */
+    public synchronized boolean isAssignedFromRe2j(Uuid topicId) {
+        if (topicId == null || !hasRe2JPatternSubscription()) {
             return false;
         }
 
-        for (TopicPartition topicPartition : assignment.partitionSet()) {
-            if (topicPartition.topic().equals(topic)) {
-                return true;
-            }
-        }
-
-        return false;
+        return this.assignedTopicIds.contains(topicId);
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {
@@ -857,8 +879,26 @@ public class SubscriptionState {
         return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs));
     }
 
-    public synchronized Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
-        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs));
+    public synchronized Map<TopicPartition, FetchPosition> partitionsNeedingValidation(long nowMs) {
+        Map<TopicPartition, FetchPosition> result = new HashMap<>();
+
+        assignment.forEach((tp, tps) -> {
+            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
+                result.put(tp, tps.position);
+            }
+        });
+
+        return result;
+    }
+
+    public synchronized boolean hasPartitionsNeedingValidation(long nowMs) {
+        for (TopicPartitionState tps  : assignment.partitionStateValues()) {
+            if (tps.awaitingValidation() && !tps.awaitingRetryBackoff(nowMs) && tps.position != null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public synchronized boolean isAssigned(TopicPartition tp) {
@@ -871,8 +911,8 @@ public class SubscriptionState {
     }
 
     synchronized boolean isFetchable(TopicPartition tp) {
-        TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
-        return assignedOrNull != null && assignedOrNull.isFetchable();
+        TopicPartitionState tps = assignedStateOrNull(tp);
+        return tps != null && isFetchableAndSubscribed(tp, tps);
     }
 
     public synchronized boolean hasValidPosition(TopicPartition tp) {
@@ -909,6 +949,21 @@ public class SubscriptionState {
                                                                   Collection<TopicPartition> addedPartitions) {
         assignFromSubscribed(fullAssignment);
         markPendingOnAssignedCallback(addedPartitions, true);
+    }
+
+    /**
+     * @return Topic IDs received in an assignment that have not been reconciled yet, so we need metadata for them.
+     */
+    public synchronized Set<Uuid> assignedTopicIds() {
+        return assignedTopicIds;
+    }
+
+    /**
+     * Set the set of topic IDs that have been assigned to the consumer by the coordinator.
+     * This is used for topic IDs received in an assignment when using the new consumer rebalance protocol (KIP-848).
+     */
+    public synchronized  void setAssignedTopicIds(Set<Uuid> assignedTopicIds) {
+        this.assignedTopicIds = assignedTopicIds;
     }
 
     /**
@@ -1165,14 +1220,16 @@ public class SubscriptionState {
         }
 
         /**
-         * True if the partition is in {@link FetchStates#INITIALIZING} state. While in this
-         * state, a position for the partition can be retrieved (based on committed offsets or
+         * Check if we need to retrieve a fetch position for the given partition.
+         * True if the partition state is {@link FetchStates#INITIALIZING}, and the partition is not being revoked.
+         * <p/>
+         * While in this state, a position for the partition will be retrieved (based on committed offsets or
          * partitions offsets).
          * Note that retrieving a position does not mean that we can start fetching from the
          * partition (see {@link #isFetchable()})
          */
         private boolean shouldInitialize() {
-            return fetchState.equals(FetchStates.INITIALIZING);
+            return fetchState.equals(FetchStates.INITIALIZING) && !pendingRevocation;
         }
 
         private boolean isFetchable() {

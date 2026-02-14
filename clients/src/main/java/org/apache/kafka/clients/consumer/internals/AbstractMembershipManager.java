@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -44,7 +44,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableList;
 
@@ -110,7 +109,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * Metadata that allows us to create the partitions needed for {@link ConsumerRebalanceListener}.
      */
-    private final ConsumerMetadata metadata;
+    private final Metadata metadata;
 
     /**
      * Logger.
@@ -206,7 +205,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     AbstractMembershipManager(String groupId,
                               SubscriptionState subscriptions,
-                              ConsumerMetadata metadata,
+                              Metadata metadata,
                               Logger log,
                               Time time,
                               RebalanceMetricsManager metricsManager,
@@ -373,6 +372,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             log.debug("Member {} updated its target assignment from {} to {}. Member will reconcile it on the next poll.",
                 memberId, currentTargetAssignment, updatedAssignment);
             currentTargetAssignment = updatedAssignment;
+            // Register the assigned topic IDs on the subscription state.
+            // This will be used to ensure they are included in metadata requests (even though they may not be reconciled yet).
+            subscriptions.setAssignedTopicIds(currentTargetAssignment.partitions.keySet());
         });
     }
 
@@ -443,7 +445,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         log.error("Member {} with epoch {} transitioned to fatal state", memberId, memberEpoch);
         notifyEpochChange(Optional.empty());
 
-        if (previousState == MemberState.UNSUBSCRIBED) {
+        if (previousState == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
                     "left the group, so onPartitionsLost callback won't be triggered.", memberId, memberEpoch);
             return;
@@ -830,8 +832,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
         if (reconciliationInProgress) {
-            log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
-                currentTargetAssignment + " will be handled in the next reconciliation loop.");
+            log.trace("Ignoring reconciliation attempt. Another reconciliation is already in progress. " +
+                 "Assignment {} will be handled in the next reconciliation loop.", currentTargetAssignment);
             return;
         }
 
@@ -987,7 +989,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             String reason = rejoinedWhileReconciliationInProgress ?
                 "the member has re-joined the group" :
                 "the member already transitioned out of the reconciling state into " + state;
-            log.info("Interrupting reconciliation that is not relevant anymore because " + reason);
+            log.info("Interrupting reconciliation that is not relevant anymore because {}", reason);
             markReconciliationCompleted();
         }
         return shouldAbort;
@@ -1077,9 +1079,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
             nameFromMetadata.ifPresent(resolvedTopicName -> {
                 // Name resolved, so assignment is ready for reconciliation.
-                topicPartitions.forEach(tp ->
-                    assignmentReadyToReconcile.add(new TopicIdPartition(topicId, tp, resolvedTopicName))
-                );
+                assignmentReadyToReconcile.addAll(topicId, resolvedTopicName, topicPartitions);
                 it.remove();
             });
         }
@@ -1135,7 +1135,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         // Ensure the set of partitions to revoke are still assigned
         Set<TopicPartition> revokedPartitions = new HashSet<>(partitionsToRevoke);
         revokedPartitions.retainAll(subscriptions.assignedPartitions());
-        log.info("Revoking previously assigned partitions {}", revokedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
+        log.info("Revoking previously assigned partitions {}", revokedPartitions);
 
         signalPartitionsBeingRevoked(revokedPartitions);
 

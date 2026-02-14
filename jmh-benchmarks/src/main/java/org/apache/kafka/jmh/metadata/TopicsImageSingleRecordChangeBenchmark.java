@@ -37,7 +37,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -77,8 +77,8 @@ public class TopicsImageSingleRecordChangeBenchmark {
             setTopicId(newTopicUuid).
             setReplicas(replicas).
             setIsr(isr).
-            setRemovingReplicas(Collections.emptyList()).
-            setAddingReplicas(Collections.emptyList()).
+            setRemovingReplicas(List.of()).
+            setAddingReplicas(List.of()).
             setLeader(0);
         topicsDelta.replay(newPartitionRecord);
         System.out.print("(Adding a single topic to metadata having " + totalTopicCount + " total topics) ");

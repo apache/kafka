@@ -301,7 +301,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public Records slice(int position, int size) {
+    public MemoryRecords slice(int position, int size) {
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + this);
         if (position > buffer.limit())
@@ -490,16 +490,6 @@ public class MemoryRecords extends AbstractRecords {
         return new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, timestampType, baseOffset,
             logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
             false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, maxSize);
-    }
-
-    public static MemoryRecordsBuilder idempotentBuilder(ByteBuffer buffer,
-                                                         Compression compression,
-                                                         long baseOffset,
-                                                         long producerId,
-                                                         short producerEpoch,
-                                                         int baseSequence) {
-        return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME,
-                baseOffset, System.currentTimeMillis(), producerId, producerEpoch, baseSequence);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,

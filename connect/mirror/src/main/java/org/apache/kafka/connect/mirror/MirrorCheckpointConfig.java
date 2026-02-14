@@ -194,12 +194,14 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         GROUPS,
                         ConfigDef.Type.LIST,
                         GROUPS_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         ConfigDef.Importance.HIGH,
                         GROUPS_DOC)
                 .define(
                         GROUPS_EXCLUDE,
                         ConfigDef.Type.LIST,
                         GROUPS_EXCLUDE_DEFAULT,
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                         ConfigDef.Importance.HIGH,
                         GROUPS_EXCLUDE_DOC)
                 .define(

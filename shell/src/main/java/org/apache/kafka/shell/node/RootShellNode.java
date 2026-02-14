@@ -21,8 +21,8 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.node.MetadataImageNode;
 import org.apache.kafka.image.node.MetadataNode;
 
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * The root node of the Kafka metadata shell.
@@ -36,7 +36,7 @@ public class RootShellNode implements MetadataNode {
 
     @Override
     public Collection<String> childNames() {
-        return Arrays.asList(LocalShellNode.NAME, MetadataImageNode.NAME);
+        return List.of(LocalShellNode.NAME, MetadataImageNode.NAME);
     }
 
     @Override

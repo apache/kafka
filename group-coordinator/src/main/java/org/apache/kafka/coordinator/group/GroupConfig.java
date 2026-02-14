@@ -75,6 +75,8 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "streams.num.standby.replicas";
 
+    public static final String STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG = "streams.initial.rebalance.delay.ms";
+
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
@@ -92,6 +94,8 @@ public final class GroupConfig extends AbstractConfig {
     public final int streamsHeartbeatIntervalMs;
 
     public final int streamsNumStandbyReplicas;
+
+    public final int streamsInitialRebalanceDelayMs;
 
     public final String shareIsolationLevel;
 
@@ -155,7 +159,13 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
             atLeast(0),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC)
+        .define(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT,
+            atLeast(0),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
@@ -168,6 +178,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsSessionTimeoutMs = getInt(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
+        this.streamsInitialRebalanceDelayMs = getInt(STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG);
         this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
     }
 
@@ -380,6 +391,13 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     /**
+     * The initial rebalance delay for streams groups.
+     */
+    public int streamsInitialRebalanceDelayMs() {
+        return streamsInitialRebalanceDelayMs;
+    }
+
+    /**
      * The share group isolation level.
      */
     public IsolationLevel shareIsolationLevel() {
@@ -391,5 +409,9 @@ public final class GroupConfig extends AbstractConfig {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Unknown Share isolation level: " + shareIsolationLevel);
         }
+    }
+
+    public static void main(String[] args) {
+        System.out.println(CONFIG.toHtml(4, config -> "groupconfigs_" + config));
     }
 }

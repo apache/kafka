@@ -35,9 +35,7 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -224,14 +222,14 @@ public class MirrorSourceTaskTest {
         OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
         when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
 
-        Set<TopicPartition> topicPartitions = new HashSet<>(Arrays.asList(
+        Set<TopicPartition> topicPartitions = Set.of(
                 new TopicPartition("previouslyReplicatedTopic", 8),
                 new TopicPartition("previouslyReplicatedTopic1", 0),
                 new TopicPartition("previouslyReplicatedTopic", 1),
                 new TopicPartition("newTopicToReplicate1", 1),
                 new TopicPartition("newTopicToReplicate1", 4),
                 new TopicPartition("newTopicToReplicate2", 0)
-        ));
+        );
 
         long arbitraryCommittedOffset = 4L;
         long offsetToSeek = arbitraryCommittedOffset + 1L;

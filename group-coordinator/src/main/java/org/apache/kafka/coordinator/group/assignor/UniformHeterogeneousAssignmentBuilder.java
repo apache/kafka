@@ -754,7 +754,7 @@ public class UniformHeterogeneousAssignmentBuilder {
             // First, choose a member from the most loaded range to reassign a partition from.
 
             // Loop until we find a member that has partitions to give up.
-            int mostLoadedMemberIndex = -1;
+            int mostLoadedMemberIndex;
             while (true) {
                 mostLoadedMemberIndex = memberAssignmentBalancer.nextMostLoadedMember();
 

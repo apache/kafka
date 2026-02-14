@@ -90,7 +90,7 @@ public class OffsetIndexTest {
                 rightAnswer = new OffsetPosition(index.baseOffset(), 0);
             } else {
                 Map.Entry<Long, OffsetPosition> lastEntry = valMap.floorEntry((long) offset);
-                rightAnswer = new OffsetPosition(lastEntry.getKey(), lastEntry.getValue().position);
+                rightAnswer = new OffsetPosition(lastEntry.getKey(), lastEntry.getValue().position());
             }
             assertEquals(rightAnswer, index.lookup(offset),
                     "The index should give the same answer as the sorted map");
@@ -151,7 +151,7 @@ public class OffsetIndexTest {
         assertEquals(Optional.empty(), index.fetchUpperBoundOffset(first, 5));
 
         Stream.of(first, second, third, fourth)
-                .forEach(offsetPosition -> index.append(offsetPosition.offset, offsetPosition.position));
+                .forEach(offsetPosition -> index.append(offsetPosition.offset(), offsetPosition.position()));
 
         assertEquals(Optional.of(second), index.fetchUpperBoundOffset(first, 5));
         assertEquals(Optional.of(second), index.fetchUpperBoundOffset(first, 10));
@@ -167,13 +167,13 @@ public class OffsetIndexTest {
     public void testReopen() throws IOException {
         OffsetPosition first = new OffsetPosition(51, 0);
         OffsetPosition sec = new OffsetPosition(52, 1);
-        index.append(first.offset, first.position);
-        index.append(sec.offset, sec.position);
+        index.append(first.offset(), first.position());
+        index.append(sec.offset(), sec.position());
         index.close();
         OffsetIndex idxRo = new OffsetIndex(index.file(), index.baseOffset());
-        assertEquals(first, idxRo.lookup(first.offset));
-        assertEquals(sec, idxRo.lookup(sec.offset));
-        assertEquals(sec.offset, idxRo.lastOffset());
+        assertEquals(first, idxRo.lookup(first.offset()));
+        assertEquals(sec, idxRo.lookup(sec.offset()));
+        assertEquals(sec.offset(), idxRo.lastOffset());
         assertEquals(2, idxRo.entries());
         assertWriteFails("Append should fail on read-only index", idxRo, 53);
     }
@@ -225,7 +225,6 @@ public class OffsetIndexTest {
         idx.forceUnmap();
         // mmap should be null after unmap causing lookup to throw a NPE
         assertThrows(NullPointerException.class, () -> idx.lookup(1));
-        assertThrows(NullPointerException.class, idx::close);
     }
 
     @Test

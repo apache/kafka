@@ -25,7 +25,7 @@ def requirements_instructions(prefs_file, prefs):
     return f"""
 Requirements:
 1. Updated docs to reference the new release version where appropriate.
-2. JDK8 and JDK17 compilers and libraries
+2. JDK25 compiler and libraries
 3. Your Apache ID, already configured with SSH keys on id.apache.org and SSH keys available in this shell session
 4. All issues in the target release resolved with valid resolutions (if not, this script will report the problematic JIRAs)
 5. A GPG key used for signing the release. This key should have been added to public Apache servers and the KEYS file on the Kafka site
@@ -70,7 +70,7 @@ If any of these are missing, see https://cwiki.apache.org/confluence/display/KAF
 Some of these may be used from these previous settings loaded from {prefs_file}:
 {prefs}
 
-Do you have all of of these setup?"""
+Do you have all of these setup?"""
 
 
 def release_announcement_email(release_version, contributors):
@@ -154,11 +154,11 @@ Go to https://repository.apache.org/#stagingRepositories and hit 'Close' for the
 There will be more than one repository entries created, please close all of them.
 In some cases, you may get errors on some repositories while closing them, see KAFKA-15033.
 If this is not the first RC, you need to 'Drop' the previous artifacts.
-Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/
+Confirm the correct artifacts are visible at https://repository.apache.org/content/groups/staging/org/apache/kafka/ and build the
+jvm and native Docker images following these instructions: https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=34840886#ReleaseProcess-CreateJVMApacheKafkaDockerArtifacts(Forversions>=3.7.0)
 """
 
-
-def sanity_check_instructions(release_version, rc_tag, apache_id):
+def sanity_check_instructions(release_version, rc_tag):
     return f"""
 *******************************************************************************************************************************************************
 Ok. We've built and staged everything for the {rc_tag}.
@@ -189,14 +189,14 @@ Some suggested steps:
 """
 
 
-def rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_version, apache_id):
+def rc_vote_email_text(release_version, rc, rc_tag, dev_branch, docs_version):
     return f"""
 To: dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
 Subject: [VOTE] {release_version} RC{rc}
 
 Hello Kafka users, developers and client-developers,
 
-This is the first candidate for release of Apache Kafka {release_version}.
+This is the <ORDINAL> candidate for release of Apache Kafka {release_version}.
 
 <DESCRIPTION OF MAJOR CHANGES, INCLUDE INDICATION OF MAJOR/MINOR RELEASE>
 
@@ -207,7 +207,7 @@ https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/RELEASE_NOTES.html
 <THE RELEASE POLICY (https://www.apache.org/legal/release-policy.html#release-approval) REQUIRES VOTES TO BE OPEN FOR MINIMUM OF 3 DAYS THEREFORE VOTING DEADLINE SHOULD BE AT LEAST 72 HOURS FROM THE TIME THIS EMAIL IS SENT.>
 
 Kafka's KEYS file containing PGP keys we use to sign the release:
-https://kafka.apache.org/KEYS
+https://downloads.apache.org/kafka/KEYS
 
 * Release artifacts to be voted upon (source and binary):
 https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/
@@ -221,7 +221,7 @@ apache/kafka-native:{rc_tag}
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
 
 * Javadoc:
-https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/javadoc/
+https://dist.apache.org/repos/dist/dev/kafka/{rc_tag}/javadoc/index.html
 
 * Tag to be voted upon (off {dev_branch} branch) is the {release_version} tag:
 https://github.com/apache/kafka/releases/tag/{rc_tag}
@@ -233,16 +233,15 @@ https://kafka.apache.org/{docs_version}/documentation.html
 https://kafka.apache.org/{docs_version}/protocol.html
 
 * Successful CI builds for the {dev_branch} branch:
-Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/{dev_branch}/<BUILD NUMBER>/
--- Confluent engineers can access the semphore build to provide the build number
-System tests: https://confluent-open-source-kafka-system-test-results.s3-us-west-2.amazonaws.com/{dev_branch}/<BUILD_NUMBER>/report.html
+Unit/integration tests: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
+System tests:
+<Confluent engineers can access the semaphore build to provide the build number
+https://confluent-open-source-kafka-system-test-results.s3-us-west-2.amazonaws.com/{dev_branch}/<BUILD_NUMBER>/report.html>
 
 <USE docker/README.md FOR STEPS TO RUN DOCKER BUILD TEST GITHUB ACTIONS>
 * Successful Docker Image Github Actions Pipeline for {dev_branch} branch:
 Docker Build Test Pipeline (JVM): https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
 Docker Build Test Pipeline (Native): https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
-
-/**************************************
 
 Thanks,
 <YOU>
@@ -294,5 +293,3 @@ IMPORTANT: Note that there are still some substitutions that need to be made in 
   - Finally, validate all the links before shipping!
 Note that all substitutions are annotated with <> around them.
 """
-
-

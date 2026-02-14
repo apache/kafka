@@ -30,7 +30,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -38,7 +37,6 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -184,7 +182,7 @@ public class ValuesTest {
         SchemaAndValue schemaAndValue = Values.parseString("[true, false]");
         assertEquals(Type.ARRAY, schemaAndValue.schema().type());
         assertEquals(Type.BOOLEAN, schemaAndValue.schema().valueSchema().type());
-        assertEquals(Arrays.asList(true, false), schemaAndValue.value());
+        assertEquals(List.of(true, false), schemaAndValue.value());
     }
 
     @Test
@@ -217,14 +215,14 @@ public class ValuesTest {
     public void shouldParseEmptyMap() {
         SchemaAndValue schemaAndValue = Values.parseString("{}");
         assertEquals(Type.MAP, schemaAndValue.schema().type());
-        assertEquals(Collections.emptyMap(), schemaAndValue.value());
+        assertEquals(Map.of(), schemaAndValue.value());
     }
 
     @Test
     public void shouldParseEmptyArray() {
         SchemaAndValue schemaAndValue = Values.parseString("[]");
         assertEquals(Type.ARRAY, schemaAndValue.schema().type());
-        assertEquals(Collections.emptyList(), schemaAndValue.value());
+        assertEquals(List.of(), schemaAndValue.value());
     }
 
     @Test
@@ -468,16 +466,16 @@ public class ValuesTest {
     @Test
     public void shouldParseStringListWithMultipleElementTypes() {
         assertParseStringArrayWithNoSchema(
-                Arrays.asList((byte) 1, (byte) 2, (short) 300, "four"),
+                List.of((byte) 1, (byte) 2, (short) 300, "four"),
                 "[1, 2, 300, \"four\"]");
         assertParseStringArrayWithNoSchema(
-                Arrays.asList((byte) 2, (short) 300, "four", (byte) 1),
+                List.of((byte) 2, (short) 300, "four", (byte) 1),
                 "[2, 300, \"four\", 1]");
         assertParseStringArrayWithNoSchema(
-                Arrays.asList((short) 300, "four", (byte) 1, (byte) 2),
+                List.of((short) 300, "four", (byte) 1, (byte) 2),
                 "[300, \"four\", 1, 2]");
         assertParseStringArrayWithNoSchema(
-                Arrays.asList("four", (byte) 1, (byte) 2, (short) 300),
+                List.of("four", (byte) 1, (byte) 2, (short) 300),
                 "[\"four\", 1, 2, 300]");
     }
 
@@ -648,7 +646,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, elementSchema.type());
         assertEquals(Date.LOGICAL_NAME, elementSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_DATE_FORMAT_PATTERN).parse(dateStr);
-        assertEquals(Collections.singletonList(expected), result.value());
+        assertEquals(List.of(expected), result.value());
     }
 
     @Test
@@ -661,7 +659,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, elementSchema.type());
         assertEquals(Time.LOGICAL_NAME, elementSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
-        assertEquals(Collections.singletonList(expected), result.value());
+        assertEquals(List.of(expected), result.value());
     }
 
     @Test
@@ -674,7 +672,7 @@ public class ValuesTest {
         assertEquals(Type.INT64, elementSchema.type());
         assertEquals(Timestamp.LOGICAL_NAME, elementSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr);
-        assertEquals(Collections.singletonList(expected), result.value());
+        assertEquals(List.of(expected), result.value());
     }
 
     @Test
@@ -691,7 +689,7 @@ public class ValuesTest {
         java.util.Date expected1 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr1);
         java.util.Date expected2 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr2);
         java.util.Date expected3 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr3);
-        assertEquals(Arrays.asList(expected1, expected2, expected3), result.value());
+        assertEquals(List.of(expected1, expected2, expected3), result.value());
     }
 
     @Test
@@ -707,7 +705,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, valueSchema.type());
         assertEquals(Time.LOGICAL_NAME, valueSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
-        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+        assertEquals(Map.of(keyStr, expected), result.value());
     }
 
     @Test
@@ -723,7 +721,7 @@ public class ValuesTest {
         assertEquals(Type.INT32, valueSchema.type());
         assertEquals(Time.LOGICAL_NAME, valueSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
-        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+        assertEquals(Map.of(keyStr, expected), result.value());
     }
 
     @Test
@@ -904,7 +902,7 @@ public class ValuesTest {
 
         // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd"
         LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.DAYS);
-        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, LocalDate.ofEpochDay(days).format(DateTimeFormatter.ISO_LOCAL_DATE));
+        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, localTime.format(DateTimeFormatter.ISO_LOCAL_DATE));
         LocalDateTime date3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(d3.getTime()), ZoneId.systemDefault());
         assertEquals(localTimeTruncated, date3);
 
@@ -991,25 +989,25 @@ public class ValuesTest {
 
     @Test
     public void shouldInferNoSchemaForEmptyList() {
-        Schema listSchema = Values.inferSchema(Collections.emptyList());
+        Schema listSchema = Values.inferSchema(List.of());
         assertNull(listSchema);
     }
 
     @Test
     public void shouldInferNoSchemaForListContainingObject() {
-        Schema listSchema = Values.inferSchema(Collections.singletonList(new Object()));
+        Schema listSchema = Values.inferSchema(List.of(new Object()));
         assertNull(listSchema);
     }
 
     @Test
     public void shouldInferNoSchemaForEmptyMap() {
-        Schema listSchema = Values.inferSchema(Collections.emptyMap());
+        Schema listSchema = Values.inferSchema(Map.of());
         assertNull(listSchema);
     }
 
     @Test
     public void shouldInferNoSchemaForMapContainingObject() {
-        Schema listSchema = Values.inferSchema(Collections.singletonMap(new Object(), new Object()));
+        Schema listSchema = Values.inferSchema(Map.of(new Object(), new Object()));
         assertNull(listSchema);
     }
 
@@ -1019,7 +1017,7 @@ public class ValuesTest {
      */
     @Test
     public void shouldNotConvertArrayValuesToDecimal() {
-        List<Object> decimals = Arrays.asList("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
+        List<Object> decimals = List.of("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
                 BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE), (byte) 1, (byte) 1);
         List<Object> expected = new ArrayList<>(decimals); // most values are directly reproduced with the same type
         expected.set(0, "1.0"); // The quotes are parsed away, but the value remains a string
@@ -1032,7 +1030,7 @@ public class ValuesTest {
 
     @Test
     public void shouldParseArrayOfOnlyDecimals() {
-        List<Object> decimals = Arrays.asList(BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
+        List<Object> decimals = List.of(BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
                 BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE));
         SchemaAndValue schemaAndValue = Values.parseString(decimals.toString());
         Schema schema = schemaAndValue.schema();

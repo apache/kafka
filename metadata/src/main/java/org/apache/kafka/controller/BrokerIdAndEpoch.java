@@ -17,41 +17,5 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Objects;
-
-public class BrokerIdAndEpoch {
-    private final int id;
-    private final long epoch;
-
-    public BrokerIdAndEpoch(
-        int id,
-        long epoch
-    ) {
-        this.id = id;
-        this.epoch = epoch;
-    }
-
-    public int id() {
-        return id;
-    }
-
-    public long epoch() {
-        return epoch;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || (!(o instanceof BrokerIdAndEpoch other))) return false;
-        return id == other.id && epoch == other.epoch;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, epoch);
-    }
-
-    @Override
-    public String toString() {
-        return "BrokerIdAndEpoch(id=" + id + ", epoch=" + epoch + ")";
-    }
+public record BrokerIdAndEpoch(int id, long epoch) {
 }

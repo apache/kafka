@@ -48,7 +48,7 @@ public abstract class GraphNode {
     }
 
     public Collection<GraphNode> parentNodes() {
-        return parentNodes;
+        return new LinkedHashSet<>(parentNodes);
     }
 
     String[] parentNodeNames() {

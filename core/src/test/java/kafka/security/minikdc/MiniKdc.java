@@ -136,8 +136,8 @@ public class MiniKdc {
      *                MiniKdc.
      */
     public MiniKdc(Properties config, File workDir) {
-        Set<String> requiredProperties = new HashSet<>(List.of(ORG_NAME, ORG_DOMAIN, KDC_BIND_ADDRESS, KDC_PORT,
-                INSTANCE, TRANSPORT, MAX_TICKET_LIFETIME, MAX_RENEWABLE_LIFETIME));
+        Set<String> requiredProperties = Set.of(ORG_NAME, ORG_DOMAIN, KDC_BIND_ADDRESS, KDC_PORT,
+                INSTANCE, TRANSPORT, MAX_TICKET_LIFETIME, MAX_RENEWABLE_LIFETIME);
         if (!config.keySet().containsAll(requiredProperties)) {
             throw new IllegalArgumentException("Missing required properties: " + requiredProperties);
         }

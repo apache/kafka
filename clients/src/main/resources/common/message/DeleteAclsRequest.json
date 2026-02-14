@@ -30,7 +30,7 @@
       { "name": "ResourceTypeFilter", "type": "int8", "versions": "0+",
         "about": "The resource type." },
       { "name": "ResourceNameFilter", "type": "string", "versions": "0+", "nullableVersions": "0+",
-        "about": "The resource name." },
+        "about": "The resource name, or null to match any resource name." },
       { "name": "PatternTypeFilter", "type": "int8", "versions": "1+", "default": "3", "ignorable": false,
         "about": "The pattern type." },
       { "name": "PrincipalFilter", "type": "string", "versions": "0+", "nullableVersions": "0+",

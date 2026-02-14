@@ -20,8 +20,6 @@ import org.apache.kafka.common.config.ConfigDef;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +35,7 @@ public class MirrorCheckpointConfigTest {
 
     @Test
     public void testTaskConfigConsumerGroups() {
-        List<String> groups = Arrays.asList("consumer-1", "consumer-2", "consumer-3");
+        List<String> groups = List.of("consumer-1", "consumer-2", "consumer-3");
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
         Map<String, String> props = config.taskConfigForConsumerGroups(groups, 1);
         MirrorCheckpointTaskConfig taskConfig = new MirrorCheckpointTaskConfig(props);
@@ -118,7 +116,7 @@ public class MirrorCheckpointConfigTest {
         Map<String, String> configValues = MirrorCheckpointConfig.validate(makeProps(
                 MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "false",
                 MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED, "false"));
-        assertEquals(configValues.keySet(), Collections.singleton(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED));
+        assertEquals(configValues.keySet(), Set.of(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED));
 
         configValues = MirrorCheckpointConfig.validate(makeProps(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED, "true",
                 MirrorCheckpointConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));

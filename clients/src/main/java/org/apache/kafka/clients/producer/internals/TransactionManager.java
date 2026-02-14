@@ -33,10 +33,12 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionAbortableException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -144,12 +146,14 @@ public class TransactionManager {
     private volatile long latestFinalizedFeaturesEpoch = -1;
     private volatile boolean isTransactionV2Enabled = false;
     private final boolean enable2PC;
+    private volatile ProducerIdAndEpoch preparedTxnState = ProducerIdAndEpoch.NONE;
 
     private enum State {
         UNINITIALIZED,
         INITIALIZING,
         READY,
         IN_TRANSACTION,
+        PREPARED_TRANSACTION,
         COMMITTING_TRANSACTION,
         ABORTING_TRANSACTION,
         ABORTABLE_ERROR,
@@ -165,10 +169,12 @@ public class TransactionManager {
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
                     return source == READY;
+                case PREPARED_TRANSACTION:
+                    return source == IN_TRANSACTION || source == INITIALIZING;
                 case COMMITTING_TRANSACTION:
-                    return source == IN_TRANSACTION;
+                    return source == IN_TRANSACTION || source == PREPARED_TRANSACTION;
                 case ABORTING_TRANSACTION:
-                    return source == IN_TRANSACTION || source == ABORTABLE_ERROR;
+                    return source == IN_TRANSACTION || source == PREPARED_TRANSACTION || source == ABORTABLE_ERROR;
                 case ABORTABLE_ERROR:
                     return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR
                             || source == INITIALIZING;
@@ -197,6 +203,24 @@ public class TransactionManager {
 
         Priority(int priority) {
             this.priority = priority;
+        }
+    }
+    
+    private enum TransactionOperation {
+        SEND("send"),
+        BEGIN_TRANSACTION("beginTransaction"),
+        PREPARE_TRANSACTION("prepareTransaction"),
+        SEND_OFFSETS_TO_TRANSACTION("sendOffsetsToTransaction");
+        
+        final String displayName;
+
+        TransactionOperation(String displayName) {
+            this.displayName = displayName;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
         }
     }
 
@@ -241,7 +265,7 @@ public class TransactionManager {
      * transaction manager. The {@link Producer} API calls that perform a state transition include:
      *
      * <ul>
-     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
+     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions(boolean)}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
      *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
      *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
@@ -325,9 +349,25 @@ public class TransactionManager {
 
     public synchronized void beginTransaction() {
         ensureTransactional();
-        throwIfPendingState("beginTransaction");
+        throwIfPendingState(TransactionOperation.BEGIN_TRANSACTION);
         maybeFailWithError();
         transitionTo(State.IN_TRANSACTION);
+    }
+
+    /**
+     * Prepare a transaction for a two-phase commit.
+     * This transitions the transaction to the PREPARED_TRANSACTION state.
+     * The preparedTxnState is set with the current producer ID and epoch.
+     */
+    public synchronized void prepareTransaction() {
+        ensureTransactional();
+        throwIfPendingState(TransactionOperation.PREPARE_TRANSACTION);
+        maybeFailWithError();
+        transitionTo(State.PREPARED_TRANSACTION);
+        this.preparedTxnState = new ProducerIdAndEpoch(
+            this.producerIdAndEpoch.producerId,
+            this.producerIdAndEpoch.epoch
+        );
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -384,7 +424,7 @@ public class TransactionManager {
     public synchronized TransactionalRequestResult sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                                             final ConsumerGroupMetadata groupMetadata) {
         ensureTransactional();
-        throwIfPendingState("sendOffsetsToTransaction");
+        throwIfPendingState(TransactionOperation.SEND_OFFSETS_TO_TRANSACTION);
         maybeFailWithError();
 
         if (currentState != State.IN_TRANSACTION) {
@@ -416,7 +456,7 @@ public class TransactionManager {
 
     public synchronized void maybeAddPartition(TopicPartition topicPartition) {
         maybeFailWithError();
-        throwIfPendingState("send");
+        throwIfPendingState(TransactionOperation.SEND);
 
         if (isTransactional()) {
             if (!hasProducerId()) {
@@ -485,6 +525,10 @@ public class TransactionManager {
 
     public boolean isTransactionV2Enabled() {
         return isTransactionV2Enabled;
+    }
+
+    public boolean is2PCEnabled() {
+        return enable2PC;
     }
 
     synchronized boolean hasPartitionsToAdd() {
@@ -745,6 +789,15 @@ public class TransactionManager {
                 || exception instanceof InvalidPidMappingException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
+            // RetriableExceptions from the Sender thread are converted to Abortable errors
+            // because they indicate that the transaction cannot be completed after all retry attempts.
+            // This conversion ensures the application layer treats these errors as abortable,
+            // preventing duplicate message delivery.
+            if (exception instanceof RetriableException ||
+                    exception instanceof InvalidTxnStateException) {
+                exception = new TransactionAbortableException("Transaction Request was aborted after exhausting retries.", exception);
+            }
+
             if (needToTriggerEpochBumpFromClient() && !isCompleting()) {
                 clientSideEpochBumpRequired = true;
             }
@@ -887,7 +940,7 @@ public class TransactionManager {
                     log.debug("Not sending EndTxn for completed transaction since no partitions " +
                             "or offsets were successfully added");
                 }
-                completeTransaction();
+                resetTransactionState();
             }
             nextRequestHandler = pendingRequests.poll();
         }
@@ -1058,6 +1111,15 @@ public class TransactionManager {
         return isTransactional() && currentState == State.INITIALIZING;
     }
 
+    /**
+     * Check if the transaction is in the prepared state.
+     *
+     * @return true if the current state is PREPARED_TRANSACTION
+     */
+    public synchronized boolean isPrepared() {
+        return currentState == State.PREPARED_TRANSACTION;
+    }
+
     void handleCoordinatorReady() {
         NodeApiVersions nodeApiVersions = transactionCoordinator != null ?
                 apiVersions.get(transactionCoordinator.idString()) :
@@ -1204,7 +1266,7 @@ public class TransactionManager {
         return new TxnOffsetCommitHandler(result, builder);
     }
 
-    private void throwIfPendingState(String operation) {
+    private void throwIfPendingState(TransactionOperation operation) {
         if (pendingTransition != null) {
             if (pendingTransition.result.isAcked()) {
                 pendingTransition = null;
@@ -1285,7 +1347,7 @@ public class TransactionManager {
         return coordinatorSupportsBumpingEpoch || isTransactionV2Enabled;
     }
 
-    private void completeTransaction() {
+    private void resetTransactionState() {
         if (clientSideEpochBumpRequired) {
             transitionTo(State.INITIALIZING);
         } else {
@@ -1297,6 +1359,7 @@ public class TransactionManager {
         newPartitionsInTransaction.clear();
         pendingPartitionsInTransaction.clear();
         partitionsInTransaction.clear();
+        preparedTxnState = ProducerIdAndEpoch.NONE;
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1453,7 +1516,21 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                transitionTo(State.READY);
+                // If this is a transaction with keepPreparedTxn=true, transition directly
+                // to PREPARED_TRANSACTION state IFF there is an ongoing transaction.
+                if (builder.data.keepPreparedTxn() &&
+                    initProducerIdResponse.data().ongoingTxnProducerId() != RecordBatch.NO_PRODUCER_ID
+                ) {
+                    transitionTo(State.PREPARED_TRANSACTION);
+                    // Update the preparedTxnState with the ongoing pid and epoch from the response.
+                    // This will be used to complete the transaction later.
+                    TransactionManager.this.preparedTxnState = new ProducerIdAndEpoch(
+                        initProducerIdResponse.data().ongoingTxnProducerId(),
+                        initProducerIdResponse.data().ongoingTxnProducerEpoch()
+                    );
+                } else {
+                    transitionTo(State.READY);
+                }
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
@@ -1690,7 +1767,7 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
-
+            boolean isAbort = !builder.data.committed();
             if (error == Errors.NONE) {
                 // For End Txn version 5+, the broker includes the producerId and producerEpoch in the EndTxnResponse.
                 // For versions lower than 5, the producer Id and epoch are set to -1 by default.
@@ -1707,7 +1784,7 @@ public class TransactionManager {
                     setProducerIdAndEpoch(producerIdAndEpoch);
                     resetSequenceNumbers();
                 }
-                completeTransaction();
+                resetTransactionState();
                 result.done();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
@@ -1723,6 +1800,11 @@ public class TransactionManager {
                 fatalError(error.exception());
             } else if (error == Errors.UNKNOWN_PRODUCER_ID) {
                 abortableErrorIfPossible(error.exception());
+            } else if (isAbort && error.exception() instanceof TransactionAbortableException) {
+                // When aborting a transaction, we must convert TRANSACTION_ABORTABLE errors to KafkaException
+                // because if an abort operation itself encounters an abortable error, retrying the abort would create a cycle.
+                // Instead, we treat this as fatal error at the application layer to ensure the transaction can be cleanly terminated.
+                fatalError(new KafkaException("Failed to abort transaction", error.exception()));
             } else if (error == Errors.TRANSACTION_ABORTABLE) {
                 abortableError(error.exception());
             } else {
@@ -1904,5 +1986,14 @@ public class TransactionManager {
         }
     }
 
-
+    /**
+     * Returns a ProducerIdAndEpoch object containing the producer ID and epoch
+     * of the ongoing transaction.
+     * This is used when preparing a transaction for a two-phase commit.
+     *
+     * @return a ProducerIdAndEpoch with the current producer ID and epoch.
+     */
+    public ProducerIdAndEpoch preparedTransactionState() {
+        return this.preparedTxnState;
+    }
 }

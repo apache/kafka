@@ -19,8 +19,6 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.MetricNameTemplate;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -135,7 +133,7 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate predicateClass;
     public final MetricNameTemplate predicateVersion;
 
-    public Map<MetricNameTemplate, TaskStatus.State> connectorStatusMetrics;
+    public final Map<MetricNameTemplate, TaskStatus.State> connectorStatusMetrics;
 
     public ConnectMetricsRegistry() {
         this(new LinkedHashSet<>());
@@ -388,14 +386,14 @@ public class ConnectMetricsRegistry {
             WORKER_GROUP_NAME,
             "The number of restarting tasks of the connector on the worker.", workerConnectorTags);
 
-        connectorStatusMetrics = new HashMap<>();
-        connectorStatusMetrics.put(connectorRunningTaskCount, TaskStatus.State.RUNNING);
-        connectorStatusMetrics.put(connectorPausedTaskCount, TaskStatus.State.PAUSED);
-        connectorStatusMetrics.put(connectorFailedTaskCount, TaskStatus.State.FAILED);
-        connectorStatusMetrics.put(connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED);
-        connectorStatusMetrics.put(connectorDestroyedTaskCount, TaskStatus.State.DESTROYED);
-        connectorStatusMetrics.put(connectorRestartingTaskCount, TaskStatus.State.RESTARTING);
-        connectorStatusMetrics = Collections.unmodifiableMap(connectorStatusMetrics);
+        connectorStatusMetrics = Map.of(
+            connectorRunningTaskCount, TaskStatus.State.RUNNING,
+            connectorPausedTaskCount, TaskStatus.State.PAUSED,
+            connectorFailedTaskCount, TaskStatus.State.FAILED,
+            connectorUnassignedTaskCount, TaskStatus.State.UNASSIGNED,
+            connectorDestroyedTaskCount, TaskStatus.State.DESTROYED,
+            connectorRestartingTaskCount, TaskStatus.State.RESTARTING
+        );
 
         /* Worker rebalance level */
         Set<String> rebalanceTags = new LinkedHashSet<>(tags);
@@ -444,7 +442,7 @@ public class ConnectMetricsRegistry {
     }
 
     public List<MetricNameTemplate> getAllTemplates() {
-        return Collections.unmodifiableList(allTemplates);
+        return List.copyOf(allTemplates);
     }
 
     public String connectorTagName() {

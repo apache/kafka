@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
@@ -79,6 +80,7 @@ import static org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -275,6 +277,24 @@ public class AclCommandTest {
         testPatternTypes(adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
 
+    @ClusterTest
+    public void testDuplicateAdd(ClusterInstance cluster) {
+        final String topicName = "test-topic";
+        final String principal = "User:Alice";
+        ResourcePattern resource = new ResourcePattern(ResourceType.TOPIC, topicName, PatternType.LITERAL);
+        AccessControlEntry ace = new AccessControlEntry(principal, WILDCARD_HOST, READ, ALLOW);
+        AclBinding binding = new AclBinding(resource, ace);
+        List<String> cmdArgs = adminArgs(cluster.bootstrapServers(), Optional.empty());
+        List<String> initialAddArgs = new ArrayList<>(cmdArgs);
+        initialAddArgs.addAll(List.of(ADD, TOPIC, topicName, "--allow-principal", principal, OPERATION, "Read"));
+
+        callMain(initialAddArgs);
+        String out = callMain(initialAddArgs).getKey();
+
+        assertTrue(out.contains("Acl " + binding + " already exists."));
+        assertFalse(out.contains("Adding ACLs for resource"));
+    }
+
     @Test
     public void testUseBootstrapServerOptWithBootstrapControllerOpt() {
         assertInitializeInvalidOptionsExitCodeAndMsg(
@@ -425,7 +445,17 @@ public class AclCommandTest {
     }
 
     private Map.Entry<String, String> callMain(List<String> args) {
-        return ToolsTestUtils.grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
+        Exit.setExitProcedure((status, message) -> {
+            if (status == 1)
+                throw new RuntimeException("Exiting command");
+            else
+                throw new AssertionError("Unexpected exit with status " + status);
+        });
+        try {
+            return ToolsTestUtils.grabConsoleOutputAndError(() -> AclCommand.main(args.toArray(new String[0])));
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     private void testAclCli(ClusterInstance cluster, List<String> cmdArgs) throws InterruptedException {
@@ -487,29 +517,19 @@ public class AclCommandTest {
     }
 
     private void testPatternTypes(List<String> cmdArgs) {
-        Exit.setExitProcedure((status, message) -> {
-            if (status == 1)
-                throw new RuntimeException("Exiting command");
-            else
-                throw new AssertionError("Unexpected exit with status " + status);
-        });
-        try {
-            for (PatternType patternType : PatternType.values()) {
-                List<String> addCmd = new ArrayList<>(cmdArgs);
-                addCmd.addAll(List.of("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
-                        ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
-                verifyPatternType(addCmd, patternType.isSpecific());
+        for (PatternType patternType : PatternType.values()) {
+            List<String> addCmd = new ArrayList<>(cmdArgs);
+            addCmd.addAll(List.of("--allow-principal", PRINCIPAL.toString(), PRODUCER, TOPIC, "Test",
+                    ADD, RESOURCE_PATTERN_TYPE, patternType.toString()));
+            verifyPatternType(addCmd, patternType.isSpecific());
 
-                List<String> listCmd = new ArrayList<>(cmdArgs);
-                listCmd.addAll(List.of(TOPIC, "Test", LIST, RESOURCE_PATTERN_TYPE, patternType.toString()));
-                verifyPatternType(listCmd, patternType != PatternType.UNKNOWN);
+            List<String> listCmd = new ArrayList<>(cmdArgs);
+            listCmd.addAll(List.of(TOPIC, "Test", LIST, RESOURCE_PATTERN_TYPE, patternType.toString()));
+            verifyPatternType(listCmd, patternType != PatternType.UNKNOWN);
 
-                List<String> removeCmd = new ArrayList<>(cmdArgs);
-                removeCmd.addAll(List.of(TOPIC, "Test", "--force", REMOVE, RESOURCE_PATTERN_TYPE, patternType.toString()));
-                verifyPatternType(removeCmd, patternType != PatternType.UNKNOWN);
-            }
-        } finally {
-            Exit.resetExitProcedure();
+            List<String> removeCmd = new ArrayList<>(cmdArgs);
+            removeCmd.addAll(List.of(TOPIC, "Test", "--force", REMOVE, RESOURCE_PATTERN_TYPE, patternType.toString()));
+            verifyPatternType(removeCmd, patternType != PatternType.UNKNOWN);
         }
     }
 

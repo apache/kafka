@@ -62,7 +62,7 @@ public class InitProducerIdRequest extends AbstractRequest {
                 .setErrorCode(Errors.forException(e).code())
                 .setProducerId(RecordBatch.NO_PRODUCER_ID)
                 .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
-                .setThrottleTimeMs(0);
+                .setThrottleTimeMs(throttleTimeMs);
         return new InitProducerIdResponse(response);
     }
 

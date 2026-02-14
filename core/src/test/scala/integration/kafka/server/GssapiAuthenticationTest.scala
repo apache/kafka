@@ -19,8 +19,7 @@
 package kafka.server
 
 import java.net.InetSocketAddress
-import java.time.Duration
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import javax.security.auth.login.LoginContext
 import kafka.api.{IntegrationTestHarness, SaslSetup}
@@ -41,8 +40,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-
-import scala.jdk.CollectionConverters._
 
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 1
@@ -184,10 +181,15 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     val configOverrides = new Properties()
     configOverrides.setProperty(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     val consumer = createConsumer(configOverrides = configOverrides)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     val startMs = System.currentTimeMillis()
-    assertThrows(classOf[SaslAuthenticationException], () => consumer.poll(Duration.ofMillis(50)))
+    TestUtils.pollUntilException(
+      consumer,
+      t => t.isInstanceOf[SaslAuthenticationException],
+      "Consumer.poll() did not trigger a SaslAuthenticationException within timeout",
+      pollTimeoutMs = 50
+    )
     val endMs = System.currentTimeMillis()
     require(endMs - startMs < failedAuthenticationDelayMs, "Failed authentication must not be delayed on the client")
     consumer.close()
@@ -263,7 +265,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private def createSelectorWithRelogin(): Selector = {
     clientConfig.setProperty(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, "0")
     val config = new TestSecurityConfig(clientConfig)
-    val jaasContexts = Collections.singletonMap("GSSAPI", JaasContext.loadClientContext(config.values()))
+    val jaasContexts = java.util.Map.of("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol,
       null, false, kafkaClientSaslMechanism, null, null, null, time, new LogContext(),
       _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER)) {

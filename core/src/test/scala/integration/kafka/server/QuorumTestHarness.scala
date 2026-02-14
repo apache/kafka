@@ -20,10 +20,10 @@ package kafka.server
 import java.io.File
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Locale, Optional, OptionalInt, Properties, stream}
+import java.util.{Locale, Optional, OptionalInt, Properties, stream}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
-import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
 import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
@@ -31,17 +31,17 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.queue.KafkaEventQueue
-import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.raft.{KRaftConfigs, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
-import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVersion, TransactionVersion}
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
+import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.junit.jupiter.api.Assertions._
@@ -81,7 +81,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val metaPropertiesEnsemble = {
       val loader = new MetaPropertiesEnsemble.Loader()
-      loader.addLogDirs(config.logDirs.asJava)
+      loader.addLogDirs(config.logDirs)
       loader.addMetadataLogDir(config.metadataLogDir)
       val ensemble = loader.load()
       val copier = new MetaPropertiesEnsemble.Copier(ensemble)
@@ -119,15 +119,15 @@ class KRaftQuorumImplementation(
       broker
     } catch {
       case e: Throwable => {
-        if (broker != null) CoreUtils.swallow(broker.shutdown(), log)
-        CoreUtils.swallow(sharedServer.stopForBroker(), log)
+        if (broker != null) Utils.swallow(() => broker.shutdown())
+        Utils.swallow(() => sharedServer.stopForBroker())
         throw e
       }
     }
   }
 
   override def shutdown(): Unit = {
-    CoreUtils.swallow(controllerServer.shutdown(), log)
+    Utils.swallow(() => controllerServer.shutdown())
   }
 }
 
@@ -229,7 +229,7 @@ abstract class QuorumTestHarness extends Logging {
   def shutdownKRaftController(): Unit = {
     // Note that the RaftManager instance is left running; it will be shut down in tearDown()
     val kRaftQuorumImplementation = asKRaft()
-    CoreUtils.swallow(kRaftQuorumImplementation.controllerServer.shutdown(), kRaftQuorumImplementation.log)
+    Utils.swallow(this.logger.underlying, () => kRaftQuorumImplementation.controllerServer.shutdown())
   }
 
   def addFormatterSettings(formatter: Formatter): Unit = {}
@@ -263,8 +263,10 @@ abstract class QuorumTestHarness extends Logging {
     val listeners = extraControllerSecurityProtocols().map(sc => sc + "://localhost:0").mkString(",")
     val listenerNames = extraControllerSecurityProtocols().mkString(",")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto,$securityProtocolMaps")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0,$listeners")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, s"CONTROLLER,$listenerNames")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG,
+      if (listeners.isEmpty) "CONTROLLER://localhost:0" else s"CONTROLLER://localhost:0,$listeners")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG,
+      if (listeners.isEmpty) "CONTROLLER" else s"CONTROLLER,$listenerNames")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
     props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)
@@ -275,7 +277,7 @@ abstract class QuorumTestHarness extends Logging {
     formatter.addDirectory(metadataDir.getAbsolutePath)
     formatter.setReleaseVersion(metadataVersion)
     formatter.setUnstableFeatureVersionsEnabled(true)
-    formatter.setControllerListenerName(config.controllerListenerNames.head)
+    formatter.setControllerListenerName(config.controllerListenerNames.get(0))
     formatter.setMetadataLogDirectory(config.metadataLogDir)
 
     val transactionVersion =
@@ -283,12 +285,6 @@ abstract class QuorumTestHarness extends Logging {
         TransactionVersion.TV_2.featureLevel()
       } else TransactionVersion.TV_1.featureLevel()
     formatter.setFeatureLevel(TransactionVersion.FEATURE_NAME, transactionVersion)
-
-    val elrVersion =
-      if (TestInfoUtils.isEligibleLeaderReplicasV1Enabled(testInfo)) {
-        EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
-      } else EligibleLeaderReplicasVersion.ELRV_0.featureLevel()
-    formatter.setFeatureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME, elrVersion)
 
     addFormatterSettings(formatter)
     formatter.run()
@@ -307,7 +303,7 @@ abstract class QuorumTestHarness extends Logging {
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      Collections.emptyList(),
+      util.List.of,
       faultHandlerFactory,
       ServerSocketFactory.INSTANCE,
     )
@@ -324,15 +320,15 @@ abstract class QuorumTestHarness extends Logging {
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
           controllerQuorumVotersFuture.complete(
-            Collections.singletonMap(nodeId, new InetSocketAddress("localhost", port))
+            util.Map.of(nodeId, new InetSocketAddress("localhost", port))
           )
         }
       })
       controllerServer.startup()
     } catch {
       case e: Throwable =>
-        if (controllerServer != null) CoreUtils.swallow(controllerServer.shutdown(), this)
-        CoreUtils.swallow(sharedServer.stopForController(), this)
+        if (controllerServer != null) Utils.swallow(this.logger.underlying, () => controllerServer.shutdown())
+        Utils.swallow(this.logger.underlying, () => sharedServer.stopForController())
         throw e
     }
     new KRaftQuorumImplementation(

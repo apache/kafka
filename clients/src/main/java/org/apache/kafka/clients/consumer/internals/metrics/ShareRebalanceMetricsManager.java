@@ -45,7 +45,7 @@ public final class ShareRebalanceMetricsManager extends RebalanceMetricsManager 
 
         rebalanceSensor = metrics.sensor("rebalance-latency");
         rebalanceSensor.add(rebalanceTotal, new CumulativeCount());
-        rebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        rebalanceSensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount(), 1));
     }
 
     public void recordRebalanceStarted(long nowMs) {

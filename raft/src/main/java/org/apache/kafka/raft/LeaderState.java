@@ -189,6 +189,29 @@ public class LeaderState<T> implements EpochState {
     }
 
     /**
+     * Determines the set of replicas that should receive a {@code BeginQuorumEpoch} request
+     * based on the elapsed time since their last fetch.
+     * <p>
+     * For each remote voter (excluding the local node), if the time since the last
+     * fetch exceeds the configured {@code beginQuorumEpochTimeoutMs}, the replica
+     * is considered to need a new quorum epoch request.
+     *
+     * @param currentTimeMs the current system time in milliseconds
+     * @return an unmodifiable set of {@link ReplicaKey} objects representing replicas
+     *         that need to receive a {@code BeginQuorumEpoch} request
+     */
+    public Set<ReplicaKey> needToSendBeginQuorumRequests(long currentTimeMs) {
+        return voterStates.values()
+            .stream()
+            .filter(
+                state -> state.replicaKey.id() != localVoterNode.voterKey().id() &&
+                currentTimeMs - state.lastFetchTimestamp >= beginQuorumEpochTimeoutMs
+            )
+            .map(ReplicaState::replicaKey)
+            .collect(Collectors.toUnmodifiableSet());
+    }
+
+    /**
      * Get the remaining time in milliseconds until the checkQuorumTimer expires.
      *
      * This will happen if we didn't receive a valid fetch/fetchSnapshot request from the majority

@@ -22,6 +22,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -37,7 +38,8 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
                         val replicaId: Int = 0,
                         val leaderId: Int = 1,
                         fetchBackOffMs: Int = 0,
-                        failedPartitions: FailedPartitions = new FailedPartitions)
+                        failedPartitions: FailedPartitions = new FailedPartitions,
+                        fetchFromLastTieredOffset: Boolean = false)
   extends AbstractFetcherThread("mock-fetcher",
     clientId = "mock-fetcher",
     leader = mockLeader,
@@ -178,8 +180,10 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
 
   def verifyLastFetchedEpoch(partition: TopicPartition, expectedEpoch: Option[Int]): Unit = {
     if (leader.isTruncationOnFetchSupported) {
-      assertEquals(Some(Fetching), fetchState(partition).map(_.state))
+      assertEquals(Some(ReplicaState.FETCHING), fetchState(partition).map(_.state))
       assertEquals(expectedEpoch, fetchState(partition).map(_.lastFetchedEpoch.get()))
     }
   }
+
+  override def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, leaderEndOffset: Long, replicaEndOffset: Long): Boolean = fetchFromLastTieredOffset
 }

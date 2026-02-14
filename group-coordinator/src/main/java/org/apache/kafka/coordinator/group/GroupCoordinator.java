@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -56,13 +58,11 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 /**
@@ -240,6 +240,20 @@ public interface GroupCoordinator {
     );
 
     /**
+     * Alter Share Group Offsets for a given group.
+     *
+     * @param context     The request context.
+     * @param groupId     The group id.
+     * @param requestData The AlterShareGroupOffsetsRequest data.
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(
+        AuthorizableRequestContext context,
+        String groupId,
+        AlterShareGroupOffsetsRequestData requestData
+    );
+
+    /**
      * Delete Groups.
      *
      * @param context           The request context.
@@ -265,21 +279,6 @@ public interface GroupCoordinator {
      *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
-        AuthorizableRequestContext context,
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        boolean requireStable
-    );
-
-    /**
-     * Fetch all offsets for a given Group.
-     *
-     * @param context           The request context.
-     * @param request           The OffsetFetchRequestGroup request.
-     *
-     * @return  A future yielding the results.
-     *          The error codes of the results are set to indicate the errors occurred during the execution.
-     */
-    CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
         AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
@@ -385,7 +384,7 @@ public interface GroupCoordinator {
      * @param producerEpoch     The producer epoch.
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
-     * @param timeout           The operation timeout.
+     * @param transactionVersion The transaction version (1 = TV1, 2 = TV2, etc.).
      *
      * @return A future yielding the result.
      */
@@ -395,7 +394,7 @@ public interface GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
-        Duration timeout
+        short transactionVersion
     );
 
     /**
@@ -406,17 +405,6 @@ public interface GroupCoordinator {
      * @return The partition index.
      */
     int partitionFor(String groupId);
-
-    /**
-     * Remove the provided deleted partitions offsets.
-     *
-     * @param topicPartitions   The deleted partitions.
-     * @param bufferSupplier    The buffer supplier tight to the request thread.
-     */
-    void onPartitionsDeleted(
-        List<TopicPartition> topicPartitions,
-        BufferSupplier bufferSupplier
-    ) throws ExecutionException, InterruptedException;
 
     /**
      * Group coordinator is now the leader for the given partition at the
@@ -449,12 +437,12 @@ public interface GroupCoordinator {
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
      * @param delta     The metadata delta.
+     * @param newImage  The new metadata image.
      */
-    void onNewMetadataImage(
-        MetadataImage newImage,
-        MetadataDelta delta
+    void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage
     );
 
     /**

@@ -55,8 +55,6 @@ public interface TasksRegistry {
 
     void removeTask(final Task taskToRemove);
 
-    void replaceActiveWithStandby(final StandbyTask standbyTask);
-
     void replaceStandbyWithActive(final StreamTask activeTask);
 
     boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions);

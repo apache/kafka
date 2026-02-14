@@ -16,16 +16,18 @@
  */
 package kafka.server
 
-import kafka.server.ClientQuotaManager.BaseUserEntity
-
+import org.apache.kafka.common.Cluster
 import java.net.InetAddress
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.network.Session
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
+import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaManager, ClientQuotaType, QuotaType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
+import java.util.{Collections, Map, HashMap, Optional}
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig()
@@ -38,12 +40,12 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         client1.configUser,
         client1.configClientEntity,
-        Some(new Quota(2000, true))
+        Optional.of(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
         client2.configUser,
         client2.configClientEntity,
-        Some(new Quota(4000, true))
+        Optional.of(new Quota(4000, true))
       )
 
       assertEquals(Long.MaxValue.toDouble, clientQuotaManager.quota(randomClient.user, randomClient.clientId).bound, 0.0,
@@ -62,7 +64,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         client1.configUser,
         client1.configClientEntity,
-        Some(new Quota(3000, true))
+        Optional.of(new Quota(3000, true))
       )
       assertEquals(3000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (3000)")
 
@@ -73,7 +75,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         client1.configUser,
         client1.configClientEntity,
-        Some(new Quota(500, true))
+        Optional.of(new Quota(500, true))
       )
       assertEquals(500, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the default value (500)")
 
@@ -84,12 +86,12 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         client1.configUser,
         client1.configClientEntity,
-        None
+        Optional.empty
       )
       clientQuotaManager.updateQuota(
         defaultConfigClient.configUser,
         defaultConfigClient.configClientEntity,
-        Some(new Quota(4000, true))
+        Optional.of(new Quota(4000, true))
       )
       assertEquals(4000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
 
@@ -106,10 +108,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
    */
   @Test
   def testUserQuotaParsingWithDefaultClientIdQuota(): Unit = {
-    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), None)
-    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), None)
-    val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultUserEntity), None)
+    val client1 = UserClient("User1", "p1", Optional.of(new ClientQuotaManager.UserEntity("User1")), Optional.empty)
+    val client2 = UserClient("User2", "p2", Optional.of(new ClientQuotaManager.UserEntity("User2")), Optional.empty)
+    val randomClient = UserClient("RandomUser", "random-client-id", Optional.empty, Optional.empty)
+    val defaultConfigClient = UserClient("", "", Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY), Optional.empty)
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -119,7 +121,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val expectedMaxValueInQuotaWindow =
       if (expectedBound < Long.MaxValue) config.quotaWindowSizeSeconds * (config.numQuotaSamples - 1) * expectedBound.toDouble
       else Double.MaxValue
-    assertEquals(expectedMaxValueInQuotaWindow, quotaManager.getMaxValueInQuotaWindow(session, clientId), 0.01)
+    assertEquals(expectedMaxValueInQuotaWindow, quotaManager.maxValueInQuotaWindow(session, clientId), 0.01)
 
     val throttleTimeMs = maybeRecord(quotaManager, user, clientId, value * config.numQuotaSamples)
     if (expectThrottle)
@@ -129,7 +131,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   @Test
-  def testGetMaxValueInQuotaWindowWithNonDefaultQuotaWindow(): Unit = {
+  def testMaxValueInQuotaWindowWithNonDefaultQuotaWindow(): Unit = {
     val numFullQuotaWindows = 3   // 3 seconds window (vs. 10 seconds default)
     val nonDefaultConfig = new ClientQuotaManagerConfig(numFullQuotaWindows + 1)
     val clientQuotaManager = new ClientQuotaManager(nonDefaultConfig, metrics, QuotaType.FETCH, time, "")
@@ -137,15 +139,15 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       // no quota set
-      assertEquals(Double.MaxValue, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
+      assertEquals(Double.MaxValue, clientQuotaManager.maxValueInQuotaWindow(userSession, "client1"), 0.01)
 
       // Set default <user> quota config
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.DefaultUserEntity), 
-        None, 
-        Some(new Quota(10, true))
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.empty,
+        Optional.of(new Quota(10, true))
       )
-      assertEquals(10 * numFullQuotaWindows, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
+      assertEquals(10 * numFullQuotaWindows, clientQuotaManager.maxValueInQuotaWindow(userSession, "client1"), 0.01)
     } finally {
       clientQuotaManager.shutdown()
     }
@@ -163,17 +165,17 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Set default <user> quota config
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.DefaultUserEntity),
-        None, 
-        Some(new Quota(10, true))
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.empty,
+        Optional.of(new Quota(10, true))
       )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
       // Remove default <user> quota config, back to no quotas
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.DefaultUserEntity),
-        None, 
-        None
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.empty,
+        Optional.empty
       )
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, expectThrottle = false)
     } finally {
@@ -183,24 +185,24 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
   @Test
   def testSetAndRemoveUserQuota(): Unit = {
-    // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
+
     val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, QuotaType.PRODUCE, time, "")
 
     try {
       // Set <user> quota config
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")), 
-        None, 
-        Some(new Quota(10, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.empty,
+        Optional.of(new Quota(10, true))
       )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
       // Remove <user> quota config, back to no quotas
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")), 
-        None, 
-        None
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.empty,
+        Optional.empty
       )
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, expectThrottle = false)
     } finally {
@@ -217,17 +219,17 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       // Set <user, client-id> quota config
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.ClientIdEntity("client1")), 
-        Some(new Quota(10, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+        Optional.of(new Quota(10, true))
       )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
       // Remove <user, client-id> quota config, back to no quotas
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.ClientIdEntity("client1")), 
-        None
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+        Optional.empty
       )
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, expectThrottle = false)
     } finally {
@@ -242,54 +244,54 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.DefaultUserEntity), 
-        None, 
-        Some(new Quota(1000, true))
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.empty,
+        Optional.of(new Quota(1000, true))
       )
       clientQuotaManager.updateQuota(
-        None,
-        Some(ClientQuotaManager.DefaultClientIdEntity),
-        Some(new Quota(2000, true))
+        Optional.empty,
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.DefaultUserEntity),
-        Some(ClientQuotaManager.DefaultClientIdEntity), 
-        Some(new Quota(3000, true))
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(3000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")), 
-        None, 
-        Some(new Quota(4000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.empty,
+        Optional.of(new Quota(4000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")), 
-        Some(ClientQuotaManager.ClientIdEntity("client1")),
-        Some(new Quota(5000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+        Optional.of(new Quota(5000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userB")), 
-        None, 
-        Some(new Quota(6000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userB")),
+        Optional.empty,
+        Optional.of(new Quota(6000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userB")),
-        Some(ClientQuotaManager.ClientIdEntity("client1")),
-        Some(new Quota(7000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userB")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+        Optional.of(new Quota(7000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userB")),
-        Some(ClientQuotaManager.DefaultClientIdEntity), 
-        Some(new Quota(8000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userB")),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(8000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userC")), 
-        None, 
-        Some(new Quota(10000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userC")),
+        Optional.empty,
+        Optional.of(new Quota(10000, true))
       )
       clientQuotaManager.updateQuota(
-        None,
-        Some(ClientQuotaManager.ClientIdEntity("client1")),
-        Some(new Quota(9000, true))
+        Optional.empty,
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+        Optional.of(new Quota(9000, true))
       )
 
       checkQuota(clientQuotaManager, "userA", "client1", 5000, 4500, expectThrottle = false) // <user, client> quota takes precedence over <user>
@@ -307,9 +309,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user, client> quota config, revert to <user> default
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.DefaultUserEntity),
-        Some(ClientQuotaManager.DefaultClientIdEntity),
-        None
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.empty
       )
       checkQuota(clientQuotaManager, "userD", "client1", 1000, 0, expectThrottle = false)    // Metrics tags changed, restart counter
       checkQuota(clientQuotaManager, "userE", "client4", 1000, 1500, expectThrottle = true)
@@ -318,9 +320,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user> quota config, revert to <client-id> default
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.DefaultUserEntity),
-        None, 
-        None
+        Optional.of(ClientQuotaManager.DEFAULT_USER_ENTITY),
+        Optional.empty,
+        Optional.empty
       )
       checkQuota(clientQuotaManager, "userF", "client4", 2000, 0, expectThrottle = false)  // Default <client-id> quota shared across client-id of all users
       checkQuota(clientQuotaManager, "userF", "client5", 2000, 0, expectThrottle = false)
@@ -329,40 +331,40 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Update quotas
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")), 
-        None, 
-        Some(new Quota(8000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.empty,
+        Optional.of(new Quota(8000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.ClientIdEntity("client1")),
-        Some(new Quota(10000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+        Optional.of(new Quota(10000, true))
       )
       checkQuota(clientQuotaManager, "userA", "client2", 8000, 0, expectThrottle = false)
       checkQuota(clientQuotaManager, "userA", "client2", 8000, 4500, expectThrottle = true) // Throttled due to sum of new and earlier values
       checkQuota(clientQuotaManager, "userA", "client1", 10000, 0, expectThrottle = false)
       checkQuota(clientQuotaManager, "userA", "client1", 10000, 6000, expectThrottle = true)
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.ClientIdEntity("client1")),
-        None
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client1")),
+        Optional.empty
       )
       checkQuota(clientQuotaManager, "userA", "client6", 8000, 0, expectThrottle = true)    // Throttled due to shared user quota
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.ClientIdEntity("client6")),
-        Some(new Quota(11000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client6")),
+        Optional.of(new Quota(11000, true))
       )
       checkQuota(clientQuotaManager, "userA", "client6", 11000, 8500, expectThrottle = false)
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.DefaultClientIdEntity),
-        Some(new Quota(12000, true))
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(12000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.ClientIdEntity("client6")),
-        None
+        Optional.of(new ClientQuotaManager.UserEntity("userA")),
+        Optional.of(new ClientQuotaManager.ClientIdEntity("client6")),
+        Optional.empty
       )
       checkQuota(clientQuotaManager, "userA", "client6", 12000, 4000, expectThrottle = true) // Throttled due to sum of new and earlier values
 
@@ -377,9 +379,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
       clientQuotaManager.updateQuota(
-        None,
-        Some(ClientQuotaManager.DefaultClientIdEntity),
-        Some(new Quota(500, true))
+        Optional.empty,
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(500, true))
       )
 
       // We have 10 seconds windows. Make sure that there is no quota violation
@@ -401,12 +403,12 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       throttle(clientQuotaManager, "ANONYMOUS", "unknown", throttleTime, callback)
       assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       // After a request is delayed, the callback cannot be triggered immediately
-      clientQuotaManager.throttledChannelReaper.doWork()
+      clientQuotaManager.processThrottledChannelReaperDoWork
       assertEquals(0, numCallbacks)
       time.sleep(throttleTime)
 
       // Callback can only be triggered after the delay time passes
-      clientQuotaManager.throttledChannelReaper.doWork()
+      clientQuotaManager.processThrottledChannelReaperDoWork()
       assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(1, numCallbacks)
 
@@ -428,9 +430,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
     try {
       clientQuotaManager.updateQuota(
-        None,
-        Some(ClientQuotaManager.DefaultClientIdEntity),
-        Some(new Quota(500, true))
+        Optional.empty,
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(500, true))
       )
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
@@ -453,9 +455,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
     try {
       clientQuotaManager.updateQuota(
-        None,
-        Some(ClientQuotaManager.DefaultClientIdEntity),
-        Some(new Quota(500, true))
+        Optional.empty,
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(500, true))
       )
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
@@ -483,9 +485,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientId = "client@#$%"
     try {
       clientQuotaManager.updateQuota(
-        None,
-        Some(ClientQuotaManager.DefaultClientIdEntity),
-        Some(new Quota(500, true))
+        Optional.empty,
+        Optional.of(ClientQuotaManager.DEFAULT_USER_CLIENT_ID),
+        Optional.of(new Quota(500, true))
       )
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", clientId, 100)
@@ -501,10 +503,126 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
   }
 
+  @Test
+  def testQuotaTypesEnabledUpdatesWithDefaultCallback(): Unit = {
+    val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.CONTROLLER_MUTATION, time, "")
+    try {
+      assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled())
+      assertFalse(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.USER_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client2")), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.USER_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userB")), Optional.empty(), Optional.of(new Quota(5, true)))
+      assertEquals(ClientQuotaManager.USER_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(10, true)))
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.USER_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.USER_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.USER_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userB")), Optional.empty(), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED | ClientQuotaManager.CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client2")), Optional.empty())
+      assertEquals(ClientQuotaManager.USER_CLIENT_ID_QUOTA_ENABLED, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertFalse(clientQuotaManager.quotasEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.NO_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertFalse(clientQuotaManager.quotasEnabled)
+    } finally {
+      clientQuotaManager.shutdown()
+    }
+  }
+
+  @Test
+  def testQuotaTypesEnabledUpdatesWithCustomCallback(): Unit = {
+    val customQuotaCallback = new ClientQuotaCallback {
+      val quotas = new HashMap[ClientQuotaEntity, Quota]()
+      override def configure(configs: Map[String, _]): Unit = {}
+
+      override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): Map[String, String] = Collections.emptyMap()
+
+      override def quotaLimit(quotaType: ClientQuotaType, metricTags: Map[String, String]): java.lang.Double = 1
+      override def updateClusterMetadata(cluster: Cluster): Boolean = false
+
+      override def updateQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity, newValue: Double): Unit = {
+        quotas.put(entity.asInstanceOf[ClientQuotaManager.KafkaQuotaEntity], new Quota(newValue.toLong, true))
+      }
+
+      override def removeQuota(quotaType: ClientQuotaType, entity: ClientQuotaEntity): Unit = {
+        quotas.remove(entity.asInstanceOf[ClientQuotaManager.KafkaQuotaEntity])
+      }
+
+      override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
+
+      override def close(): Unit = {}
+    }
+    val clientQuotaManager = new ClientQuotaManager(
+      new ClientQuotaManagerConfig(),
+      metrics,
+      QuotaType.CONTROLLER_MUTATION,
+      time,
+      "",
+      Optional.of(Plugin.wrapInstance(customQuotaCallback, metrics, ""))
+    )
+
+    try {
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should be true with custom callback")
+
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled)
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.of(new Quota(12, true)))
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
+
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      clientQuotaManager.updateQuota(Optional.of(new ClientQuotaManager.UserEntity("userA")), Optional.empty(), Optional.empty())
+      clientQuotaManager.updateQuota(Optional.empty(), Optional.of(new ClientQuotaManager.ClientIdEntity("client1")), Optional.empty())
+      assertEquals(ClientQuotaManager.CUSTOM_QUOTAS, clientQuotaManager.quotaTypesEnabled())
+      assertTrue(clientQuotaManager.quotasEnabled, "quotasEnabled should remain true")
+    } finally {
+      clientQuotaManager.shutdown()
+    }
+  }
+
   private case class UserClient(
     user: String,
     clientId: String,
-    configUser: Option[BaseUserEntity] = None,
-    configClientEntity: Option[ClientQuotaManager.ClientIdEntity] = None
+    configUser: Optional[ClientQuotaEntity.ConfigEntity] = Optional.empty,
+    configClientEntity: Optional[ClientQuotaEntity.ConfigEntity] = Optional.empty
   )
 }

@@ -225,13 +225,13 @@ public class AssignmentInfoTest {
     @Test
     public void nextRebalanceTimeShouldBeMaxValueByDefault() {
         final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
-        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
+        assertEquals(Long.MAX_VALUE, info.nextRebalanceMs());
     }
 
     @Test
     public void shouldDecodeDefaultNextRebalanceTime() {
         final AssignmentInfo info = new AssignmentInfo(7, activeTasks, standbyTasks, activeAssignment, standbyAssignment, 0);
-        assertEquals(info.nextRebalanceMs(), Long.MAX_VALUE);
+        assertEquals(Long.MAX_VALUE, info.nextRebalanceMs());
     }
 
     @Test

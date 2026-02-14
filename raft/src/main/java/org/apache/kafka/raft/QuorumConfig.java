@@ -35,6 +35,7 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 
@@ -57,6 +58,9 @@ public class QuorumConfig {
     public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of <code>{id}@{host}:{port}</code> entries. " +
+        "This is the old way of defining membership for controller quorums and should NOT be " +
+        "set if using dynamic quorums. Instead, controller.quorum.bootstrap.servers should be set," +
+        "and the voter set is determined by the --standalone or --initial-controllers flags when formatting." +
         "For example: <code>1@localhost:9092,2@localhost:9093,3@localhost:9094</code>";
     public static final List<String> DEFAULT_QUORUM_VOTERS = List.of();
 
@@ -99,6 +103,11 @@ public class QuorumConfig {
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
+    public static final String QUORUM_AUTO_JOIN_ENABLE_CONFIG = QUORUM_PREFIX + "auto.join.enable";
+    public static final String QUORUM_AUTO_JOIN_ENABLE_DOC = "Controls whether a KRaft controller should automatically " +
+        "join the cluster metadata partition for its cluster id.";
+    public static final boolean DEFAULT_QUORUM_AUTO_JOIN_ENABLE = false;
+
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(QUORUM_VOTERS_CONFIG, LIST, DEFAULT_QUORUM_VOTERS, new ControllerQuorumVotersValidator(), HIGH, QUORUM_VOTERS_DOC)
             .define(QUORUM_BOOTSTRAP_SERVERS_CONFIG, LIST, DEFAULT_QUORUM_BOOTSTRAP_SERVERS, new ControllerQuorumBootstrapServersValidator(), HIGH, QUORUM_BOOTSTRAP_SERVERS_DOC)
@@ -107,7 +116,8 @@ public class QuorumConfig {
             .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS, atLeast(0), HIGH, QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
             .define(QUORUM_LINGER_MS_CONFIG, INT, DEFAULT_QUORUM_LINGER_MS, atLeast(0), MEDIUM, QUORUM_LINGER_MS_DOC)
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, atLeast(0), MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
-            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC);
+            .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC)
+            .define(QUORUM_AUTO_JOIN_ENABLE_CONFIG, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC);
 
     private final List<String> voters;
     private final List<String> bootstrapServers;
@@ -117,6 +127,7 @@ public class QuorumConfig {
     private final int electionBackoffMaxMs;
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
+    private final boolean autoJoin;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
         this.voters = abstractConfig.getList(QUORUM_VOTERS_CONFIG);
@@ -127,6 +138,7 @@ public class QuorumConfig {
         this.electionBackoffMaxMs = abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
         this.fetchTimeoutMs = abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
         this.appendLingerMs = abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG);
+        this.autoJoin = abstractConfig.getBoolean(QUORUM_AUTO_JOIN_ENABLE_CONFIG);
     }
 
     public List<String> voters() {
@@ -159,6 +171,10 @@ public class QuorumConfig {
 
     public int appendLingerMs() {
         return appendLingerMs;
+    }
+
+    public boolean autoJoin() {
+        return autoJoin;
     }
 
     private static Integer parseVoterId(String idString) {

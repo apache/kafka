@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
@@ -455,18 +456,18 @@ public class StateStoreMetrics {
 
     }
 
-    public static void addOldestOpenIteratorGauge(final String taskId,
-                                                  final String storeType,
-                                                  final String storeName,
-                                                  final StreamsMetricsImpl streamsMetrics,
-                                                  final Gauge<Long> oldestOpenIteratorGauge) {
-        streamsMetrics.addStoreLevelMutableMetric(
+    public static MetricName addOldestOpenIteratorGauge(final String taskId,
+                                                        final String storeType,
+                                                        final String storeName,
+                                                        final StreamsMetricsImpl streamsMetrics,
+                                                        final Gauge<Long> oldestOpenIteratorGauge) {
+        return streamsMetrics.addStoreLevelMutableMetric(
                 taskId,
                 storeType,
                 storeName,
                 OLDEST_ITERATOR_OPEN_SINCE_MS,
                 OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION,
-                RecordingLevel.INFO,
+                RecordingLevel.DEBUG,
                 oldestOpenIteratorGauge
         );
     }

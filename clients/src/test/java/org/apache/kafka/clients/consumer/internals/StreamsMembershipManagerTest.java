@@ -60,16 +60,19 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
+import static org.apache.kafka.common.requests.ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -128,6 +131,15 @@ public class StreamsMembershipManagerTest {
         );
         membershipManager.registerStateListener(memberStateListener);
         verifyInStateUnsubscribed(membershipManager);
+    }
+
+    @Test
+    public void testAssignedPartitionCountMetricRegistered() {
+        MetricName metricName = metrics.metricName(
+                "assigned-partitions",
+                CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
+        );
+        assertNotNull(metrics.metric(metricName), "Metric assigned-partitions should have been registered");
     }
 
     @Test
@@ -1143,6 +1155,60 @@ public class StreamsMembershipManagerTest {
         testLeaveGroupWhenNotInGroup(membershipManager::leaveGroupOnClose);
     }
 
+    @Test
+    public void testIgnoreLeaveResponseWhenNotLeavingGroup() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final CompletableFuture<Void> onTasksAssignedCallbackExecutedSetup =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of());
+        acknowledging(onTasksAssignedCallbackExecutedSetup);
+        stable();
+
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+        final CompletableFuture<Void> onTasksRevokedCallbackExecutedSetup =
+            verifyOnTasksRevokedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks);
+        onTasksRevokedCallbackExecutedSetup.complete(null);
+
+        // Send leave request, transitioning to UNSUBSCRIBED state
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Receive a previous heartbeat response, which should be ignored
+        membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(MEMBER_EPOCH)
+        ));
+        assertFalse(leaveResult.isDone());
+
+        // Receive a leave heartbeat response, which should unblock the consumer
+        membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+        ));
+        assertTrue(leaveResult.isDone());
+
+        // Consumer unblocks and updates subscription
+        membershipManager.onSubscriptionUpdated();
+        membershipManager.onConsumerPoll();
+
+        membershipManager.onHeartbeatSuccess(new StreamsGroupHeartbeatResponse(
+            new StreamsGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setMemberId(membershipManager.memberId())
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+        ));
+
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        assertEquals(0, membershipManager.memberEpoch());
+    }
+
     private void testLeaveGroupWhenNotInGroup(final Supplier<CompletableFuture<Void>> leaveGroup) {
         final CompletableFuture<Void> future = leaveGroup.get();
 
@@ -1216,10 +1282,18 @@ public class StreamsMembershipManagerTest {
         assertEquals(onGroupLeft, onGroupLeftAfterRevocationCallback);
         membershipManager.onHeartbeatRequestGenerated();
         verifyInStateUnsubscribed(membershipManager);
+
+        // Don't unblock unsubscribe if this is not a leave group response
         membershipManager.onHeartbeatSuccess(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0), MEMBER_EPOCH + 1));
+
+        assertFalse(onGroupLeft.isDone());
+        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
+
+        // Unblock unsubscribe when this is not a leave group response
+        membershipManager.onHeartbeatSuccess(makeHeartbeatResponse(List.of(), List.of(), List.of(), LEAVE_GROUP_MEMBER_EPOCH));
+
         assertTrue(onGroupLeft.isDone());
         assertFalse(onGroupLeft.isCompletedExceptionally());
-        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
     }
 
     @Test
@@ -1252,10 +1326,18 @@ public class StreamsMembershipManagerTest {
         assertFalse(onGroupLeft.isDone());
         membershipManager.onHeartbeatRequestGenerated();
         verifyInStateUnsubscribed(membershipManager);
+
+        // Don't unblock unsubscribe if this is not a leave group response
         membershipManager.onHeartbeatSuccess(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0), MEMBER_EPOCH + 1));
+
+        assertFalse(onGroupLeft.isDone());
+        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
+
+        // Unblock unsubscribe when this is not a leave group response
+        membershipManager.onHeartbeatSuccess(makeHeartbeatResponse(List.of(), List.of(), List.of(), LEAVE_GROUP_MEMBER_EPOCH));
+
         assertTrue(onGroupLeft.isDone());
         assertFalse(onGroupLeft.isCompletedExceptionally());
-        verify(memberStateListener, never()).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH + 1), membershipManager.memberId());
     }
 
     @Test
@@ -1856,6 +1938,242 @@ public class StreamsMembershipManagerTest {
         verifyInStateUnsubscribed(membershipManager);
     }
 
+    @Test
+    public void testIsGroupReadyWithMissingSourceTopicsStatus() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("One or more source topics are missing.")
+        );
+
+        final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            MEMBER_EPOCH,
+            statuses
+        );
+
+        membershipManager.onHeartbeatSuccess(response);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            false
+        );
+
+        future.complete(null);
+    }
+
+    @Test
+    public void testIsGroupReadyWithMissingInternalTopicsStatus() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                .setStatusDetail("One or more internal topics are missing.")
+        );
+
+        final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            MEMBER_EPOCH,
+            statuses
+        );
+
+        membershipManager.onHeartbeatSuccess(response);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            false
+        );
+
+        future.complete(null);
+    }
+
+    @Test
+    public void testIsGroupReadyWithIncorrectlyPartitionedTopicsStatus() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.INCORRECTLY_PARTITIONED_TOPICS.code())
+                .setStatusDetail("One or more topics expected to be copartitioned are not copartitioned.")
+        );
+
+        final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            MEMBER_EPOCH,
+            statuses
+        );
+
+        membershipManager.onHeartbeatSuccess(response);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            false
+        );
+
+        future.complete(null);
+    }
+
+    @Test
+    public void testIsGroupReadyWithAssignmentDelayedStatus() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+        );
+
+        final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            MEMBER_EPOCH,
+            statuses
+        );
+
+        membershipManager.onHeartbeatSuccess(response);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            false
+        );
+
+        future.complete(null);
+    }
+
+    @Test
+    public void testIsGroupReadyWithNoStatuses() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            MEMBER_EPOCH,
+            null
+        );
+
+        membershipManager.onHeartbeatSuccess(response);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            true
+        );
+
+        future.complete(null);
+    }
+
+    @Test
+    public void testIsGroupReadyWithOtherStatuses() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())
+                .setStatusDetail("The topology epoch supplied is inconsistent with the topology for this streams group.")
+        );
+
+        final StreamsGroupHeartbeatResponse response = makeHeartbeatResponse(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            MEMBER_EPOCH,
+            statuses
+        );
+
+        membershipManager.onHeartbeatSuccess(response);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            true
+        );
+
+        future.complete(null);
+    }
+
+    @Test
+    public void testIsGroupReadyChangeWhenTasksAreNull() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        joining();
+
+        final StreamsGroupHeartbeatResponse responseWithTasks = makeHeartbeatResponse(
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            MEMBER_EPOCH,
+            null
+        );
+
+        membershipManager.onHeartbeatSuccess(responseWithTasks);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future1 = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            true
+        );
+        future1.complete(null);
+
+        final List<StreamsGroupHeartbeatResponseData.Status> statuses = List.of(
+            new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+        );
+
+        final StreamsGroupHeartbeatResponse responseWithoutTasks = makeHeartbeatResponse(
+            null,
+            null,
+            null,
+            MEMBER_EPOCH,
+            statuses
+        );
+
+        membershipManager.onHeartbeatSuccess(responseWithoutTasks);
+        membershipManager.poll(time.milliseconds());
+
+        final CompletableFuture<Void> future2 = verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+            Set.of(),
+            Set.of(),
+            Set.of(),
+            false
+        );
+        future2.complete(null);
+    }
+
     private void verifyThatNoTasksHaveBeenRevoked() {
         verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
         verify(subscriptionState, never()).markPendingRevocation(any());
@@ -1955,9 +2273,16 @@ public class StreamsMembershipManagerTest {
     private CompletableFuture<Void> verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(final Set<StreamsRebalanceData.TaskId> activeTasks,
                                                                                                           final Set<StreamsRebalanceData.TaskId> standbyTasks,
                                                                                                           final Set<StreamsRebalanceData.TaskId> warmupTasks) {
+        return verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, standbyTasks, warmupTasks, true);
+    }
+
+    private CompletableFuture<Void> verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(final Set<StreamsRebalanceData.TaskId> activeTasks,
+                                                                                                          final Set<StreamsRebalanceData.TaskId> standbyTasks,
+                                                                                                          final Set<StreamsRebalanceData.TaskId> warmupTasks,
+                                                                                                          final boolean isGroupReady) {
         verify(backgroundEventHandler, times(++onTasksAssignedCallbackNeededAddCount)).add(onTasksAssignedCallbackNeededEventCaptor.capture());
         final StreamsOnTasksAssignedCallbackNeededEvent onTasksAssignedCallbackNeeded = onTasksAssignedCallbackNeededEventCaptor.getValue();
-        assertEquals(makeTaskAssignment(activeTasks, standbyTasks, warmupTasks), onTasksAssignedCallbackNeeded.assignment());
+        assertEquals(makeTaskAssignment(activeTasks, standbyTasks, warmupTasks, isGroupReady), onTasksAssignedCallbackNeeded.assignment());
         return onTasksAssignedCallbackNeeded.future();
     }
 
@@ -1991,7 +2316,7 @@ public class StreamsMembershipManagerTest {
 
     private void setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(final String subtopologyId,
                                                                            final String topicName) {
-        when(streamsRebalanceData.subtopologies()).thenReturn(
+        lenient().when(streamsRebalanceData.subtopologies()).thenReturn(
             mkMap(
                 mkEntry(
                     subtopologyId,
@@ -2011,7 +2336,7 @@ public class StreamsMembershipManagerTest {
                                                                 final String topicName1,
                                                                 final String subtopologyId2,
                                                                 final String topicName2) {
-        when(streamsRebalanceData.subtopologies()).thenReturn(
+        lenient().when(streamsRebalanceData.subtopologies()).thenReturn(
             mkMap(
                 mkEntry(
                     subtopologyId1,
@@ -2118,6 +2443,14 @@ public class StreamsMembershipManagerTest {
                                                                 final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
                                                                 final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks,
                                                                 final int memberEpoch) {
+        return makeHeartbeatResponse(activeTasks, standbyTasks, warmupTasks, memberEpoch, null);
+    }
+
+    private StreamsGroupHeartbeatResponse makeHeartbeatResponse(final List<StreamsGroupHeartbeatResponseData.TaskIds> activeTasks,
+                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> standbyTasks,
+                                                                final List<StreamsGroupHeartbeatResponseData.TaskIds> warmupTasks,
+                                                                final int memberEpoch,
+                                                                final List<StreamsGroupHeartbeatResponseData.Status> statuses) {
         final StreamsGroupHeartbeatResponseData responseData = new StreamsGroupHeartbeatResponseData()
             .setErrorCode(Errors.NONE.code())
             .setMemberId(membershipManager.memberId())
@@ -2125,16 +2458,27 @@ public class StreamsMembershipManagerTest {
             .setActiveTasks(activeTasks)
             .setStandbyTasks(standbyTasks)
             .setWarmupTasks(warmupTasks);
+        if (statuses != null) {
+            responseData.setStatus(statuses);
+        }
         return new StreamsGroupHeartbeatResponse(responseData);
     }
 
     private StreamsRebalanceData.Assignment makeTaskAssignment(final Set<StreamsRebalanceData.TaskId> activeTasks,
                                                                final Set<StreamsRebalanceData.TaskId> standbyTasks,
                                                                final Set<StreamsRebalanceData.TaskId> warmupTasks) {
+        return makeTaskAssignment(activeTasks, standbyTasks, warmupTasks, true);
+    }
+
+    private StreamsRebalanceData.Assignment makeTaskAssignment(final Set<StreamsRebalanceData.TaskId> activeTasks,
+                                                               final Set<StreamsRebalanceData.TaskId> standbyTasks,
+                                                               final Set<StreamsRebalanceData.TaskId> warmupTasks,
+                                                               final boolean isGroupReady) {
         return new StreamsRebalanceData.Assignment(
             activeTasks,
             standbyTasks,
-            warmupTasks
+            warmupTasks,
+            isGroupReady
         );
     }
 

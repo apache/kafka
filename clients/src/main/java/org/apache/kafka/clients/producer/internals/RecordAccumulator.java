@@ -514,7 +514,12 @@ public class RecordAccumulator {
         // the split doesn't happen too often.
         CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression.type(),
                                                 Math.max(1.0f, (float) bigBatch.compressionRatio()));
-        Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
+        int targetSplitBatchSize = this.batchSize;
+
+        if (bigBatch.isSplitBatch()) {
+            targetSplitBatchSize = Math.max(bigBatch.maxRecordSize, bigBatch.estimatedSizeInBytes() / 2);
+        }
+        Deque<ProducerBatch> dq = bigBatch.split(targetSplitBatchSize);
         int numSplitBatches = dq.size();
         Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
         while (!dq.isEmpty()) {
@@ -1022,14 +1027,39 @@ public class RecordAccumulator {
     }
 
     /**
-     * Deallocate the record batch
+     * Complete and deallocate the record batch
+     */
+    public void completeAndDeallocateBatch(ProducerBatch batch) {
+        completeBatch(batch);
+        deallocate(batch);
+    }
+
+    /**
+     * Only perform deallocation (and not removal from the incomplete set)
      */
     public void deallocate(ProducerBatch batch) {
-        incomplete.remove(batch);
         // Only deallocate the batch if it is not a split batch because split batch are allocated outside the
         // buffer pool.
-        if (!batch.isSplitBatch())
-            free.deallocate(batch.buffer(), batch.initialCapacity());
+        if (!batch.isSplitBatch()) {
+            if (batch.isBufferDeallocated()) {
+                log.warn("Skipping deallocating a batch that has already been deallocated. Batch is {}, created time is {}", batch, batch.createdMs);
+            } else {
+                batch.markBufferDeallocated();
+                if (batch.isInflight()) {
+                    // Create a fresh ByteBuffer to give to BufferPool to reuse since we can't safely call deallocate with the ProduceBatch's buffer
+                    free.deallocate(ByteBuffer.allocate(batch.initialCapacity()));
+                    throw new IllegalStateException("Attempting to deallocate a batch that is inflight. Batch is " + batch);
+                }
+                free.deallocate(batch.buffer(), batch.initialCapacity());
+            }
+        }
+    }
+
+    /**
+     * Remove from the incomplete list but do not free memory yet
+     */
+    public void completeBatch(ProducerBatch batch) {
+        incomplete.remove(batch);
     }
 
     /**
@@ -1071,8 +1101,13 @@ public class RecordAccumulator {
             // We must be careful not to hold a reference to the ProduceBatch(s) so that garbage
             // collection can occur on the contents.
             // The sender will remove ProducerBatch(s) from the original incomplete collection.
+            //
+            // We use awaitAllDependents() here instead of await() to ensure that if any batch
+            // was split into multiple batches, we wait for all the split batches to complete.
+            // This is required to guarantee that all records sent before flush()
+            // must be fully complete, including records in split batches.
             for (ProduceRequestResult result : this.incomplete.requestResults())
-                result.await();
+                result.awaitAllDependents();
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
@@ -1122,7 +1157,14 @@ public class RecordAccumulator {
                 dq.remove(batch);
             }
             batch.abort(reason);
-            deallocate(batch);
+            if (batch.isInflight()) {
+                // KAFKA-19012: if the batch has been sent it might still be in use by the network client so we cannot allow it to be reused yet.
+                // We skip deallocating it now. When the request in network client completes with a response, either Sender.completeBatch() or
+                // Sender.failBatch() will be called with deallocateBatch=true. The buffer associated with the batch will be deallocated then.
+                completeBatch(batch);
+            } else {
+                completeAndDeallocateBatch(batch);
+            }
         }
     }
 
@@ -1142,7 +1184,7 @@ public class RecordAccumulator {
             }
             if (aborted) {
                 batch.abort(reason);
-                deallocate(batch);
+                completeAndDeallocateBatch(batch);
             }
         }
     }

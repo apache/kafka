@@ -24,7 +24,6 @@ import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonCreator;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -68,9 +67,7 @@ public class TopicsSpec extends Message {
     }
 
     public TopicsSpec immutableCopy() {
-        HashMap<String, PartitionsSpec> mapCopy = new HashMap<>();
-        mapCopy.putAll(map);
-        return new TopicsSpec(Collections.unmodifiableMap(mapCopy));
+        return new TopicsSpec(Map.copyOf(map));
     }
 
     /**

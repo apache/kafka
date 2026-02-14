@@ -60,6 +60,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManager.SHARE_PROTOCOL_NOT_SUPPORTED_MSG;
+import static org.apache.kafka.clients.consumer.internals.ShareHeartbeatRequestManager.SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -353,6 +354,57 @@ public class ShareHeartbeatRequestManagerTest {
         verify(backgroundEventHandler).add(any());
     }
 
+    /**
+     * Test that GROUP_ID_NOT_FOUND error while unsubscribed is not treated as fatal.
+     * This can happen when the consumer never successfully joined the group
+     * (e.g., due to an InvalidTopicException during poll() and close() sends
+     * a leave heartbeat for a group that was never created.
+     */
+    @Test
+    public void testGroupIdNotFoundExceptionWhileUnsubscribed() {
+        // Setup: member is in UNSUBSCRIBED state with epoch -1
+        when(membershipManager.state()).thenReturn(MemberState.UNSUBSCRIBED);
+        when(membershipManager.memberEpoch()).thenReturn(-1);
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Complete the heartbeat with GROUP_ID_NOT_FOUND error
+        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_ID_NOT_FOUND);
+        result.unsentRequests.get(0).handler().onComplete(response);
+
+        // Verify: no fatal error, heartbeat skipped (benign)
+        verify(membershipManager, never()).transitionToFatal();
+        verify(membershipManager).onHeartbeatRequestSkipped();
+        verify(backgroundEventHandler, never()).add(any());
+    }
+
+    /**
+     * Test that GROUP_ID_NOT_FOUND error while stable is treated as fatal.
+     * This would indicate the group was unexpectedly deleted while the member
+     * was actively participating.
+     */
+    @Test
+    public void testGroupIdNotFoundWhileStableIsFatal() {
+        // Setup: member is in STABLE state with positive epoch
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Complete the heartbeat with GROUP_ID_NOT_FOUND error
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_ID_NOT_FOUND);
+        result.unsentRequests.get(0).handler().onComplete(response);
+
+        // Verify: fatal error
+        verify(membershipManager).transitionToFatal();
+        verify(backgroundEventHandler).add(any());
+    }
+
     @Test
     public void testNoCoordinator() {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
@@ -439,7 +491,7 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {SHARE_PROTOCOL_NOT_SUPPORTED_MSG})
+    @ValueSource(strings = {SHARE_PROTOCOL_VERSION_NOT_SUPPORTED_MSG})
     public void testUnsupportedVersionGeneratedOnTheClient(String errorMsg) {
         mockResponseWithException(new UnsupportedVersionException(errorMsg), false);
 
@@ -692,11 +744,11 @@ public class ShareHeartbeatRequestManagerTest {
     private ClientResponse createHeartbeatResponseWithException(
             final NetworkClientDelegate.UnsentRequest request,
             final UnsupportedVersionException exception,
-            final boolean isFromClient
+            final boolean isFromBroker
     ) {
         ShareGroupHeartbeatResponse response = null;
-        if (!isFromClient) {
-            response = new ShareGroupHeartbeatResponse(null);
+        if (isFromBroker) {
+            response = new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code()));
         }
         return new ClientResponse(
                 new RequestHeader(ApiKeys.SHARE_GROUP_HEARTBEAT, ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
@@ -705,7 +757,7 @@ public class ShareHeartbeatRequestManagerTest {
                 time.milliseconds(),
                 time.milliseconds(),
                 false,
-                exception,
+                isFromBroker ? null : exception,
                 null,
                 response);
     }

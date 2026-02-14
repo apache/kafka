@@ -48,14 +48,14 @@ public final class ReassignReplicaShrinkTest extends TieredStorageTestHarness {
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
-        final Integer broker1 = 1;
+        final int broker0 = 0;
+        final int broker1 = 1;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer p1 = 1;
-        final Integer partitionCount = 2;
-        final Integer replicationFactor = 2;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int p1 = 1;
+        final int partitionCount = 2;
+        final int replicationFactor = 2;
+        final int maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
         final Map<Integer, List<Integer>> replicaAssignment = mkMap(
                 mkEntry(p0, List.of(broker0, broker1)),

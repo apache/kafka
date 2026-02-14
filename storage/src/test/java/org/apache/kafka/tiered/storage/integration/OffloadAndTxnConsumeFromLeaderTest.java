@@ -21,6 +21,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
+import org.apache.kafka.tiered.storage.specs.FetchCountAndOp;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 import org.apache.kafka.tiered.storage.specs.RemoteFetchCount;
 
@@ -28,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.FetchCountAndOp;
 import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO;
 
 /**
@@ -61,12 +61,12 @@ public final class OffloadAndTxnConsumeFromLeaderTest extends TieredStorageTestH
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker = 0;
+        final int broker = 0;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer oneBatchPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 1;
+        final int oneBatchPerSegment = 1;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
 

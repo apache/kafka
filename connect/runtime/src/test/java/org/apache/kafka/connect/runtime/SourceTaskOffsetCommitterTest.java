@@ -40,7 +40,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -73,6 +72,7 @@ public class SourceTaskOffsetCommitterTest {
     @BeforeEach
     public void setup() {
         Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
@@ -94,7 +94,7 @@ public class SourceTaskOffsetCommitterTest {
 
         committer.schedule(taskId, task);
         assertNotNull(taskWrapper.getValue());
-        assertEquals(singletonMap(taskId, commitFuture), committers);
+        assertEquals(Map.of(taskId, commitFuture), committers);
     }
 
     @Test

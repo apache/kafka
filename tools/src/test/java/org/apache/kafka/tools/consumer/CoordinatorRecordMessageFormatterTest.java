@@ -28,10 +28,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -59,7 +59,7 @@ public abstract class CoordinatorRecordMessageFormatterTest {
         );
 
         try (MessageFormatter formatter = formatter()) {
-            formatter.configure(emptyMap());
+            formatter.configure(Map.of());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             formatter.writeTo(record, new PrintStream(out));
             assertEquals(expectedOutput.replaceAll("\\s+", ""), out.toString());

@@ -47,7 +47,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.acl.AclOperation.READ;
@@ -55,8 +54,8 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 0)
-@Measurement(iterations = 4)
+@Warmup(iterations = 7, timeUnit = TimeUnit.SECONDS, time = 2)
+@Measurement(iterations = 10, timeUnit = TimeUnit.SECONDS, time = 2)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class StandardAuthorizerUpdateBenchmark {
@@ -72,13 +71,13 @@ public class StandardAuthorizerUpdateBenchmark {
     private int aclCount;
     int index = 0;
 
-    @Setup(Level.Trial)
+    @Setup(Level.Iteration)
     public void setup() throws Exception {
         authorizer = new StandardAuthorizer();
         addAcls(aclCount);
     }
 
-    @TearDown(Level.Trial)
+    @TearDown(Level.Iteration)
     public void tearDown() throws IOException {
         authorizer.close();
     }
@@ -98,7 +97,7 @@ public class StandardAuthorizerUpdateBenchmark {
                 return aclsForResource(resourcePattern);
             })
             .flatMap(Collection::stream)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private List<StandardAclWithId> aclsForResource(ResourcePattern pattern) {
@@ -109,7 +108,7 @@ public class StandardAuthorizerUpdateBenchmark {
                 return new StandardAcl(pattern.resourceType(), pattern.name(), pattern.patternType(), p, h, READ, ALLOW);
             })
             .map(this::withId)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private StandardAclWithId withId(StandardAcl acl) {

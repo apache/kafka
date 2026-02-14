@@ -46,7 +46,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
     // the number of estimated total operations in the purgatory
     private final AtomicInteger estimatedTotalOperations = new AtomicInteger(0);
     /* background thread expiring operations that have timed out */
-    private final ExpiredOperationReaper expirationReaper = new ExpiredOperationReaper();
+    private final ExpiredOperationReaper expirationReaper;
     private final String purgatoryName;
     private final Timer timeoutTimer;
     private final int brokerId;
@@ -56,6 +56,10 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
 
     public DelayedOperationPurgatory(String purgatoryName, Timer timer, int brokerId, boolean reaperEnabled) {
         this(purgatoryName, timer, brokerId, 1000, reaperEnabled, true);
+    }
+
+    public DelayedOperationPurgatory(String purgatoryName, Timer timer, int brokerId, int purgeInterval) {
+        this(purgatoryName, timer, brokerId, purgeInterval, true, true);
     }
 
     public DelayedOperationPurgatory(String purgatoryName, int brokerId) {
@@ -82,6 +86,9 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         this.purgeInterval = purgeInterval;
         this.reaperEnabled = reaperEnabled;
         this.timerEnabled = timerEnabled;
+        // The initialization of the expiration reaper thread is done after the brokerId and purgatoryName
+        // are set, so that the thread name can include these values.
+        this.expirationReaper = new ExpiredOperationReaper();
 
         watcherLists = new ArrayList<>(SHARDS);
         for (int i = 0; i < SHARDS; i++) {
@@ -192,7 +199,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
     }
 
     /**
-     * Return the total size of watch lists the purgatory. Since an operation may be watched
+     * Return the total size of watch lists in the purgatory. Since an operation may be watched
      * on multiple lists, and some of its watched entries may still be in the watch lists
      * even when it has been completed, this number may be larger than the number of real operations watched
      */

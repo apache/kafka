@@ -311,6 +311,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,
                     JmxReporter.class.getName(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(
@@ -320,6 +321,12 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG,
+                    ConfigDef.Type.LIST,
+                    List.of(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                    ConfigDef.Importance.LOW, 
+                    CONFIG_PROVIDERS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 

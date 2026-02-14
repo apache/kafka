@@ -24,7 +24,6 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Collections;
 import java.util.Map;
 
 public class DegradedNetworkFaultSpec extends TaskSpec {
@@ -75,7 +74,7 @@ public class DegradedNetworkFaultSpec extends TaskSpec {
                                     @JsonProperty("durationMs") long durationMs,
                                     @JsonProperty("nodeSpecs") Map<String, NodeDegradeSpec> nodeSpecs) {
         super(startMs, durationMs);
-        this.nodeSpecs = nodeSpecs == null ? Collections.emptyMap() : Collections.unmodifiableMap(nodeSpecs);
+        this.nodeSpecs = nodeSpecs == null ? Map.of() : Map.copyOf(nodeSpecs);
     }
 
     @Override

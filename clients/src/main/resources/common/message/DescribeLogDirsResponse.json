@@ -51,10 +51,10 @@
             "about": "True if this log is created by AlterReplicaLogDirsRequest and will replace the current log of the replica in the future." }]}
       ]},
       { "name": "TotalBytes", "type": "int64", "versions": "4+", "ignorable": true, "default": "-1",
-        "about": "The total size in bytes of the volume the log directory is in."
+        "about": "The total size in bytes of the volume the log directory is in. This value does not include the size of data stored in remote storage."
       },
       { "name": "UsableBytes", "type": "int64", "versions": "4+", "ignorable": true, "default": "-1",
-        "about": "The usable size in bytes of the volume the log directory is in."
+        "about": "The usable size in bytes of the volume the log directory is in. This value does not include the size of data stored in remote storage."
       }
     ]}
   ]

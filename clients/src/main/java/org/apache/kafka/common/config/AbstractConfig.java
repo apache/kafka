@@ -65,6 +65,10 @@ public class AbstractConfig {
     public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    public static final String CONFIG_PROVIDERS_DOC = 
+            "Comma-separated alias names for classes implementing the <code>ConfigProvider</code> interface. " +
+            "This enables loading configuration data (such as passwords, API keys, and other credentials) from external " +
+            "sources. For example, see <a href=\"https://kafka.apache.org/documentation/#config_providers\">Configuration Providers</a>.";
 
     private static final String CONFIG_PROVIDERS_PARAM = ".param.";
 

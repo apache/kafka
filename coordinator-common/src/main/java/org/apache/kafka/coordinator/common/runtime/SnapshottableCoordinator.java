@@ -19,8 +19,6 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
@@ -62,7 +60,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      */
     private long lastCommittedOffset;
 
-    SnapshottableCoordinator(
+    public SnapshottableCoordinator(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
         S coordinator,
@@ -138,7 +136,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param offset The new last written offset.
      */
     @Override
-    public synchronized void updateLastWrittenOffset(Long offset) {
+    public synchronized void updateLastWrittenOffset(long offset) {
         if (offset <= lastWrittenOffset) {
             throw new IllegalStateException("New last written offset " + offset + " of " + tp +
                 " must be greater than " + lastWrittenOffset + ".");
@@ -157,7 +155,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      * @param offset The new last committed offset.
      */
     @Override
-    public synchronized void updateLastCommittedOffset(Long offset) {
+    public synchronized void updateLastCommittedOffset(long offset) {
         if (offset < lastCommittedOffset) {
             throw new IllegalStateException("New committed offset " + offset + " of " + tp +
                 " must be greater than or equal to " + lastCommittedOffset + ".");
@@ -179,7 +177,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
      *
      * @param newImage  The metadata image.
      */
-    synchronized void onLoaded(MetadataImage newImage) {
+    synchronized void onLoaded(CoordinatorMetadataImage newImage) {
         this.coordinator.onLoaded(newImage);
     }
 
@@ -201,14 +199,17 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
     }
 
     /**
-     * A new metadata image is available. This is only called after {@link SnapshottableCoordinator#onLoaded(MetadataImage)}
+     * A new metadata image is available. This is only called after {@link SnapshottableCoordinator#onLoaded(CoordinatorMetadataImage)}
      * is called to signal that the coordinator has been fully loaded.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
      */
-    synchronized void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
-        this.coordinator.onNewMetadataImage(newImage, delta);
+    synchronized void onMetadataUpdate(
+        CoordinatorMetadataDelta delta,
+        CoordinatorMetadataImage newImage
+    ) {
+        this.coordinator.onMetadataUpdate(delta, newImage);
     }
 
     /**

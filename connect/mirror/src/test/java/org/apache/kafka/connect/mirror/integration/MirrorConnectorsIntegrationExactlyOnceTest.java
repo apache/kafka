@@ -24,7 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,7 +45,7 @@ public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectors
                 BACKUP_CLUSTER_ALIAS + "." + DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
                 DistributedConfig.ExactlyOnceSourceSupport.ENABLED.toString()
         );
-        for (Properties brokerProps : Arrays.asList(primaryBrokerProps, backupBrokerProps)) {
+        for (Properties brokerProps : List.of(primaryBrokerProps, backupBrokerProps)) {
             brokerProps.put("transaction.state.log.replication.factor", "1");
             brokerProps.put("transaction.state.log.min.isr", "1");
         }
@@ -81,7 +81,7 @@ public class MirrorConnectorsIntegrationExactlyOnceTest extends MirrorConnectors
         assertEquals(expectedRecordsTopic2, backup.kafka().consume(expectedRecordsTopic2, RECORD_TRANSFER_DURATION_MS, backupTopic2).count(),
                 "New topic was not re-replicated to backup cluster after altering offsets.");
 
-        @SuppressWarnings({"unchecked", "rawtypes"})
+        @SuppressWarnings("unchecked")
         Class<? extends Connector>[] connectorsToReset = CONNECTOR_LIST.toArray(new Class[0]);
         stopMirrorMakerConnectors(backup, connectorsToReset);
         // Resetting the offsets for the heartbeat and checkpoint connectors doesn't have any effect

@@ -19,9 +19,8 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,24 +29,35 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jwk.RsaJsonWebKey;
 import org.jose4j.jwk.RsaJwkGenerator;
+import org.jose4j.jwt.consumer.InvalidJwtException;
+import org.jose4j.jwt.consumer.JwtConsumer;
+import org.jose4j.jwt.consumer.JwtConsumerBuilder;
+import org.jose4j.jwt.consumer.JwtContext;
 import org.jose4j.lang.JoseException;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.api.function.Executable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -63,8 +73,6 @@ import static org.mockito.Mockito.when;
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class OAuthBearerTest {
 
-    protected final Logger log = LoggerFactory.getLogger(getClass());
-
     protected ObjectMapper mapper = new ObjectMapper();
 
     protected void assertThrowsWithMessage(Class<? extends Exception> clazz,
@@ -78,18 +86,6 @@ public abstract class OAuthBearerTest {
             String.format("Expected exception message (\"%s\") to contain substring (\"%s\")",
                 actual,
                 expectedSubstring));
-    }
-
-    protected void configureHandler(AuthenticateCallbackHandler handler,
-        Map<String, ?> configs,
-        Map<String, Object> jaasConfig) {
-        TestJaasConfig config = new TestJaasConfig();
-        config.createOrUpdateEntry("KafkaClient", OAuthBearerLoginModule.class.getName(), jaasConfig);
-        AppConfigurationEntry kafkaClient = config.getAppConfigurationEntry("KafkaClient")[0];
-
-        handler.configure(configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-            Collections.singletonList(kafkaClient));
     }
 
     protected String createBase64JsonJwtSection(Consumer<ObjectNode> c) {
@@ -147,36 +143,6 @@ public abstract class OAuthBearerTest {
         return mockedCon;
     }
 
-    protected File createTempDir(String directory) throws IOException {
-        File tmpDir = new File(System.getProperty("java.io.tmpdir"));
-
-        if (directory != null)
-            tmpDir = new File(tmpDir, directory);
-
-        if (!tmpDir.exists() && !tmpDir.mkdirs())
-            throw new IOException("Could not create " + tmpDir);
-
-        tmpDir.deleteOnExit();
-        log.debug("Created temp directory {}", tmpDir);
-        return tmpDir;
-    }
-
-    protected File createTempFile(File tmpDir,
-        String prefix,
-        String suffix,
-        String contents)
-        throws IOException {
-        File file = File.createTempFile(prefix, suffix, tmpDir);
-        log.debug("Created new temp file {}", file);
-        file.deleteOnExit();
-
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write(contents);
-        }
-
-        return file;
-    }
-
     protected Map<String, ?> getSaslConfigs(Map<String, ?> configs) {
         ConfigDef configDef = new ConfigDef();
         configDef.withClientSaslSupport();
@@ -190,6 +156,20 @@ public abstract class OAuthBearerTest {
 
     protected Map<String, ?> getSaslConfigs() {
         return getSaslConfigs(Collections.emptyMap());
+    }
+
+    protected List<AppConfigurationEntry> getJaasConfigEntries() {
+        return getJaasConfigEntries(Map.of());
+    }
+
+    protected List<AppConfigurationEntry> getJaasConfigEntries(Map<String, ?> options) {
+        return List.of(
+            new AppConfigurationEntry(
+                OAuthBearerLoginModule.class.getName(),
+                AppConfigurationEntry.LoginModuleControlFlag.REQUIRED,
+                options
+            )
+        );
     }
 
     protected PublicJsonWebKey createRsaJwk() throws JoseException {
@@ -212,4 +192,75 @@ public abstract class OAuthBearerTest {
         return jwk;
     }
 
+    protected String createJwt(String header, String payload, String signature) {
+        Base64.Encoder enc = Base64.getUrlEncoder();
+        header = enc.encodeToString(Utils.utf8(header));
+        payload = enc.encodeToString(Utils.utf8(payload));
+        signature = enc.encodeToString(Utils.utf8(signature));
+        return String.format("%s.%s.%s", header, payload, signature);
+    }
+
+    protected String createJwt(String subject) {
+        Time time = Time.SYSTEM;
+        long nowSeconds = time.milliseconds() / 1000;
+
+        return createJwt(
+            "{}",
+            String.format(
+                "{\"iat\":%s, \"exp\":%s, \"sub\":\"%s\"}",
+                nowSeconds,
+                nowSeconds + 300,
+                subject
+            ),
+            "sign"
+        );
+    }
+
+
+    protected void assertClaims(PublicKey publicKey, String assertion) throws InvalidJwtException {
+        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
+        jwtConsumer.processToClaims(assertion);
+    }
+
+    protected JwtContext assertContext(PublicKey publicKey, String assertion) throws InvalidJwtException {
+        JwtConsumer jwtConsumer = jwtConsumer(publicKey);
+        return jwtConsumer.process(assertion);
+    }
+
+    protected JwtConsumer jwtConsumer(PublicKey publicKey) {
+        return new JwtConsumerBuilder()
+            .setVerificationKey(publicKey)
+            .setRequireExpirationTime()
+            .setAllowedClockSkewInSeconds(30)               // Sure, let's give it some slack
+            .build();
+    }
+
+    protected File generatePrivateKey(PrivateKey privateKey) throws IOException {
+        File file = File.createTempFile("private-", ".key");
+        byte[] bytes = Base64.getEncoder().encode(privateKey.getEncoded());
+
+        try (FileChannel channel = FileChannel.open(file.toPath(), EnumSet.of(StandardOpenOption.WRITE))) {
+            Utils.writeFully(channel, ByteBuffer.wrap(bytes));
+        }
+
+        return file;
+    }
+
+    protected File generatePrivateKey() throws IOException {
+        return generatePrivateKey(generateKeyPair().getPrivate());
+    }
+
+    protected KeyPair generateKeyPair() {
+        return generateKeyPair("RSA");
+    }
+
+    protected KeyPair generateKeyPair(String algorithm) {
+        try {
+            KeyPairGenerator keyGen = KeyPairGenerator.getInstance(algorithm);
+            keyGen.initialize(2048);
+            return keyGen.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Received unexpected error during private key generation", e);
+        }
+    }
 }

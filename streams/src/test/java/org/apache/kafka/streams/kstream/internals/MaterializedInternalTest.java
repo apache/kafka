@@ -95,7 +95,7 @@ public class MaterializedInternalTest {
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
             new TopologyConfig("my-topology", config, topologyOverrides));
 
-        final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder);
+        final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder, false);
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
@@ -113,7 +113,7 @@ public class MaterializedInternalTest {
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
                 new TopologyConfig("my-topology", config, topologyOverrides));
 
-        final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder);
+        final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder, false);
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
                 new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
@@ -129,7 +129,7 @@ public class MaterializedInternalTest {
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
                 new TopologyConfig("my-topology", config, topologyOverrides));
 
-        final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder);
+        final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(topologyBuilder, false);
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
                 new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);

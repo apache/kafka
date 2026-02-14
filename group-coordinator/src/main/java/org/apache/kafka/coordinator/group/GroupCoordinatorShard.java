@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -55,10 +57,13 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataDelta;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -93,8 +98,6 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
@@ -107,8 +110,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKe
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -119,8 +120,6 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
-import org.apache.kafka.image.MetadataDelta;
-import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -160,7 +159,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private Time time;
-        private CoordinatorTimer<Void, CoordinatorRecord> timer;
+        private CoordinatorTimer<CoordinatorRecord> timer;
         private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
@@ -192,7 +191,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         @Override
         public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withTimer(
-            CoordinatorTimer<Void, CoordinatorRecord> timer
+            CoordinatorTimer<CoordinatorRecord> timer
         ) {
             this.timer = timer;
             return this;
@@ -270,6 +269,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withConfig(config)
                 .withGroupConfigManager(groupConfigManager)
                 .withGroupCoordinatorMetricsShard(metricsShard)
+                .withShareGroupAssignor(config.shareGroupAssignors().get(0))
                 .withAuthorizerPlugin(authorizerPlugin)
                 .build();
 
@@ -359,6 +359,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Represents a deleted topic with its ID and name.
+     * Used during offset cleanup to ensure only offsets for the correct
+     * topic incarnation are deleted (preventing race conditions with topic recreation).
+     *
+     * @param id    The topic ID.
+     * @param name  The topic name.
+     */
+    public record DeletedTopic(Uuid id, String name) { }
+
+    /**
      * The group/offsets expiration key to schedule a timer task.
      *
      * Visible for testing.
@@ -400,7 +410,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * The coordinator timer.
      */
-    private final CoordinatorTimer<Void, CoordinatorRecord> timer;
+    private final CoordinatorTimer<CoordinatorRecord> timer;
 
     /**
      * The group coordinator config.
@@ -431,7 +441,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         GroupMetadataManager groupMetadataManager,
         OffsetMetadataManager offsetMetadataManager,
         Time time,
-        CoordinatorTimer<Void, CoordinatorRecord> timer,
+        CoordinatorTimer<CoordinatorRecord> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
         CoordinatorMetricsShard metricsShard
@@ -523,15 +533,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
         return groupMetadataManager.uninitializeShareGroupState(groupId, topicPartitionMap);
-    }
-
-    /**
-     * Reconcile initializing and initialized tps in share group state metadata records.
-     *
-     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
-     */
-    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
-        return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
     }
 
     /**
@@ -630,7 +631,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             try {
                 groupMetadataManager.validateDeleteGroup(groupId);
                 numDeletedOffsets += offsetMetadataManager.deleteAllOffsets(groupId, records);
-                groupMetadataManager.createGroupTombstoneRecords(groupId, records);
+                groupMetadataManager.createGroupTombstoneRecordsAndCancelTimers(groupId, records);
                 deletedGroups.add(groupId);
 
                 resultCollection.add(
@@ -655,10 +656,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     /**
      * Method returns a Map keyed on groupId and value as pair of {@link DeleteShareGroupStateParameters}
-     * and any ERRORS while building the request corresponding
-     * to the valid share groups passed as the input.
+     * and any ERRORS while building the request corresponding to the valid share groups passed as the input.
      * <p>
-     * The groupIds are first filtered by type to restrict the list to share groups.
+     * The groupIds are first filtered by type to restrict the list to share groups. If a group isn't
+     * found or isn't a share group, it won't trigger an error in the response since group deletions
+     * are chained. Instead, that group should be retried against other group types.
      * @param groupIds - A list of groupIds as string
      * @return A result object containing a map keyed on groupId and value pair (req, error) and related coordinator records.
      */
@@ -674,9 +676,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records)
                     .ifPresent(req -> responseMap.put(groupId, Map.entry(req, Errors.NONE)));
             } catch (GroupIdNotFoundException exception) {
-                log.debug("GroupId {} not found as a share group.", groupId);
+                log.debug("Unable to delete share group. GroupId {} not found.", groupId);
+                // Do not include the error in response map, as the deletion of groups is chained hence
+                // the respective group should be re-tried for deletion against other group types.
             } catch (GroupNotEmptyException exception) {
-                log.debug("Share group {} is not empty.", groupId);
+                log.debug("Unable to delete share group. Provided group {} is not empty.", groupId);
                 responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
             }
         }
@@ -736,13 +740,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             );
 
         } catch (GroupIdNotFoundException exception) {
-            log.error("groupId {} not found", groupId, exception);
+            log.debug("Unable to delete share group offsets. GroupId {} not found.", groupId);
             return new CoordinatorResult<>(
                 records,
                 new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage())
             );
         } catch (GroupNotEmptyException exception) {
-            log.error("Provided group {} is not empty", groupId);
+            log.debug("Unable to delete share group offsets. Provided group {} is not empty.", groupId);
             return new CoordinatorResult<>(
                 records,
                 new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage())
@@ -786,6 +790,21 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Alters the offsets for a share group.
+     *
+     * @param groupId - The group ID
+     * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
+     * @return A Result containing a pair of AlterShareGroupOffsets InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
+     */
+    public CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> alterShareGroupOffsets(
+        String groupId,
+        AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequestData
+    ) {
+        return groupMetadataManager.alterShareGroupOffsets(groupId, alterShareGroupOffsetsRequestData.topics());
+    }
+
+    /**
      * Fetch offsets for a given set of partitions and a given group.
      *
      * @param request   The OffsetFetchRequestGroup request.
@@ -798,23 +817,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long epoch
     ) throws ApiException {
-        return offsetMetadataManager.fetchOffsets(request, epoch);
-    }
-
-    /**
-     * Fetch all offsets for a given group.
-     *
-     * @param request   The OffsetFetchRequestGroup request.
-     * @param epoch     The epoch (or offset) used to read from the
-     *                  timeline data structure.
-     *
-     * @return A List of OffsetFetchResponseTopics response.
-     */
-    public OffsetFetchResponseData.OffsetFetchResponseGroup fetchAllOffsets(
-        OffsetFetchRequestData.OffsetFetchRequestGroup request,
-        long epoch
-    ) throws ApiException {
-        return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        if (OffsetFetchRequest.requestAllOffsets(request)) {
+            return offsetMetadataManager.fetchAllOffsets(request, epoch);
+        } else {
+            return offsetMetadataManager.fetchOffsets(request, epoch);
+        }
     }
 
     /**
@@ -1011,21 +1018,33 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Remove offsets of the partitions that have been deleted.
+     * Remove offsets of the topics that have been deleted.
      *
-     * @param topicPartitions   The partitions that have been deleted.
+     * @param deletedTopics   The topics that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> onPartitionsDeleted(
-        List<TopicPartition> topicPartitions
+    public CoordinatorResult<Void, CoordinatorRecord> onTopicsDeleted(
+        List<DeletedTopic> deletedTopics
     ) {
         final long startTimeMs = time.milliseconds();
-        final List<CoordinatorRecord> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+        final List<CoordinatorRecord> records = offsetMetadataManager.onTopicsDeleted(deletedTopics);
 
-        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
-            records.size(), time.milliseconds() - startTimeMs, topicPartitions);
+        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for topics {}.",
+            records.size(), time.milliseconds() - startTimeMs, deletedTopics);
 
         return new CoordinatorResult<>(records, false);
+    }
+
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
+        Set<Uuid> deletedTopicIds
+    ) {
+        final long startTimeMs = time.milliseconds();
+        final var result = groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
+
+        log.info("Generated {} records in {} milliseconds while cleaning share group state for topics {}.",
+            result.records().size(), time.milliseconds() - startTimeMs, deletedTopicIds);
+
+        return result;
     }
 
     /**
@@ -1059,9 +1078,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param newImage  The metadata image.
      */
     @Override
-    public void onLoaded(MetadataImage newImage) {
-        MetadataDelta emptyDelta = new MetadataDelta(newImage);
-        groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
+    public void onLoaded(CoordinatorMetadataImage newImage) {
+        CoordinatorMetadataDelta emptyDelta = newImage.emptyDelta();
+        groupMetadataManager.onMetadataUpdate(emptyDelta, newImage);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
@@ -1080,12 +1099,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * A new metadata image is available.
      *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
+     * @param delta    The delta image.
+     * @param newImage The new metadata image.
      */
     @Override
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
-        groupMetadataManager.onNewMetadataImage(newImage, delta);
+    public void onMetadataUpdate(CoordinatorMetadataDelta delta, CoordinatorMetadataImage newImage) {
+        groupMetadataManager.onMetadataUpdate(delta, newImage);
     }
 
     private static OffsetCommitKey convertLegacyOffsetCommitKey(
@@ -1204,13 +1223,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
                 break;
 
-            case SHARE_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (ShareGroupPartitionMetadataKey) key,
-                    (ShareGroupPartitionMetadataValue) Utils.messageOrNull(value)
-                );
-                break;
-
             case SHARE_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
                     (ShareGroupMemberMetadataKey) key,
@@ -1264,13 +1276,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (StreamsGroupMetadataKey) key,
                     (StreamsGroupMetadataValue) Utils.messageOrNull(value)
-                );
-                break;
-
-            case STREAMS_GROUP_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (StreamsGroupPartitionMetadataKey) key,
-                    (StreamsGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 

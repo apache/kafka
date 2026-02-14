@@ -38,12 +38,12 @@ public class RollAndOffloadActiveSegmentTest extends TieredStorageTestHarness {
 
     @Override
     protected void writeTestSpecifications(TieredStorageTestBuilder builder) {
-        final Integer broker0 = 0;
+        final int broker0 = 0;
         final String topicA = "topicA";
-        final Integer p0 = 0;
-        final Integer partitionCount = 1;
-        final Integer replicationFactor = 1;
-        final Integer maxBatchCountPerSegment = 1;
+        final int p0 = 0;
+        final int partitionCount = 1;
+        final int replicationFactor = 1;
+        final int maxBatchCountPerSegment = 1;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
 

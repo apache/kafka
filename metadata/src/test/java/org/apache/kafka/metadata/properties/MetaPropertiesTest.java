@@ -88,15 +88,11 @@ public final class MetaPropertiesTest {
         assertEquals(directoryId, metaProperties.directoryId());
         Properties props = new Properties();
         props.setProperty("version", "0");
-        if (clusterId.isPresent()) {
-            props.setProperty("cluster.id", clusterId.get());
-        }
+        clusterId.ifPresent(id -> props.setProperty("cluster.id", id));
         if (nodeId.isPresent()) {
             props.setProperty("broker.id", "" + nodeId.getAsInt());
         }
-        if (directoryId.isPresent()) {
-            props.setProperty("directory.id", directoryId.get().toString());
-        }
+        directoryId.ifPresent(id -> props.setProperty("directory.id", id.toString()));
         Properties props2 = metaProperties.toProperties();
         assertEquals(props, props2);
         MetaProperties metaProperties2 = new MetaProperties.Builder(props2).build();
@@ -151,9 +147,7 @@ public final class MetaPropertiesTest {
         props.setProperty("version", "1");
         props.setProperty("cluster.id", clusterId);
         props.setProperty("node.id", "" + nodeId);
-        if (directoryId.isPresent()) {
-            props.setProperty("directory.id", directoryId.get().toString());
-        }
+        directoryId.ifPresent(id -> props.setProperty("directory.id", id.toString()));
         Properties props2 = metaProperties.toProperties();
         assertEquals(props, props2);
         MetaProperties metaProperties2 = new MetaProperties.Builder(props2).build();

@@ -1024,6 +1024,12 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever"
+},
+{
+  "name":"org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator"
+},
+{
   "name":"org.apache.kafka.common.security.plain.PlainLoginModule",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
@@ -1066,6 +1072,18 @@
 {
   "name":"org.apache.kafka.metadata.authorizer.StandardAuthorizer",
   "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.kafka.server.logger.LoggingController",
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"org.apache.kafka.server.logger.LoggingControllerMBean",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"org.apache.kafka.server.share.persister.DefaultStatePersister",
+  "methods":[{"name":"<init>","parameterTypes":["org.apache.kafka.server.share.persister.PersisterStateManager"] }]
 },
 {
   "name":"org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler$Content",

@@ -21,12 +21,12 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, MemoryRecords, RecordBatch, SimpleRecord, TimestampType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MockConfigRepository
+import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, LocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, UnifiedLog}
@@ -245,7 +245,7 @@ class LogLoaderTest {
   @Test
   def testProducerSnapshotsRecoveryAfterUncleanShutdown(): Unit = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "640")
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "640")
     val logConfig = new LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     assertEquals(OptionalLong.empty(), log.oldestProducerSnapshotOffset)
@@ -287,7 +287,7 @@ class LogLoaderTest {
           val wrapper = Mockito.spy(segment)
           Mockito.doAnswer { in =>
             segmentsWithReads += wrapper
-            segment.read(in.getArgument(0, classOf[java.lang.Long]), in.getArgument(1, classOf[java.lang.Integer]), in.getArgument(2, classOf[java.util.Optional[java.lang.Long]]), in.getArgument(3, classOf[java.lang.Boolean]))
+            segment.read(in.getArgument(0, classOf[java.lang.Long]), in.getArgument(1, classOf[java.lang.Integer]), in.getArgument(2, classOf[util.Optional[java.lang.Long]]), in.getArgument(3, classOf[java.lang.Boolean]))
           }.when(wrapper).read(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any())
           Mockito.doAnswer { in =>
             recoveredSegments += wrapper
@@ -392,12 +392,12 @@ class LogLoaderTest {
                                               codec: Compression = Compression.NONE,
                                               timestamp: Long = RecordBatch.NO_TIMESTAMP,
                                               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
-    val records = Seq(new SimpleRecord(timestamp, key, value))
+    val records = util.List.of(new SimpleRecord(timestamp, key, value))
 
-    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, offset,
       mockTime.milliseconds, leaderEpoch)
-    records.foreach(builder.append)
+    records.forEach(builder.append)
     builder.build()
   }
 
@@ -494,7 +494,7 @@ class LogLoaderTest {
 
     val firstAppendTimestamp = mockTime.milliseconds()
     LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, ControlRecordType.ABORT,
-      firstAppendTimestamp, coordinatorEpoch = coordinatorEpoch)
+      firstAppendTimestamp, coordinatorEpoch = coordinatorEpoch, transactionVersion = TransactionVersion.TV_0.featureLevel())
     assertEquals(firstAppendTimestamp, log.producerStateManager.lastEntry(producerId).get.lastTimestamp)
 
     val maxProducerIdExpirationMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT
@@ -503,7 +503,7 @@ class LogLoaderTest {
 
     val secondAppendTimestamp = mockTime.milliseconds()
     LogTestUtils.appendEndTxnMarkerAsLeader(log, producerId, epoch, ControlRecordType.ABORT,
-      secondAppendTimestamp, coordinatorEpoch = coordinatorEpoch - 1)
+      secondAppendTimestamp, coordinatorEpoch = coordinatorEpoch - 1, transactionVersion = TransactionVersion.TV_0.featureLevel())
 
     log.close()
 
@@ -560,7 +560,7 @@ class LogLoaderTest {
       false,
       LogOffsetsListener.NO_OP_OFFSETS_LISTENER)
 
-    verify(stateManager).removeStraySnapshots(any[java.util.List[java.lang.Long]])
+    verify(stateManager).removeStraySnapshots(any[util.List[java.lang.Long]])
     verify(stateManager, times(2)).updateMapEndOffset(0L)
     verify(stateManager, times(2)).takeSnapshot()
     verify(stateManager).isEmpty
@@ -1216,11 +1216,11 @@ class LogLoaderTest {
     val fourthBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 3, offset = 3)
     log.appendAsFollower(fourthBatch, Int.MaxValue)
 
-    assertEquals(java.util.Arrays.asList(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
 
     // deliberately remove some of the epoch entries
     leaderEpochCache.truncateFromEndAsyncFlush(2)
-    assertNotEquals(java.util.Arrays.asList(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+    assertNotEquals(util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
     log.close()
 
     // reopen the log and recover from the beginning
@@ -1228,7 +1228,7 @@ class LogLoaderTest {
     val recoveredLeaderEpochCache = recoveredLog.leaderEpochCache
 
     // epoch entries should be recovered
-    assertEquals(java.util.Arrays.asList(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
     recoveredLog.close()
   }
 
@@ -1256,18 +1256,18 @@ class LogLoaderTest {
     appendPid3(3) // 17
     LogTestUtils.appendNonTransactionalAsLeader(log, 2) // 19
     appendPid1(10) // 29
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 30
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 30
     appendPid2(6) // 36
     appendPid4(3) // 39
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 49
     appendPid3(9) // 58
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 59
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 59
     appendPid4(8) // 67
     appendPid2(7) // 74
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 75
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 75
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 85
     appendPid4(4) // 89
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 90
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 90
 
     // delete all the offset and transaction index files to force recovery
     log.logSegments.forEach { segment =>
@@ -1307,18 +1307,18 @@ class LogLoaderTest {
     appendPid3(3) // 17
     LogTestUtils.appendNonTransactionalAsLeader(log, 2) // 19
     appendPid1(10) // 29
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 30
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 30
     appendPid2(6) // 36
     appendPid4(3) // 39
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 49
     appendPid3(9) // 58
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 59
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 59
     appendPid4(8) // 67
     appendPid2(7) // 74
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 75
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 75
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 85
     appendPid4(4) // 89
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 90
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 90
 
     // delete the last offset and transaction index files to force recovery
     val lastSegment = log.logSegments.asScala.last
@@ -1358,18 +1358,18 @@ class LogLoaderTest {
     appendPid3(3) // 17
     LogTestUtils.appendNonTransactionalAsLeader(log, 2) // 19
     appendPid1(10) // 29
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 30
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 30
     appendPid2(6) // 36
     appendPid4(3) // 39
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 49
     appendPid3(9) // 58
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 59
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 59
     appendPid4(8) // 67
     appendPid2(7) // 74
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT, mockTime.milliseconds()) // 75
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 75
     LogTestUtils.appendNonTransactionalAsLeader(log, 10) // 85
     appendPid4(4) // 89
-    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT, mockTime.milliseconds()) // 90
+    LogTestUtils.appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT, mockTime.milliseconds(), transactionVersion = TransactionVersion.TV_0.featureLevel()) // 90
 
     LogTestUtils.deleteProducerSnapshotFiles(logDir)
 

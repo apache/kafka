@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{TestInfoUtils, TestUtils}
 
 import java.io.File
 import java.util.concurrent.CancellationException
@@ -25,9 +25,10 @@ import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
-import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.common.utils.{Exit, Utils}
 import org.apache.kafka.metadata.BrokerState
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.raft.KRaftConfigs
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
@@ -104,7 +105,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
     // do a clean shutdown and check that offset checkpoint file exists
     shutdownBroker()
-    for (logDir <- config.logDirs) {
+    for (logDir <- config.logDirs.asScala) {
       val OffsetCheckpointFile = new File(logDir, LogManager.RECOVERY_POINT_CHECKPOINT_FILE)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
@@ -146,7 +147,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     createTopic(topic)
     shutdownBroker()
-    config.logDirs.foreach { dirName =>
+    config.logDirs.forEach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
@@ -176,7 +177,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   def testShutdownWithKRaftControllerUnavailable(): Unit = {
     shutdownKRaftController()
     killBroker(0, Duration.ofSeconds(1))
-    CoreUtils.delete(broker.config.logDirs)
+    broker.config.logDirs.forEach(f => Utils.delete(new File(f)))
     verifyNonDaemonThreadsStatus()
   }
 

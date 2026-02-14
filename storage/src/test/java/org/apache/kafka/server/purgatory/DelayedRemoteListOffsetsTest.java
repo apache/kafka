@@ -100,7 +100,7 @@ public class DelayedRemoteListOffsetsTest {
         assertEquals(numResponse.get(), listOffsetsRequestKeys.size());
         assertEquals(listOffsetsRequestKeys.size(), DelayedRemoteListOffsets.AGGREGATE_EXPIRATION_METER.count());
         listOffsetsRequestKeys.forEach(key -> {
-            TopicPartition tp = new TopicPartition(key.topic, key.partition);
+            TopicPartition tp = new TopicPartition(key.topic(), key.partition());
             assertEquals(1, DelayedRemoteListOffsets.PARTITION_EXPIRATION_METERS.get(tp).count());
         });
     }

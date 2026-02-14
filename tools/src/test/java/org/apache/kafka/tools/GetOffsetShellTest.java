@@ -40,12 +40,12 @@ import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,7 +84,7 @@ public class GetOffsetShellTest {
     }
 
     private void setUp() {
-        setupTopics(this::getTopicName, Collections.emptyMap());
+        setupTopics(this::getTopicName, Map.of());
         sendProducerRecords(this::getTopicName);
     }
 
@@ -97,7 +97,7 @@ public class GetOffsetShellTest {
         Map<String, String> rlsConfigs = new HashMap<>();
         rlsConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
         rlsConfigs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1");
-        rlsConfigs.put(TopicConfig.SEGMENT_BYTES_CONFIG, "100");
+        rlsConfigs.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "100");
         setupTopics(this::getRemoteLogStorageEnabledTopicName, rlsConfigs);
         sendProducerRecords(this::getRemoteLogStorageEnabledTopicName);
     }
@@ -138,7 +138,7 @@ public class GetOffsetShellTest {
         serverProperties.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "100");
         serverProperties.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "EXTERNAL");
 
-        return Collections.singletonList(
+        return List.of(
                 ClusterConfig.defaultBuilder()
                         .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                         .setServerProperties(serverProperties)
@@ -237,7 +237,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> offsets = executeAndParse("--partitions", "0,1");
-        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).toList(), offsets);
     }
 
     @ClusterTest
@@ -246,7 +246,7 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--topic", "topic.*", "--partitions", "0,1");
 
-        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).collect(Collectors.toList()), offsets);
+        assertEquals(expectedTestTopicOffsets().stream().filter(r -> r.partition <= 1).toList(), offsets);
     }
 
     @ClusterTest
@@ -256,7 +256,7 @@ public class GetOffsetShellTest {
         createConsumerAndPoll();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
-        List<Row> expected = Arrays.asList(
+        List<Row> expected = List.of(
                 new Row("__consumer_offsets", 3, 0L),
                 new Row("topic1", 0, 1L),
                 new Row("topic2", 1, 2L),
@@ -273,7 +273,7 @@ public class GetOffsetShellTest {
 
         for (String time : new String[] {"-1", "latest"}) {
             List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
-            List<Row> expected = Arrays.asList(
+            List<Row> expected = List.of(
                     new Row("topic1", 0, 1L),
                     new Row("topic2", 0, 2L),
                     new Row("topic3", 0, 3L),
@@ -290,7 +290,7 @@ public class GetOffsetShellTest {
 
         for (String time : new String[] {"-2", "earliest"}) {
             List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
-            List<Row> expected = Arrays.asList(
+            List<Row> expected = List.of(
                     new Row("topic1", 0, 0L),
                     new Row("topic2", 0, 0L),
                     new Row("topic3", 0, 0L),
@@ -323,7 +323,7 @@ public class GetOffsetShellTest {
             // test topics disable remote log storage
             // as remote log disabled, broker return the same result as earliest offset
             TestUtils.waitForCondition(() ->
-                    Arrays.asList(
+                    List.of(
                             new Row("topic1", 0, 0L),
                             new Row("topic2", 0, 0L),
                             new Row("topic3", 0, 0L),
@@ -333,7 +333,7 @@ public class GetOffsetShellTest {
 
             // test topics enable remote log storage
             TestUtils.waitForCondition(() ->
-                    Arrays.asList(
+                    List.of(
                             new Row("topicRLS1", 0, 0L),
                             new Row("topicRLS2", 0, 1L),
                             new Row("topicRLS3", 0, 2L),
@@ -352,18 +352,42 @@ public class GetOffsetShellTest {
             // test topics disable remote log storage
             // as remote log not enabled, broker return unknown offset for each topic partition and these
             // unknown offsets are ignored by GetOffsetShell hence we have empty result here.
-            assertEquals(Collections.emptyList(),
+            assertEquals(List.of(),
                     executeAndParse("--topic-partitions", "topic\\d+:0", "--time", time));
 
             // test topics enable remote log storage
             // topicRLS1 has no result because there's no log segments being uploaded to the remote storage
             TestUtils.waitForCondition(() ->
-                    Arrays.asList(
+                    List.of(
                             new Row("topicRLS2", 0, 0L),
                             new Row("topicRLS3", 0, 1L),
                             new Row("topicRLS4", 0, 2L))
                             .equals(executeAndParse("--topic-partitions", "topicRLS.*:0", "--time", time)),
                     "testGetOffsetsByLatestTieredSpec result not match");
+        }
+    }
+
+    @ClusterTemplate("withRemoteStorage")
+    public void testGetOffsetsByEarliestTieredSpec() throws InterruptedException {
+        setUp();
+        setUpRemoteLogTopics();
+
+        for (String time : new String[] {"-6", "earliest-pending-upload"}) {
+            // test topics disable remote log storage
+            // as remote log disabled, broker returns unknown offset of each topic partition and these
+            // unknown offsets are ignore by GetOffsetShell, hence we have empty result here.
+            assertEquals(List.of(),
+                executeAndParse("--topic-partitions", "topic\\d+:0", "--time", time));
+
+            // test topics enable remote log storage
+            TestUtils.waitForCondition(() ->
+                    List.of(
+                            new Row("topicRLS1", 0, 0L),
+                            new Row("topicRLS2", 0, 1L),
+                            new Row("topicRLS3", 0, 2L),
+                            new Row("topicRLS4", 0, 3L))
+                            .equals(executeAndParse("--topic-partitions", "topicRLS.*:0", "--time", time)),
+                    "testGetOffsetsByEarliestTieredSpec result not match");
         }
     }
 
@@ -374,7 +398,7 @@ public class GetOffsetShellTest {
         String time = String.valueOf(System.currentTimeMillis() / 2);
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic.*:0", "--time", time);
-        List<Row> expected = Arrays.asList(
+        List<Row> expected = List.of(
                 new Row("topic1", 0, 0L),
                 new Row("topic2", 0, 0L),
                 new Row("topic3", 0, 0L),
@@ -400,7 +424,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3", "--exclude-internal-topics");
-        List<Row> expected = Arrays.asList(
+        List<Row> expected = List.of(
                 new Row("topic1", 0, 1L),
                 new Row("topic2", 1, 2L),
                 new Row("topic3", 2, 3L),
@@ -418,7 +442,7 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--topic-partitions", "__.*:0");
 
-        assertEquals(Arrays.asList(new Row("__consumer_offsets", 0, 0L)), offsets);
+        assertEquals(List.of(new Row("__consumer_offsets", 0, 0L)), offsets);
     }
 
     @ClusterTest
@@ -486,9 +510,9 @@ public class GetOffsetShellTest {
     private List<Row> expectedOffsetsWithInternal() {
         List<Row> consOffsets = IntStream.range(0, 4)
                 .mapToObj(i -> new Row("__consumer_offsets", i, 0L))
-                .collect(Collectors.toList());
+                .toList();
 
-        return Stream.concat(consOffsets.stream(), expectedTestTopicOffsets().stream()).collect(Collectors.toList());
+        return Stream.concat(consOffsets.stream(), expectedTestTopicOffsets().stream()).toList();
     }
 
     private List<Row> expectedTestTopicOffsets() {
@@ -504,7 +528,7 @@ public class GetOffsetShellTest {
     private List<Row> expectedOffsetsForTopic(int i) {
         String name = getTopicName(i);
 
-        return IntStream.range(0, i).mapToObj(p -> new Row(name, p, (long) i)).collect(Collectors.toList());
+        return IntStream.range(0, i).mapToObj(p -> new Row(name, p, (long) i)).toList();
     }
 
     private List<Row> executeAndParse(String... args) {
@@ -514,11 +538,11 @@ public class GetOffsetShellTest {
                 .map(i -> i.split(":"))
                 .filter(i -> i.length >= 2)
                 .map(line -> new Row(line[0], Integer.parseInt(line[1]), (line.length == 2 || line[2].isEmpty()) ? null : Long.parseLong(line[2])))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private String[] addBootstrapServer(String... args) {
-        ArrayList<String> newArgs = new ArrayList<>(Arrays.asList(args));
+        ArrayList<String> newArgs = new ArrayList<>(List.of(args));
         newArgs.add("--bootstrap-server");
         newArgs.add(cluster.bootstrapServers());
 

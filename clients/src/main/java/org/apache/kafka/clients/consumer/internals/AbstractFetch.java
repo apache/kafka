@@ -45,6 +45,7 @@ import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -54,7 +55,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -147,6 +147,7 @@ public abstract class AbstractFetch implements Closeable {
      * @param data {@link FetchSessionHandler.FetchRequestData} that represents the session data
      * @param resp {@link ClientResponse} from which the {@link FetchResponse} will be retrieved
      */
+    @SuppressWarnings("NPathComplexity")
     protected void handleFetchSuccess(final Node fetchTarget,
                                       final FetchSessionHandler.FetchRequestData data,
                                       final ClientResponse resp) {
@@ -173,6 +174,8 @@ public abstract class AbstractFetch implements Closeable {
             final Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), requestVersion);
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
+
+            boolean needsWakeup = true;
 
             Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
@@ -220,13 +223,24 @@ public abstract class AbstractFetch implements Closeable {
                         metricAggregator,
                         fetchOffset);
                 fetchBuffer.add(completedFetch);
+                needsWakeup = false;
             }
 
+            // "Wake" the fetch buffer on any response, even if it's empty, to allow the consumer to not block
+            // indefinitely waiting on the fetch buffer to get data.
+            if (needsWakeup)
+                fetchBuffer.wakeup();
+
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
-                List<Node> leaderNodes = response.data().nodeEndpoints().stream()
-                    .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
-                    .filter(e -> !e.equals(Node.noNode()))
-                    .collect(Collectors.toList());
+                List<Node> leaderNodes = new ArrayList<>();
+
+                for (FetchResponseData.NodeEndpoint e : response.data().nodeEndpoints()) {
+                    Node node = new Node(e.nodeId(), e.host(), e.port(), e.rack());
+
+                    if (!node.equals(Node.noNode()))
+                        leaderNodes.add(node);
+                }
+
                 Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
                 updatedPartitions.forEach(
                     tp -> {
@@ -321,21 +335,21 @@ public abstract class AbstractFetch implements Closeable {
     }
 
     /**
-     * Return the set of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
+     * Return the list of <em>fetchable</em> partitions, which are the list of partitions to which we are subscribed,
      * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
      * has yet to process the data for the partition that has already been fetched, we should not go send for more data
      * until the previously-fetched data has been processed.
      *
      * @param buffered The set of partitions we have in our buffer
-     * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
+     * @return {@link List} of {@link TopicPartition topic partitions} for which we should fetch data
      */
-    private Set<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
+    private List<TopicPartition> fetchablePartitions(Set<TopicPartition> buffered) {
         // This is the test that returns true if the partition is *not* buffered
         Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
 
         // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
         // messages sitting in our buffer.
-        return new HashSet<>(subscriptions.fetchablePartitions(isNotBuffered));
+        return subscriptions.fetchablePartitions(isNotBuffered);
     }
 
     /**
@@ -397,7 +411,7 @@ public abstract class AbstractFetch implements Closeable {
             fetchable.put(fetchTarget, sessionHandler.newBuilder());
         });
 
-        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+        return convert(fetchable);
     }
 
     /**
@@ -415,8 +429,8 @@ public abstract class AbstractFetch implements Closeable {
         // This is the set of partitions that have buffered data
         Set<TopicPartition> buffered = Collections.unmodifiableSet(fetchBuffer.bufferedPartitions());
 
-        // This is the set of partitions that do not have buffered data
-        Set<TopicPartition> unbuffered = fetchablePartitions(buffered);
+        // This is the list of partitions that are fetchable and have no buffered data
+        List<TopicPartition> unbuffered = fetchablePartitions(buffered);
 
         if (unbuffered.isEmpty()) {
             // If there are no partitions that don't already have data locally buffered, there's no need to issue
@@ -470,7 +484,21 @@ public abstract class AbstractFetch implements Closeable {
             }
         }
 
-        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+        return convert(fetchable);
+    }
+
+    /**
+     * This method converts {@link FetchSessionHandler.Builder} instances to
+     * {@link FetchSessionHandler.FetchRequestData} instances. It intentionally forgoes use of the Java Collections
+     * Streams API to reduce overhead in the critical network path.
+     */
+    private Map<Node, FetchSessionHandler.FetchRequestData> convert(Map<Node, FetchSessionHandler.Builder> fetchable) {
+        Map<Node, FetchSessionHandler.FetchRequestData> map = new HashMap<>(fetchable.size());
+
+        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet())
+            map.put(entry.getKey(), entry.getValue().build());
+
+        return map;
     }
 
     /**
@@ -549,7 +577,7 @@ public abstract class AbstractFetch implements Closeable {
      * </p>
      *
      * <p>
-     * Here's why this is important—in a production system, a given leader node serves as a leader for many partitions.
+     * Here's why this is important-in a production system, a given leader node serves as a leader for many partitions.
      * From the client's perspective, it's possible that a node has a mix of both fetchable and unfetchable partitions.
      * When the client determines which nodes to skip and which to fetch from, it's important that unfetchable
      * partitions don't block fetchable partitions from being fetched.

@@ -198,7 +198,7 @@ class LocalLogTest {
         assertEquals(oldConfig, log.config());
 
         Properties props = new Properties();
-        props.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldConfig.segmentSize + 1);
+        props.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldConfig.segmentSize() + 1);
         LogConfig newConfig = new LogConfig(props);
         log.updateConfig(newConfig);
         assertEquals(newConfig, log.config());

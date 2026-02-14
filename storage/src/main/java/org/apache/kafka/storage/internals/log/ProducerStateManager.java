@@ -524,9 +524,9 @@ public class ProducerStateManager {
      * transaction index, but the completion must be done only after successfully appending to the index.
      */
     public long lastStableOffset(CompletedTxn completedTxn) {
-        return findNextIncompleteTxn(completedTxn.producerId)
+        return findNextIncompleteTxn(completedTxn.producerId())
                 .map(x -> x.firstOffset.messageOffset)
-                .orElse(completedTxn.lastOffset + 1);
+                .orElse(completedTxn.lastOffset() + 1);
     }
 
     private Optional<TxnMetadata> findNextIncompleteTxn(long producerId) {
@@ -543,13 +543,13 @@ public class ProducerStateManager {
      * advancing the first unstable offset.
      */
     public void completeTxn(CompletedTxn completedTxn) {
-        TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset);
+        TxnMetadata txnMetadata = ongoingTxns.remove(completedTxn.firstOffset());
         if (txnMetadata == null)
             throw new IllegalArgumentException("Attempted to complete transaction " + completedTxn + " on partition "
                     + topicPartition + " which was not started");
 
-        txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset);
-        unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata);
+        txnMetadata.lastOffset = OptionalLong.of(completedTxn.lastOffset());
+        unreplicatedTxns.put(completedTxn.firstOffset(), txnMetadata);
         updateOldestTxnTimestamp();
     }
 
@@ -649,9 +649,12 @@ public class ProducerStateManager {
             long currentTxnFirstOffset = producerEntry.currentTxnFirstOffset();
 
             OptionalLong currentTxnFirstOffsetVal = currentTxnFirstOffset >= 0 ? OptionalLong.of(currentTxnFirstOffset) : OptionalLong.empty();
-            Optional<BatchMetadata> batchMetadata =
-                    (lastOffset >= 0) ? Optional.of(new BatchMetadata(lastSequence, lastOffset, offsetDelta, timestamp)) : Optional.empty();
-            entries.add(new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal, batchMetadata));
+            ProducerStateEntry stateEntry = new ProducerStateEntry(producerId, producerEpoch, coordinatorEpoch, timestamp, currentTxnFirstOffsetVal);
+
+            if (lastOffset >= 0)
+                stateEntry.addBatch(producerEpoch, lastSequence, lastOffset, offsetDelta, timestamp);
+
+            entries.add(stateEntry);
         }
 
         return entries;

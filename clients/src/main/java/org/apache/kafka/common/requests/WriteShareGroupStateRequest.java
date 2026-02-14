@@ -59,16 +59,16 @@ public class WriteShareGroupStateRequest extends AbstractRequest {
     public WriteShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<WriteShareGroupStateResponseData.WriteStateResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new WriteShareGroupStateResponseData.WriteStateResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new WriteShareGroupStateResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code())
-                                        .setErrorMessage(Errors.forException(e).message()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new WriteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code())
+                        .setErrorMessage(Errors.forException(e).message()))
+                    .collect(Collectors.toList()))));
         return new WriteShareGroupStateResponse(new WriteShareGroupStateResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -78,8 +78,8 @@ public class WriteShareGroupStateRequest extends AbstractRequest {
 
     public static WriteShareGroupStateRequest parse(Readable readable, short version) {
         return new WriteShareGroupStateRequest(
-                new WriteShareGroupStateRequestData(readable, version),
-                version
+            new WriteShareGroupStateRequestData(readable, version),
+            version
         );
     }
 }

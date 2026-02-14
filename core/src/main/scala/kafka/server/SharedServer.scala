@@ -18,9 +18,9 @@
 package kafka.server
 
 import kafka.metrics.KafkaMetricsReporter
-import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager}
+import kafka.raft.KafkaRaftManager
 import kafka.server.Server.MetricsPrefix
-import kafka.utils.{CoreUtils, Logging, VerifiableProperties}
+import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
@@ -33,11 +33,11 @@ import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.ListenerInfo
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
-import org.apache.kafka.raft.Endpoints
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics}
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
-import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics}
+import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -112,10 +112,15 @@ class SharedServer(
   private var usedByController: Boolean = false
   val brokerConfig = new KafkaConfig(sharedServerConfig.props, false)
   val controllerConfig = new KafkaConfig(sharedServerConfig.props, false)
+  
+  // Factory for creating request handler pools with shared aggregate thread counter
+  val requestHandlerPoolFactory = new KafkaRequestHandlerPoolFactory()
+
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
   @volatile var controllerServerMetrics: ControllerMetadataMetrics = _
+  @volatile var nodeMetrics: NodeMetrics = _
   @volatile var loader: MetadataLoader = _
   private val snapshotsDisabledReason = new AtomicReference[String](null)
   @volatile var snapshotEmitter: SnapshotEmitter = _
@@ -268,7 +273,7 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(clientTelemetryExporterPluginOpt = None)
 
         if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
           brokerMetrics = new BrokerServerMetrics(metrics)
@@ -277,7 +282,10 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
 
-        val externalKRaftMetrics = new DefaultExternalKRaftMetrics(Option(brokerMetrics), Option(controllerServerMetrics))
+        val externalKRaftMetrics: ExternalKRaftMetrics = ignoredStaticVoters => {
+          Option(brokerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
+          Option(controllerServerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
+        }
 
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
@@ -298,13 +306,16 @@ class SharedServer(
         raftManager = _raftManager
         _raftManager.startup()
 
+        nodeMetrics = new NodeMetrics(metrics, controllerConfig.unstableFeatureVersionsEnabled)
         metadataLoaderMetrics = if (brokerMetrics != null) {
-          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+          new MetadataLoaderMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()),
             elapsedNs => brokerMetrics.updateBatchProcessingTime(elapsedNs),
             batchSize => brokerMetrics.updateBatchSize(batchSize),
             brokerMetrics.lastAppliedImageProvenance)
         } else {
-          new MetadataLoaderMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()),
+          new MetadataLoaderMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()),
             _ => {},
             _ => {},
             new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
@@ -340,7 +351,7 @@ class SharedServer(
             throw new RuntimeException("Unable to install metadata publishers.", t)
           }
         }
-        _raftManager.register(loader)
+        _raftManager.client.register(loader)
         debug("Completed SharedServer startup.")
         started = true
       } catch {
@@ -357,7 +368,7 @@ class SharedServer(
     // Ideally, this would just resign our leadership, if we had it. But we don't have an API in
     // RaftManager for that yet, so shut down the RaftManager.
     Option(raftManager).foreach(_raftManager => {
-      CoreUtils.swallow(_raftManager.shutdown(), this)
+      Utils.swallow(this.logger.underlying, () => _raftManager.shutdown())
       raftManager = null
     })
   }
@@ -368,10 +379,10 @@ class SharedServer(
     } else {
       info("Stopping SharedServer")
       if (loader != null) {
-        CoreUtils.swallow(loader.beginShutdown(), this)
+        Utils.swallow(this.logger.underlying, () => loader.beginShutdown())
       }
       if (snapshotGenerator != null) {
-        CoreUtils.swallow(snapshotGenerator.beginShutdown(), this)
+        Utils.swallow(this.logger.underlying, () => snapshotGenerator.beginShutdown())
       }
       Utils.closeQuietly(loader, "loader")
       loader = null
@@ -380,16 +391,18 @@ class SharedServer(
       Utils.closeQuietly(snapshotGenerator, "snapshot generator")
       snapshotGenerator = null
       if (raftManager != null) {
-        CoreUtils.swallow(raftManager.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => raftManager.shutdown())
         raftManager = null
       }
       Utils.closeQuietly(controllerServerMetrics, "controller server metrics")
       controllerServerMetrics = null
       Utils.closeQuietly(brokerMetrics, "broker metrics")
       brokerMetrics = null
+      Utils.closeQuietly(nodeMetrics, "node metrics")
+      nodeMetrics = null
       Utils.closeQuietly(metrics, "metrics")
       metrics = null
-      CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics), this)
+      Utils.swallow(this.logger.underlying, () => AppInfoParser.unregisterAppInfo(MetricsPrefix, sharedServerConfig.nodeId.toString, metrics))
       started = false
     }
   }

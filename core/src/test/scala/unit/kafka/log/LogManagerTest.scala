@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify}
+import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify, when}
 
 import java.io._
 import java.lang.{Long => JLong}
@@ -43,7 +43,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogManager => JLogManager, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogMetricNames, LogManager => JLogManager, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.function.Executable
@@ -60,7 +60,7 @@ class LogManagerTest {
   val maxRollInterval = 100
   val maxLogAgeMs: Int = 10 * 60 * 1000
   val logProps = new Properties()
-  logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+  logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
   val logConfig = new LogConfig(logProps)
@@ -391,7 +391,7 @@ class LogManagerTest {
     logManager.shutdown()
     val segmentBytes = 10 * setSize
     val properties = new Properties()
-    properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes.toString)
+    properties.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes.toString)
     properties.put(TopicConfig.RETENTION_BYTES_CONFIG, (5L * 10L * setSize + 10L).toString)
     val configRepository = MockConfigRepository.forTopic(name, properties)
 
@@ -534,7 +534,7 @@ class LogManagerTest {
       true
     }
 
-    logManager.loadLog(log.dir, hadCleanShutdown = true, Collections.emptyMap[TopicPartition, JLong], Collections.emptyMap[TopicPartition, JLong], logConfig, Map.empty, new ConcurrentHashMap[String, Integer](),  providedIsStray)
+    logManager.loadLog(log.dir, hadCleanShutdown = true, util.Map.of[TopicPartition, JLong], util.Map.of[TopicPartition, JLong], logConfig, Map.empty, new ConcurrentHashMap[String, Integer](),  providedIsStray)
     assertEquals(1, invokedCount)
     assertTrue(
       logDir.listFiles().toSet
@@ -1110,6 +1110,47 @@ class LogManagerTest {
     assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
     assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isDefined)
     assertEquals(2, logManager.directoryIdsSet.size)
+  }
+
+  /**
+   * Test that replaceCurrentWithFutureLog does not close the source log, preventing race conditions
+   * where a concurrent read/flush could fail with ClosedChannelException.
+   */
+  @Test
+  def testReplaceCurrentWithFutureLogDoesNotCloseSourceLog(): Unit = {
+    val logDir1 = TestUtils.tempDir()
+    val logDir2 = TestUtils.tempDir()
+    logManager = createLogManager(Seq(logDir1, logDir2))
+    logManager.startup(Set.empty)
+
+    val topicName = "replace-log"
+    val tp = new TopicPartition(topicName, 0)
+    val currentLog = logManager.getOrCreateLog(tp, topicId = Optional.empty)
+    // Create a future log in a different directory
+    logManager.maybeUpdatePreferredLogDir(tp, logDir2.getAbsolutePath)
+    logManager.getOrCreateLog(tp, isFuture = true, topicId = Optional.empty)
+
+    // Spy on the source log to verify close() is not called
+    val spyCurrentLog = spy(currentLog)
+    // Inject the spy into the map
+    val field = classOf[LogManager].getDeclaredField("currentLogs")
+    field.setAccessible(true)
+    val currentLogs = field.get(logManager).asInstanceOf[ConcurrentHashMap[TopicPartition, UnifiedLog]]
+    currentLogs.put(tp, spyCurrentLog)
+
+    logManager.replaceCurrentWithFutureLog(tp)
+
+    // Verify close() was NOT called on the source log
+    verify(spyCurrentLog, never()).close()
+
+    // Verify the source log was renamed to .delete
+    assertTrue(spyCurrentLog.dir.getName.endsWith(LogFileUtils.DELETE_DIR_SUFFIX))
+
+    // Verify that flush() can be called without error (no ClosedChannelException)
+    // Mock logEndOffset > 0 to trigger actual flush (flush only happens when flushOffset > recoveryPoint)
+    when(spyCurrentLog.logEndOffset()).thenReturn(100L)
+    val flushLog: Executable = () => spyCurrentLog.flush(false)
+    assertDoesNotThrow(flushLog)
   }
 
   @Test

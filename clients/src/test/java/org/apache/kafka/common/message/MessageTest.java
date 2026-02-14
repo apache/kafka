@@ -567,7 +567,8 @@ public final class MessageTest {
                         .setMemberEpoch(version >= 9 ? 10 : -1)
                         .setTopics(List.of(
                             new OffsetFetchRequestTopics()
-                                .setName("foo")
+                                .setName(version < 10 ? "foo" : "")
+                                .setTopicId(version >= 10 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
                                 .setPartitionIndexes(List.of(0, 1, 2))
                         ))
                 ));
@@ -606,7 +607,8 @@ public final class MessageTest {
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                         .setTopics(List.of(
                             new OffsetFetchResponseTopics()
-                                .setName("foo")
+                                .setName(version < 10 ? "foo" : "")
+                                .setTopicId(version >= 10 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
                                 .setPartitions(List.of(
                                     new OffsetFetchResponsePartitions()
                                         .setPartitionIndex(0)

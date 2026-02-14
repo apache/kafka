@@ -21,15 +21,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import java.util.AbstractMap;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Spliterator;
-import java.util.Spliterators;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 public class JsonObject implements JsonValue {
     protected final ObjectNode node;
@@ -49,17 +41,6 @@ public class JsonObject implements JsonValue {
 
     public Optional<JsonValue> get(String name) {
         return Optional.ofNullable(node().get(name)).map(JsonValue::apply);
-    }
-
-    public Iterator<Map.Entry<String, JsonValue>> iterator() {
-        Iterator<Map.Entry<String, JsonNode>> iterator = node.fields();
-        Stream<Map.Entry<String, JsonNode>> stream = StreamSupport.stream(
-                Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false);
-
-        Stream<Map.Entry<String, JsonValue>> results = stream.map(entry ->
-                new AbstractMap.SimpleEntry<>(entry.getKey(), JsonValue.apply(entry.getValue()))
-        );
-        return results.collect(Collectors.toList()).iterator();
     }
 
     @Override

@@ -22,8 +22,9 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
+import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, VerificationGuard}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
@@ -34,9 +35,9 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.nio.charset.Charset
+import java.util
 import java.util.Optional
 import scala.collection.Map
-import scala.jdk.CollectionConverters._
 
 class CoordinatorPartitionWriterTest {
   @Test
@@ -75,8 +76,8 @@ class CoordinatorPartitionWriterTest {
       replicaManager
     )
 
-    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(Map.empty.asJava)))
-    assertEquals(new LogConfig(Map.empty.asJava), partitionRecordWriter.config(tp))
+    when(replicaManager.getLogConfig(tp)).thenReturn(Some(new LogConfig(util.Map.of)))
+    assertEquals(new LogConfig(util.Map.of), partitionRecordWriter.config(tp))
 
     when(replicaManager.getLogConfig(tp)).thenReturn(None)
     assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.config(tp))
@@ -105,6 +106,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
+      ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
     )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
       new LogAppendInfo(
         5L,
@@ -119,9 +121,10 @@ class CoordinatorPartitionWriterTest {
         10L
       ),
       Option.empty,
-      false
+      hasCustomErrorMessage = false
     )))
 
+    // Test non-transactional records (regular coordinator records) - should use TV_UNKNOWN
     val batch = MemoryRecords.withRecords(
       Compression.NONE,
       new SimpleRecord(
@@ -134,12 +137,125 @@ class CoordinatorPartitionWriterTest {
     assertEquals(11, partitionRecordWriter.append(
       tp,
       VerificationGuard.SENTINEL,
-      batch
+      batch,
+      TransactionVersion.TV_UNKNOWN
     ))
     assertEquals(
       batch,
       recordsCapture.getValue.getOrElse(new TopicIdPartition(topicId, tp), throw new AssertionError(s"No records for $tp"))
     )
+  }
+
+  @Test
+  def testWriteTransactionMarker(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
+    val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+        replicaManager
+    )
+
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
+
+    when(replicaManager.appendRecordsToLeader(
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      recordsCapture.capture(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
+      ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
+      new LogAppendInfo(
+        5L,
+        10L,
+        Optional.empty,
+        RecordBatch.NO_TIMESTAMP,
+        0L,
+        0L,
+        RecordValidationStats.EMPTY,
+        CompressionType.NONE,
+        100,
+        10L
+      ),
+      Option.empty,
+      hasCustomErrorMessage = false
+    )))
+
+    // Test transactional records (transaction marker) - should use explicit transaction version
+    val producerId = 100L
+    val producerEpoch = 5.toShort
+    val markerBatch = MemoryRecords.withEndTransactionMarker(
+      System.currentTimeMillis(),
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 1)
+    )
+
+    assertEquals(11, partitionRecordWriter.append(
+      tp,
+      VerificationGuard.SENTINEL,
+      markerBatch,
+      TransactionVersion.TV_2.featureLevel()
+    ))
+    assertEquals(
+      markerBatch,
+      recordsCapture.getValue.getOrElse(new TopicIdPartition(topicId, tp), throw new AssertionError(s"No records for $tp"))
+    )
+  }
+
+  @Test
+  def testWriteTransactionMarkerWithTVUnknownThrowsException(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
+    val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+
+    val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
+
+    // Mock ReplicaManager to throw IllegalArgumentException when TV_UNKNOWN is passed for a transaction marker
+    // This simulates the validation error from ProducerAppendInfo.appendEndTxnMarker()
+    when(replicaManager.appendRecordsToLeader(
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      recordsCapture.capture(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
+      ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
+    )).thenThrow(new IllegalArgumentException(
+      "transactionVersion must be explicitly specified (TV_0, TV_1, or TV_2), " +
+      "cannot use default value TV_UNKNOWN for origin COORDINATOR"
+    ))
+
+    // Test that passing TV_UNKNOWN for a transaction marker throws IllegalArgumentException
+    val producerId = 100L
+    val producerEpoch = 5.toShort
+    val markerBatch = MemoryRecords.withEndTransactionMarker(
+      System.currentTimeMillis(),
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 1)
+    )
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => partitionRecordWriter.append(
+      tp,
+      VerificationGuard.SENTINEL,
+      markerBatch,
+      TransactionVersion.TV_UNKNOWN
+    ))
+    assertTrue(exception.getMessage.contains("transactionVersion must be explicitly specified"))
+    assertTrue(exception.getMessage.contains("TV_UNKNOWN"))
   }
 
   @ParameterizedTest
@@ -212,10 +328,11 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
+      ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
     )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
       LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
       Some(Errors.NOT_LEADER_OR_FOLLOWER.exception),
-      false
+      hasCustomErrorMessage = false
     )))
 
     val batch = MemoryRecords.withRecords(
@@ -230,7 +347,8 @@ class CoordinatorPartitionWriterTest {
     assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.append(
       tp,
       VerificationGuard.SENTINEL,
-      batch
+      batch,
+      TransactionVersion.TV_UNKNOWN
     ))
   }
 

@@ -28,7 +28,6 @@ import org.eclipse.jetty.util.StringUtil;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -54,7 +53,7 @@ public abstract class RestServerConfig extends AbstractConfig {
             " Leave hostname empty to bind to default interface.\n" +
             " Examples of legal listener lists: HTTP://myhost:8083,HTTPS://myhost:8084";
     // Visible for testing
-    static final List<String> LISTENERS_DEFAULT = Collections.singletonList("http://:8083");
+    static final List<String> LISTENERS_DEFAULT = List.of("http://:8083");
 
     public static final String REST_ADVERTISED_HOST_NAME_CONFIG = "rest.advertised.host.name";
     private static final String REST_ADVERTISED_HOST_NAME_DOC
@@ -86,7 +85,8 @@ public abstract class RestServerConfig extends AbstractConfig {
     private static final String ADMIN_LISTENERS_DOC = "List of comma-separated URIs the Admin REST API will listen on." +
             " The supported protocols are HTTP and HTTPS." +
             " An empty or blank string will disable this feature." +
-            " The default behavior is to use the regular listener (specified by the 'listeners' property).";
+            " The default behavior is to use the regular listener (specified by the 'listeners' property)." +
+            " A comma-separated list of valid URLs, e.g., http://localhost:8080,https://localhost:8443.";
     public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
 
     public static final String REST_EXTENSION_CLASSES_CONFIG = "rest.extension.classes";
@@ -132,7 +132,7 @@ public abstract class RestServerConfig extends AbstractConfig {
 
     /**
      * Add the properties related to a user-facing server to the given {@link ConfigDef}.
-     * </p>
+     * <p>
      * This automatically adds the properties for intra-cluster communication; it is not necessary to
      * invoke both {@link #addInternalConfig(ConfigDef)} and this method on the same {@link ConfigDef}.
      * @param configDef the {@link ConfigDef} to add the properties to; may not be null
@@ -140,15 +140,15 @@ public abstract class RestServerConfig extends AbstractConfig {
     public static void addPublicConfig(ConfigDef configDef) {
         addInternalConfig(configDef);
         configDef
-                .define(
-                        REST_EXTENSION_CLASSES_CONFIG,
+                .define(REST_EXTENSION_CLASSES_CONFIG,
                         ConfigDef.Type.LIST,
-                        "",
-                        ConfigDef.Importance.LOW, REST_EXTENSION_CLASSES_DOC
-                ).define(ADMIN_LISTENERS_CONFIG,
+                        List.of(),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                        ConfigDef.Importance.LOW, REST_EXTENSION_CLASSES_DOC)
+                .define(ADMIN_LISTENERS_CONFIG,
                         ConfigDef.Type.LIST,
                         null,
-                        new AdminListenersValidator(),
+                        ConfigDef.ValidList.anyNonDuplicateValues(true, true),
                         ConfigDef.Importance.LOW,
                         ADMIN_LISTENERS_DOC);
     }
@@ -329,37 +329,6 @@ public abstract class RestServerConfig extends AbstractConfig {
         }
     }
 
-    private static class AdminListenersValidator implements ConfigDef.Validator {
-        @Override
-        public void ensureValid(String name, Object value) {
-            if (value == null) {
-                return;
-            }
-
-            if (!(value instanceof List<?> items)) {
-                throw new ConfigException("Invalid value type for admin.listeners (expected list).");
-            }
-
-            if (items.isEmpty()) {
-                return;
-            }
-
-            for (Object item : items) {
-                if (!(item instanceof String)) {
-                    throw new ConfigException("Invalid type for admin.listeners (expected String).");
-                }
-                if (Utils.isBlank((String) item)) {
-                    throw new ConfigException("Empty URL found when parsing admin.listeners list.");
-                }
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "List of comma-separated URLs, ex: http://localhost:8080,https://localhost:8443.";
-        }
-    }
-
     private static class ResponseHttpHeadersValidator implements ConfigDef.Validator {
         @Override
         public void ensureValid(String name, Object value) {
@@ -391,7 +360,7 @@ public abstract class RestServerConfig extends AbstractConfig {
         @Override
         public List<String> adminListeners() {
             // Disable admin resources (such as the logging resource)
-            return Collections.emptyList();
+            return List.of();
         }
 
         @Override

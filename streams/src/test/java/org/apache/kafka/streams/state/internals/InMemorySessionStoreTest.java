@@ -22,8 +22,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Set;
 
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,7 +47,7 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
         // Advance stream time to expire the first three record
         sessionStore.put(new Windowed<>("aa", new SessionWindow(100, 2 * RETENTION_PERIOD)), 4L);
 
-        assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(1L, 2L, 3L, 4L)));
+        assertEquals(Set.of(1L, 2L, 3L, 4L), valuesToSet(iterator));
         assertFalse(iterator.hasNext());
 
         iterator.close();

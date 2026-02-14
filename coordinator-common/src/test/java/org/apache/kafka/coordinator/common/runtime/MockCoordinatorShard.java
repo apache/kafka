@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
  * A simple Coordinator implementation that stores the records into a set.
  */
 public class MockCoordinatorShard implements CoordinatorShard<String> {
-    static record RecordAndMetadata(
+    record RecordAndMetadata(
         long offset,
         long producerId,
         short producerEpoch,
@@ -53,19 +53,19 @@ public class MockCoordinatorShard implements CoordinatorShard<String> {
     private final SnapshotRegistry snapshotRegistry;
     private final TimelineHashSet<RecordAndMetadata> records;
     private final TimelineHashMap<Long, TimelineHashSet<RecordAndMetadata>> pendingRecords;
-    private final CoordinatorTimer<Void, String> timer;
+    private final CoordinatorTimer<String> timer;
     private final CoordinatorExecutor<String> executor;
 
     MockCoordinatorShard(
         SnapshotRegistry snapshotRegistry,
-        CoordinatorTimer<Void, String> timer
+        CoordinatorTimer<String> timer
     ) {
         this(snapshotRegistry, timer, null);
     }
 
     MockCoordinatorShard(
         SnapshotRegistry snapshotRegistry,
-        CoordinatorTimer<Void, String> timer,
+        CoordinatorTimer<String> timer,
         CoordinatorExecutor<String> executor
     ) {
         this.snapshotRegistry = snapshotRegistry;
@@ -130,7 +130,7 @@ public class MockCoordinatorShard implements CoordinatorShard<String> {
             .toList();
     }
 
-    CoordinatorTimer<Void, String> timer() {
+    CoordinatorTimer<String> timer() {
         return timer;
     }
 

@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.ClearElrRecord;
@@ -39,7 +40,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,18 +58,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
 @Timeout(value = 40)
 public class TopicsImageTest {
     public static final TopicsImage IMAGE1;
-
     public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
-
-    static final TopicsDelta DELTA1;
 
     static final TopicsImage IMAGE2;
 
-    static final List<TopicImage> TOPIC_IMAGES1;
+    private static final TopicsDelta DELTA1;
+    private static final List<TopicImage> TOPIC_IMAGES1;
 
     private static TopicImage newTopicImage(String name, Uuid id, PartitionRegistration... partitions) {
         Map<Integer, PartitionRegistration> partitionMap = new HashMap<>();
@@ -96,17 +93,14 @@ public class TopicsImageTest {
         return map;
     }
 
-    public static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
-
+    private static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
     private static final Uuid FOO_UUID2 = Uuid.fromString("9d3lha5qv8DoIl93jf8pbX");
-
     private static final Uuid BAR_UUID = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
-
     private static final Uuid BAZ_UUID = Uuid.fromString("tgHBnRglT5W_RlENnuG5vg");
-
     private static final Uuid BAM_UUID = Uuid.fromString("b66ybsWIQoygs01vdjH07A");
-
     private static final Uuid BAM_UUID2 = Uuid.fromString("yd6Sq3a9aK1G8snlKv7ag5");
+
+    private static final TopicIdPartition FOO_0 = new TopicIdPartition(FOO_UUID, new TopicPartition("foo", 0));
 
     static {
         TOPIC_IMAGES1 = List.of(
@@ -194,7 +188,7 @@ public class TopicsImageTest {
         );
     }
 
-    private PartitionRegistration newPartition(int[] replicas) {
+    private static PartitionRegistration newPartition(int[] replicas) {
         Uuid[] directories = new Uuid[replicas.length];
         for (int i = 0; i < replicas.length; i++) {
             directories[i] = DirectoryId.random();
@@ -251,18 +245,16 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("baz", 0))),
+            Set.of(new TopicPartition("baz", 0)),
             changes.electedLeaders().keySet()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("baz", 0))),
+            Set.of(new TopicPartition("baz", 0)),
             changes.leaders().keySet()
         );
         assertEquals(
-            new HashSet<>(
-                List.of(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
-                    new TopicPartition("bam", 1))
-            ),
+            Set.of(new TopicPartition("baz", 1), new TopicPartition("bar", 0),
+                    new TopicPartition("bam", 1)),
             changes.followers().keySet()
         );
 
@@ -307,7 +299,7 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         LocalReplicaChanges changes = delta.localChanges(localId);
-        assertEquals(new HashSet<>(List.of(new TopicPartition("zoo", 0))), changes.deletes());
+        assertEquals(Set.of(new TopicPartition("zoo", 0)), changes.deletes());
         assertEquals(Map.of(), changes.electedLeaders());
         assertEquals(Map.of(), changes.leaders());
         assertEquals(Map.of(), changes.followers());
@@ -349,7 +341,7 @@ public class TopicsImageTest {
         assertEquals(Set.of(), changes.deletes());
         assertEquals(Map.of(), changes.electedLeaders());
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 0))),
+            Set.of(new TopicPartition("zoo", 0)),
             changes.leaders().keySet()
         );
         assertEquals(Map.of(), changes.followers());
@@ -430,23 +422,246 @@ public class TopicsImageTest {
     }
 
     @Test
+    public void testClearElrRecordOnNonExistingTopic() {
+        TopicsImage image = TopicsImage.EMPTY;
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.addAll(List.of(
+            new ApiMessageAndVersion(
+                new ClearElrRecord().setTopicName("foo"),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ))
+        );
+        TopicsDelta delta = new TopicsDelta(image);
+        assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
+    }
+
+    @Test
+    public void testClearElrRecords_All_ForDeletedTopics() {
+        Uuid fooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+        Uuid fooId2 = Uuid.randomUuid();
+        Uuid barId = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
+        Uuid barId2 = Uuid.randomUuid();
+
+        List<TopicImage> topics = new ArrayList<>();
+        topics.add(
+            newTopicImage(
+                "foo",
+                fooId,
+                newPartition(new int[] {0, 1, 2, 3})
+            )
+        );
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
+            newTopicsByNameMap(topics));
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.add(
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(fooId).
+                    setPartitionId(0).
+                    setLeader(0).
+                    setIsr(List.of(1, 2, 3)),
+                PARTITION_RECORD.highestSupportedVersion()
+            )
+        );
+
+        TopicsDelta delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+        image = delta.apply();
+
+        topicRecords = new ArrayList<>();
+        /* Test the following:
+            1. Topic foo is deleted and created in the same delta, the clear elr applies on the new topic
+            2. Topic bar is created, deleted, then created in the same delta, the clear elr applies on the new topic
+        */
+        topicRecords.addAll(List.of(
+            new ApiMessageAndVersion(
+                new RemoveTopicRecord().setTopicId(fooId),
+                REMOVE_TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new TopicRecord().setTopicId(fooId2).
+                    setName("foo"),
+                TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(fooId2).setPartitionId(0).
+                    setIsr(List.of(0, 1)).
+                    setEligibleLeaderReplicas(List.of(2)).
+                    setLastKnownElr(List.of(3)),
+                PARTITION_CHANGE_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new TopicRecord().setTopicId(barId).
+                    setName("bar"),
+                TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(barId).
+                    setPartitionId(0).
+                    setLeader(0).
+                    setIsr(List.of(1, 2, 3)),
+                PARTITION_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new RemoveTopicRecord().setTopicId(barId),
+                REMOVE_TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new TopicRecord().setTopicId(barId2).
+                    setName("bar"),
+                TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(barId2).
+                    setPartitionId(0).
+                    setLeader(0).
+                    setIsr(List.of(1)).
+                    setEligibleLeaderReplicas(List.of(2)).
+                    setLastKnownElr(List.of(3)),
+                PARTITION_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new ClearElrRecord(),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ))
+        );
+        delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+        image = delta.apply();
+        assertEquals(2, image.topicsById().size());
+        assertEquals(2, image.topicsByName().size());
+
+        assertEquals(0, image.getTopic(fooId2).partitions().get(0).elr.length);
+        assertEquals(0, image.getTopic(fooId2).partitions().get(0).lastKnownElr.length);
+        assertEquals(0, image.getTopic(barId2).partitions().get(0).elr.length);
+        assertEquals(0, image.getTopic(barId2).partitions().get(0).lastKnownElr.length);
+    }
+
+    @Test
+    public void testClearElrRecords_Single_ForDeletedTopics() {
+        Uuid fooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+        Uuid fooId2 = Uuid.randomUuid();
+        Uuid barId = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
+        Uuid barId2 = Uuid.randomUuid();
+
+        List<TopicImage> topics = new ArrayList<>();
+        topics.add(
+            newTopicImage(
+                "foo",
+                fooId,
+                newPartition(new int[] {0, 1, 2, 3})
+            )
+        );
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
+            newTopicsByNameMap(topics));
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.add(
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(fooId).
+                    setPartitionId(0).
+                    setLeader(0).
+                    setIsr(List.of(1, 2, 3)),
+                PARTITION_RECORD.highestSupportedVersion()
+            )
+        );
+
+        TopicsDelta delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+        image = delta.apply();
+
+        topicRecords = new ArrayList<>();
+        /* Test the following:
+            1. Topic foo is deleted and created in the same delta, the clear elr applies on the new topic
+            2. Topic bar is created, deleted, then created in the same delta, the clear elr applies on the new topic
+        */
+        topicRecords.addAll(List.of(
+            new ApiMessageAndVersion(
+                new RemoveTopicRecord().setTopicId(fooId),
+                REMOVE_TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new TopicRecord().setTopicId(fooId2).
+                    setName("foo"),
+                TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(fooId2).setPartitionId(0).
+                    setIsr(List.of(0, 1)).
+                    setEligibleLeaderReplicas(List.of(2)).
+                    setLastKnownElr(List.of(3)),
+                PARTITION_CHANGE_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new TopicRecord().setTopicId(barId).
+                    setName("bar"),
+                TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(barId).
+                    setPartitionId(0).
+                    setLeader(0).
+                    setIsr(List.of(1, 2, 3)),
+                PARTITION_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new RemoveTopicRecord().setTopicId(barId),
+                REMOVE_TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new TopicRecord().setTopicId(barId2).
+                    setName("bar"),
+                TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(barId2).
+                    setPartitionId(0).
+                    setLeader(0).
+                    setIsr(List.of(1)).
+                    setEligibleLeaderReplicas(List.of(2)).
+                    setLastKnownElr(List.of(3)),
+                PARTITION_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new ClearElrRecord().setTopicName("foo"),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new ClearElrRecord().setTopicName("bar"),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ))
+        );
+        delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+        image = delta.apply();
+        assertEquals(2, image.topicsById().size());
+        assertEquals(2, image.topicsByName().size());
+
+        assertEquals(0, image.getTopic(fooId2).partitions().get(0).elr.length);
+        assertEquals(0, image.getTopic(fooId2).partitions().get(0).lastKnownElr.length);
+        assertEquals(0, image.getTopic(barId2).partitions().get(0).elr.length);
+        assertEquals(0, image.getTopic(barId2).partitions().get(0).lastKnownElr.length);
+    }
+
+    @Test
     public void testClearElrRecordForNonExistTopic() {
         TopicsImage image = new TopicsImage(newTopicsByIdMap(List.of()),
             newTopicsByNameMap(List.of()));
         TopicsDelta delta = new TopicsDelta(image);
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
-        topicRecords.addAll(List.of(
+        topicRecords.add(
             new ApiMessageAndVersion(
                 new ClearElrRecord().setTopicName("non-exist"),
                 CLEAR_ELR_RECORD.highestSupportedVersion()
-            ))
+            )
         );
         assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
     }
 
     @Test
     public void testTopicDeltaElectionStatsWithEmptyImage() {
-        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Collections.EMPTY_MAP);
+        TopicImage image = new TopicImage("topic", Uuid.randomUuid(), Map.of());
         TopicDelta delta = new TopicDelta(image);
         delta.replay(new PartitionRecord().setPartitionId(0).setLeader(0).setIsr(List.of(0, 1)).setReplicas(List.of(0, 1, 2)));
         delta.replay(new PartitionChangeRecord().setPartitionId(0).setLeader(2).setIsr(List.of(2)).setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
@@ -568,19 +783,19 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 2), new TopicPartition("zoo", 3))),
+            Set.of(new TopicPartition("zoo", 2), new TopicPartition("zoo", 3)),
             changes.deletes()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),
+            Set.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4)),
             changes.electedLeaders().keySet()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),
+            Set.of(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4)),
             changes.leaders().keySet()
         );
         assertEquals(
-            new HashSet<>(List.of(new TopicPartition("zoo", 1), new TopicPartition("zoo", 5))),
+            Set.of(new TopicPartition("zoo", 1), new TopicPartition("zoo", 5)),
             changes.followers().keySet()
         );
 
@@ -646,11 +861,11 @@ public class TopicsImageTest {
         assertEquals(BAR_UUID, map.get("bar"));
         assertFalse(map.containsKey("baz"));
         assertNull(map.get("baz"));
-        HashSet<Uuid> uuids = new HashSet<>();
+        Set<Uuid> uuids = new HashSet<>();
         map.values().iterator().forEachRemaining(uuids::add);
-        HashSet<Uuid> expectedUuids = new HashSet<>(List.of(
+        Set<Uuid> expectedUuids = Set.of(
             Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA"),
-            Uuid.fromString("f62ptyETTjet8SL5ZeREiw")));
+            Uuid.fromString("f62ptyETTjet8SL5ZeREiw"));
         assertEquals(expectedUuids, uuids);
         assertThrows(UnsupportedOperationException.class, () -> map.remove("foo"));
         assertThrows(UnsupportedOperationException.class, () -> map.put("bar", FOO_UUID));
@@ -665,11 +880,47 @@ public class TopicsImageTest {
         assertEquals("bar", map.get(BAR_UUID));
         assertFalse(map.containsKey(BAZ_UUID));
         assertNull(map.get(BAZ_UUID));
-        HashSet<String> names = new HashSet<>();
+        Set<String> names = new HashSet<>();
         map.values().iterator().forEachRemaining(names::add);
-        HashSet<String> expectedNames = new HashSet<>(List.of("foo", "bar"));
+        Set<String> expectedNames = Set.of("foo", "bar");
         assertEquals(expectedNames, names);
         assertThrows(UnsupportedOperationException.class, () -> map.remove(FOO_UUID));
         assertThrows(UnsupportedOperationException.class, () -> map.put(FOO_UUID, "bar"));
+
+        var result = IMAGE1.topicIdToNameView().get("zar");
+        assertNull(result);
+    }
+
+    @Test
+    public void testTopicsDeltaCreateThenDelete() {
+        TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
+        delta.replay(new TopicRecord().setName("test").setTopicId(FOO_UUID));
+        assertTrue(delta.createdTopicIds().contains(FOO_UUID));
+        assertFalse(delta.deletedTopicIds().contains(FOO_UUID));
+        delta.replay(new RemoveTopicRecord().setTopicId(FOO_UUID));
+        assertFalse(delta.deletedTopicIds().contains(FOO_UUID));
+        assertFalse(delta.createdTopicIds().contains(FOO_UUID));
+    }
+
+    @Test
+    public void testPartitionReplicasWithEmptyImage() {
+        TopicsImage image = topicsImage(List.of());
+        assertTrue(image.partitionReplicas(FOO_UUID, 0).isEmpty());
+    }
+
+    @Test
+    public void testPartitionReplicas() {
+        TopicsImage image = topicsImage(List.of(
+                newTopicImage(FOO_0.topic(), FOO_0.topicId(), newPartition(new int[]{0, 1, 2}))
+        ));
+        assertEquals(List.of(0, 1, 2), image.partitionReplicas(FOO_UUID, 0));
+    }
+
+    private static TopicsImage topicsImage(List<TopicImage> topics) {
+        TopicsImage retval = TopicsImage.EMPTY;
+        for (TopicImage topic : topics) {
+            retval = retval.including(topic);
+        }
+        return retval;
     }
 }

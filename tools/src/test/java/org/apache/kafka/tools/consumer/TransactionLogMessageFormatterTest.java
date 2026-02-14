@@ -22,9 +22,8 @@ import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 
 import org.junit.jupiter.params.provider.Arguments;
 
+import java.util.List;
 import java.util.stream.Stream;
-
-import static java.util.Collections.emptyList;
 
 public class TransactionLogMessageFormatterTest extends CoordinatorRecordMessageFormatterTest {
 
@@ -37,7 +36,7 @@ public class TransactionLogMessageFormatterTest extends CoordinatorRecordMessage
         .setTransactionStartTimestampMs(750L)
         .setTransactionLastUpdateTimestampMs(1000L)
         .setTransactionTimeoutMs(500)
-        .setTransactionPartitions(emptyList());
+        .setTransactionPartitions(List.of());
 
     @Override
     protected CoordinatorRecordMessageFormatter formatter() {

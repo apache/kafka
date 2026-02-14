@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.util.{Collections, Objects, Optional, Properties}
+import java.util.{Objects, Optional, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
 import kafka.security.JaasTestUtils
@@ -32,9 +32,10 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{SaslConfigs, SslConfigs}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.KRaftConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -126,7 +127,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     servers.head.groupCoordinator.groupMetadataTopicConfigs.entrySet().
       forEach(e => newTopicConfigs.put(e.getKey.toString, e.getValue.toString))
     newTopic.configs(newTopicConfigs)
-    admin.createTopics(java.util.Arrays.asList(newTopic)).all().get(5, TimeUnit.MINUTES)
+    admin.createTopics(java.util.List.of(newTopic)).all().get(5, TimeUnit.MINUTES)
 
     createScramCredentials(admin, JaasTestUtils.KAFKA_SCRAM_USER, JaasTestUtils.KAFKA_SCRAM_PASSWORD)
     TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
@@ -143,7 +144,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       def addProducerConsumer(listenerName: ListenerName, mechanism: String, saslProps: Option[Properties]): Unit = {
 
         val topic = s"${listenerName.value}${producers.size}"
-        admin.createTopics(java.util.Arrays.asList(new NewTopic(topic, 2, 2.toShort))).all().get(5, TimeUnit.MINUTES)
+        admin.createTopics(java.util.List.of(new NewTopic(topic, 2, 2.toShort))).all().get(5, TimeUnit.MINUTES)
         val clientMetadata = ClientMetadata(listenerName, mechanism, topic)
 
         producers(clientMetadata) = TestUtils.createProducer(bootstrapServers, acks = -1,
@@ -188,7 +189,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
 
       val consumer = consumers(clientMetadata)
-      consumer.subscribe(Collections.singleton(clientMetadata.topic))
+      consumer.subscribe(java.util.Set.of(clientMetadata.topic))
       TestUtils.consumeRecords(consumer, producerRecords.size)
     }
   }

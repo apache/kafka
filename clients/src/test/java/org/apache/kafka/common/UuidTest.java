@@ -35,8 +35,8 @@ public class UuidTest {
     public void testSignificantBits() {
         Uuid id = new Uuid(34L, 98L);
 
-        assertEquals(id.getMostSignificantBits(), 34L);
-        assertEquals(id.getLeastSignificantBits(), 98L);
+        assertEquals(34L, id.getMostSignificantBits());
+        assertEquals(98L, id.getLeastSignificantBits());
     }
 
     @Test
@@ -74,15 +74,15 @@ public class UuidTest {
 
         String zeroIdString = Uuid.ZERO_UUID.toString();
 
-        assertEquals(Uuid.fromString(zeroIdString), Uuid.ZERO_UUID);
+        assertEquals(Uuid.ZERO_UUID, Uuid.fromString(zeroIdString));
     }
 
     @RepeatedTest(value = 100, name = RepeatedTest.LONG_DISPLAY_NAME)
     public void testRandomUuid() {
         Uuid randomID = Uuid.randomUuid();
 
-        assertNotEquals(randomID, Uuid.ZERO_UUID);
-        assertNotEquals(randomID, Uuid.METADATA_TOPIC_ID);
+        assertNotEquals(Uuid.ZERO_UUID, randomID);
+        assertNotEquals(Uuid.METADATA_TOPIC_ID, randomID);
         assertFalse(randomID.toString().startsWith("-"));
     }
 

@@ -61,7 +61,6 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -421,7 +420,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
                 printJson(new OffsetResetStrategySet(offsetResetStrategy.type().toString()));
             }
 
-            consumer.subscribe(Collections.singleton(this.topic));
+            consumer.subscribe(Set.of(this.topic));
             consumer.setAcknowledgementCommitCallback(this);
             while (!(maxMessages >= 0 && totalAcknowledged >= maxMessages)) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(5000));
@@ -500,8 +499,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .action(store())
             .required(true)
             .type(String.class)
-            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
             .dest("bootstrapServer")
+            .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
             .help("The server(s) to connect to. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
@@ -515,17 +514,17 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .action(store())
             .required(true)
             .type(String.class)
-            .metavar("GROUP_ID")
             .dest("groupId")
-            .help("The groupId shared among members of the share group");
+            .metavar("GROUP-ID")
+            .help("The group id of the share group");
 
         parser.addArgument("--max-messages")
             .action(store())
             .required(false)
             .type(Integer.class)
             .setDefault(-1)
-            .metavar("MAX-MESSAGES")
             .dest("maxMessages")
+            .metavar("MAX-MESSAGES")
             .help("Consume this many messages. If -1 (the default), the share consumers will consume until the process is killed externally");
 
         parser.addArgument("--verbose")
@@ -540,6 +539,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .setDefault("auto")
             .type(String.class)
             .dest("acknowledgementMode")
+            .metavar("ACKNOWLEDGEMENT-MODE")
             .help("Acknowledgement mode for the share consumers (must be either 'auto', 'sync' or 'async')");
 
         parser.addArgument("--offset-reset-strategy")
@@ -548,14 +548,15 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .setDefault("")
             .type(String.class)
             .dest("offsetResetStrategy")
-            .help("Set share group reset strategy (must be either 'earliest' or 'latest')");
+            .metavar("OFFSET-RESET-STRATEGY")
+            .help("Share group offset reset strategy (must be either 'earliest' or 'latest')");
 
         parser.addArgument("--command-config")
             .action(store())
             .required(false)
             .type(String.class)
             .dest("commandConfig")
-            .metavar("CONFIG_FILE")
+            .metavar("CONFIG-FILE")
             .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;

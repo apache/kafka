@@ -22,14 +22,16 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCon
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse.Status;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
-import org.apache.kafka.coordinator.group.streams.TopicMetadata;
+import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InternalTopicManagerTest {
 
+    public static final MockTime TIME = new MockTime();
     public static final String SOURCE_TOPIC_1 = "source_topic1";
     public static final String SOURCE_TOPIC_2 = "source_topic2";
     public static final String REPARTITION_TOPIC = "repartition_topic";
@@ -54,12 +57,13 @@ class InternalTopicManagerTest {
 
     @Test
     void testConfigureTopicsSetsConfigurationExceptionWhenSourceTopicIsMissing() {
-        Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), SOURCE_TOPIC_1, 2)
+            .build();
         // SOURCE_TOPIC_2 is missing from topicMetadata
         StreamsTopology topology = makeTestTopology();
 
-        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), topology, topicMetadata);
+        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
 
         assertEquals(Optional.empty(), configuredTopology.subtopologies());
         assertTrue(configuredTopology.topicConfigurationException().isPresent());
@@ -69,14 +73,14 @@ class InternalTopicManagerTest {
 
     @Test
     void testConfigureTopics() {
-        Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2));
-        topicMetadata.put(SOURCE_TOPIC_2, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_2, 2));
-        topicMetadata.put(STATE_CHANGELOG_TOPIC_2,
-            new TopicMetadata(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_2, 2));
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), SOURCE_TOPIC_1, 2)
+            .addTopic(Uuid.randomUuid(), SOURCE_TOPIC_2, 2)
+            .addTopic(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_2, 2)
+            .build();
         StreamsTopology topology = makeTestTopology();
 
-        ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), topology, topicMetadata);
+        ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
         final Map<String, CreatableTopic> internalTopicsToBeCreated = configuredTopology.internalTopicsToBeCreated();
 
         assertEquals(2, internalTopicsToBeCreated.size());
@@ -106,6 +110,7 @@ class InternalTopicManagerTest {
         return mkMap(
             mkEntry(SUBTOPOLOGY_1,
                 new ConfiguredSubtopology(
+                    2,
                     Set.of(SOURCE_TOPIC_1),
                     Map.of(),
                     Set.of(REPARTITION_TOPIC),
@@ -120,6 +125,7 @@ class InternalTopicManagerTest {
             ),
             mkEntry(SUBTOPOLOGY_2,
                 new ConfiguredSubtopology(
+                    2,
                     Set.of(SOURCE_TOPIC_2),
                     Map.of(REPARTITION_TOPIC,
                         new ConfiguredInternalTopic(REPARTITION_TOPIC,

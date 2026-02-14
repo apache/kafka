@@ -24,15 +24,16 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
 import kafka.cluster.Partition
-import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
-import org.apache.kafka.metadata.MockConfigRepository
+import org.apache.kafka.metadata.{KRaftMetadataCache, MockConfigRepository}
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChannel}
 
 import java.util.Optional
+
+import scala.jdk.CollectionConverters._
 
 class HighwatermarkPersistenceTest {
 
@@ -41,7 +42,7 @@ class HighwatermarkPersistenceTest {
   val configRepository = new MockConfigRepository()
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
-      logDirs = config.logDirs.map(new File(_)),
+      logDirs = config.logDirs.asScala.map(new File(_)),
       cleanerConfig = new CleanerConfig(true))
   }
 
@@ -195,7 +196,7 @@ class HighwatermarkPersistenceTest {
   }
 
   private def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read().getOrDefault(
+    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.get(0)).getAbsolutePath).read().getOrDefault(
       new TopicPartition(topic, partition), 0L)
   }
 }

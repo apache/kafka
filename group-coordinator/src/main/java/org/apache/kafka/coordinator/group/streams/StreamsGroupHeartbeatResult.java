@@ -33,7 +33,7 @@ public record StreamsGroupHeartbeatResult(StreamsGroupHeartbeatResponseData data
 
     public StreamsGroupHeartbeatResult {
         Objects.requireNonNull(data);
-        creatableTopics = Objects.requireNonNull(Collections.unmodifiableMap(creatableTopics));
+        creatableTopics = Collections.unmodifiableMap(Objects.requireNonNull(creatableTopics));
     }
 
 }

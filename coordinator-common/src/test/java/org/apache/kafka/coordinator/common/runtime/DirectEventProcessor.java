@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.common.runtime;
 
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
@@ -23,24 +25,43 @@ import java.util.concurrent.RejectedExecutionException;
  * useful in unit tests where execution in threads is not required.
  */
 public class DirectEventProcessor implements CoordinatorEventProcessor {
+    private final Deque<CoordinatorEvent> queue;
+    private boolean inEvent;
+
+    public DirectEventProcessor() {
+        this.queue = new LinkedList<>();
+        this.inEvent = false;
+    }
+
     @Override
     public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
-        try {
-            event.run();
-        } catch (Throwable ex) {
-            event.complete(ex);
-        }
+        queue.addLast(event);
+        processQueue();
     }
 
     @Override
     public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
-        try {
-            event.run();
-        } catch (Throwable ex) {
-            event.complete(ex);
-        }
+        queue.addFirst(event);
+        processQueue();
     }
 
     @Override
     public void close() {}
+
+    private void processQueue() {
+        if (inEvent) {
+            return;
+        }
+
+        inEvent = true;
+        while (!queue.isEmpty()) {
+            CoordinatorEvent event = queue.removeFirst();
+            try {
+                event.run();
+            } catch (Throwable ex) {
+                event.complete(ex);
+            }
+        }
+        inEvent = false;
+    }
 }

@@ -19,7 +19,7 @@ package kafka.server
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.message.{JoinGroupResponseData, ListGroupsResponseData, OffsetFetchResponseData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{JoinGroupResponseData, ListGroupsResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupResponseData}
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
@@ -883,7 +883,8 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo")
+              .setName(if (version < 10) "foo" else "")
+              .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -897,14 +898,16 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
               ).asJava)
           ).asJava),
         fetchOffsets(
-          groupId = groupId,
-          memberId = memberId1,
-          memberEpoch = 1,
-          partitions = List(
-            new TopicPartition("foo", 0),
-            new TopicPartition("foo", 1),
-            new TopicPartition("foo", 2)
-          ),
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(groupId)
+            .setMemberId(memberId1)
+            .setMemberEpoch(1)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0, 1, 2).asJava)
+            ).asJava),
           requireStable = false,
           version = version.toShort
         )
@@ -1183,7 +1186,8 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           .setGroupId(groupId)
           .setTopics(List(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
-              .setName("foo")
+              .setName(if (version < 10) "foo" else "")
+              .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
               .setPartitions(List(
                 new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                   .setPartitionIndex(0)
@@ -1197,14 +1201,16 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
               ).asJava)
           ).asJava),
         fetchOffsets(
-          groupId = groupId,
-          memberId = memberId1,
-          memberEpoch = 1,
-          partitions = List(
-            new TopicPartition("foo", 0),
-            new TopicPartition("foo", 1),
-            new TopicPartition("foo", 2)
-          ),
+          group = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(groupId)
+            .setMemberId(memberId1)
+            .setMemberEpoch(1)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setTopicId(topicId)
+                .setPartitionIndexes(List[Integer](0, 1, 2).asJava)
+            ).asJava),
           requireStable = false,
           version = version.toShort
         )

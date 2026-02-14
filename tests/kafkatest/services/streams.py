@@ -382,33 +382,6 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 
         return cmd
 
-class StreamsEosTestBaseService(StreamsTestBaseService):
-    """Base class for Streams EOS Test services providing some common settings and functionality"""
-
-    clean_node_enabled = True
-
-    def __init__(self, test_context, kafka, command):
-        super(StreamsEosTestBaseService, self).__init__(test_context,
-                                                        kafka,
-                                                        "org.apache.kafka.streams.tests.StreamsEosTest",
-                                                        command)
-
-    def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
-                      streams_property.PROCESSING_GUARANTEE: "exactly_once_v2",
-                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
-                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
-                      }
-
-        cfg = KafkaConfig(**properties)
-        return cfg.render()
-
-    def clean_node(self, node):
-        if self.clean_node_enabled:
-            super(StreamsEosTestBaseService, self).clean_node(node)
-
-
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestDriverService, self).__init__(test_context, kafka, "run")
@@ -440,28 +413,6 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka, processing_guarantee, group_protocol = 'classic', num_threads = 3, replication_factor = 3):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, group_protocol, num_threads, replication_factor)
-
-class StreamsEosTestDriverService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsEosTestDriverService, self).__init__(test_context, kafka, "run")
-
-class StreamsEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsEosTestJobRunnerService, self).__init__(test_context, kafka, "process")
-
-class StreamsComplexEosTestJobRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsComplexEosTestJobRunnerService, self).__init__(test_context, kafka, "process-complex")
-
-class StreamsEosTestVerifyRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify")
-
-
-class StreamsComplexEosTestVerifyRunnerService(StreamsEosTestBaseService):
-    def __init__(self, test_context, kafka):
-        super(StreamsComplexEosTestVerifyRunnerService, self).__init__(test_context, kafka, "verify-complex")
-
 
 class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):

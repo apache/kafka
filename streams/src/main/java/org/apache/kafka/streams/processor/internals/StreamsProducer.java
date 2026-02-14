@@ -247,6 +247,22 @@ public class StreamsProducer {
         maybeBeginTransaction();
         try {
             producer.sendOffsetsToTransaction(offsets, consumerGroupMetadata);
+        } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {
+            throw new TaskMigratedException(
+                formatException("Producer got fenced trying to add offsets to a transaction"),
+                error
+            );
+        } catch (final TimeoutException timeoutException) {
+            // re-throw to trigger `task.timeout.ms`
+            throw timeoutException;
+        } catch (final KafkaException error) {
+            throw new StreamsException(
+                formatException("Error encountered trying to add offsets to a transaction"),
+                error
+            );
+        }
+
+        try {
             producer.commitTransaction();
             transactionInFlight = false;
         } catch (final ProducerFencedException | InvalidProducerEpochException | CommitFailedException | InvalidPidMappingException error) {

@@ -27,10 +27,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -44,7 +46,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -117,6 +118,8 @@ public class StreamsResetter {
             + "*** Warning! This tool makes irreversible changes to your application. It is strongly recommended that "
             + "you run this once with \"--dry-run\" to preview your changes before making them.\n\n";
 
+    private static final int MAX_REMOVE_MEMBERS_FROM_CONSUMER_GROUP_RETRIES = 3;
+
     private final List<String> allTopics = new LinkedList<>();
 
     public static void main(final String[] args) {
@@ -132,10 +135,15 @@ public class StreamsResetter {
             StreamsResetterOptions options = new StreamsResetterOptions(args);
 
             String groupId = options.applicationId();
-            Properties properties = new Properties();
-            if (options.hasCommandConfig()) {
-                properties.putAll(Utils.loadProps(options.commandConfig()));
+
+            String commandConfigFile;
+            if (options.hasConfig()) {
+                System.out.println("Option --config-file has been deprecated and will be removed in a future version. Use --command-config instead.");
+                commandConfigFile = options.config();
+            } else {
+                commandConfigFile = options.commandConfig();
             }
+            Properties properties = (commandConfigFile != null) ? Utils.loadProps(commandConfigFile) : new Properties();
 
             String bootstrapServerValue = "localhost:9092";
             if (options.hasBootstrapServer()) {
@@ -145,7 +153,7 @@ public class StreamsResetter {
             properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServerValue);
 
             try (Admin adminClient = Admin.create(properties)) {
-                maybeDeleteActiveConsumers(groupId, adminClient, options);
+                maybeDeleteActiveConsumers(groupId, adminClient, options.hasForce());
 
                 allTopics.clear();
                 allTopics.addAll(adminClient.listTopics().names().get(60, TimeUnit.SECONDS));
@@ -173,30 +181,42 @@ public class StreamsResetter {
         }
     }
 
-    private void maybeDeleteActiveConsumers(final String groupId,
-                                            final Admin adminClient,
-                                            final StreamsResetterOptions options)
+    // visible for testing
+    void maybeDeleteActiveConsumers(final String groupId,
+                                    final Admin adminClient,
+                                    final boolean force)
         throws ExecutionException, InterruptedException {
-        final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
-            Collections.singleton(groupId),
-            new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
-        try {
-            final List<MemberDescription> members =
-                new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
-            if (!members.isEmpty()) {
-                if (options.hasForce()) {
-                    System.out.println("Force deleting all active members in the group: " + groupId);
-                    adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
-                } else {
-                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
-                        + "and has following members: " + members + ". "
-                        + "Make sure to stop all running application instances before running the reset tool."
-                        + " You can use option '--force' to remove active members from the group.");
+        int retries = 0;
+        while (true) {
+            final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(
+                    Set.of(groupId),
+                    new DescribeConsumerGroupsOptions().timeoutMs(10 * 1000));
+            try {
+                final List<MemberDescription> members =
+                        new ArrayList<>(describeResult.describedGroups().get(groupId).get().members());
+                if (!members.isEmpty()) {
+                    if (force) {
+                        System.out.println("Force deleting all active members in the group: " + groupId);
+                        adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions()).all().get();
+                    } else {
+                        throw new IllegalStateException("Consumer group '" + groupId + "' is still active "
+                                + "and has following members: " + members + ". "
+                                + "Make sure to stop all running application instances before running the reset tool."
+                                + " You can use option '--force' to remove active members from the group.");
+                    }
                 }
-            }
-        } catch (ExecutionException ee) {
-            // If the group ID is not found, this is not an error case
-            if (!(ee.getCause() instanceof GroupIdNotFoundException)) {
+                break;
+            } catch (ExecutionException ee) {
+                // If the group ID is not found, this is not an error case
+                if (ee.getCause() instanceof GroupIdNotFoundException) {
+                    break;
+                }
+                // if a member is unknown, it may mean that it left the group itself. Retrying to confirm.
+                if (ee.getCause() instanceof KafkaException ke && ke.getCause() instanceof UnknownMemberIdException) {
+                    if (retries++ < MAX_REMOVE_MEMBERS_FROM_CONSUMER_GROUP_RETRIES) {
+                        continue;
+                    }
+                }
                 throw ee;
             }
         }
@@ -212,15 +232,15 @@ public class StreamsResetter {
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
 
-        if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
+        if (inputTopics.isEmpty() && intermediateTopics.isEmpty()) {
             System.out.println("No input or intermediate topics specified. Skipping seek.");
             return EXIT_CODE_SUCCESS;
         }
 
-        if (inputTopics.size() != 0) {
+        if (!inputTopics.isEmpty()) {
             System.out.println("Reset-offsets for input topics " + inputTopics);
         }
-        if (intermediateTopics.size() != 0) {
+        if (!intermediateTopics.isEmpty()) {
             System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
         }
 
@@ -313,7 +333,7 @@ public class StreamsResetter {
     public void maybeSeekToEnd(final String groupId,
                                final Consumer<byte[], byte[]> client,
                                final Set<TopicPartition> intermediateTopicPartitions) {
-        if (intermediateTopicPartitions.size() > 0) {
+        if (!intermediateTopicPartitions.isEmpty()) {
             System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final TopicPartition topicPartition : intermediateTopicPartitions) {
                 if (allTopics.contains(topicPartition.topic())) {
@@ -328,7 +348,7 @@ public class StreamsResetter {
                             final Set<TopicPartition> inputTopicPartitions,
                             final StreamsResetterOptions options)
         throws IOException, ParseException {
-        if (inputTopicPartitions.size() > 0) {
+        if (!inputTopicPartitions.isEmpty()) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + options.applicationId() + ")");
             if (options.hasToOffset()) {
                 resetOffsetsTo(client, inputTopicPartitions, options.toOffset());
@@ -405,7 +425,7 @@ public class StreamsResetter {
             if (partitionOffset.isPresent()) {
                 client.seek(topicPartition, partitionOffset.get());
             } else {
-                client.seekToEnd(Collections.singletonList(topicPartition));
+                client.seekToEnd(List.of(topicPartition));
                 System.out.println("Partition " + topicPartition.partition() + " from topic " + topicPartition.topic() +
                         " is empty, without a committed record. Falling back to latest known offset.");
             }
@@ -508,7 +528,7 @@ public class StreamsResetter {
         final List<String> topicsToDelete;
 
         if (!specifiedInternalTopics.isEmpty()) {
-            if (!inferredInternalTopics.containsAll(specifiedInternalTopics)) {
+            if (!new HashSet<>(inferredInternalTopics).containsAll(specifiedInternalTopics)) {
                 throw new IllegalArgumentException("Invalid topic specified in the "
                         + "--internal-topics option. "
                         + "Ensure that the topics specified are all internal topics. "
@@ -574,12 +594,14 @@ public class StreamsResetter {
         private final OptionSpec<String> fromFileOption;
         private final OptionSpec<Long> shiftByOption;
         private final OptionSpecBuilder dryRunOption;
+        @Deprecated(since = "4.2", forRemoval = true)
+        private final OptionSpec<String> configOption;
         private final OptionSpec<String> commandConfigOption;
         private final OptionSpecBuilder forceOption;
 
         public StreamsResetterOptions(String[] args) {
             super(args);
-            applicationIdOption = parser.accepts("application-id", "The Kafka Streams application ID (application.id).")
+            applicationIdOption = parser.accepts("application-id", "REQUIRED: The Kafka Streams application ID (application.id).")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("id")
@@ -625,7 +647,12 @@ public class StreamsResetter {
                 .withRequiredArg()
                 .describedAs("number-of-offsets")
                 .ofType(Long.class);
-            commandConfigOption = parser.accepts("config-file", "Property file containing configs to be passed to admin clients and embedded consumer.")
+            configOption = parser.accepts("config-file", "(DEPRECATED) Property file containing configs to be passed to admin clients and embedded consumer. "
+                    + "This option will be removed in a future version. Use --command-config instead.")
+                .withRequiredArg()
+                .ofType(String.class)
+                .describedAs("file name");
+            commandConfigOption = parser.accepts("command-config", "Config properties file to be passed to admin clients and embedded consumer.")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("file name");
@@ -636,12 +663,7 @@ public class StreamsResetter {
 
             try {
                 options = parser.parse(args);
-                if (CommandLineUtils.isPrintHelpNeeded(this)) {
-                    CommandLineUtils.printUsageAndExit(parser, USAGE);
-                }
-                if (CommandLineUtils.isPrintVersionNeeded(this)) {
-                    CommandLineUtils.printVersionAndExit();
-                }
+                CommandLineUtils.maybePrintHelpOrVersion(this, USAGE);
                 CommandLineUtils.checkInvalidArgs(parser, options, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, toDatetimeOption, toOffsetOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, byDurationOption, toOffsetOption, toDatetimeOption, toEarliestOption, toLatestOption, fromFileOption, shiftByOption);
@@ -649,6 +671,7 @@ public class StreamsResetter {
                 CommandLineUtils.checkInvalidArgs(parser, options, toLatestOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, fromFileOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, fromFileOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, shiftByOption);
                 CommandLineUtils.checkInvalidArgs(parser, options, shiftByOption, toOffsetOption, toDatetimeOption, byDurationOption, toEarliestOption, toLatestOption, fromFileOption);
+                CommandLineUtils.checkInvalidArgs(parser, options, configOption, commandConfigOption);
             } catch (final OptionException e) {
                 CommandLineUtils.printUsageAndExit(parser, e.getMessage());
             }
@@ -662,8 +685,12 @@ public class StreamsResetter {
             return options.valueOf(applicationIdOption);
         }
 
-        public boolean hasCommandConfig() {
-            return options.has(commandConfigOption);
+        public boolean hasConfig() {
+            return options.has(configOption);
+        }
+
+        public String config() {
+            return options.valueOf(configOption);
         }
 
         public String commandConfig() {

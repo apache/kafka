@@ -26,41 +26,41 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * ExternalCommandSpec describes a task that executes Trogdor tasks with the command.
  *
  * An example uses the python runner to execute the ProduceBenchSpec task.
  *
- * #{@code
- *   {
- *      "class": "org.apache.kafka.trogdor.workload.ExternalCommandSpec",
- *      "command": ["python", "/path/to/trogdor/python/runner"],
- *      "durationMs": 10000000,
- *      "producerNode": "node0",
- *      "workload": {
- *        "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
- *        "bootstrapServers": "localhost:9092",
- *        "targetMessagesPerSec": 10,
- *        "maxMessages": 100,
- *        "activeTopics": {
- *          "foo[1-3]": {
- *            "numPartitions": 3,
- *            "replicationFactor": 1
- *          }
- *        },
- *        "inactiveTopics": {
- *          "foo[4-5]": {
- *            "numPartitions": 3,
- *            "replicationFactor": 1
- *          }
+ * <pre>{@code
+ * {
+ *    "class": "org.apache.kafka.trogdor.workload.ExternalCommandSpec",
+ *    "command": ["python", "/path/to/trogdor/python/runner"],
+ *    "durationMs": 10000000,
+ *    "producerNode": "node0",
+ *    "workload": {
+ *      "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+ *      "bootstrapServers": "localhost:9092",
+ *      "targetMessagesPerSec": 10,
+ *      "maxMessages": 100,
+ *      "activeTopics": {
+ *        "foo[1-3]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
  *        }
- *     }
+ *      },
+ *      "inactiveTopics": {
+ *        "foo[4-5]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
+ *        }
+ *      }
  *   }
+ * }
+ * }</pre>
  */
 public class ExternalCommandSpec extends TaskSpec {
     private final String commandNode;
@@ -78,7 +78,7 @@ public class ExternalCommandSpec extends TaskSpec {
             @JsonProperty("shutdownGracePeriodMs") Optional<Integer> shutdownGracePeriodMs) {
         super(startMs, durationMs);
         this.commandNode = (commandNode == null) ? "" : commandNode;
-        this.command = (command == null) ? Collections.unmodifiableList(new ArrayList<>()) : command;
+        this.command = (command == null) ? List.of() : command;
         this.workload = (workload == null) ? NullNode.instance : workload;
         this.shutdownGracePeriodMs = shutdownGracePeriodMs;
     }
@@ -105,7 +105,7 @@ public class ExternalCommandSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(commandNode);
+        return topology -> Set.of(commandNode);
     }
 
     @Override

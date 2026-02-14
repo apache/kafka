@@ -30,7 +30,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
@@ -72,14 +71,14 @@ public class TestPurgatoryPerformance {
                 new DelayedOperationPurgatory<>("fake purgatory", 0, 1000);
         CompletionQueue queue = new CompletionQueue();
 
-        List<String> gcNames = gcMXBeans.stream().map(MemoryManagerMXBean::getName).collect(Collectors.toList());
+        List<String> gcNames = gcMXBeans.stream().map(MemoryManagerMXBean::getName).toList();
         CountDownLatch latch = new CountDownLatch(numRequests);
         long initialCpuTimeNano = getProcessCpuTimeNanos(osMXBean).orElseThrow();
         long start = System.currentTimeMillis();
         Random rand = new Random();
         List<FakeOperationKey> keys = IntStream.range(0, numKeys)
                 .mapToObj(i -> new FakeOperationKey(format("fakeKey%d", rand.nextInt(numPossibleKeys))))
-                .collect(Collectors.toList());
+                .toList();
 
         AtomicLong requestArrivalTime = new AtomicLong(start);
         AtomicLong end = new AtomicLong(0);
@@ -313,7 +312,7 @@ public class TestPurgatoryPerformance {
         }
 
         public void printStats() {
-            List<Long> samples = this.samples.stream().sorted().collect(Collectors.toList());
+            List<Long> samples = this.samples.stream().sorted().toList();
 
             long p75 = samples.get((int) (samples.size() * 0.75d));
             long p50 = samples.get((int) (samples.size() * 0.5d));
@@ -405,12 +404,7 @@ public class TestPurgatoryPerformance {
 
     }
 
-    private static class Scheduled implements Delayed {
-        final FakeOperation operation;
-
-        public Scheduled(FakeOperation operation) {
-            this.operation = operation;
-        }
+    private record Scheduled(FakeOperation operation) implements Delayed {
 
         @Override
         public long getDelay(TimeUnit unit) {
@@ -429,29 +423,10 @@ public class TestPurgatoryPerformance {
         }
     }
 
-    private static class FakeOperationKey implements DelayedOperationKey {
-        private final String key;
-
-        public FakeOperationKey(String key) {
-            this.key = key;
-        }
-
+    private record FakeOperationKey(String key) implements DelayedOperationKey {
         @Override
         public String keyLabel() {
             return key;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            FakeOperationKey that = (FakeOperationKey) o;
-            return Objects.equals(key, that.key);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(key);
         }
     }
 
@@ -469,7 +444,6 @@ public class TestPurgatoryPerformance {
 
         @Override
         public void onExpiration() {
-
         }
 
         @Override

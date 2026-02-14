@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.time.Duration;
 import java.util.Collection;
 
 /**
@@ -51,7 +50,7 @@ import java.util.Collection;
  * Under normal conditions, if a partition is reassigned from one consumer to another, then the old consumer will
  * always invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} for that partition prior to the new consumer
  * invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} for the same partition. So if offsets or other state is saved in the
- * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time the
+ * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will always be accessible by the time the
  * other consumer member taking over that partition and triggering its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
  * <p>
  * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, the consumer may not have an opportunity to do so.
@@ -121,13 +120,31 @@ public interface ConsumerRebalanceListener {
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store.
      * This method will be called during a rebalance operation when the consumer has to give up some partitions.
-     * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
-     * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
+     * The consumer may need to give up some partitions (thus this callback executed) under the following scenarios:
+     * <ul>
+     *     <li>If the consumer assignment changes</li>
+     *     <li>If the consumer is being closed ({@link KafkaConsumer#close(CloseOptions option)})</li>
+     *     <li>If the consumer is unsubscribing ({@link KafkaConsumer#unsubscribe()})</li>
+     * </ul>
      * It is recommended that offsets should be committed in this callback to either Kafka or a
      * custom offset store to prevent duplicate data.
      * <p>
-     * In eager rebalancing, it will always be called at the start of a rebalance and after the consumer stops fetching data.
-     * In cooperative rebalancing, it will be called at the end of a rebalance on the set of partitions being revoked iff the set is non-empty.
+     * This callback is always called before re-assigning the partitions.
+     * If the consumer is using the {@link GroupProtocol#CLASSIC} rebalance protocol:
+     * <ul>
+     *     <li>
+     *         In eager rebalancing, onPartitionsRevoked will be called with the full set of assigned partitions as a parameter (all partitions are revoked).
+     *         It will be called even if there are no partitions to revoke.
+     *     </li>
+     *     <li>
+     *         In cooperative rebalancing, onPartitionsRevoked will be called with the set of partitions to revoke,
+     *         iff the set is non-empty.
+     *     </li>
+     * </ul>
+     * If the consumer is using the {@link GroupProtocol#CONSUMER} rebalance protocol, this callback will be called
+     * with the set of partitions to revoke iff the set is non-empty
+     * (same behavior as the {@link GroupProtocol#CLASSIC} rebalance protocol with Cooperative mode).
+     * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
      * <p>
      * It is common for the revocation callback to use the consumer instance in order to commit offsets. It is possible
@@ -136,8 +153,9 @@ public interface ConsumerRebalanceListener {
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
-     * @param partitions The list of partitions that were assigned to the consumer and now need to be revoked (may not
-     *                   include all currently assigned partitions, i.e. there may still be some partitions left)
+     * @param partitions The list of partitions that were assigned to the consumer and now need to be revoked. This will
+     *                  include the full assignment under the Classic/Eager protocol, given that it revokes all partitions.
+     *                   It will only include the subset to revoke under the Classic/Cooperative and Consumer protocols.
      * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
@@ -145,12 +163,13 @@ public interface ConsumerRebalanceListener {
 
     /**
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
-     * partition re-assignment. This method will be called after the partition re-assignment completes and before the
-     * consumer starts fetching data, and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
+     * partition re-assignment. This method will be called after the partition re-assignment completes (even if no new
+     * partitions were assigned to the consumer), and before the consumer starts fetching data,
+     * and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
      * <p>
      * It is guaranteed that under normal conditions all the processes in a consumer group will execute their
-     * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its
-     * {@link #onPartitionsAssigned(Collection)} callback. During exceptional scenarios, partitions may be migrated
+     * {@link #onPartitionsRevoked(Collection)} callback before any instance executes this onPartitionsAssigned callback.
+     * During exceptional scenarios, partitions may be migrated
      * without the old owner being notified (i.e. their {@link #onPartitionsRevoked(Collection)} callback not triggered),
      * and later when the old owner consumer realized this event, the {@link #onPartitionsLost(Collection)} callback
      * will be triggered by the consumer then.
@@ -161,9 +180,11 @@ public interface ConsumerRebalanceListener {
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
-     * @param partitions The list of partitions that are now assigned to the consumer (previously owned partitions will
-     *                   NOT be included, i.e. this list will only include newly added partitions)
-     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
+     * @param partitions Partitions that have been added to the assignment as a result of the rebalance.
+     *                   Note that partitions that were already owned by this consumer and remain assigned are not
+     *                   included in this list under the Classic/Cooperative or Consumer protocols. THe full assignment
+     *                   will be received under the Classic/Eager protocol.
+     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
     void onPartitionsAssigned(Collection<TopicPartition> partitions);
@@ -188,10 +209,9 @@ public interface ConsumerRebalanceListener {
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
      * @param partitions The list of partitions that were assigned to the consumer and now have been reassigned
-     *                   to other consumers. With the current protocol this will always include all of the consumer's
-     *                   previously assigned partitions, but this may change in future protocols (ie there would still
-     *                   be some partitions left)
-     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
+     *                   to other consumers. With both, the Classic and Consumer protocols, this will always include
+     *                   all partitions that were previously assigned to the consumer.
+     * @throws org.apache.kafka.common.errors.WakeupException    If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
     default void onPartitionsLost(Collection<TopicPartition> partitions) {

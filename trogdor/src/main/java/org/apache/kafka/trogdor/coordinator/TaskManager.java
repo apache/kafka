@@ -256,17 +256,12 @@ public final class TaskManager {
         }
 
         TaskState taskState() {
-            switch (state) {
-                case PENDING:
-                    return new TaskPending(spec);
-                case RUNNING:
-                    return new TaskRunning(spec, startedMs, getCombinedStatus());
-                case STOPPING:
-                    return new TaskStopping(spec, startedMs, getCombinedStatus());
-                case DONE:
-                    return new TaskDone(spec, startedMs, doneMs, error, cancelled, getCombinedStatus());
-            }
-            throw new RuntimeException("unreachable");
+            return switch (state) {
+                case PENDING -> new TaskPending(spec);
+                case RUNNING -> new TaskRunning(spec, startedMs, getCombinedStatus());
+                case STOPPING -> new TaskStopping(spec, startedMs, getCombinedStatus());
+                case DONE -> new TaskDone(spec, startedMs, doneMs, error, cancelled, getCombinedStatus());
+            };
         }
 
         private JsonNode getCombinedStatus() {

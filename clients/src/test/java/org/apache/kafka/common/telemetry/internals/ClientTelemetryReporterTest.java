@@ -19,7 +19,13 @@ package org.apache.kafka.common.telemetry.internals;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
@@ -63,8 +69,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 public class ClientTelemetryReporterTest {
 
@@ -410,6 +418,134 @@ public class ClientTelemetryReporterTest {
             // CompressionType.NONE is used when compression fails.
             assertEquals(CompressionType.NONE.id, request.data().compressionType());
             assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+        }
+    }
+
+    @Test
+    public void testCreateRequestPushCompressionFallbackToNextType() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        // Set up subscription with multiple compression types: GZIP -> LZ4 -> SNAPPY
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
+            uuid, 1234, 20000, List.of(CompressionType.GZIP, CompressionType.LZ4, CompressionType.SNAPPY), true, null);
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
+            // First request: GZIP fails with NoClassDefFoundError, should use NONE for this request
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.GZIP))).thenThrow(new NoClassDefFoundError("GZIP not available"));
+
+            Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            PushTelemetryRequest request = (PushTelemetryRequest) requestOptional.get().build();
+
+            // Should fallback to NONE for this request (GZIP gets cached as unsupported)
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+
+            // Reset state for next request
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+            // Second request: LZ4 is selected (since GZIP is now cached as unsupported), LZ4 fails, should use NONE
+            // Note that some libraries eg. LZ4 return KafkaException with cause as NoClassDefFoundError
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4))).thenThrow(new KafkaException(new NoClassDefFoundError("LZ4 not available")));
+
+            requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            request = (PushTelemetryRequest) requestOptional.get().build();
+
+            // Should fallback to NONE for this request (LZ4 gets cached as unsupported)
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+
+            // Reset state for next request
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+            // Third request: SNAPPY is selected (since GZIP and LZ4 are now cached as unsupported), SNAPPY fails, should use NONE
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.SNAPPY))).thenThrow(new NoClassDefFoundError("SNAPPY not available"));
+
+            requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            request = (PushTelemetryRequest) requestOptional.get().build();
+
+            // Should fallback to NONE for this request (SNAPPY gets cached as unsupported)
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+
+            // Reset state for next request
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+            // Fourth request: All compression types are now cached as unsupported, should use NONE directly
+            requestOptional = telemetrySender.createRequest();
+            assertNotNull(requestOptional);
+            assertTrue(requestOptional.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, requestOptional.get().build());
+            request = (PushTelemetryRequest) requestOptional.get().build();
+
+            // Should use NONE directly (no compression types are supported)
+            assertEquals(CompressionType.NONE.id, request.data().compressionType());
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+        }
+    }
+
+    @Test
+    public void testCreateRequestPushCompressionFallbackAndTermination() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        // Set up subscription with ZSTD compression type
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(
+            uuid, 1234, 20000, List.of(CompressionType.ZSTD, CompressionType.LZ4), true, null);
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        try (MockedStatic<ClientTelemetryUtils> mockedCompress = Mockito.mockStatic(ClientTelemetryUtils.class, new CallsRealMethods())) {
+            
+            // === Test 1: NoClassDefFoundError fallback (recoverable) ===
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.ZSTD)))
+                    .thenThrow(new NoClassDefFoundError("com/github/luben/zstd/BufferPool"));
+            
+            assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+            
+            Optional<AbstractRequest.Builder<?>> request1 = telemetrySender.createRequest();
+            assertNotNull(request1);
+            assertTrue(request1.isPresent());
+            assertInstanceOf(PushTelemetryRequest.class, request1.get().build());
+            PushTelemetryRequest pushRequest1 = (PushTelemetryRequest) request1.get().build();
+            assertEquals(CompressionType.NONE.id, pushRequest1.data().compressionType()); // Fallback to NONE
+            assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
+            
+            // Reset state (simulate successful response handling)
+            assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+            
+            // === Test 2: OutOfMemoryError causes termination (non-recoverable Error) ===
+            mockedCompress.reset();
+            mockedCompress.when(() -> ClientTelemetryUtils.compress(any(), eq(CompressionType.LZ4)))
+                    .thenThrow(new OutOfMemoryError("Out of memory during compression"));
+            
+            assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+
+            assertThrows(KafkaException.class, telemetrySender::createRequest);
+            assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state());
+            
+            // === Test 3: After termination, no more requests ===
+            Optional<AbstractRequest.Builder<?>> request3 = telemetrySender.createRequest();
+            assertNotNull(request3);
+            assertFalse(request3.isPresent()); // No request created
+            assertEquals(ClientTelemetryState.TERMINATED, telemetrySender.state()); // State remains TERMINATED
         }
     }
 
@@ -768,6 +904,163 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.initiateClose();
         assertEquals(ClientTelemetryState.TERMINATED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithRetriableException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException retriableException = new TimeoutException("Request timed out");
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(retriableException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithWrappedRetriableException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException wrappedException = new KafkaException(new DisconnectException("Connection lost"));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(wrappedException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithFatalException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException fatalException = new AuthorizationException("Not authorized for telemetry");
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(fatalException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedGetTelemetrySubscriptionsRequestWithWrappedFatalException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException wrappedException = new KafkaException("Version check failed", 
+            new UnsupportedVersionException("Broker doesn't support telemetry"));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(wrappedException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedPushTelemetryRequestWithRetriableException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
+
+        KafkaException networkException = new NetworkException("Network failure");
+        telemetrySender.handleFailedPushTelemetryRequest(networkException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedPushTelemetryRequestWithFatalException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
+
+        KafkaException authException = new AuthorizationException("Not authorized to push telemetry");
+        telemetrySender.handleFailedPushTelemetryRequest(authException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedRequestWithMultipleRetriableExceptionsInChain() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException chainedException = new TimeoutException("Outer timeout",
+            new DisconnectException("Inner disconnect"));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(chainedException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS, telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+    }
+    
+    @Test
+    public void testHandleFailedRequestWithGenericKafkaException() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        KafkaException genericException = new KafkaException("Unknown error");
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(genericException);
+
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testHandleFailedRequestDuringTermination() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+
+        KafkaException exception = new TimeoutException("Timeout");
+        telemetrySender.handleFailedPushTelemetryRequest(exception);
+
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testSequentialFailuresWithDifferentExceptionTypes() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(
+            new TimeoutException("Timeout 1"));
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(
+            new DisconnectException("Disconnect"));
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertTrue(telemetrySender.enabled());
+
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        telemetrySender.handleFailedGetTelemetrySubscriptionsRequest(
+            new UnsupportedVersionException("Version not supported"));
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertFalse(telemetrySender.enabled());
     }
 
     @AfterEach

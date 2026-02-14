@@ -23,31 +23,29 @@
 // and not the version installed on the machine running the task.
 // Read more about the wrapper here: https://docs.gradle.org/current/userguide/gradle_wrapper.html
 wrapper {
-    gradleVersion = project.gradleVersion
-    distributionType = Wrapper.DistributionType.ALL
+    gradleVersion = versions.gradle
 }
 
 // Custom task to inject support for downloading the gradle wrapper jar if it doesn't exist.
 // This allows us to avoid checking in the jar to our repository.
-// Additionally adds a license header to the wrapper while editing the file contents.
 task bootstrapWrapper() {
     // In the doLast block so this runs when the task is called and not during project configuration.
     doLast {
         def wrapperBasePath = "\$APP_HOME/gradle/wrapper"
         def wrapperJarPath = wrapperBasePath + "/gradle-wrapper.jar"
 
-        // Add a trailing zero to the version if needed.
-        def fullVersion = project.gradleVersion.count(".") == 1 ? "${project.gradleVersion}.0" : versions.gradle
         // Leverages the wrapper jar checked into the gradle project on github because the jar isn't
         // available elsewhere. Using raw.githubusercontent.com instead of github.com because
         // github.com servers deprecated TLSv1/TLSv1.1 support some time ago, so older versions
         // of curl (built against OpenSSL library that doesn't support TLSv1.2) would fail to
         // fetch the jar.
-        def wrapperBaseUrl = "https://raw.githubusercontent.com/gradle/gradle/v$fullVersion/gradle/wrapper"
-        def wrapperJarUrl = wrapperBaseUrl + "/gradle-wrapper.jar"
+        // IMPORTANT: This checksum **must** be updated whenever the Gradle version changes.
+        String wrapperChecksum = "423cb469ccc0ecc31f0e4e1c309976198ccb734cdcbb7029d4bda0f18f57e8d9"
+        def wrapperJarUrl = "https://raw.githubusercontent.com/gradle/gradle/v$versions.gradle/gradle/wrapper/gradle-wrapper.jar"
 
         def bootstrapString = """
       # Loop in case we encounter an error.
+      REQUIRED_WRAPPER_JAR_CHECKSUM="$wrapperChecksum"
       for attempt in 1 2 3; do
         if [ ! -e "$wrapperJarPath" ]; then
           if ! curl -s -S --retry 3 -L -o "$wrapperJarPath" "$wrapperJarUrl"; then
@@ -56,9 +54,31 @@ task bootstrapWrapper() {
             sleep 5
             continue
           fi
+        else
+          # Verify checksum of existing wrapper JAR. 
+          # This prevents developers from running into incompatibility issues when using an outdated wrapper JAR after a Gradle upgrade.
+          # Use sha256sum or shasum, whichever is available.
+          if command -v sha256sum >/dev/null 2>&1; then
+            LOCAL_WRAPPER_JAR_CHECKSUM=\$(sha256sum "$wrapperJarPath" | awk '{print \$1}')
+          elif command -v shasum >/dev/null 2>&1; then
+            LOCAL_WRAPPER_JAR_CHECKSUM=\$(shasum -a 256 "$wrapperJarPath" | awk '{print \$1}')
+          else
+            # If no checksum tool is found, this verification is skipped .
+            warn "Cannot find sha256sum or shasum to verify wrapper JAR."
+            break
+          fi
+
+          # If the local checksum does not match the required checksum, delete the JAR to force re-download.
+          if [ "\$LOCAL_WRAPPER_JAR_CHECKSUM" != "\$REQUIRED_WRAPPER_JAR_CHECKSUM" ] ; then
+            rm -f "$wrapperJarPath"
+          else
+            break
+          fi
         fi
       done
       """.stripIndent()
+
+        String putBootstrapStringAbove = "# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script."
 
         def wrapperScript = wrapper.scriptFile
         def wrapperLines = wrapperScript.readLines()
@@ -66,7 +86,7 @@ task bootstrapWrapper() {
             def bootstrapWritten = false
             wrapperLines.each { line ->
                 // Print the wrapper bootstrap before the first usage of the wrapper jar.
-                if (!bootstrapWritten && line.contains("gradle-wrapper.jar")) {
+                if (!bootstrapWritten && line.contains(putBootstrapStringAbove)) {
                     out.println(bootstrapString)
                     bootstrapWritten = true
                 }

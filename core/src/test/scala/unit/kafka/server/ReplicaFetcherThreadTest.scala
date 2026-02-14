@@ -18,13 +18,13 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.log.LogManager
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
+
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -34,14 +34,18 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBat
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.storage.internals.log.{LogAppendInfo, UnifiedLog}
+import org.apache.kafka.server.ReplicaState
+import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, times, verify, when}
@@ -49,10 +53,10 @@ import org.mockito.Mockito.{mock, times, verify, when}
 import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
 import java.util
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, Properties}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters._
 
 class ReplicaFetcherThreadTest {
 
@@ -161,13 +165,13 @@ class ReplicaFetcherThreadTest {
       mockBlockingSend
     )
 
-    val result = thread.leader.fetchEpochEndOffsets(Map(
-      t1p0 -> new OffsetForLeaderPartition()
+    val result = thread.leader.fetchEpochEndOffsets(java.util.Map.of(
+      t1p0, new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(0),
-      t1p1 -> new OffsetForLeaderPartition()
+      t1p1, new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(0)))
+        .setLeaderEpoch(0))).asScala
 
     val expected = Map(
       t1p0 -> newOffsetForLeaderPartitionResult(t1p0, Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
@@ -209,9 +213,9 @@ class ReplicaFetcherThreadTest {
     stub(partition, replicaManager, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
-    val offsets = Map(
-      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 1),
-      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1)).asJava
+    val offsets = java.util.Map.of(
+      t1p0, newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 1),
+      t1p1, newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1))
 
     //Create the fetcher thread
     val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, Time.SYSTEM)
@@ -307,7 +311,7 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
-    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
 
     def partitionData(partition: Int, divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.PartitionData = {
       new FetchResponseData.PartitionData()
@@ -332,7 +336,7 @@ class ReplicaFetcherThreadTest {
       "Expected " + t1p0 + " to truncate to offset 140 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     assertTrue(truncateToCapture.getAllValues.asScala.contains(141),
       "Expected " + t1p1 + " to truncate to offset 141 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
 
     // Loop 3 should truncate because of diverging epoch. Offset truncation is not complete
     // because divergent epoch is not known to follower. We truncate and stay in Fetching state.
@@ -347,7 +351,7 @@ class ReplicaFetcherThreadTest {
     verify(partition, times(4)).truncateTo(truncateToCapture.capture(), anyBoolean())
     assertTrue(truncateToCapture.getAllValues.asScala.contains(129),
       "Expected to truncate to offset 129 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
 
     // Loop 4 should truncate because of diverging epoch. Offset truncation is not complete
     // because divergent epoch is not known to follower. Last fetched epoch cannot be determined
@@ -364,7 +368,7 @@ class ReplicaFetcherThreadTest {
     verify(partition, times(6)).truncateTo(truncateToCapture.capture(), anyBoolean())
     assertTrue(truncateToCapture.getAllValues.asScala.contains(119),
       "Expected to truncate to offset 119 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    partitions.foreach { tp => assertEquals(Fetching, thread.fetchState(tp).get.state) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
   }
 
   @Test
@@ -521,7 +525,7 @@ class ReplicaFetcherThreadTest {
 
     // Lag is initialized to None when the partition fetch
     // state is created.
-    assertEquals(None, thread.fetchState(t1p0).flatMap(_.lag))
+    assertEquals(None, thread.fetchState(t1p0).flatMap(_.lag.toScala))
 
     // Prepare the fetch response data.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
@@ -539,7 +543,7 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
 
     // Lag is set to Some(0).
-    assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.lag))
+    assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.lag.toScala))
     assertEquals(Optional.of(lastFetchedEpoch), thread.fetchState(t1p0).toJava.flatMap(_.lastFetchedEpoch))
   }
 
@@ -621,13 +625,14 @@ class ReplicaFetcherThreadTest {
     val leaderEpoch = 1
 
     val partitionMap = Map(
-        t1p0 -> PartitionFetchState(Some(topicId1), 150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty),
-        t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty),
-        t2p1 -> PartitionFetchState(Some(topicId2), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty))
+        t1p0 -> new PartitionFetchState(Optional.of(topicId1), 150, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty),
+        t1p1 -> new PartitionFetchState(Optional.of(topicId1), 155, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty),
+        t2p1 -> new PartitionFetchState(Optional.of(topicId2), 160, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty))
 
-    val ResultWithPartitions(fetchRequestOpt, _) = thread.leader.buildFetch(partitionMap)
+    val result = thread.leader.buildFetch(partitionMap.asJava)
+    val fetchRequestOpt = result.result
 
-    assertTrue(fetchRequestOpt.isDefined)
+    assertTrue(fetchRequestOpt.isPresent)
     val fetchRequestBuilder = fetchRequestOpt.get.fetchRequest
 
     val partitionDataMap = partitionMap.map { case (tp, state) =>
@@ -643,16 +648,17 @@ class ReplicaFetcherThreadTest {
     responseData.put(tid1p0, new FetchResponseData.PartitionData())
     responseData.put(tid1p1, new FetchResponseData.PartitionData())
     responseData.put(tid2p1, new FetchResponseData.PartitionData())
-    val fetchResponse = FetchResponse.of(Errors.NONE, 0, 123, responseData)
+    val fetchResponse = FetchResponse.of(Errors.NONE, 0, 123, responseData,  List.empty.asJava)
 
     leader.fetchSessionHandler.handleResponse(fetchResponse, ApiKeys.FETCH.latestVersion())
 
     // Remove t1p0, change the ID for t2p1, and keep t1p1 the same
     val newTopicId = Uuid.randomUuid()
     val partitionMap2 = Map(
-      t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty),
-      t2p1 -> PartitionFetchState(Some(newTopicId), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty))
-    val ResultWithPartitions(fetchRequestOpt2, _) = thread.leader.buildFetch(partitionMap2)
+      t1p1 -> new PartitionFetchState(Optional.of(topicId1), 155, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty),
+      t2p1 -> new PartitionFetchState(Optional.of(newTopicId), 160, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.FETCHING, Optional.empty))
+    val result2 = thread.leader.buildFetch(partitionMap2.asJava)
+    val fetchRequestOpt2 = result2.result
 
     // Since t1p1 didn't change, we drop that one
     val partitionDataMap2 = partitionMap2.drop(1).map { case (tp, state) =>
@@ -660,7 +666,7 @@ class ReplicaFetcherThreadTest {
         config.replicaFetchMaxBytes, Optional.of(state.currentLeaderEpoch), Optional.empty()))
     }
 
-    assertTrue(fetchRequestOpt2.isDefined)
+    assertTrue(fetchRequestOpt2.isPresent)
     val fetchRequestBuilder2 = fetchRequestOpt2.get.fetchRequest
     assertEquals(partitionDataMap2.asJava, fetchRequestBuilder2.fetchData())
     assertEquals(Collections.singletonList(tid2p1), fetchRequestBuilder2.replaced())
@@ -813,5 +819,68 @@ class ReplicaFetcherThreadTest {
     when(replicaManager.getPartitionOrException(t1p1)).thenReturn(partition)
     when(replicaManager.localLogOrException(t2p1)).thenReturn(log)
     when(replicaManager.getPartitionOrException(t2p1)).thenReturn(partition)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "false, false, compact, 0, 0, false",
+    "false, false, compact, 5, 0, false",
+    "false, false, compact, 5, 1, false",
+    "false, false, delete, 0, 0, false",
+    "false, false, delete, 5, 0, false",
+    "false, false, delete, 5, 1, false",
+    "false, true, compact, 0, 0, false",
+    "false, true, compact, 5, 0, false",
+    "false, true, compact, 5, 1, false",
+    "false, true, delete, 0, 0, false",
+    "false, true, delete, 5, 0, false",
+    "false, true, delete, 5, 1, false",
+    "true, false, compact, 0, 0, false",
+    "true, false, compact, 5, 0, false",
+    "true, false, compact, 5, 1, false",
+    "true, false, delete, 0, 0, false",
+    "true, false, delete, 5, 0, false",
+    "true, false, delete, 5, 1, false",
+    "true, true, compact, 0, 0, false",
+    "true, true, compact, 5, 0, false",
+    "true, true, compact, 5, 1, false",
+    "true, true, delete, 0, 0, false",
+    "true, true, delete, 5, 0, true",
+    "true, true, delete, 5, 1, false"))
+  def testShouldFetchFromLastTieredOffset(enableLastTieredOffsetFetch: Boolean,
+                                          remoteStorageEnabled: Boolean,
+                                          cleanUpPolicy: String,
+                                          leaderEndOffset: Long,
+                                          replicaEndOffset: Long,
+                                          expected: Boolean): Unit = {
+    val tp = new TopicPartition("t", 0)
+
+    val props = TestUtils.createBrokerConfig(1)
+    props.put(ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG, String.valueOf(enableLastTieredOffsetFetch))
+    val config = KafkaConfig.fromProps(props)
+
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
+    when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
+
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.brokerTopicStats).thenReturn(new BrokerTopicStats)
+
+    val lcOverrides = new Properties()
+    lcOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanUpPolicy)
+    val logConfig = LogConfig.fromProps(config.extractLogConfigMap, lcOverrides)
+
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    when(log.config).thenReturn(logConfig)
+    when(log.remoteLogEnabled()).thenReturn(remoteStorageEnabled)
+    when(replicaManager.localLog(tp)).thenReturn(Some(log))
+
+    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${mockBlockingSend.brokerEndPoint().id}, fetcherId=0] ")
+    val fetchSessionHandler = new FetchSessionHandler(logContext, mockBlockingSend.brokerEndPoint().id)
+    val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler,
+      config, replicaManager, UNBOUNDED_QUOTA, () => MetadataVersion.MINIMUM_VERSION, () => 1)
+
+    val thread = new ReplicaFetcherThread("test-fetcher", leader, config, failedPartitions, replicaManager, UNBOUNDED_QUOTA, logContext.logPrefix)
+
+    assertEquals(expected, thread.shouldFetchFromLastTieredOffset(tp, leaderEndOffset, replicaEndOffset))
   }
 }

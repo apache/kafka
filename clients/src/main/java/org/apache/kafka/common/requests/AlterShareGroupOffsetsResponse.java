@@ -17,7 +17,10 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
@@ -37,6 +40,7 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(topic -> topic.partitions().forEach(partitionResponse ->
             updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))
         ));
@@ -62,5 +66,48 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
         return new AlterShareGroupOffsetsResponse(
             new AlterShareGroupOffsetsResponseData(readable, version)
         );
+    }
+
+    public static class Builder {
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        AlterShareGroupOffsetsResponseTopicCollection topics = new AlterShareGroupOffsetsResponseTopicCollection();
+
+        private AlterShareGroupOffsetsResponseTopic getOrCreateTopic(String topic, Uuid topicId) {
+            AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = topics.find(topic);
+            if (topicData == null) {
+                topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                    .setTopicName(topic)
+                    .setTopicId(topicId == null ? Uuid.ZERO_UUID : topicId);
+                topics.add(topicData);
+            }
+            return topicData;
+        }
+
+        public Builder addPartition(String topic, int partition, Map<String, Uuid> topicIdsToNames, ApiError error) {
+            AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic, topicIdsToNames.get(topic));
+            topicData.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                .setPartitionIndex(partition)
+                .setErrorCode(error.error().code())
+                .setErrorMessage(error.message()));
+            return this;
+        }
+
+        public AlterShareGroupOffsetsResponse build() {
+            data.setResponses(topics);
+            return new AlterShareGroupOffsetsResponse(data);
+        }
+
+        public Builder merge(AlterShareGroupOffsetsResponseData data, Map<String, Uuid> topicIdsToNames) {
+            data.responses().forEach(topic -> {
+                AlterShareGroupOffsetsResponseTopic newTopic = getOrCreateTopic(topic.topicName(), topicIdsToNames.get(topic.topicName()));
+                topic.partitions().forEach(partition -> newTopic.partitions().add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(partition.partitionIndex())
+                        .setErrorCode(partition.errorCode())
+                        .setErrorMessage(partition.errorMessage())));
+            });
+            return this;
+
+        }
     }
 }

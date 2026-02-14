@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The assignment specification for a Streams group.
+ * The assignment specification for a streams group.
  *
  * @param members           The member metadata keyed by member ID.
  * @param assignmentConfigs Any configurations passed to the assignor.

@@ -77,7 +77,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test", "processId", new MockTime());
+            new StreamsMetricsImpl(metrics, "test", new MockTime());
 
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
@@ -105,7 +105,7 @@ public class MeteredTimestampedWindowStoreTest {
 
     public void setUpWithoutContextName() {
         final StreamsMetricsImpl streamsMetrics =
-                new StreamsMetricsImpl(metrics, "test", "processId", new MockTime());
+                new StreamsMetricsImpl(metrics, "test", new MockTime());
 
         context = new InternalMockProcessorContext<>(
                 TestUtils.tempDirectory(),

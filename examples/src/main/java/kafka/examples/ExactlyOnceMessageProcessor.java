@@ -216,18 +216,14 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
         }
         return consumer.assignment().stream().mapToLong(partition -> {
             long currentPosition = consumer.position(partition);
-            if (fullEndOffsets.containsKey(partition)) {
-                return fullEndOffsets.get(partition) - currentPosition;
-            } else {
-                return 0;
-            }
+            return fullEndOffsets.getOrDefault(partition, currentPosition) - currentPosition;
         }).sum();
     }
 
     /**
      * When we get a generic {@code KafkaException} while processing records, we retry up to {@code MAX_RETRIES} times.
      * If we exceed this threshold, we log an error and move on to the next batch of records.
-     * In a real world application you may want to to send these records to a dead letter topic (DLT) for further processing.
+     * In a real world application you may want to send these records to a dead letter topic (DLT) for further processing.
      * 
      * @param retries Current number of retries
      * @param consumer Consumer instance

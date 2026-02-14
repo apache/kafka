@@ -56,17 +56,11 @@ public class SkimpyOffsetMap implements OffsetMap {
     /* number of entries put into the map */
     private int entries = 0;
 
-    /* number of lookups on the map */
-    private long lookups = 0L;
-
-    /* the number of probes for all lookups */
-    private long probes = 0L;
-
     /* the latest offset written into the map */
     private long lastOffset = -1L;
 
     /**
-     * Create an instance of SkimplyOffsetMap with the default hash algorithm (MD5).
+     * Create an instance of SkimpyOffsetMap with the default hash algorithm (MD5).
      *
      * @param memory The amount of memory this map can use
      */
@@ -105,7 +99,6 @@ public class SkimpyOffsetMap implements OffsetMap {
      */
     @Override
     public long get(ByteBuffer key) throws DigestException {
-        ++lookups;
         hashInto(key, hash1);
         // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
         int attempt = 0;
@@ -136,7 +129,6 @@ public class SkimpyOffsetMap implements OffsetMap {
             throw new IllegalArgumentException("Attempted to add a new entry to a full offset map, "
                 + "entries: " + entries + ", slots: " + slots);
 
-        ++lookups;
         hashInto(key, hash1);
 
         // probe until we find the first empty slot
@@ -174,8 +166,6 @@ public class SkimpyOffsetMap implements OffsetMap {
     @Override
     public void clear() {
         this.entries = 0;
-        this.lookups = 0L;
-        this.probes = 0L;
         this.lastOffset = -1L;
         Arrays.fill(bytes.array(), bytes.arrayOffset(), bytes.arrayOffset() + bytes.limit(), (byte) 0);
     }
@@ -197,14 +187,6 @@ public class SkimpyOffsetMap implements OffsetMap {
     }
 
     /**
-     * The rate of collisions in the lookups
-     */
-    // Visible for testing
-    public double collisionRate() {
-        return (this.probes - this.lookups) / (double) this.lookups;
-    }
-
-    /**
      * Check that there is no entry at the given position
      */
     private boolean isEmpty(int position) {
@@ -223,7 +205,6 @@ public class SkimpyOffsetMap implements OffsetMap {
     private int positionOf(byte[] hash, int attempt) {
         int probe = ByteUtils.readIntBE(hash, Math.min(attempt, hashSize - 4)) + Math.max(0, attempt - hashSize + 4);
         int slot = Utils.abs(probe) % slots;
-        ++this.probes;
         return slot * bytesPerEntry;
     }
 

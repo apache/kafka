@@ -94,12 +94,14 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V],
                                  partition: TopicPartition,
                                  pollTimeoutMs: Long = 100): ConsumerRecords[K, V] = {
+    var result: ConsumerRecords[K, V] = null
+
     TestUtils.pollRecordsUntilTrue(consumer, (polledRecords: ConsumerRecords[K, V]) => {
-      if (polledRecords.records(partition).asScala.nonEmpty)
-        return polledRecords
-      false
+      val hasRecords = !polledRecords.records(partition).isEmpty
+      if (hasRecords) result = polledRecords
+      hasRecords
     }, s"Consumer did not consume any messages for partition $partition before timeout.", JTestUtils.DEFAULT_MAX_WAIT_MS, pollTimeoutMs)
-    throw new IllegalStateException("Should have timed out before reaching here")
+    result
   }
 
   /**

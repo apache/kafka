@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -66,6 +67,10 @@ public class GroupConfigManager implements AutoCloseable {
      */
     public Optional<GroupConfig> groupConfig(String groupId) {
         return Optional.ofNullable(configMap.get(groupId));
+    }
+
+    public List<String> groupIds() {
+        return List.copyOf(configMap.keySet());
     }
 
     /**

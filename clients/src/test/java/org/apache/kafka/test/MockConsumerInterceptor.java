@@ -118,6 +118,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         CONFIG_COUNT.set(0);
         THROW_CONFIG_EXCEPTION.set(0);
         CLUSTER_META.set(null);
+        THROW_ON_CONFIG_EXCEPTION_THRESHOLD.set(0);
         CLUSTER_ID_BEFORE_ON_CONSUME.set(NO_CLUSTER_ID);
     }
 

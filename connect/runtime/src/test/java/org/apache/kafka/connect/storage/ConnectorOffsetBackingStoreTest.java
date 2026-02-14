@@ -40,8 +40,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -440,7 +440,7 @@ public class ConnectorOffsetBackingStoreTest {
         MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.LATEST.name());
         Node noNode = Node.noNode();
         Node[] nodes = new Node[]{noNode};
-        consumer.updatePartitions(topic, Collections.singletonList(new PartitionInfo(topic, 0, noNode, nodes, nodes)));
+        consumer.updatePartitions(topic, List.of(new PartitionInfo(topic, 0, noNode, nodes, nodes)));
         consumer.updateBeginningOffsets(mkMap(mkEntry(new TopicPartition(topic, 0), 100L)));
         return consumer;
     }

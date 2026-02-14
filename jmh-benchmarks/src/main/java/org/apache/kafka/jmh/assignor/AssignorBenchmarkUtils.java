@@ -19,6 +19,8 @@ package org.apache.kafka.jmh.assignor;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -26,17 +28,15 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,90 +89,50 @@ public class AssignorBenchmarkUtils {
     }
 
     /**
-     * Creates a subscription metadata map for the given topics.
+     * Creates a TopicsImage from the given topic names.
      *
-     * @param topicNames                The names of the topics.
-     * @param partitionsPerTopic        The number of partitions per topic.
-     * @return The subscription metadata map.
-     */
-    public static Map<String, TopicMetadata> createSubscriptionMetadata(
-        List<String> topicNames,
-        int partitionsPerTopic
-    ) {
-        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-
-        for (String topicName : topicNames) {
-            Uuid topicId = Uuid.randomUuid();
-
-            TopicMetadata metadata = new TopicMetadata(
-                topicId,
-                topicName,
-                partitionsPerTopic
-            );
-            subscriptionMetadata.put(topicName, metadata);
-        }
-
-        return subscriptionMetadata;
-    }
-
-    /**
-     * Creates a topic metadata map from the given subscription metadata.
-     *
-     * @param subscriptionMetadata  The subscription metadata.
-     * @return The topic metadata map.
-     */
-    public static Map<Uuid, TopicMetadata> createTopicMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>((int) (subscriptionMetadata.size() / 0.75f + 1));
-        for (Map.Entry<String, TopicMetadata> entry : subscriptionMetadata.entrySet()) {
-            topicMetadata.put(entry.getValue().id(), entry.getValue());
-        }
-        return topicMetadata;
-    }
-
-    /**
-     * Creates a TopicsImage from the given subscription metadata.
-     *
-     * @param subscriptionMetadata  The subscription metadata.
+     * @param allTopicNames      The topic names.
+     * @param partitionsPerTopic Number of partitions per topic.
      * @return A TopicsImage containing the topic ids, names and partition counts from the
      *         subscription metadata.
      */
-    public static TopicsImage createTopicsImage(Map<String, TopicMetadata> subscriptionMetadata) {
+    public static CoordinatorMetadataImage createMetadataImage(
+        List<String> allTopicNames,
+        int partitionsPerTopic
+    ) {
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
 
-        for (Map.Entry<String, TopicMetadata> entry : subscriptionMetadata.entrySet()) {
-            TopicMetadata topicMetadata = entry.getValue();
+        for (String topicName : allTopicNames) {
             AssignorBenchmarkUtils.addTopic(
                 delta,
-                topicMetadata.id(),
-                topicMetadata.name(),
-                topicMetadata.numPartitions()
+                Uuid.randomUuid(),
+                topicName,
+                partitionsPerTopic
             );
         }
 
-        return delta.apply(MetadataProvenance.EMPTY).topics();
+        return new KRaftCoordinatorMetadataImage(delta.apply(MetadataProvenance.EMPTY));
     }
 
     /**
-     * Creates a GroupSpec from the given ConsumerGroupMembers.
+     * Creates a GroupSpec from the given ModernGroupMembers.
      *
-     * @param members               The ConsumerGroupMembers.
-     * @param subscriptionType      The group's subscription type.
+     * @param members               The ModernGroupMembers.
+     * @param subscriptionType      The group's subscription type.
      * @param topicResolver         The TopicResolver to use.
      * @return The new GroupSpec.
      */
     public static GroupSpec createGroupSpec(
-        Map<String, ConsumerGroupMember> members,
+        Map<String, ? extends ModernGroupMember> members,
         SubscriptionType subscriptionType,
         TopicIds.TopicResolver topicResolver
     ) {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        for (Map.Entry<String, ConsumerGroupMember> memberEntry : members.entrySet()) {
+        for (Map.Entry<String, ? extends ModernGroupMember> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
-            ConsumerGroupMember member = memberEntry.getValue();
+            ModernGroupMember member = memberEntry.getValue();
 
             memberSpecs.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.ofNullable(member.rackId()),
@@ -185,7 +145,7 @@ public class AssignorBenchmarkUtils {
         return new GroupSpecImpl(
             memberSpecs,
             subscriptionType,
-            Collections.emptyMap()
+            Map.of()
         );
     }
 
@@ -279,6 +239,88 @@ public class AssignorBenchmarkUtils {
         return members;
     }
 
+    /**
+     * Creates a ShareGroupMembers map where all members have the same topic subscriptions.
+     *
+     * @param memberCount           The number of members in the group.
+     * @param getMemberId           A function to map member indices to member ids.
+     * @param topicNames            The topics to subscribe to.
+     * @return The new ShareGroupMembers map.
+     */
+    public static Map<String, ShareGroupMember> createHomogeneousShareGroupMembers(
+        int memberCount,
+        Function<Integer, String> getMemberId,
+        List<String> topicNames
+    ) {
+        Map<String, ShareGroupMember> members = new HashMap<>();
+
+        for (int i = 0; i < memberCount; i++) {
+            String memberId = getMemberId.apply(i);
+
+            members.put(memberId, new ShareGroupMember.Builder("member" + i)
+                .setSubscribedTopicNames(topicNames)
+                .build()
+            );
+        }
+
+        return members;
+    }
+
+    /**
+     * Creates a ShareGroupMembers map where members have different topic subscriptions.
+     *
+     * Divides members and topics into a given number of buckets. Within each bucket, members are
+     * subscribed to the same topics.
+     *
+     * @param memberCount           The number of members in the group.
+     * @param bucketCount           The number of buckets.
+     * @param getMemberId           A function to map member indices to member ids.
+     * @param topicNames            The topics to subscribe to.
+     * @return The new ShareGroupMembers map.
+     */
+    public static Map<String, ShareGroupMember> createHeterogeneousBucketedShareGroupMembers(
+        int memberCount,
+        int bucketCount,
+        Function<Integer, String> getMemberId,
+        List<String> topicNames
+    ) {
+        Map<String, ShareGroupMember> members = new HashMap<>();
+
+        // Adjust bucket count based on member count when member count < max bucket count.
+        bucketCount = Math.min(bucketCount, memberCount);
+
+        // Check minimum topics requirement
+        if (topicNames.size() < bucketCount) {
+            throw new IllegalArgumentException("At least " + bucketCount + " topics are recommended for effective bucketing.");
+        }
+
+        int bucketSizeTopics = (int) Math.ceil((double) topicNames.size() / bucketCount);
+        int bucketSizeMembers = (int) Math.ceil((double) memberCount / bucketCount);
+
+        // Define buckets for each member and assign topics from the same bucket
+        for (int bucket = 0; bucket < bucketCount; bucket++) {
+            int memberStartIndex = bucket * bucketSizeMembers;
+            int memberEndIndex = Math.min((bucket + 1) * bucketSizeMembers, memberCount);
+
+            int topicStartIndex = bucket * bucketSizeTopics;
+            int topicEndIndex = Math.min((bucket + 1) * bucketSizeTopics, topicNames.size());
+
+            List<String> bucketTopicNames = topicNames.subList(topicStartIndex, topicEndIndex);
+
+            // Assign topics to each member in the current bucket
+            for (int i = memberStartIndex; i < memberEndIndex; i++) {
+                String memberId = getMemberId.apply(i);
+
+                members.put(memberId, new ShareGroupMember.Builder("member" + i)
+                    .setSubscribedTopicNames(bucketTopicNames)
+                    .build()
+                );
+            }
+        }
+
+        return members;
+    }
+
     public static void addTopic(
         MetadataDelta delta,
         Uuid topicId,
@@ -293,7 +335,7 @@ public class AssignorBenchmarkUtils {
             delta.replay(new PartitionRecord()
                 .setTopicId(topicId)
                 .setPartitionId(i)
-                .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
+                .setReplicas(List.of(i % 4, (i + 1) % 4)));
         }
     }
 }

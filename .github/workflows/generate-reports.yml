@@ -32,12 +32,12 @@ jobs:
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Run Report
         if : ${{ ! github.event.repository.fork }}
         env:
-          DEVELOCITY_ACCESS_TOKEN: ${{ secrets.DV_API_ACCESS }}
+          DEVELOCITY_ACCESS_TOKEN: ${{ secrets.KAFKA_DEVELOCITY_ACCESS_KEY }}
         run: |
           python ./.github/scripts/develocity_reports.py >> $GITHUB_STEP_SUMMARY

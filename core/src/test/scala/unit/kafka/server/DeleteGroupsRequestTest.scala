@@ -78,8 +78,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       )
 
       deleteGroups(
-        groupIds = List("grp-non-empty", "grp"),
-        expectedErrors = List(Errors.NON_EMPTY_GROUP, Errors.NONE),
+        groupIds = List("grp-non-empty", "grp", ""),
+        expectedErrors = List(Errors.NON_EMPTY_GROUP, Errors.NONE, Errors.GROUP_ID_NOT_FOUND),
         version = version.toShort
       )
 

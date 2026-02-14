@@ -402,13 +402,13 @@ public class FeatureControlManager {
             if (!metadataChanged) {
                 log.warn("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
             } else if (allowUnsafeDowngrade) {
-                return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported " +
-                        "in this version.");
+                return unsupportedMetadataDowngrade(currentVersion, newVersion, 
+                        "Unsafe metadata downgrade is not supported in this version.");
             } else {
                 // The phrase "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed." has been removed
                 // because unsafe metadata downgrades are not yet supported. We can add it back when implemented (KAFKA-13896).
-                return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
-                        "downgrade because it might delete metadata information.");
+                return unsupportedMetadataDowngrade(currentVersion, newVersion,
+                        "Refusing to perform the requested downgrade because it might delete metadata information.");
             }
         } else {
             log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
@@ -424,6 +424,13 @@ public class FeatureControlManager {
 
     private ApiError invalidMetadataVersion(short version, String message) {
         String errorMessage = String.format("Invalid metadata.version %d. %s", version, message);
+        log.warn(errorMessage);
+        return new ApiError(Errors.INVALID_UPDATE_VERSION, errorMessage);
+    }
+
+    private ApiError unsupportedMetadataDowngrade(MetadataVersion currentVersion, MetadataVersion targetVersion, String message) {
+        String errorMessage = String.format("Unsupported metadata.version downgrade from %s to %s. %s", 
+                currentVersion.featureLevel(), targetVersion.featureLevel(), message);
         log.warn(errorMessage);
         return new ApiError(Errors.INVALID_UPDATE_VERSION, errorMessage);
     }

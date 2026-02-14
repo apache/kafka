@@ -34,9 +34,7 @@ specifies the versions of the protocol that our code understands.  For example,
 specifying "0-2" indicates that we understand versions 0, 1, and 2.  You must
 always specify the highest message version which is supported.
 
-The only old message versions that are no longer supported are version 0 of
-MetadataRequest and MetadataResponse.  In general, since we adopted KIP-97,
-dropping support for old message versions is no longer allowed without a KIP.
+Dropping support for old message versions is no longer allowed without a KIP.
 Therefore, please be careful not to increase the lower end of the version
 support interval for any message.
 
@@ -93,6 +91,8 @@ There are several primitive field types available.
 
 * "records": recordset such as memory recordset.
 
+* "struct": a composite object consisting of one or more fields.
+
 In addition to these primitive field types, there is also an array type.  Array
 types start with a "[]" and end with the name of the element type.  For
 example, []Foo declares an array of "Foo" objects.  Array fields have their own
@@ -103,10 +103,11 @@ Guide](https://kafka.apache.org/protocol.html).
 
 Nullable Fields
 ---------------
-Booleans, ints, and floats can never be null.  However, fields that are strings,
-bytes, uuid, records, or arrays may optionally be "nullable".  When a field is 
-"nullable", that simply means that we are prepared to serialize and deserialize
-null entries for that field.
+Booleans, ints, floats and uuid can never be null. Uuid fields use a special zero uuid
+value (all bits set to 0) as a sentinel to represent "no UUID" instead of null. However,
+fields that are strings, bytes, records, struct, or arrays may optionally be "nullable".
+When a field is "nullable", that simply means that we are prepared to serialize and
+deserialize null entries for that field.
 
 If you want to declare a field as nullable, you set "nullableVersions" for that
 field.  Nullability is implemented as a version range in order to accommodate a

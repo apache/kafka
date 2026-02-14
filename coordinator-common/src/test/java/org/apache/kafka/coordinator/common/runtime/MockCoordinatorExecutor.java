@@ -49,34 +49,13 @@ public class MockCoordinatorExecutor<T> implements CoordinatorExecutor<T> {
         }
     }
 
-    public static class ExecutorResult<T> {
-        public final String key;
-        public final CoordinatorResult<Void, T> result;
-
+    public record ExecutorResult<T>(String key, CoordinatorResult<Void, T> result) {
         public ExecutorResult(
             String key,
             CoordinatorResult<Void, T> result
         ) {
             this.key = Objects.requireNonNull(key);
             this.result = Objects.requireNonNull(result);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            ExecutorResult<?> that = (ExecutorResult<?>) o;
-
-            if (!Objects.equals(key, that.key)) return false;
-            return Objects.equals(result, that.result);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = key.hashCode();
-            result = 31 * result + this.result.hashCode();
-            return result;
         }
 
         @Override

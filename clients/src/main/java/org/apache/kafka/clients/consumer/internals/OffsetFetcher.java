@@ -115,7 +115,7 @@ public class OffsetFetcher {
      */
     public void validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
-                offsetFetcherUtils.getPartitionsToValidate();
+                offsetFetcherUtils.refreshAndGetPartitionsToValidate();
 
         validatePositionsAsync(partitionsToValidate);
     }

@@ -58,6 +58,13 @@ public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
         }
     }
 
+    /*
+       The StreamMetrics object is a singleton shared by all StreamThread instances.
+       So we need to make sure we only pass metrics for the current StreamThread that contains this
+       MetricsReporter instance, which will register metrics with the embedded KafkaConsumer to pass
+       through the telemetry pipeline.
+       Otherwise, Kafka Streams would register multiple metrics for all StreamThreads.
+     */
     private boolean tagMatchStreamOrStateUpdaterThreadId(final KafkaMetric metric) {
         final Map<String, String> tags = metric.metricName().tags();
         final boolean shouldInclude = tags.containsKey(THREAD_ID_TAG) && (tags.get(THREAD_ID_TAG).equals(threadId) ||

@@ -53,7 +53,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -721,7 +720,7 @@ public class FetchCollectorTest {
      * This is a handy utility method for returning a set from a varargs array.
      */
     private static Set<TopicPartition> partitions(TopicPartition... partitions) {
-        return new HashSet<>(Arrays.asList(partitions));
+        return Set.of(partitions);
     }
 
     private void buildDependencies() {

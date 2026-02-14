@@ -80,12 +80,18 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     }
 
     public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(Errors error) {
-        return getErrorDeleteResponseData(error.code(), error.message());
+        return getErrorDeleteResponseData(error, null);
     }
 
     public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(short errorCode, String errorMessage) {
         return new DeleteShareGroupOffsetsResponseData()
             .setErrorCode(errorCode)
-            .setErrorMessage(errorMessage);
+            .setErrorMessage(errorMessage == null ? Errors.forCode(errorCode).message() : errorMessage);
+    }
+
+    public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(Errors error, String errorMessage) {
+        return new DeleteShareGroupOffsetsResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage == null ? error.message() : errorMessage);
     }
 }

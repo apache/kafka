@@ -129,10 +129,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_after_broker_down_initially",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,
@@ -189,10 +191,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_normal_broker_start",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,
@@ -273,10 +277,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_after_normal_broker_start",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,
@@ -320,10 +326,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
+                    # repeating_keys enables production of records with keys, ensuring that we produce to all 3 partitions
                     self.assert_produce(self.inputTopic,
                                         "sending_message_after_hard_bouncing_streams_instance_bouncing_broker",
                                         num_messages=self.num_messages,
-                                        timeout_sec=120)
+                                        timeout_sec=120,
+                                        repeating_keys=self.num_messages)
 
                     monitor_1.wait_until(self.message,
                                          timeout_sec=120,

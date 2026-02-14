@@ -24,6 +24,7 @@ import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogCleaner;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
@@ -172,6 +173,8 @@ public class LogManagerBuilder {
                               logDirFailureChannel,
                               time,
                               remoteStorageSystemEnable,
-                              initialTaskDelayMs);
+                              initialTaskDelayMs,
+                              LogCleaner::new
+                );
     }
 }

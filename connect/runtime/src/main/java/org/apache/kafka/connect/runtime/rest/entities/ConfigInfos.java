@@ -16,84 +16,14 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
-import java.util.Objects;
 
-public class ConfigInfos {
-
-    @JsonProperty("name")
-    private final String name;
-
-    @JsonProperty("error_count")
-    private final int errorCount;
-
-    @JsonProperty("groups")
-    private final List<String> groups;
-
-    @JsonProperty("configs")
-    private final List<ConfigInfo> configs;
-
-    @JsonCreator
-    public ConfigInfos(@JsonProperty("name") String name,
-                       @JsonProperty("error_count") int errorCount,
-                       @JsonProperty("groups") List<String> groups,
-                       @JsonProperty("configs") List<ConfigInfo> configs) {
-        this.name = name;
-        this.groups = groups;
-        this.errorCount = errorCount;
-        this.configs = configs;
-    }
-
-    @JsonProperty
-    public String name() {
-        return name;
-    }
-
-    @JsonProperty
-    public List<String> groups() {
-        return groups;
-    }
-
-    @JsonProperty("error_count")
-    public int errorCount() {
-        return errorCount;
-    }
-
-    @JsonProperty("configs")
-    public List<ConfigInfo> values() {
-        return configs;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ConfigInfos that = (ConfigInfos) o;
-        return Objects.equals(name, that.name) &&
-               Objects.equals(errorCount, that.errorCount) &&
-               Objects.equals(groups, that.groups) &&
-               Objects.equals(configs, that.configs);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, errorCount, groups, configs);
-    }
-
-    @Override
-    public String toString() {
-        return "[" +
-                name +
-                "," +
-                errorCount +
-                "," +
-                groups +
-                "," +
-                configs +
-                "]";
-    }
-
+public record ConfigInfos(
+    @JsonProperty("name") String name,
+    @JsonProperty("error_count") int errorCount,
+    @JsonProperty("groups") List<String> groups,
+    @JsonProperty("configs") List<ConfigInfo> configs
+) {
 }

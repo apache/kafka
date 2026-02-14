@@ -18,48 +18,12 @@ package org.apache.kafka.storage.internals.log;
 
 import java.util.Objects;
 
-public class LoadedLogOffsets {
-    public final long logStartOffset;
-    public final long recoveryPoint;
-    public final LogOffsetMetadata nextOffsetMetadata;
-
+public record LoadedLogOffsets(long logStartOffset, long recoveryPoint, LogOffsetMetadata nextOffsetMetadata) {
     public LoadedLogOffsets(final long logStartOffset,
                             final long recoveryPoint,
                             final LogOffsetMetadata nextOffsetMetadata) {
         this.logStartOffset = logStartOffset;
         this.recoveryPoint = recoveryPoint;
         this.nextOffsetMetadata = Objects.requireNonNull(nextOffsetMetadata, "nextOffsetMetadata should not be null");
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-
-        final LoadedLogOffsets that = (LoadedLogOffsets) o;
-        return logStartOffset == that.logStartOffset
-                && recoveryPoint == that.recoveryPoint
-                && nextOffsetMetadata.equals(that.nextOffsetMetadata);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = Long.hashCode(logStartOffset);
-        result = 31 * result + Long.hashCode(recoveryPoint);
-        result = 31 * result + nextOffsetMetadata.hashCode();
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "LoadedLogOffsets(" +
-                "logStartOffset=" + logStartOffset +
-                ", recoveryPoint=" + recoveryPoint +
-                ", nextOffsetMetadata=" + nextOffsetMetadata +
-                ')';
     }
 }

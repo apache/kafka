@@ -198,6 +198,11 @@ public class LogCleaner implements BrokerReconfigurable {
      * Start the background cleaner threads.
      */
     public void startup() {
+        if (config.numThreads < 1) {
+            LOG.warn("Invalid value for `log.cleaner.threads`: must be >= 1 starting from Kafka 5.0 since log cleaner" +
+                    " is always enabled.");
+        }
+
         LOG.info("Starting the log cleaner");
         IntStream.range(0, config.numThreads).forEach(i -> {
             try {
@@ -459,7 +464,7 @@ public class LogCleaner implements BrokerReconfigurable {
      * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
      * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
      */
-    public class CleanerThread extends ShutdownableThread {
+    public final class CleanerThread extends ShutdownableThread {
         private final Logger logger = new LogContext(logPrefix).logger(CleanerThread.class);
 
         private final Cleaner cleaner;
@@ -467,7 +472,6 @@ public class LogCleaner implements BrokerReconfigurable {
         private volatile CleanerStats lastStats = new CleanerStats(Time.SYSTEM);
         private volatile PreCleanStats lastPreCleanStats = new PreCleanStats();
 
-        @SuppressWarnings("this-escape")
         public CleanerThread(int threadId) throws NoSuchAlgorithmException {
             super("kafka-log-cleaner-thread-" + threadId, false);
 

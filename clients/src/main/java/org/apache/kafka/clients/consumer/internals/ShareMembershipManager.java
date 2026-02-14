@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.metrics.ShareRebalanceMetricsManager;
 import org.apache.kafka.common.Uuid;
@@ -81,7 +82,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                                   String groupId,
                                   String rackId,
                                   SubscriptionState subscriptions,
-                                  ConsumerMetadata metadata,
+                                  Metadata metadata,
                                   Time time,
                                   Metrics metrics) {
         this(logContext,
@@ -98,7 +99,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                            String groupId,
                            String rackId,
                            SubscriptionState subscriptions,
-                           ConsumerMetadata metadata,
+                           Metadata metadata,
                            Time time,
                            ShareRebalanceMetricsManager metricsManager) {
         super(groupId,
@@ -137,7 +138,7 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                     "already leaving the group.", memberId, memberEpoch);
             return;
         }
-        if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
+        if (state == MemberState.UNSUBSCRIBED && responseData.memberEpoch() < 0 && maybeCompleteLeaveInProgress()) {
             log.debug("Member {} with epoch {} received a successful response to the heartbeat " +
                     "to leave the group and completed the leave operation. ", memberId, memberEpoch);
             return;
@@ -145,6 +146,13 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
                     " so it's not a member of the group. ", memberId, state);
+            return;
+        }
+        if (responseData.memberEpoch() < 0) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} " +
+                    "is in {} state and the member epoch is invalid: {}. ", memberId, memberEpoch, state,
+                    responseData.memberEpoch());
+            maybeCompleteLeaveInProgress();
             return;
         }
 

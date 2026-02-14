@@ -61,13 +61,22 @@ public class TopicIdPartitionSet {
     }
 
     /**
-     * Add a new topic (id+name) and partition. This will keep it, and also save references to the topic ID, topic name and partition.
+     * Add a single partition to the assignment, along with its topic ID and name.
+     * This will keep it, and also save references to the topic ID, topic name and partition.
+     * Visible for testing.
      */
-    public void add(TopicIdPartition topicIdPartition) {
+    void add(TopicIdPartition topicIdPartition) {
         topicIdPartitions.add(topicIdPartition);
         topicPartitions.add(topicIdPartition.topicPartition());
         topicIds.add(topicIdPartition.topicId());
         topicNames.add(topicIdPartition.topicPartition().topic());
+    }
+
+    /**
+     * Add a set of partitions to the assignment, along with the topic ID and name.
+     */
+    public void addAll(Uuid topicId, String topicName, Set<Integer> partitions) {
+        partitions.forEach(tp -> add(new TopicIdPartition(topicId, tp, topicName)));
     }
 
     public boolean isEmpty() {

@@ -317,7 +317,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
         waitForCondition(
             () -> streamInstanceOneRecovery.state() == KafkaStreams.State.ERROR,
-            "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
+                () -> "Stream instance 1 did not go into error state. Is in " + streamInstanceOneRecovery.state() + " state."
         );
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.fetcher;
 
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerBlockingSender;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
@@ -31,10 +32,9 @@ import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.metadata.KRaftMetadataCache;
-import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -48,11 +48,14 @@ import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.RecordsSend;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.jmh.util.BenchmarkConfigUtils;
+import org.apache.kafka.metadata.KRaftMetadataCache;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.MockConfigRepository;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.network.BrokerEndPoint;
@@ -82,20 +85,17 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import scala.Option;
-import scala.collection.Iterator;
-import scala.collection.Map;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
@@ -121,18 +121,16 @@ public class ReplicaFetcherThreadBenchmark {
     @Setup(Level.Trial)
     public void setup() throws IOException {
         scheduler.startup();
-        KafkaConfig config =  KafkaConfig.fromProps(TestUtils.createBrokerConfig(
-            0, true, true, 9092, Option.empty(), Option.empty(),
-            Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
-            (short) 1, false));
+        Properties configs = BenchmarkConfigUtils.createDummyBrokerConfig();
+        KafkaConfig config =  KafkaConfig.fromProps(configs);
         LogConfig logConfig = createLogConfig();
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(config.logDirs().size());
-        List<File> logDirs = CollectionConverters.asJava(config.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        List<File> logDirs = config.logDirs().stream().map(File::new).toList();
         logManager = new LogManagerBuilder().
             setLogDirs(logDirs).
-            setInitialOfflineDirs(Collections.emptyList()).
+            setInitialOfflineDirs(List.of()).
             setConfigRepository(new MockConfigRepository()).
             setInitialDefaultConfig(logConfig).
             setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false)).
@@ -148,6 +146,7 @@ public class ReplicaFetcherThreadBenchmark {
             setTime(Time.SYSTEM).
             build();
 
+        AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         replicaManager = new ReplicaManagerBuilder().
             setConfig(config).
             setMetrics(metrics).
@@ -158,7 +157,7 @@ public class ReplicaFetcherThreadBenchmark {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(new KRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
             setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
-            setAlterPartitionManager(TestUtils.createAlterIsrManager()).
+            setAlterPartitionManager(alterPartitionManager).
             build();
 
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> initialFetched = new LinkedHashMap<>();
@@ -166,20 +165,21 @@ public class ReplicaFetcherThreadBenchmark {
         for (int i = 0; i < partitionCount; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
 
-            List<Integer> replicas = Arrays.asList(0, 1, 2);
-            LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
-                    .setControllerEpoch(0)
-                    .setLeader(0)
-                    .setLeaderEpoch(0)
-                    .setIsr(replicas)
-                    .setPartitionEpoch(1)
-                    .setReplicas(replicas)
-                    .setIsNew(true);
+            int[] replicas = {0, 1, 2};
+            PartitionRegistration partitionRegistration = new PartitionRegistration.Builder()
+                .setLeader(0)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED)
+                .setLeaderEpoch(0)
+                .setIsr(replicas)
+                .setPartitionEpoch(1)
+                .setReplicas(replicas)
+                .setDirectories(DirectoryId.unassignedArray(replicas.length))
+                .build();
 
             OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Optional.of(0L);
             Partition partition = replicaManager.createPartition(tp);
 
-            partition.makeFollower(partitionState, checkpoints, topicId, Option.empty());
+            partition.makeFollower(partitionRegistration, true, checkpoints, topicId, Option.empty());
             pool.put(tp, partition);
             initialFetchStates.put(tp, new InitialFetchState(topicId, new BrokerEndPoint(3, "host", 3000), 0, 0));
             BaseRecords fetched = new BaseRecords() {
@@ -221,7 +221,7 @@ public class ReplicaFetcherThreadBenchmark {
         // so that we do not measure this time as part of the steady state work
         fetcher.doWork();
         // handle response to engage the incremental fetch session handler
-        ((RemoteLeaderEndPoint) fetcher.leader()).fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched), ApiKeys.FETCH.latestVersion());
+        ((RemoteLeaderEndPoint) fetcher.leader()).fetchSessionHandler().handleResponse(FetchResponse.of(Errors.NONE, 0, 999, initialFetched, List.of()), ApiKeys.FETCH.latestVersion());
     }
 
     @TearDown(Level.Trial)
@@ -280,10 +280,8 @@ public class ReplicaFetcherThreadBenchmark {
 
                         @Override
                         public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
-                            scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
-                            Iterator<TopicPartition> iterator = partitions.keys().iterator();
-                            while (iterator.hasNext()) {
-                                TopicPartition tp = iterator.next();
+                            var endOffsets = new HashMap<TopicPartition, EpochEndOffset>();
+                            for (TopicPartition tp : partitions.keySet()) {
                                 endOffsets.put(tp, new EpochEndOffset()
                                         .setPartition(tp.partition())
                                         .setErrorCode(Errors.NONE.code())
@@ -295,7 +293,7 @@ public class ReplicaFetcherThreadBenchmark {
 
                         @Override
                         public Map<TopicPartition, FetchResponseData.PartitionData> fetch(FetchRequest.Builder fetchRequest) {
-                            return new scala.collection.mutable.HashMap<>();
+                            return Map.of();
                         }
                     },
                     config,

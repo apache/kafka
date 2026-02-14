@@ -138,6 +138,7 @@ public class ConsoleShareConsumerTest {
         consumer.cleanup();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldUpgradeDeliveryCount() {
         // Mock dependencies

@@ -242,7 +242,7 @@ public class MockProcessorContextAPITest {
         final Properties config = mkProperties(
             mkMap(
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "testMetadata"),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "")
+                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock-localhost:9092")
             )
         );
 
@@ -336,7 +336,7 @@ public class MockProcessorContextAPITest {
     public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testFullConstructor");
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "mock-localhost:9092");
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
 

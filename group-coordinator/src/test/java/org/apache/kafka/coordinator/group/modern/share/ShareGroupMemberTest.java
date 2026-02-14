@@ -18,7 +18,8 @@ package org.apache.kafka.coordinator.group.modern.share;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
-import org.apache.kafka.coordinator.group.MetadataImageBuilder;
+import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.image.MetadataImage;
 
@@ -169,7 +170,7 @@ public class ShareGroupMemberTest {
                 mkTopicAssignment(topicId1, 0, 1, 2)))
             .build();
 
-        ShareGroupDescribeResponseData.Member actual = member.asShareGroupDescribeMember(metadataImage.topics());
+        ShareGroupDescribeResponseData.Member actual = member.asShareGroupDescribeMember(new KRaftCoordinatorMetadataImage(metadataImage));
         ShareGroupDescribeResponseData.Member expected = new ShareGroupDescribeResponseData.Member()
             .setMemberId(memberId)
             .setMemberEpoch(epoch)

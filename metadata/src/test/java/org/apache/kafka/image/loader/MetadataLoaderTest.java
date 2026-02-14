@@ -18,6 +18,7 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
@@ -36,6 +37,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.MockFaultHandler;
@@ -59,6 +61,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -355,6 +358,8 @@ public class MetadataLoaderTest {
                 publishers.get(0).latestSnapshotManifest);
             assertEquals(MINIMUM_VERSION,
                 loader.metrics().currentMetadataVersion());
+            assertEquals(MINIMUM_VERSION.featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
         }
         assertTrue(publishers.get(0).closed);
         assertEquals(Optional.of(MINIMUM_VERSION), publishers.get(0).latestImage.features().metadataVersion());
@@ -509,6 +514,65 @@ public class MetadataLoaderTest {
     }
 
     /**
+     * Test the kraft.version finalized level value is correct.
+     * @throws Exception
+     */
+    @Test
+    public void testKRaftVersionFinalizedLevelMetric() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("testKRaftVersionFinalizedLevelMetric");
+        MockTime time = new MockTime();
+        List<MockPublisher> publishers = List.of(new MockPublisher());
+        try (MetadataLoader loader = new MetadataLoader.Builder().
+            setFaultHandler(faultHandler).
+            setTime(time).
+            setHighWaterMarkAccessor(() -> OptionalLong.of(1L)).
+            build()) {
+            loader.installPublishers(publishers).get();
+            loadTestSnapshot(loader, 200);
+            assertThrows(
+                NullPointerException.class,
+                () -> loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME)
+            );
+            publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
+            MockBatchReader batchReader = new MockBatchReader(
+                300,
+                List.of(
+                    Batch.control(
+                        300,
+                        100,
+                        4000,
+                        10,
+                        List.of(ControlRecord.of(new KRaftVersionRecord()))
+                    )
+                )
+            ).setTime(time);
+            loader.handleCommit(batchReader);
+            loader.waitForAllEventsToBeHandled();
+            assertTrue(batchReader.closed);
+            assertEquals(300L, loader.lastAppliedOffset());
+            assertEquals((short) 0, loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME));
+            loader.handleCommit(new MockBatchReader(301, List.of(
+                MockBatchReader.newBatch(301, 100, List.of(
+                    new ApiMessageAndVersion(new RemoveTopicRecord().
+                        setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))))));
+            loader.waitForAllEventsToBeHandled();
+            assertEquals(301L, loader.lastAppliedOffset());
+            assertEquals((short) 0, loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME));
+            loader.handleCommit(new MockBatchReader(302, List.of(
+                Batch.control(
+                    302,
+                    100,
+                    4000,
+                    10,
+                    List.of(ControlRecord.of(new KRaftVersionRecord().setKRaftVersion((short) 1)))))));
+            loader.waitForAllEventsToBeHandled();
+            assertEquals(302L, loader.lastAppliedOffset());
+            assertEquals((short) 1, loader.metrics().finalizedFeatureLevel(KRaftVersion.FEATURE_NAME));
+        }
+        assertTrue(publishers.get(0).closed);
+    }
+
+    /**
      * Test that the lastAppliedOffset moves forward as expected.
      */
     @Test
@@ -640,12 +704,16 @@ public class MetadataLoaderTest {
             assertEquals(200L, loader.lastAppliedOffset());
             assertEquals(MINIMUM_VERSION.featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
+            assertEquals(MINIMUM_VERSION.featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
             assertFalse(publishers.get(0).latestDelta.image().isEmpty());
 
             loadTestSnapshot2(loader, 400);
             assertEquals(400L, loader.lastAppliedOffset());
             assertEquals(MetadataVersion.latestProduction().featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
+            assertEquals(MetadataVersion.latestProduction().featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
 
             // Make sure the topic in the initial snapshot was overwritten by loading the new snapshot.
             assertFalse(publishers.get(0).latestImage.topics().topicsByName().containsKey("foo"));
@@ -659,6 +727,8 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
             assertEquals(IBP_3_5_IV0.featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
+            assertEquals(IBP_3_5_IV0.featureLevel(),
+                loader.metrics().finalizedFeatureLevel(FEATURE_NAME));
         }
         faultHandler.maybeRethrowFirstException();
     }

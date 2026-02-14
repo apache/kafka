@@ -66,14 +66,7 @@ public class JmxTool {
     public static void main(String[] args) {
         try {
             JmxToolOptions options = new JmxToolOptions(args);
-            if (CommandLineUtils.isPrintHelpNeeded(options)) {
-                CommandLineUtils.printUsageAndExit(options.parser, "Dump JMX values to standard output.");
-                return;
-            }
-            if (CommandLineUtils.isPrintVersionNeeded(options)) {
-                CommandLineUtils.printVersionAndExit();
-                return;
-            }
+            CommandLineUtils.maybePrintHelpOrVersion(options, "Dump JMX values to standard output.");
 
             Optional<String[]> attributesInclude = options.attributesInclude();
             Optional<DateFormat> dateFormat = options.dateFormat();
@@ -96,7 +89,7 @@ public class JmxTool {
             while (keepGoing) {
                 long start = System.currentTimeMillis();
                 Map<String, Object> attributes = queryAttributes(conn, found, attributesInclude);
-                attributes.put("time", dateFormat.isPresent() ? dateFormat.get().format(new Date()) : String.valueOf(System.currentTimeMillis()));
+                attributes.put("time", dateFormat.map(format -> format.format(new Date())).orElseGet(() -> String.valueOf(System.currentTimeMillis())));
                 maybePrintDataRows(reportFormat, numExpectedAttributes, keys, attributes);
                 if (options.isOneTime()) {
                     keepGoing = false;
@@ -225,7 +218,7 @@ public class JmxTool {
                         AttributeList attributes = conn.getAttributes(objectName, attributesNames(mBeanInfo));
                         List<ObjectName> expectedAttributes = new ArrayList<>();
                         attributes.asList().forEach(attribute -> {
-                            if (Arrays.asList(attributesInclude.get()).contains(attribute.getName())) {
+                            if (List.of(attributesInclude.get()).contains(attribute.getName())) {
                                 expectedAttributes.add(objectName);
                             }
                         });
@@ -254,10 +247,10 @@ public class JmxTool {
         for (ObjectName objectName : objectNames) {
             MBeanInfo beanInfo = conn.getMBeanInfo(objectName);
             AttributeList attributes = conn.getAttributes(objectName,
-                    Arrays.stream(beanInfo.getAttributes()).map(a -> a.getName()).toArray(String[]::new));
+                    Arrays.stream(beanInfo.getAttributes()).map(MBeanFeatureInfo::getName).toArray(String[]::new));
             for (Attribute attribute : attributes.asList()) {
                 if (attributesInclude.isPresent()) {
-                    if (Arrays.asList(attributesInclude.get()).contains(attribute.getName())) {
+                    if (List.of(attributesInclude.get()).contains(attribute.getName())) {
                         result.put(String.format("%s:%s", objectName.toString(), attribute.getName()),
                                 attribute.getValue());
                     }
@@ -395,7 +388,7 @@ public class JmxTool {
 
         private String parseFormat() {
             String reportFormat = options.valueOf(reportFormatOpt).toLowerCase(Locale.ROOT);
-            return Arrays.asList("properties", "csv", "tsv").contains(reportFormat) ? reportFormat : "original";
+            return List.of("properties", "csv", "tsv").contains(reportFormat) ? reportFormat : "original";
         }
 
         public boolean hasJmxAuthPropOpt() {

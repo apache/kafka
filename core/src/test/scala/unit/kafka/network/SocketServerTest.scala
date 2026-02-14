@@ -59,7 +59,7 @@ import java.security.cert.X509Certificate
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent._
-import java.util.{Collections, Properties, Random}
+import java.util.{Properties, Random}
 import javax.net.ssl._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -85,7 +85,7 @@ class SocketServerTest {
   TestUtils.clearYammerMetrics()
 
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
+    () => new FinalizedFeatures(MetadataVersion.latestTesting(), util.Map.of[String, java.lang.Short], 0))
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 
@@ -1722,7 +1722,7 @@ class SocketServerTest {
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props), connectionQueueSize = 1)
     testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     val testableSelector = testableServer.testableSelector
-    val errors = new mutable.HashSet[String]
+    val errors = new util.HashSet[String]()
 
     def acceptorStackTraces: scala.collection.Map[Thread, String] = {
       Thread.getAllStackTraces.asScala.collect {
@@ -1746,7 +1746,7 @@ class SocketServerTest {
       // Block selector until Acceptor is blocked while connections are pending
       testableSelector.pollCallback = () => {
         try {
-          TestUtils.waitUntilTrue(() => errors.nonEmpty || registeredConnectionCount >= numConnections - 1 || acceptorBlocked,
+          TestUtils.waitUntilTrue(() => !errors.isEmpty || registeredConnectionCount >= numConnections - 1 || acceptorBlocked,
             "Acceptor not blocked", waitTimeMs = 10000)
         } catch {
           case _: Throwable => errors.add(s"Acceptor not blocked: $acceptorStackTraces")
@@ -1754,9 +1754,9 @@ class SocketServerTest {
       }
       testableSelector.operationCounts.clear()
       val sockets = (1 to numConnections).map(_ => connect(testableServer))
-      TestUtils.waitUntilTrue(() => errors.nonEmpty || registeredConnectionCount == numConnections,
+      TestUtils.waitUntilTrue(() => !errors.isEmpty || registeredConnectionCount == numConnections,
         "Connections not registered", waitTimeMs = 15000)
-      assertEquals(Set.empty, errors)
+      assertEquals(util.Set.of, errors)
       testableSelector.waitForOperations(SelectorOperation.Register, numConnections)
 
       // In each iteration, SocketServer processes at most connectionQueueSize (1 in this test)
@@ -2061,7 +2061,7 @@ class SocketServerTest {
     private var conn: Option[Socket] = None
 
     override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-      new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
+      new TestableSelector(config, channelBuilder, time, metrics, metricTags)
     }
 
     override private[network] def processException(errorMessage: String, throwable: Throwable): Unit = {
@@ -2159,9 +2159,9 @@ class SocketServerTest {
     case object CloseSelector extends SelectorOperation
   }
 
-  class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics, metricTags: mutable.Map[String, String] = mutable.Map.empty)
+  class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics, metricTags: util.Map[String, String] = new util.HashMap())
     extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
-      metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
+      metrics, time, "socket-server", metricTags, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
     val failures = mutable.Map[SelectorOperation, Throwable]()
     val operationCounts = mutable.Map[SelectorOperation, Int]().withDefaultValue(0)

@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -48,15 +49,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
@@ -272,7 +275,7 @@ public class MetricsIntegrationTest {
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
         verifyAliveStreamThreadsMetric();
-        verifyStateMetric(State.CREATED);
+        verifyStateMetric(State.CREATED.name());
         verifyTopologyDescriptionMetric(topology.describe().toString());
         verifyApplicationIdMetric();
 
@@ -283,7 +286,7 @@ public class MetricsIntegrationTest {
             () -> "Kafka Streams application did not reach state RUNNING in " + timeout + " ms");
 
         verifyAliveStreamThreadsMetric();
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
     }
 
     private void produceRecordsForTwoSegments(final Duration segmentInterval) {
@@ -339,8 +342,13 @@ public class MetricsIntegrationTest {
             () -> "Kafka Streams application did not reach state NOT_RUNNING in " + timeout + " ms");
     }
 
-    @Test
-    public void shouldAddMetricsOnAllLevels() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAddMetricsOnAllLevels(final boolean streamsProtocolEnabled) throws Exception {
+        if (streamsProtocolEnabled) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
+
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
         builder.table(STREAM_OUTPUT_1,
@@ -357,7 +365,7 @@ public class MetricsIntegrationTest {
             .to(STREAM_OUTPUT_4);
         startApplication();
 
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
         checkClientLevelMetrics();
         checkThreadLevelMetrics();
         checkTaskLevelMetrics();
@@ -373,8 +381,13 @@ public class MetricsIntegrationTest {
         checkMetricsDeregistration();
     }
 
-    @Test
-    public void shouldAddMetricsForWindowStoreAndSuppressionBuffer() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAddMetricsForWindowStoreAndSuppressionBuffer(final boolean streamsProtocolEnabled) throws Exception {
+        if (streamsProtocolEnabled) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
+
         final Duration windowSize = Duration.ofMillis(50);
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
@@ -392,7 +405,7 @@ public class MetricsIntegrationTest {
         produceRecordsForClosingWindow(windowSize);
         startApplication();
 
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
 
         checkWindowStoreAndSuppressionBufferMetrics();
 
@@ -401,8 +414,13 @@ public class MetricsIntegrationTest {
         checkMetricsDeregistration();
     }
 
-    @Test
-    public void shouldAddMetricsForSessionStore() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAddMetricsForSessionStore(final boolean streamsProtocolEnabled) throws Exception {
+        if (streamsProtocolEnabled) {
+            streamsConfiguration.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        }
+
         final Duration inactivityGap = Duration.ofMillis(50);
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
             .groupByKey()
@@ -421,7 +439,7 @@ public class MetricsIntegrationTest {
 
         startApplication();
 
-        verifyStateMetric(State.RUNNING);
+        verifyStateMetric(State.RUNNING.name());
 
         checkSessionStoreMetrics();
 
@@ -439,14 +457,14 @@ public class MetricsIntegrationTest {
         assertThat(metricsList.get(0).metricValue(), is(NUM_THREADS));
     }
 
-    private void verifyStateMetric(final State state) {
+    private void verifyStateMetric(final String state) {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(STATE) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
             .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
         assertThat(metricsList.get(0).metricValue(), is(state));
-        assertThat(metricsList.get(0).metricValue().toString(), is(state.toString()));
+        assertThat(metricsList.get(0).metricValue().toString(), is(state));
     }
 
     private void verifyTopologyDescriptionMetric(final String topologyDescription) {

@@ -73,6 +73,7 @@ public class TopicMetadataRequestManagerTest {
         props.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
             new LogContext(),
             time,

@@ -73,8 +73,6 @@ import org.mockito.stubbing.Answer;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -121,8 +119,8 @@ public class AbstractWorkerSourceTaskTest {
 
     private static final String TOPIC = "topic";
     private static final String OTHER_TOPIC = "other-topic";
-    private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
-    private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
+    private static final Map<String, byte[]> PARTITION = Map.of("key", "partition".getBytes());
+    private static final Map<String, Integer> OFFSET = Map.of("key", 12);
 
     // Connect-format data
     private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
@@ -171,6 +169,7 @@ public class AbstractWorkerSourceTaskTest {
 
     private Map<String, String> workerProps() {
         Map<String, String> props = new HashMap<>();
+        props.put(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("offset.storage.file.filename", "/tmp/connect.offsets");
@@ -253,7 +252,7 @@ public class AbstractWorkerSourceTaskTest {
         createWorkerTask();
 
         // Can just use the same record for key and value
-        List<SourceRecord> records = Collections.singletonList(
+        List<SourceRecord> records = List.of(
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
         );
 
@@ -282,7 +281,7 @@ public class AbstractWorkerSourceTaskTest {
         expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
-        workerTask.toSend = Collections.singletonList(
+        workerTask.toSend = List.of(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
         workerTask.sendRecords();
@@ -302,7 +301,7 @@ public class AbstractWorkerSourceTaskTest {
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
         expectApplyTransformationChain();
 
-        workerTask.toSend = Collections.singletonList(
+        workerTask.toSend = List.of(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
         assertThrows(InvalidRecordException.class, workerTask::sendRecords);
@@ -319,7 +318,7 @@ public class AbstractWorkerSourceTaskTest {
         expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
-        workerTask.toSend = Collections.singletonList(
+        workerTask.toSend = List.of(
                 new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, timestamp)
         );
         workerTask.sendRecords();
@@ -345,7 +344,7 @@ public class AbstractWorkerSourceTaskTest {
         expectApplyTransformationChain();
         expectTopicCreation(TOPIC);
 
-        workerTask.toSend = Collections.singletonList(
+        workerTask.toSend = List.of(
             new SourceRecord(PARTITION, OFFSET, TOPIC, null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD,
                 null, connectHeaders)
         );
@@ -367,7 +366,7 @@ public class AbstractWorkerSourceTaskTest {
         SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
         createWorkerTask(stringConverter, testConverter, stringConverter, RetryWithToleranceOperatorTest.noneOperator(),
-                Collections::emptyList, transformationChain);
+                List::of, transformationChain);
 
         expectSendRecord(null);
         expectApplyTransformationChain();
@@ -383,7 +382,7 @@ public class AbstractWorkerSourceTaskTest {
         org.apache.kafka.connect.header.Headers headersB = new ConnectHeaders()
             .addString("encoding", encodingB);
 
-        workerTask.toSend = Arrays.asList(
+        workerTask.toSend = List.of(
             new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "a",
                 Schema.STRING_SCHEMA, stringA, null, headersA),
             new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b",
@@ -426,13 +425,13 @@ public class AbstractWorkerSourceTaskTest {
 
         expectPreliminaryCalls(TOPIC);
 
-        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
-        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, List.of(), List.of());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, List.of(topicPartitionInfo));
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of(TOPIC, topicDesc));
 
         expectSendRecord(emptyHeaders());
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         workerTask.sendRecords();
 
         verifySendRecord(2);
@@ -452,11 +451,11 @@ public class AbstractWorkerSourceTaskTest {
 
         when(admin.describeTopics(TOPIC))
                 .thenThrow(new RetriableException(new TimeoutException("timeout")))
-                .thenReturn(Collections.emptyMap());
+                .thenReturn(Map.of());
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         workerTask.sendRecords();
-        assertEquals(Arrays.asList(record1, record2), workerTask.toSend);
+        assertEquals(List.of(record1, record2), workerTask.toSend);
         verify(admin, never()).createOrFindTopics(any(NewTopic.class));
         verifyNoMoreInteractions(admin);
 
@@ -477,16 +476,16 @@ public class AbstractWorkerSourceTaskTest {
 
         expectPreliminaryCalls(TOPIC);
 
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class)))
                 // First call to create the topic times out
                 .thenThrow(new RetriableException(new TimeoutException("timeout")))
                 // Next attempt succeeds
                 .thenReturn(createdTopic(TOPIC));
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         workerTask.sendRecords();
-        assertEquals(Arrays.asList(record1, record2), workerTask.toSend);
+        assertEquals(List.of(record1, record2), workerTask.toSend);
 
         // Next they all succeed
         workerTask.sendRecords();
@@ -509,9 +508,9 @@ public class AbstractWorkerSourceTaskTest {
         expectPreliminaryCalls(OTHER_TOPIC);
 
         when(admin.describeTopics(anyString()))
-                .thenReturn(Collections.emptyMap())
+                .thenReturn(Map.of())
                 .thenThrow(new RetriableException(new TimeoutException("timeout")))
-                .thenReturn(Collections.emptyMap());
+                .thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenAnswer(
             (Answer<TopicAdmin.TopicCreationResponse>) invocation -> {
                 NewTopic newTopic = invocation.getArgument(0);
@@ -519,9 +518,9 @@ public class AbstractWorkerSourceTaskTest {
             });
 
         // Try to send 3, make first pass, second fail. Should save last record
-        workerTask.toSend = Arrays.asList(record1, record2, record3);
+        workerTask.toSend = List.of(record1, record2, record3);
         workerTask.sendRecords();
-        assertEquals(Collections.singletonList(record3), workerTask.toSend);
+        assertEquals(List.of(record3), workerTask.toSend);
 
         // Next they all succeed
         workerTask.sendRecords();
@@ -532,10 +531,10 @@ public class AbstractWorkerSourceTaskTest {
         ArgumentCaptor<NewTopic> newTopicCaptor = ArgumentCaptor.forClass(NewTopic.class);
         verify(admin, times(2)).createOrFindTopics(newTopicCaptor.capture());
 
-        assertEquals(Arrays.asList(TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
+        assertEquals(List.of(TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
             .stream()
             .map(NewTopic::name)
-            .collect(Collectors.toList()));
+            .toList());
     }
 
     @Test
@@ -550,16 +549,16 @@ public class AbstractWorkerSourceTaskTest {
         expectPreliminaryCalls(TOPIC);
         expectPreliminaryCalls(OTHER_TOPIC);
 
-        when(admin.describeTopics(anyString())).thenReturn(Collections.emptyMap());
+        when(admin.describeTopics(anyString())).thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class)))
                 .thenReturn(createdTopic(TOPIC))
                 .thenThrow(new RetriableException(new TimeoutException("timeout")))
                 .thenReturn(createdTopic(OTHER_TOPIC));
 
         // Try to send 3, make first pass, second fail. Should save last record
-        workerTask.toSend = Arrays.asList(record1, record2, record3);
+        workerTask.toSend = List.of(record1, record2, record3);
         workerTask.sendRecords();
-        assertEquals(Collections.singletonList(record3), workerTask.toSend);
+        assertEquals(List.of(record3), workerTask.toSend);
         verifyTopicCreation(2,  TOPIC, OTHER_TOPIC); // Second call to createOrFindTopics will throw
 
         // Next they all succeed
@@ -581,7 +580,7 @@ public class AbstractWorkerSourceTaskTest {
             new ConnectException(new TopicAuthorizationException("unauthorized"))
         );
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
     }
 
@@ -593,12 +592,12 @@ public class AbstractWorkerSourceTaskTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
         expectPreliminaryCalls(TOPIC);
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenThrow(
             new ConnectException(new TopicAuthorizationException("unauthorized"))
         );
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
         verify(admin).createOrFindTopics(any());
 
@@ -614,10 +613,10 @@ public class AbstractWorkerSourceTaskTest {
 
         expectPreliminaryCalls(TOPIC);
 
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(TopicAdmin.EMPTY_CREATION);
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         assertThrows(ConnectException.class, workerTask::sendRecords);
         verify(admin).createOrFindTopics(any());
 
@@ -634,10 +633,10 @@ public class AbstractWorkerSourceTaskTest {
         expectSendRecord(emptyHeaders());
         expectApplyTransformationChain();
 
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(foundTopic(TOPIC));
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         workerTask.sendRecords();
 
         ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord(2);
@@ -659,10 +658,10 @@ public class AbstractWorkerSourceTaskTest {
         expectSendRecord(emptyHeaders());
         expectApplyTransformationChain();
 
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.emptyMap());
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of());
         when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(createdTopic(TOPIC));
 
-        workerTask.toSend = Arrays.asList(record1, record2);
+        workerTask.toSend = List.of(record1, record2);
         workerTask.sendRecords();
 
         ArgumentCaptor<ProducerRecord<byte[], byte[]>> sent = verifySendRecord(2);
@@ -688,13 +687,13 @@ public class AbstractWorkerSourceTaskTest {
         when(transformationChain.apply(any(), eq(record2))).thenReturn(null);
         when(transformationChain.apply(any(), eq(record3))).thenReturn(record3);
 
-        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
-        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, List.of(), List.of());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, List.of(topicPartitionInfo));
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of(TOPIC, topicDesc));
 
         when(producer.send(any(), any())).thenThrow(new RetriableException("Retriable exception")).thenReturn(null);
 
-        workerTask.toSend = Arrays.asList(record1, record2, record3);
+        workerTask.toSend = List.of(record1, record2, record3);
 
         // The first two records are filtered out / dropped by the transformation chain; only the third record will be attempted to be sent.
         // The producer throws a RetriableException the first time we try to send the third record
@@ -721,11 +720,11 @@ public class AbstractWorkerSourceTaskTest {
 
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
 
-        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
-        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, List.of(), List.of());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, List.of(topicPartitionInfo));
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of(TOPIC, topicDesc));
 
-        workerTask.toSend = Arrays.asList(record1);
+        workerTask.toSend = List.of(record1);
 
         // The transformation errored out so the error should be re-raised by sendRecords with error tolerance None
         Exception exception = assertThrows(ConnectException.class, workerTask::sendRecords);
@@ -752,7 +751,7 @@ public class AbstractWorkerSourceTaskTest {
 
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
 
-        workerTask.toSend = Arrays.asList(record1);
+        workerTask.toSend = List.of(record1);
 
         // The transformation errored out so the error should be ignored & the record skipped with error tolerance all
         assertTrue(workerTask.sendRecords());
@@ -778,11 +777,11 @@ public class AbstractWorkerSourceTaskTest {
         // When we try to convert the key/value of each record, throw an exception
         throwExceptionWhenConvertKey(emptyHeaders(), TOPIC);
 
-        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
-        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
-        when(admin.describeTopics(TOPIC)).thenReturn(Collections.singletonMap(TOPIC, topicDesc));
+        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, List.of(), List.of());
+        TopicDescription topicDesc = new TopicDescription(TOPIC, false, List.of(topicPartitionInfo));
+        when(admin.describeTopics(TOPIC)).thenReturn(Map.of(TOPIC, topicDesc));
 
-        workerTask.toSend = Arrays.asList(record1, record2, record3);
+        workerTask.toSend = List.of(record1, record2, record3);
 
         // Send records should fail when errors.tolerance is none and the conversion call fails
         Exception exception = assertThrows(ConnectException.class, workerTask::sendRecords);
@@ -813,7 +812,7 @@ public class AbstractWorkerSourceTaskTest {
         // When we try to convert the key/value of each record, throw an exception
         throwExceptionWhenConvertKey(emptyHeaders(), TOPIC);
 
-        workerTask.toSend = Arrays.asList(record1, record2, record3);
+        workerTask.toSend = List.of(record1, record2, record3);
 
         // With errors.tolerance to all, the failed conversion should simply skip the record, and record successful batch
         assertTrue(workerTask.sendRecords());
@@ -883,15 +882,15 @@ public class AbstractWorkerSourceTaskTest {
 
     @SuppressWarnings("SameParameterValue")
     private TopicAdmin.TopicCreationResponse createdTopic(String topic) {
-        Set<String> created = Collections.singleton(topic);
-        Set<String> existing = Collections.emptySet();
+        Set<String> created = Set.of(topic);
+        Set<String> existing = Set.of();
         return new TopicAdmin.TopicCreationResponse(created, existing);
     }
 
     @SuppressWarnings("SameParameterValue")
     private TopicAdmin.TopicCreationResponse foundTopic(String topic) {
-        Set<String> created = Collections.emptySet();
-        Set<String> existing = Collections.singleton(topic);
+        Set<String> created = Set.of();
+        Set<String> existing = Set.of(topic);
         return new TopicAdmin.TopicCreationResponse(created, existing);
     }
 
@@ -945,13 +944,13 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TransformationChain transformationChain, RetryWithToleranceOperator toleranceOperator) {
-        createWorkerTask(keyConverter, valueConverter, headerConverter, toleranceOperator, Collections::emptyList,
+        createWorkerTask(keyConverter, valueConverter, headerConverter, toleranceOperator, List::of,
                 transformationChain);
     }
 
     private void createWorkerTask() {
         createWorkerTask(
-                keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noneOperator(), Collections::emptyList, transformationChain);
+                keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noneOperator(), List::of, transformationChain);
     }
 
     private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,

@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,8 +86,8 @@ public class FileStreamSourceTaskTest {
         assertEquals(1, records.size());
         assertEquals(TOPIC, records.get(0).topic());
         assertEquals("partial line finished", records.get(0).value());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 22L), records.get(0).sourceOffset());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 22L), records.get(0).sourceOffset());
         assertNull(task.poll());
 
         // Different line endings, and make sure the final \r doesn't result in a line until we can
@@ -98,25 +97,25 @@ public class FileStreamSourceTaskTest {
         records = task.poll();
         assertEquals(4, records.size());
         assertEquals("line1", records.get(0).value());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 28L), records.get(0).sourceOffset());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 28L), records.get(0).sourceOffset());
         assertEquals("line2", records.get(1).value());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(1).sourcePartition());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 35L), records.get(1).sourceOffset());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(1).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 35L), records.get(1).sourceOffset());
         assertEquals("line3", records.get(2).value());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(2).sourcePartition());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 41L), records.get(2).sourceOffset());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(2).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 41L), records.get(2).sourceOffset());
         assertEquals("line4", records.get(3).value());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(3).sourcePartition());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 47L), records.get(3).sourceOffset());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(3).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 47L), records.get(3).sourceOffset());
 
         os.write("subsequent text".getBytes());
         os.flush();
         records = task.poll();
         assertEquals(1, records.size());
         assertEquals("", records.get(0).value());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
-        assertEquals(Collections.singletonMap(FileStreamSourceTask.POSITION_FIELD, 48L), records.get(0).sourceOffset());
+        assertEquals(Map.of(FileStreamSourceTask.FILENAME_FIELD, tempFile.getAbsolutePath()), records.get(0).sourcePartition());
+        assertEquals(Map.of(FileStreamSourceTask.POSITION_FIELD, 48L), records.get(0).sourceOffset());
 
         os.close();
         task.stop();

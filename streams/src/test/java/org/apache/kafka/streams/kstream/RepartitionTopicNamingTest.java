@@ -38,8 +38,8 @@ import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class RepartitionTopicNamingTest {
 
@@ -83,20 +83,16 @@ public class RepartitionTopicNamingTest {
     // can't use same repartition topic name
     @Test
     public void shouldFailWithSameRepartitionTopicName() {
-        try {
-            final StreamsBuilder builder = new StreamsBuilder();
-            builder.<String, String>stream("topic").selectKey((k, v) -> k)
-                                            .groupByKey(Grouped.as("grouping"))
-                                            .count().toStream();
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.<String, String>stream("topic").selectKey((k, v) -> k)
+            .groupByKey(Grouped.as("grouping"))
+            .count().toStream();
 
-            builder.<String, String>stream("topicII").selectKey((k, v) -> k)
-                                              .groupByKey(Grouped.as("grouping"))
-                                              .count().toStream();
-            builder.build();
-            fail("Should not build re-using repartition topic name");
-        } catch (final TopologyException te) {
-              // ok
-        }
+        builder.<String, String>stream("topicII").selectKey((k, v) -> k)
+            .groupByKey(Grouped.as("grouping"))
+            .count().toStream();
+
+        assertThrows(TopologyException.class, builder::build, "Should not build re-using repartition topic name");
     }
 
     @Test
@@ -202,24 +198,19 @@ public class RepartitionTopicNamingTest {
     // can't use same repartition topic name in joins
     @Test
     public void shouldFailWithSameRepartitionTopicNameInJoin() {
-        try {
-            final StreamsBuilder builder = new StreamsBuilder();
-            final KStream<String, String> stream1 = builder.<String, String>stream("topic").selectKey((k, v) -> k);
-            final KStream<String, String> stream2 = builder.<String, String>stream("topic2").selectKey((k, v) -> k);
-            final KStream<String, String> stream3 = builder.<String, String>stream("topic3").selectKey((k, v) -> k);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> stream1 = builder.<String, String>stream("topic").selectKey((k, v) -> k);
+        final KStream<String, String> stream2 = builder.<String, String>stream("topic2").selectKey((k, v) -> k);
+        final KStream<String, String> stream3 = builder.<String, String>stream("topic3").selectKey((k, v) -> k);
 
-            final KStream<String, String> joined = stream1.join(stream2, (v1, v2) -> v1 + v2,
-                JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(30L)),
-                StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
+        final KStream<String, String> joined = stream1.join(stream2, (v1, v2) -> v1 + v2,
+            JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(30L)),
+            StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
 
-            joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(30L)),
-                StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
+        joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(30L)),
+            StreamJoined.<String, String, String>as("join-store").withName("join-repartition"));
 
-            builder.build();
-            fail("Should not build re-using repartition topic name");
-        } catch (final TopologyException te) {
-            // ok
-        }
+        assertThrows(TopologyException.class, builder::build, "Should not build re-using repartition topic name");
     }
 
     @Test
