@@ -31,6 +31,7 @@ object Kafka extends Logging {
     val optionParser = new OptionParser(false)
     val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
       .withRequiredArg()
+      .describedAs("key=value")
       .ofType(classOf[String])
     // This is just to make the parameter show up in the help output, we are not actually using this due the
     // fact that this class ignores the first parameter which is interpreted as positional and mandatory
