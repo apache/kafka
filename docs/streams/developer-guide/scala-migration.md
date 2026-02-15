@@ -48,10 +48,9 @@ import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{KafkaStreams, StreamsConfig}
+import org.apache.kafka.streams.scala.serialization.Serdes._
 
 object WordCountScala extends App {
-  import org.apache.kafka.streams.scala.serialization.Serdes._
-
   val props = new Properties()
   props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount")
   props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
@@ -86,16 +85,14 @@ object WordCountJava extends App {
   props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount")
   props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
   // Configure default serdes
-  props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass.getName)
-  props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass.getName)
+  props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
+  props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
 
   val builder = new StreamsBuilder  // Java StreamsBuilder
-  val textLines: KStream[String, String] = builder.stream[String, String]("input-topic")
+  val textLines = builder.stream[String, String]("input-topic")
 
-  val wordCounts: KTable[String, java.lang.Long] = textLines
-    .flatMapValues { line =>
-      line.toLowerCase.split("\\W+").toBuffer.asJava
-    }
+  val wordCounts = textLines
+    .flatMapValues(_.toLowerCase.split("\\W+"))
     .groupBy((_, word) => word)
     .count()
 
