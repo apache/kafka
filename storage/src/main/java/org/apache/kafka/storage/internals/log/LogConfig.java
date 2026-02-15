@@ -454,7 +454,7 @@ public class LogConfig extends AbstractConfig {
     /**
      * Check that property names are valid
      */
-    public static void validateNames(Properties props) {
+    public static void validateNames(Map<?, ?> props) {
         List<String> names = configNames();
         for (Object name : props.keySet())
             if (!names.contains(name))
@@ -603,12 +603,12 @@ public class LogConfig extends AbstractConfig {
     /**
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
-    public static void validate(Properties props) {
+    public static void validate(Map<?, ?> props) {
         validate(Map.of(), props, Map.of(), false);
     }
 
     public static void validate(Map<String, String> existingConfigs,
-                                Properties props,
+                                Map<?, ?> props,
                                 Map<?, ?> configuredProps,
                                 boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);

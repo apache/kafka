@@ -197,9 +197,9 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Check that property names are valid
      */
-    public static void validateNames(Properties props) {
+    public static void validateNames(Map<?, ?> props) {
         Set<String> names = configNames();
-        for (String name : props.stringPropertyNames()) {
+        for (Object name : props.keySet()) {
             if (!names.contains(name)) {
                 throw new InvalidConfigurationException("Unknown group config name: " + name);
             }
@@ -297,7 +297,7 @@ public final class GroupConfig extends AbstractConfig {
      * Check that the given properties contain only valid consumer group config names and that all values can be
      * parsed and are valid.
      */
-    public static void validate(Properties props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
+    public static void validate(Map<?, ?> props, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         validateNames(props);
         Map<?, ?> valueMaps = CONFIG.parse(props);
         validateValues(valueMaps, groupCoordinatorConfig, shareGroupConfig);

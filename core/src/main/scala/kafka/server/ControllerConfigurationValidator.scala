@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util
-import java.util.Properties
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
@@ -104,42 +103,53 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
     resource.`type`() match {
       case TOPIC =>
         validateTopicName(resource.name())
-        val properties = new Properties()
+        val filteredConfigs = new util.HashMap[String, String]()
         val nullTopicConfigs = new mutable.ArrayBuffer[String]()
         newConfigs.forEach((key, value) => {
           if (value == null) {
             nullTopicConfigs += key
           } else {
-            properties.setProperty(key, value)
+            filteredConfigs.put(key, value)
           }
         })
         if (nullTopicConfigs.nonEmpty) {
           throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
-        LogConfig.validate(oldConfigs, properties, kafkaConfig.extractLogConfigMap,
+        LogConfig.validate(oldConfigs, filteredConfigs, kafkaConfig.extractLogConfigMap,
           kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
       case BROKER => validateBrokerName(resource.name())
       case CLIENT_METRICS =>
-        val properties = new Properties()
-        newConfigs.forEach((key, value) => properties.setProperty(key, value))
-        ClientMetricsConfigs.validate(resource.name(), properties)
+        val filteredConfigs = new util.HashMap[String, String]()
+        val nullMetricsConfigs = new mutable.ArrayBuffer[String]()
+        newConfigs.forEach((key, value) => {
+          if (value == null) {
+            nullMetricsConfigs += key
+          } else {
+            filteredConfigs.put(key, value)
+          }
+        })
+        if (nullMetricsConfigs.nonEmpty) {
+          throw new InvalidConfigurationException("Null value not supported for client metrics configs: " +
+            nullMetricsConfigs.mkString(","))
+        }
+        ClientMetricsConfigs.validate(resource.name(), filteredConfigs)
       case GROUP =>
         validateGroupName(resource.name())
-        val properties = new Properties()
+        val filteredConfigs = new util.HashMap[String, String]()
         val nullGroupConfigs = new mutable.ArrayBuffer[String]()
         newConfigs.forEach((key, value) => {
           if (value == null) {
             nullGroupConfigs += key
           } else {
-            properties.setProperty(key, value)
+            filteredConfigs.put(key, value)
           }
         })
         if (nullGroupConfigs.nonEmpty) {
           throw new InvalidConfigurationException("Null value not supported for group configs: " +
             nullGroupConfigs.mkString(","))
         }
-        GroupConfigManager.validate(properties, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
+        GroupConfigManager.validate(filteredConfigs, kafkaConfig.groupCoordinatorConfig, kafkaConfig.shareGroupConfig)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

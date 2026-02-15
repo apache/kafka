@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,11 +82,11 @@ public class GroupConfigManager implements AutoCloseable {
      * @throws InvalidConfigurationException If validation fails
      */
     public static void validate(
-        Properties newGroupConfig,
+        Map<?, ?> newGroupConfig,
         GroupCoordinatorConfig groupCoordinatorConfig,
         ShareGroupConfig shareGroupConfig
     ) {
-        Properties combinedConfigs = new Properties();
+        Map<Object, Object> combinedConfigs = new HashMap<>();
         combinedConfigs.putAll(groupCoordinatorConfig.extractConsumerGroupConfigMap());
         combinedConfigs.putAll(newGroupConfig);
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
