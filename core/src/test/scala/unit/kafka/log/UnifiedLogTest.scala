@@ -1085,8 +1085,7 @@ class UnifiedLogTest {
       0.75,
       new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", mockTime),
       mockTime,
-      tp => {},
-      new util.HashMap[TopicPartition, java.lang.Double]())
+      tp => {})
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes, "a".getBytes())), producerId = pid1,
       producerEpoch = epoch, sequence = 0), 0)

@@ -61,11 +61,6 @@ public class Cleaner {
     private final Consumer<TopicPartition> checkDone;
 
     /**
-     * The topic partitions that have segment overflow history mapped to their segment size ratio
-     */
-    private final Map<TopicPartition, Double> segmentOverflowPartitions;
-
-    /**
      * Buffer used for read i/o
      */
     private ByteBuffer readBuffer;
@@ -93,8 +88,7 @@ public class Cleaner {
                    double dupBufferLoadFactor,
                    Throttler throttler,
                    Time time,
-                   Consumer<TopicPartition> checkDone,
-                   Map<TopicPartition, Double> segmentOverflowPartitions) {
+                   Consumer<TopicPartition> checkDone) {
         this.id = id;
         this.offsetMap = offsetMap;
         this.ioBufferSize = ioBufferSize;
@@ -103,7 +97,6 @@ public class Cleaner {
         this.throttler = throttler;
         this.time = time;
         this.checkDone = checkDone;
-        this.segmentOverflowPartitions = segmentOverflowPartitions;
         logger = new LogContext("Cleaner " + id + ": ").logger(Cleaner.class);
 
         readBuffer = ByteBuffer.allocate(ioBufferSize);
@@ -176,29 +169,15 @@ public class Cleaner {
                 log.name(), new Date(cleanableHorizonMs), new Date(legacyDeleteHorizonMs));
         CleanedTransactionMetadata transactionMetadata = new CleanedTransactionMetadata();
 
-        double sizeRatio = segmentOverflowPartitions.getOrDefault(log.topicPartition(), 1.0);
-        if (sizeRatio != 1.0) {
-            logger.info("Partition {} has overflow history. " + "Reducing effective segment size to {}% for this round.",
-                    log.topicPartition(), sizeRatio * 100);
-        }
-
-        int effectiveMaxSize = (int) (log.config().segmentSize() * sizeRatio);
-
         List<List<LogSegment>> groupedSegments = groupSegmentsBySize(
                 log.logSegments(0, endOffset),
-                effectiveMaxSize,
+                log.config().segmentSize(),
                 log.config().maxIndexSize,
                 cleanable.firstUncleanableOffset()
         );
 
         for (List<LogSegment> group : groupedSegments) {
             cleanSegments(log, group, offsetMap, currentTime, stats, transactionMetadata, legacyDeleteHorizonMs, upperBoundOffset);
-        }
-
-        if (segmentOverflowPartitions.remove(log.topicPartition()) != null) {
-            logger.info("Successfully cleaned log {} with degraded size (ratio: {}%). " +
-                            "Cleared overflow marker. Next cleaning will use normal size.",
-                    log.name(), sizeRatio * 100);
         }
 
         // record buffer utilization
@@ -224,16 +203,20 @@ public class Cleaner {
      */
     @SuppressWarnings("finally")
     public void cleanSegments(UnifiedLog log,
-                               List<LogSegment> segments,
-                               OffsetMap map,
-                               long currentTime,
-                               CleanerStats stats,
-                               CleanedTransactionMetadata transactionMetadata,
-                               long legacyDeleteHorizonMs,
-                               long upperBoundOffsetOfCleaningRound) throws IOException {
-        // create a new segment with a suffix appended to the name of the log and indexes
-        LogSegment cleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), segments.get(0).baseOffset());
-        transactionMetadata.setCleanedIndex(Optional.of(cleaned.txnIndex()));
+                              List<LogSegment> segments,
+                              OffsetMap map,
+                              long currentTime,
+                              CleanerStats stats,
+                              CleanedTransactionMetadata transactionMetadata,
+                              long legacyDeleteHorizonMs,
+                              long upperBoundOffsetOfCleaningRound) throws IOException {
+
+        // List to collect all cleaned segments (maybe multiple due to overflow)
+        List<LogSegment> cleanedSegments = new ArrayList<>();
+
+        // Create initial cleaned segment with the base offset of the first source segment
+        LogSegment currentCleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), segments.get(0).baseOffset());
+        transactionMetadata.setCleanedIndex(Optional.of(currentCleaned.txnIndex()));
 
         try {
             // clean segments into the new destination segment
@@ -256,15 +239,18 @@ public class Cleaner {
                 logger.info(
                         "Cleaning {} in log {} into {} with an upper bound deletion horizon {} computed from " +
                         "the segment last modified time of {},{} deletes.",
-                        currentSegment, log.name(), cleaned.baseOffset(), legacyDeleteHorizonMs, currentSegment.lastModified(),
+                        currentSegment, log.name(), currentCleaned.baseOffset(), legacyDeleteHorizonMs, currentSegment.lastModified(),
                         retainLegacyDeletesAndTxnMarkers ? "retaining" : "discarding"
                 );
 
                 try {
-                    cleanInto(
+                    // Clean this source segment, may create multiple cleaned segments
+                    // cleanInto returns the current active destination segment
+                    currentCleaned = cleanInto(
                             log.topicPartition(),
                             currentSegment.log(),
-                            cleaned,
+                            currentCleaned,
+                            cleanedSegments,
                             map,
                             retainLegacyDeletesAndTxnMarkers,
                             log.config().deleteRetentionMs,
@@ -273,24 +259,13 @@ public class Cleaner {
                             lastOffsetOfActiveProducers,
                             upperBoundOffsetOfCleaningRound,
                             stats,
-                            currentTime
+                            currentTime,
+                            log
                     );
-                } catch (SegmentOverflowException e) {
-                    var previousRatio = segmentOverflowPartitions.put(log.topicPartition(),
-                            segmentOverflowPartitions.getOrDefault(log.topicPartition(), 1.0) * 0.9);
-                    if (previousRatio == null) {
-                        logger.warn("Segment overflow detected for partition {}: {}. " +
-                                        "Marked for degradation to 90% size in next cleaning round.",
-                                log.topicPartition(), e.getMessage());
-                    } else {
-                        logger.warn("Repeated segment overflow for partition {}: {}. " +
-                                        "Further degrading to {}% size in next cleaning round.",
-                                log.topicPartition(), e.getMessage(), previousRatio * 0.9 * 100);
-                    }
-                    throw new LogCleaningAbortedException();
+
                 } catch (LogSegmentOffsetOverflowException e) {
-                    // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
-                    // scratch once the split is complete.
+                    // Split the current segment. It's also safest to abort the current cleaning process, 
+                    // so that we retry from scratch once the split is complete.
                     logger.info("Caught segment overflow error during cleaning: {}", e.getMessage());
                     log.splitOverflowedSegment(currentSegment);
                     throw new LogCleaningAbortedException();
@@ -298,35 +273,45 @@ public class Cleaner {
                 currentSegmentOpt = nextSegmentOpt;
             }
 
-            cleaned.onBecomeInactiveSegment();
-            // flush new segment to disk before swap
-            cleaned.flush();
+            // Add the final active cleaned segment to the list
+            currentCleaned.onBecomeInactiveSegment();
+            currentCleaned.flush();
 
             // update the modification date to retain the last modified date of the original files
             long modified = segments.get(segments.size() - 1).lastModified();
-            cleaned.setLastModified(modified);
+            currentCleaned.setLastModified(modified);
 
-            // swap in new segment
-            logger.info("Swapping in cleaned segment {} for segment(s) {} in log {}", cleaned, segments, log);
-            log.replaceSegments(List.of(cleaned), segments);
+            cleanedSegments.add(currentCleaned);
+
+            // swap in all cleaned segments (maybe multiple if overflow occurred)
+            logger.info("Swapping in {} cleaned segment(s) for segment(s) {} in log {}", cleanedSegments.size(), segments, log);
+            log.replaceSegments(cleanedSegments, segments);
+
         } catch (LogCleaningAbortedException e) {
+            cleanedSegments.forEach(segment -> {
+                try {
+                    segment.deleteIfExists();
+                } catch (Exception deleteException) {
+                    e.addSuppressed(deleteException);
+                }
+            });
             try {
-                cleaned.deleteIfExists();
+                currentCleaned.deleteIfExists();
             } catch (Exception deleteException) {
                 e.addSuppressed(deleteException);
-            } finally {
-                throw e;
             }
+            throw e;
         }
     }
 
     /**
-     * Clean the given source log segment into the destination segment using the key=>offset mapping
-     * provided.
+     * Clean the given source log segment into destination segment(s) using the key=>offset mapping
+     * provided. May create multiple destination segments if overflow occurs during cleaning.
      *
      * @param topicPartition The topic and partition of the log segment to clean
      * @param sourceRecords The dirty log segment
-     * @param dest The cleaned log segment
+     * @param dest The initial cleaned log segment
+     * @param cleanedSegments List to collect completed cleaned segments (when overflow occurs)
      * @param map The key=>offset mapping
      * @param retainLegacyDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
      * @param deleteRetentionMs Defines how long a tombstone should be kept as defined by log configuration
@@ -336,19 +321,24 @@ public class Cleaner {
      * @param upperBoundOffsetOfCleaningRound Next offset of the last batch in the source segment
      * @param stats Collector for cleaning statistics
      * @param currentTime The time at which the clean was initiated
+     * @param log The log instance for creating new segments if overflow occurs
+     *
+     * @return The current active destination segment (maybe different from input dest if overflow occurred)
      */
-    private void cleanInto(TopicPartition topicPartition,
-                           FileRecords sourceRecords,
-                           LogSegment dest,
-                           OffsetMap map,
-                           boolean retainLegacyDeletesAndTxnMarkers,
-                           long deleteRetentionMs,
-                           int maxLogMessageSize,
-                           CleanedTransactionMetadata transactionMetadata,
-                           Map<Long, LastRecord> lastRecordsOfActiveProducers,
-                           long upperBoundOffsetOfCleaningRound,
-                           CleanerStats stats,
-                           long currentTime) throws IOException {
+    private LogSegment cleanInto(TopicPartition topicPartition,
+                                 FileRecords sourceRecords,
+                                 LogSegment dest,
+                                 List<LogSegment> cleanedSegments,
+                                 OffsetMap map,
+                                 boolean retainLegacyDeletesAndTxnMarkers,
+                                 long deleteRetentionMs,
+                                 int maxLogMessageSize,
+                                 CleanedTransactionMetadata transactionMetadata,
+                                 Map<Long, LastRecord> lastRecordsOfActiveProducers,
+                                 long upperBoundOffsetOfCleaningRound,
+                                 CleanerStats stats,
+                                 long currentTime,
+                                 UnifiedLog log) throws IOException {
         MemoryRecords.RecordFilter logCleanerFilter = new MemoryRecords.RecordFilter(currentTime, deleteRetentionMs) {
             private boolean discardBatchRecords;
 
@@ -434,16 +424,43 @@ public class Cleaner {
             if (outputBuffer.position() > 0) {
                 outputBuffer.flip();
                 MemoryRecords retained = MemoryRecords.readableRecords(outputBuffer);
-                try {
-                    // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
-                    // after `Log.replaceSegments` (which acquires the lock) is called
-                    dest.append(result.maxOffset(), retained);
-                } catch (IllegalArgumentException e) {
-                    // this indicates that we have an offset overflow in the destination segment
-                    throw new SegmentOverflowException(dest);
+
+                // Overflow Check: max offset - base offset > Integer.MAX_VALUE
+                boolean willOverflow = result.maxOffset() - dest.baseOffset() > Integer.MAX_VALUE;
+
+                if (willOverflow) {
+                    logger.info(
+                            "Rolling new segment for partition {} due to offset overflow. " +
+                                    "(BaseOffset: {}, MaxOffset: {})",
+                            topicPartition, dest.baseOffset(), result.maxOffset()
+                    );
+
+                    // Complete current segment and add to list
+                    dest.onBecomeInactiveSegment();
+                    dest.flush();
+                    cleanedSegments.add(dest);
+
+                    // Create new segment with base offset = next offset of current segment
+                    long nextBaseOffset = dest.readNextOffset();
+                    dest = UnifiedLog.createNewCleanedSegment(
+                            log.dir(), log.config(), nextBaseOffset
+                    );
+
+                    // Update transaction metadata to use new txn index
+                    transactionMetadata.setCleanedIndex(Optional.of(dest.txnIndex()));
+
+                    logger.info(
+                            "Created new cleaned segment with base offset {} for partition {}",
+                            nextBaseOffset, topicPartition
+                    );
                 }
+
+                // Append to current destination segment
+                // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
+                // after `Log.replaceSegments` (which acquires the lock) is called
+                dest.append(result.maxOffset(), retained);
+                throttler.maybeThrottle(outputBuffer.limit());
             }
-            throttler.maybeThrottle(outputBuffer.limit());
 
             // if we read bytes but didn't get even one complete batch, our I/O buffer is too small, grow it and try again
             // `result.bytesRead` contains bytes from `messagesRead` and any discarded batches.
@@ -451,6 +468,7 @@ public class Cleaner {
                 growBuffersOrFail(sourceRecords, position, maxLogMessageSize, records);
         }
         restoreBuffers();
+        return dest;
     }
 
 

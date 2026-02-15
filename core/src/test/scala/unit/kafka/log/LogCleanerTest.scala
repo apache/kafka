@@ -30,22 +30,20 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanedTransactionMetadata, Cleaner, CleanerConfig, CleanerStats, LocalLog, LogAppendInfo, LogCleaner, LogCleanerManager, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, SegmentOverflowException, TransactionIndex, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanedTransactionMetadata, Cleaner, CleanerConfig, CleanerStats, LocalLog, LogAppendInfo, LogCleaner, LogCleanerManager, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.mockito.{ArgumentMatchers, MockedConstruction, Mockito}
+import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mockConstruction, times, verify, verifyNoMoreInteractions}
-import org.mockito.invocation.InvocationOnMock
 
 import java.io.{File, RandomAccessFile}
 import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties}
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.function.Consumer
@@ -2221,81 +2219,6 @@ class LogCleanerTest extends Logging {
     }
   }
 
-  @Test
-  def testSegmentWithCompactionDataOverflow(): Unit = {
-    val overflowPartitions = new ConcurrentHashMap[TopicPartition, java.lang.Double]()
-
-    val cleaner = makeCleaner(
-      capacity = Int.MaxValue,
-      segmentOverflowPartitions = overflowPartitions
-    )
-
-    val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
-    val config = LogConfig.fromProps(logConfig.originals, logProps)
-    val log = makeLog(config = config)
-    val dir = log.parentDir
-    val topicPartition = log.topicPartition()
-
-    log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, key = "test".getBytes), 0)
-
-    val segments = log.logSegments.asScala.toList
-    val segmentToClean = segments.head
-
-    val mockTxnIndex = Mockito.mock(classOf[TransactionIndex])
-    Mockito.when(mockTxnIndex.file()).thenReturn(new File(dir, "mock.txnindex"))
-
-    val appendCallCount = new AtomicInteger(0)
-
-    val mockLogSegmentCtor = Mockito.mockConstruction(
-      classOf[LogSegment],
-      new MockedConstruction.MockInitializer[LogSegment] {
-        override def prepare(mock: LogSegment, context: MockedConstruction.Context): Unit = {
-          Mockito.when(mock.txnIndex()).thenReturn(mockTxnIndex)
-          Mockito.when(mock.baseOffset()).thenReturn(segmentToClean.baseOffset())
-          Mockito.when(mock.readNextOffset()).thenReturn(segmentToClean.baseOffset() + 1)
-          Mockito.doNothing().when(mock).onBecomeInactiveSegment()
-          Mockito.doNothing().when(mock).flush()
-          Mockito.doNothing().when(mock).setLastModified(ArgumentMatchers.anyLong())
-
-          Mockito.doAnswer((invocation: InvocationOnMock) => {
-            if (appendCallCount.incrementAndGet() == 1) {
-              throw new SegmentOverflowException(mock)
-            } else {
-              null
-            }
-          }).when(mock).append(
-            ArgumentMatchers.anyLong(),
-            ArgumentMatchers.any(classOf[MemoryRecords])
-          )
-        }
-      }
-    )
-
-    try {
-      assertThrows(classOf[LogCleaningAbortedException], () =>
-        cleaner.cleanSegments(log, util.List.of(segmentToClean),
-          cleaner.offsetMap, 0L,
-          new CleanerStats(Time.SYSTEM),
-          new CleanedTransactionMetadata(),
-          -1, log.logEndOffset)
-      )
-
-      assertTrue(overflowPartitions.containsKey(topicPartition))
-      val segmentRatio = overflowPartitions.get(topicPartition)
-      assertEquals(0.9, segmentRatio)
-
-      val cleanable = new LogToClean(log, 0L, log.activeSegment.baseOffset, true)
-      cleaner.doClean(cleanable, time.milliseconds())
-
-      assertFalse(overflowPartitions.containsKey(topicPartition))
-
-    } finally {
-      mockLogSegmentCtor.close()
-      log.close()
-    }
-  }
-
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for (((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset), Int.MaxValue).lastOffset
@@ -2350,21 +2273,15 @@ class LogCleanerTest extends Logging {
     )
   }
 
-  private def makeCleaner(
-    capacity: Int,
-    checkDone: Consumer[TopicPartition] = _ => (),
-    maxMessageSize: Int = 64 * 1024,
-    segmentOverflowPartitions: util.Map[TopicPartition, java.lang.Double] = new util.HashMap[TopicPartition, java.lang.Double]()
-  ) =
+  private def makeCleaner(capacity: Int, checkDone: Consumer[TopicPartition] = _ => (), maxMessageSize: Int = 64*1024) =
     new Cleaner(0,
-      new FakeOffsetMap(capacity),
-      maxMessageSize,
-      maxMessageSize,
-      0.75,
-      throttler,
-      time,
-      checkDone,
-      segmentOverflowPartitions)
+                new FakeOffsetMap(capacity),
+                maxMessageSize,
+                maxMessageSize,
+                0.75,
+                throttler,
+                time,
+                checkDone)
 
   private def writeToLog(log: UnifiedLog, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for ((key, value) <- seq)
