@@ -674,9 +674,9 @@ abstract class AbstractFetcherThread(name: String,
     val fetchFromLastTieredOffset = shouldFetchFromLastTieredOffset(topicPartition, leaderEndOffset, replicaEndOffset)
 
     if (fetchFromLastTieredOffset) {
-      val leaderStartOffset = leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
-      val epochAndStartingOffset = earliestPendingUploadOffset(topicPartition, currentLeaderEpoch, leaderStartOffset)
-      fetchTierStateMachine.start(topicPartition, topicId.asJava, currentLeaderEpoch, epochAndStartingOffset, leaderStartOffset.offset())
+      val leaderStartOffsetAndEpoch = leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
+      val earliestPendingUploadOffsetAndEpoch = fetchEarliestPendingUploadOffset(topicPartition, currentLeaderEpoch, leaderStartOffsetAndEpoch)
+      fetchTierStateMachine.start(topicPartition, topicId.toJava, currentLeaderEpoch, earliestPendingUploadOffsetAndEpoch, leaderStartOffsetAndEpoch.offset())
     } else if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
@@ -787,15 +787,15 @@ abstract class AbstractFetcherThread(name: String,
                                                 leaderEpochInRequest: Optional[Integer],
                                                 fetchPartitionData: PartitionData): Boolean = {
     try {
-      val fetchFromLastTieredOffset = shouldFetchFromLastTieredOffset(topicPartition, fetchState)
-      val epochAndLogStartOffset = leader.fetchEarliestOffset(topicPartition, fetchState.currentLeaderEpoch())
-      val epochAndStartingOffset = if (fetchFromLastTieredOffset) {
-        earliestPendingUploadOffset(topicPartition, fetchState.currentLeaderEpoch(), epochAndLogStartOffset)
+      val isLastTieredOffsetFetchEnabled = shouldFetchFromLastTieredOffset(topicPartition, fetchState)
+      val leaderLogStartOffsetAndEpoch = leader.fetchEarliestOffset(topicPartition, fetchState.currentLeaderEpoch())
+      val fetchOffsetAndEpoch = if (isLastTieredOffsetFetchEnabled) {
+        fetchEarliestPendingUploadOffset(topicPartition, fetchState.currentLeaderEpoch(), leaderLogStartOffsetAndEpoch)
       } else {
         leader.fetchEarliestLocalOffset(topicPartition, fetchState.currentLeaderEpoch())
       }
       val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState.topicId(), fetchState.currentLeaderEpoch(),
-        epochAndStartingOffset, epochAndLogStartOffset.offset())
+        fetchOffsetAndEpoch, leaderLogStartOffsetAndEpoch.offset())
 
       // TODO: use fetchTierStateMachine.maybeAdvanceState when implementing async tiering logic in KAFKA-13560
 
@@ -823,14 +823,14 @@ abstract class AbstractFetcherThread(name: String,
    * Determines the earliest offset for pending uploads, taking into account
    * both local and remote storage conditions.
    */
-  private def earliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, leaderLogStartOffset: OffsetAndEpoch): OffsetAndEpoch = {
+  private def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, leaderLogStartOffsetAndEpoch: OffsetAndEpoch): OffsetAndEpoch = {
     val earliestPendingUploadOffset = leader.fetchEarliestPendingUploadOffset(topicPartition, currentLeaderEpoch)
     if (earliestPendingUploadOffset.offset == -1L) {
       val leaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch)
-      if (leaderLocalStartOffset.offset == leaderLogStartOffset.offset) {
+      if (leaderLocalStartOffset.offset == leaderLogStartOffsetAndEpoch.offset) {
         return leaderLocalStartOffset
       }
-      throw new OffsetNotAvailableException("Segments are uploaded to remote storage, but the leader does not have the information about the uploaded segments")
+      throw new OffsetNotAvailableException("Segments are uploaded to remote storage, but the leader does not know the earliest pending upload offset.")
     }
     earliestPendingUploadOffset
   }

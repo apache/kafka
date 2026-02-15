@@ -85,18 +85,18 @@ public class TierStateMachine {
     /**
      * Start the tier state machine for the provided topic partition.
      *
-     * @param topicPartition          the topic partition for which the tier state machine is to be started
-     * @param topicId                 the optional unique identifier of the topic
-     * @param currentLeaderEpoch      the current leader epoch of the partition
-     * @param epochAndStartingOffset  the offset on the leader's local log from which to start replicating logs
-     * @param leaderLogStartOffset    the starting offset in the leader's log
+     * @param topicPartition            the topic partition for which the tier state machine is to be started
+     * @param topicId                   the optional unique identifier of the topic
+     * @param currentLeaderEpoch        the current leader epoch of the partition
+     * @param fetchStartOffsetAndEpoch  the offset on the leader's local log from which to start replicating logs
+     * @param leaderLogStartOffset      the starting offset in the leader's log
      * @return the new PartitionFetchState after the successful start of the tier state machine
      * @throws Exception if an error occurs during the process, such as issues with remote storage
      */
     PartitionFetchState start(TopicPartition topicPartition,
                               Optional<Uuid> topicId,
                               int currentLeaderEpoch,
-                              OffsetAndEpoch epochAndStartingOffset,
+                              OffsetAndEpoch fetchStartOffsetAndEpoch,
                               long leaderLogStartOffset) throws Exception {
         long offsetToFetch;
         replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).buildRemoteLogAuxStateRequestRate().mark();
@@ -110,7 +110,7 @@ public class TierStateMachine {
         }
 
         try {
-            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentLeaderEpoch, epochAndStartingOffset.offset(), epochAndStartingOffset.epoch(), leaderLogStartOffset, unifiedLog);
+            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentLeaderEpoch, fetchStartOffsetAndEpoch.offset(), fetchStartOffsetAndEpoch.epoch(), leaderLogStartOffset, unifiedLog);
         } catch (RemoteStorageException e) {
             replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
             replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
@@ -124,6 +124,7 @@ public class TierStateMachine {
 
         return new PartitionFetchState(topicId, offsetToFetch, Optional.of(initialLag), currentLeaderEpoch,
                 ReplicaState.FETCHING, unifiedLog.latestEpoch());
+
     }
 
     private OffsetForLeaderEpochResponseData.EpochEndOffset fetchEarlierEpochEndOffset(Integer epoch,
@@ -179,12 +180,12 @@ public class TierStateMachine {
      * fetching records from the leader. The return value is the next offset to fetch from the leader, which is the
      * next offset following the end offset of the remote log portion.
      */
-    protected Long buildRemoteLogAuxState(TopicPartition topicPartition,
-                                          Integer currentLeaderEpoch,
-                                          Long leaderLocalLogStartOffset,
-                                          Integer epochForLeaderLocalLogStartOffset,
-                                          Long leaderLogStartOffset,
-                                          UnifiedLog unifiedLog) throws IOException, RemoteStorageException {
+    private Long buildRemoteLogAuxState(TopicPartition topicPartition,
+                                        Integer currentLeaderEpoch,
+                                        Long leaderLocalLogStartOffset,
+                                        Integer epochForLeaderLocalLogStartOffset,
+                                        Long leaderLogStartOffset,
+                                        UnifiedLog unifiedLog) throws IOException, RemoteStorageException {
 
         if (!unifiedLog.remoteLogEnabled()) {
             // If the tiered storage is not enabled throw an exception back so that it will retry until the tiered storage

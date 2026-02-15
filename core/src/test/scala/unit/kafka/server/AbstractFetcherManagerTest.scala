@@ -322,8 +322,7 @@ class AbstractFetcherManagerTest {
   }
 
   private class MockResizeFetcherTierStateMachine extends TierStateMachine(null, null, false) {
-
-    override def start(topicPartition: TopicPartition, topicId: Optional[Uuid], currentLeaderEpoch: Int, epochAndStartingOffset: OffsetAndEpoch, leaderLogStartOffset: Long): PartitionFetchState = {
+    override def start(topicPartition: TopicPartition, topicId: Optional[Uuid], currentLeaderEpoch: Int, fetchStartOffsetAndEpoch: OffsetAndEpoch, leaderLogStartOffset: Long): PartitionFetchState = {
       throw new UnsupportedOperationException("Materializing tier state is not supported in this test.")
     }
   }

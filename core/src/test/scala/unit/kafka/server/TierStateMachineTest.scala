@@ -167,7 +167,7 @@ class TierStateMachineTest {
       override def start(topicPartition: TopicPartition,
                          topicId: Optional[Uuid],
                          currentLeaderEpoch: Int,
-                         epochAndStartingOffset: OffsetAndEpoch,
+                         fetchStartOffsetAndEpoch: OffsetAndEpoch,
                          leaderLogStartOffset: Long): PartitionFetchState = {
         isErrorHandled = true
         throw new FencedLeaderEpochException(s"Epoch ${currentLeaderEpoch} is fenced")
