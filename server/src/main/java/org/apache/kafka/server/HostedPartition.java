@@ -39,4 +39,3 @@ public sealed interface HostedPartition<T> {
      */
     public record Offline<T>(Optional<T> partition) implements HostedPartition<T> { }
 }
-
