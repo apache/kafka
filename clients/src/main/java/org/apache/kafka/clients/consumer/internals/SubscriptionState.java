@@ -1162,6 +1162,7 @@ public class SubscriptionState {
 
         private void requestFailed(long nextAllowedRetryTimeMs) {
             this.nextRetryTimeMs = nextAllowedRetryTimeMs;
+            this.endOffsetRequested = false;
         }
 
         private boolean hasValidPosition() {

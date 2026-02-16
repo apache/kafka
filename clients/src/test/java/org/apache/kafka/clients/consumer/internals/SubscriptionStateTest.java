@@ -1059,6 +1059,18 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void testRequestFailedClearsEndOffsetRequested() {
+        state.assignFromUser(Set.of(tp0));
+        assertFalse(state.partitionEndOffsetRequested(tp0));
+
+        state.requestPartitionEndOffset(tp0);
+        assertTrue(state.partitionEndOffsetRequested(tp0));
+
+        state.requestFailed(Set.of(tp0), 1234L);
+        assertFalse(state.partitionEndOffsetRequested(tp0));
+    }
+
+    @Test
     public void testPositionOrNull() {
         state.assignFromUser(Set.of(tp0));
         final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
