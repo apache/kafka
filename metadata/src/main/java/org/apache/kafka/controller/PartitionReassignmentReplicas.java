@@ -119,7 +119,15 @@ class PartitionReassignmentReplicas {
             }
             if (newTargetReplicas.isEmpty()) return Optional.empty();
         }
-        if (!newTargetIsr.containsAll(newTargetReplicas)) return Optional.empty();
+
+        // Wait for all adding sync replicas to join the ISR, as new brokers could be unhealthy.
+        if (!newTargetIsr.containsAll(adding)) return Optional.empty();
+
+        // If the replication factor is being reduced, wait for all target sync replicas to be present in newTargetIsr to avoid
+        // the potential negative impact on ISR. For example: We reassign [0,1,2,3,4] -> [2,3,4,5] when only 0, 1 and 5 are in
+        // ISR. If we complete the reassignment, we end up with ISR of [5]. If we stay with the current assignment, ISR is
+        // [0,1]. So, by completing the reassignment in this case, we are reducing the size of ISR unnecessarily.
+        if (adding.size() < removing.size() && !newTargetIsr.containsAll(newTargetReplicas)) return Optional.empty();
 
         return Optional.of(
             new CompletedReassignment(

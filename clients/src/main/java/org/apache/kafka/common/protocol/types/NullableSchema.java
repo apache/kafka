@@ -24,8 +24,6 @@ import java.util.Arrays;
  */
 public final class NullableSchema extends Schema {
 
-    private static final String NULLABLE_STRUCT_TYPE_NAME = "NULLABLE_STRUCT";
-
     public NullableSchema(Schema schema) {
         super(schema.tolerateMissingFieldsWithDefaults(), Arrays.stream(schema.fields()).map(field -> field.def).toArray(Field[]::new));
     }
@@ -77,7 +75,7 @@ public final class NullableSchema extends Schema {
 
     @Override
     public String typeName() {
-        return NULLABLE_STRUCT_TYPE_NAME;
+        return "NULLABLE_STRUCT";
     }
 
     @Override

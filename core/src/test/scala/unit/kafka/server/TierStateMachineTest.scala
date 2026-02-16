@@ -20,7 +20,7 @@ package kafka.server
 import org.apache.kafka.common.errors.FencedLeaderEpochException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
 import org.junit.jupiter.api.Assertions._

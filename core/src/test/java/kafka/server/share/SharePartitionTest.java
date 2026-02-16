@@ -38,16 +38,16 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.DefaultRecord;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.DefaultRecord;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -71,7 +71,6 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.share.persister.WriteShareGroupStateResult;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -909,7 +908,7 @@ public class SharePartitionTest {
     public void testMaybeInitializeWithReadException() {
         Persister persister = Mockito.mock(Persister.class);
         // Complete the future exceptionally for read state.
-        Mockito.when(persister.readState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Read exception")));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Read exception")));
         SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
         CompletableFuture<Void> result = sharePartition1.maybeInitialize();
@@ -7514,7 +7513,7 @@ public class SharePartitionTest {
         mockPersisterReadStateMethod(persister);
         SharePartition sharePartition1 = SharePartitionBuilder.builder().withPersister(persister).build();
 
-        Mockito.when(persister.writeState(Mockito.any())).thenReturn(FutureUtils.failedFuture(new RuntimeException("Write exception")));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("Write exception")));
         CompletableFuture<Void> writeResult = sharePartition1.writeShareGroupState(anyList());
         assertTrue(writeResult.isCompletedExceptionally());
         assertFutureThrows(IllegalStateException.class, writeResult);
@@ -12067,6 +12066,46 @@ public class SharePartitionTest {
         assertEquals("member-2", sharePartition.cachedState().get(5L).offsetState().get(12L).memberId());
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(13L).memberId());
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).offsetState().get(14L).memberId());
+    }
+
+    @Test
+    public void testInvalidAcknowledgeTypeInBatchAcknowledgement() {
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(1, 10);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 10);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Invalid acknowledge type 5.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(1, 10, List.of((byte) 5))));
+        assertTrue(ackResult.isCompletedExceptionally());
+        assertFutureThrows(InvalidRequestException.class, ackResult);
+    }
+
+    @Test
+    public void testInvalidAcknowledgeTypeInSubsetAcknowledgement() {
+        ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        MemoryRecords records1 = memoryRecords(1, 10);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records1, 10);
+        assertEquals(1, acquiredRecordsList.size());
+
+        // Invalid acknowledge type -1.
+        CompletableFuture<Void> ackResult = sharePartition.acknowledge(
+            MEMBER_ID,
+            List.of(new ShareAcknowledgementBatch(2, 3, List.of((byte) -1))));
+        assertTrue(ackResult.isCompletedExceptionally());
+        assertFutureThrows(InvalidRequestException.class, ackResult);
     }
 
     /**

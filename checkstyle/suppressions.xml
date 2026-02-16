@@ -50,6 +50,7 @@
     <suppress checks="CyclomaticComplexity" files="ListConsumerGroupTest.java"/>
     <suppress checks="ClassFanOutComplexity|CyclomaticComplexity|MethodLength|ParameterNumber|JavaNCSS|ImportControl" files="RequestConvertToJson.java"/>
     <suppress checks="ImportControl" files="BrokerRegistrationRequestTest.java"/>
+    <suppress checks="ImportControl" files="MetadataRequestTest.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
@@ -221,8 +222,11 @@
     <suppress checks="(NPathComplexity|CyclomaticComplexity)"
               files="(KStreamSlidingWindowAggregate|RackAwareTaskAssignor).java"/>
 
-    <!-- suppress FinalLocalVariable outside of the streams package. -->
+    <!-- suppress FinalLocalVariable and FinalParameters outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
+              files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
+
+    <suppress checks="FinalParameters"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
     <!-- Generated code -->
@@ -373,4 +377,5 @@
 
      <!-- Add the new suppression rule for JaasTestUtils.java -->
     <suppress checks="ImportControl" files="(JaasTestUtils).java" />
+
 </suppressions>

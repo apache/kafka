@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.record.internal.CompressionType
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs

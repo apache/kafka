@@ -34,7 +34,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class RemoteLogMetadataManagerTestUtils {
-    private static final int METADATA_TOPIC_PARTITIONS_COUNT = 3;
+    static final int METADATA_TOPIC_PARTITIONS_COUNT = 3;
     private static final short METADATA_TOPIC_REPLICATION_FACTOR = 2;
     private static final long METADATA_TOPIC_RETENTION_MS = 24 * 60 * 60 * 1000L;
 

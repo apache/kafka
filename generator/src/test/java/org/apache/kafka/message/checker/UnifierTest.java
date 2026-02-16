@@ -45,7 +45,7 @@ public class UnifierTest {
                 "'validVersions': '0-1', 'flexibleVersions': '0+', " +
                 "'fields': [" +
                 "{'name': 'BrokerId', 'type': 'int32', 'versions': '0+'}," +
-                "{'name': 'ControlerId', 'type': 'int32', 'versions': '1+'}" +
+                "{'name': 'ControllerId', 'type': 'int32', 'versions': '1+'}" +
                 "]}")).unify();
     }
 

@@ -19,12 +19,12 @@ package org.apache.kafka.coordinator.common.runtime;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * A {{@link CoordinatorEvent}} processor.
+ * A {@link CoordinatorEvent} processor.
  */
 public interface CoordinatorEventProcessor extends AutoCloseable {
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}} at the end of the processor.
+     * Enqueues a new {@link CoordinatorEvent} at the end of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.
@@ -32,7 +32,7 @@ public interface CoordinatorEventProcessor extends AutoCloseable {
     void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException;
 
     /**
-     * Enqueues a new {{@link CoordinatorEvent}} at the front of the processor.
+     * Enqueues a new {@link CoordinatorEvent} at the front of the processor.
      *
      * @param event The event.
      * @throws RejectedExecutionException If the event processor is closed.
