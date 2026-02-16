@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -93,7 +94,7 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
             return null;
         }
         // for either key or value, their schema is the same hence we will just use session key schema
-        return SessionKeySchema.toBinary(data, inner, topic);
+        return SessionKeySchema.toBinary(data, inner, new RecordHeaders(), topic);
     }
 
     @Override

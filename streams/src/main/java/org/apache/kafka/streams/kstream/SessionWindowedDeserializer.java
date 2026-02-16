@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
@@ -94,7 +95,7 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
         }
 
         // for either key or value, their schema is the same hence we will just use session key schema
-        return SessionKeySchema.from(data, inner, topic);
+        return SessionKeySchema.from(data, inner, new RecordHeaders(), topic);
     }
 
     @Override
