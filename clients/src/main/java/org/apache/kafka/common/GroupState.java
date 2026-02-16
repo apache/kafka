@@ -47,7 +47,6 @@ import java.util.stream.Collectors;
  *     </tbody>
  * </table>
  */
-@InterfaceStability.Evolving
 public enum GroupState {
     UNKNOWN("Unknown"),
     PREPARING_REBALANCE("PreparingRebalance"),
