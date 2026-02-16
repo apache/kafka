@@ -433,8 +433,13 @@ public class Cleaner {
                 outputBuffer.flip();
                 MemoryRecords retained = MemoryRecords.readableRecords(outputBuffer);
 
-                boolean willOverflow = result.maxOffset() - dest.baseOffset() > Integer.MAX_VALUE;
-                if (willOverflow) {
+                // Check for TWO types of overflow BEFORE appending:
+                // 1. Offset overflow: offset range exceeds Integer.MAX_VALUE
+                // 2. Size overflow: file size would exceed Integer.MAX_VALUE
+                boolean willOffsetOverflow = result.maxOffset() - dest.baseOffset() > Integer.MAX_VALUE;
+                boolean willSizeOverflow = retained.sizeInBytes() > Integer.MAX_VALUE - dest.size();
+
+                if (willOffsetOverflow || willSizeOverflow) {
                     logger.info(
                             "Rolling new segment for partition {} due to offset overflow. " +
                                     "(BaseOffset: {}, MaxOffset: {})",
