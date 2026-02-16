@@ -173,8 +173,13 @@ public class GroupConfigTest {
         doTestInvalidProps(props, InvalidConfigurationException.class);
         props = createValidGroupConfig();
 
+        // Check for invalid shareDeliveryCountLimit, < MIN
+        props.put(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "1");
+        doTestInvalidProps(props, ConfigException.class);
+        props = createValidGroupConfig();
+
         // Check for invalid shareDeliveryCountLimit, > MAX
-        props.put(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "16");
+        props.put(GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, "11");
         doTestInvalidProps(props, InvalidConfigurationException.class);
         props = createValidGroupConfig();
 
