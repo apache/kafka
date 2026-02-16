@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.AssertionSupplierFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.CloseableSupplier;
 import org.apache.kafka.common.utils.Time;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
