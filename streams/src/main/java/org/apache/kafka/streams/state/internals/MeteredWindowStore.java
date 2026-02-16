@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -181,8 +182,8 @@ public class MeteredWindowStore<K, V>
                 record -> listener.apply(
                     record.withKey(WindowKeySchema.fromStoreKey(record.key(), windowSizeMs, serdes.keyDeserializer(), serdes.topic()))
                         .withValue(new Change<>(
-                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue, new RecordHeaders()) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue, new RecordHeaders()) : null,
                             record.value().isLatest
                         ))
                 ),
@@ -198,7 +199,7 @@ public class MeteredWindowStore<K, V>
         Objects.requireNonNull(key, "key cannot be null");
         try {
             maybeMeasureLatency(
-                () -> wrapped().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp),
+                () -> wrapped().put(keyBytes(key), serdes.rawValue(value, new RecordHeaders()), windowStartTimestamp),
                 time,
                 putSensor
             );
@@ -219,7 +220,7 @@ public class MeteredWindowStore<K, V>
                 if (result == null) {
                     return null;
                 }
-                return serdes.valueFrom(result);
+                return serdes.valueFrom(result, new RecordHeaders());
             },
             time,
             fetchSensor
@@ -512,11 +513,11 @@ public class MeteredWindowStore<K, V>
     }
 
     private Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key));
+        return Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
     }
 
     protected V outerValue(final byte[] value) {
-        return value != null ? serdes.valueFrom(value) : null;
+        return value != null ? serdes.valueFrom(value, new RecordHeaders()) : null;
     }
 
     private void maybeRecordE2ELatency() {
