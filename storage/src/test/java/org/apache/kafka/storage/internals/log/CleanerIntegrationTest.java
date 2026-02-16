@@ -19,6 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -34,6 +35,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CleanerIntegrationTest {
 
@@ -69,6 +71,16 @@ public class CleanerIntegrationTest {
                 }
             })).toList();
             producers.forEach(CompletableFuture::join);
+            
+            var ids = admin.describeCluster().nodes().get().stream().map(Node::id).toList();
+            var size = admin.describeLogDirs(ids).allDescriptions().get().entrySet()
+                    .stream()
+                    .flatMap(e -> e.getValue().values()
+                        .stream()
+                        .flatMap(v -> v.replicaInfos().entrySet().stream()))
+                    .filter(v -> v.getKey().topic().equals(topic))
+                    .mapToLong(v -> v.getValue().size()).sum();
+            assertTrue(Integer.MAX_VALUE < size, "log size should exceed Integer.MAX_VALUE to trigger overflow");
         }
         var metrics = KafkaYammerMetrics.defaultRegistry().allMetrics();
         metrics.forEach((name, metric) -> {
