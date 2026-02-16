@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
