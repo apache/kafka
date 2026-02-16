@@ -93,7 +93,7 @@ public class SessionWindowedSerializer<T> implements WindowedSerializer<T> {
     }
 
     @Override
-    public byte[] serialize(String topic, Headers headers, Windowed<T> data) {
+    public byte[] serialize(final String topic, final Headers headers, final Windowed<T> data) {
         WindowedSerdes.verifyInnerSerializerNotNull(inner, this);
 
         if (data == null) {

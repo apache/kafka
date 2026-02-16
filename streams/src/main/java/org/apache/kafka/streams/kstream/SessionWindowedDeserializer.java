@@ -93,7 +93,7 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
     }
 
     @Override
-    public Windowed<T> deserialize(String topic, Headers headers, byte[] data) {
+    public Windowed<T> deserialize(final String topic, final Headers headers, final byte[] data) {
         WindowedSerdes.verifyInnerDeserializerNotNull(inner, this);
 
         if (data == null || data.length == 0) {
@@ -101,7 +101,7 @@ public class SessionWindowedDeserializer<T> implements Deserializer<Windowed<T>>
         }
 
         // for either key or value, their schema is the same hence we will just use session key schema
-        return SessionKeySchema.from(data, inner, new RecordHeaders(), topic);
+        return SessionKeySchema.from(data, inner, headers, topic);
     }
 
     @Override
