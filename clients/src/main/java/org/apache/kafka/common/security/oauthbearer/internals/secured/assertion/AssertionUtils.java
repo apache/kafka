@@ -67,7 +67,8 @@ public class AssertionUtils {
         PKCS8EncodedKeySpec keySpec;
 
         if (passphrase.isPresent()) {
-            EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(privateKeyContents);
+            byte[] derEncoded = Base64.getDecoder().decode(privateKeyContents);
+            EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(derEncoded);
             String algorithm = keyInfo.getAlgName();
             SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(algorithm);
             SecretKey pbeKey = secretKeyFactory.generateSecret(new PBEKeySpec(passphrase.get().toCharArray()));
@@ -79,15 +80,27 @@ public class AssertionUtils {
             keySpec = new PKCS8EncodedKeySpec(pkcs8EncodedBytes);
         }
 
-        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-        return keyFactory.generatePrivate(keySpec);
+        // Try RSA first, then EC. PKCS#8 encoded keys are algorithm-agnostic, so we need to
+        // attempt multiple key factories to determine the correct key type.
+        for (String keyAlgorithm : new String[]{"RSA", "EC"}) {
+            try {
+                KeyFactory keyFactory = KeyFactory.getInstance(keyAlgorithm);
+                return keyFactory.generatePrivate(keySpec);
+            } catch (GeneralSecurityException e) {
+                // Try next algorithm
+            }
+        }
+
+        throw new GeneralSecurityException("Unable to load private key: unsupported key type (tried RSA, EC)");
     }
 
     public static Signature getSignature(String algorithm) throws GeneralSecurityException {
         if (algorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_RS256)) {
             return Signature.getInstance("SHA256withRSA");
         } else if (algorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_ES256)) {
-            return Signature.getInstance("SHA256withECDSA");
+            // Use P1363 format which produces raw R||S concatenation as required by JWS (RFC 7515).
+            // Java's default SHA256withECDSA uses DER encoding which is not compatible with JWT signatures.
+            return Signature.getInstance("SHA256withECDSAinP1363Format");
         } else {
             throw new NoSuchAlgorithmException(String.format("Unsupported signing algorithm: %s", algorithm));
         }

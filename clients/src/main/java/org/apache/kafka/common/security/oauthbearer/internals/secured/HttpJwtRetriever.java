@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -312,5 +313,13 @@ public class HttpJwtRetriever implements JwtRetriever {
             log.warn("Error parsing error response", e);
         }
         return String.format("{%s}", errorResponseBody);
+    }
+
+    @Override
+    public void close() throws IOException {
+        // Close the request formatter if it implements Closeable (e.g., ClientAssertionRequestFormatter)
+        if (requestFormatter instanceof Closeable) {
+            ((Closeable) requestFormatter).close();
+        }
     }
 }

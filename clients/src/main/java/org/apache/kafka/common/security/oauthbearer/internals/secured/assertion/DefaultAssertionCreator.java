@@ -85,7 +85,10 @@ public class DefaultAssertionCreator implements AssertionCreator {
             try {
                 contents = contents.replace("-----BEGIN PRIVATE KEY-----", "")
                     .replace("-----END PRIVATE KEY-----", "")
-                    .replace("\n", "");
+                    .replace("-----BEGIN ENCRYPTED PRIVATE KEY-----", "")
+                    .replace("-----END ENCRYPTED PRIVATE KEY-----", "")
+                    .replace("\n", "")
+                    .replace("\r", "");
 
                 return privateKey(contents.getBytes(StandardCharsets.UTF_8), passphrase);
             } catch (GeneralSecurityException | IOException e) {
