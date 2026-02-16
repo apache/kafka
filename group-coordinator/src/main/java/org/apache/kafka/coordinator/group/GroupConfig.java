@@ -375,6 +375,10 @@ public final class GroupConfig extends AbstractConfig {
         return shareHeartbeatIntervalMs;
     }
 
+    public int shareDeliveryCountLimit() {
+        return shareDeliveryCountLimit;
+    }
+
     /**
      * The share group record lock duration milliseconds.
      */
