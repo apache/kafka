@@ -29,6 +29,12 @@ import java.util.stream.Collectors;
 
 /**
  * A detailed description of a single classic group in the cluster.
+ * <p>
+ * This is the result type of {@link Admin#describeClassicGroups(java.util.Collection)}.
+ * Classic groups are the legacy group coordination protocol used before KIP-848 introduced the new
+ * consumer group protocol.
+ *
+ * @see Admin#describeClassicGroups(java.util.Collection)
  */
 public class ClassicGroupDescription {
     private final String groupId;
@@ -39,6 +45,14 @@ public class ClassicGroupDescription {
     private final Node coordinator;
     private final Set<AclOperation> authorizedOperations;
 
+    /**
+     * @param groupId         the group id.
+     * @param protocol        the group protocol type.
+     * @param protocolData    the group protocol data.
+     * @param members         the group members.
+     * @param state           the classic group state.
+     * @param coordinator     the group coordinator.
+     */
     public ClassicGroupDescription(String groupId,
                                    String protocol,
                                    String protocolData,
@@ -48,6 +62,15 @@ public class ClassicGroupDescription {
         this(groupId, protocol, protocolData, members, state, coordinator, Set.of());
     }
 
+    /**
+     * @param groupId               the group id.
+     * @param protocol              the group protocol type.
+     * @param protocolData          the group protocol data.
+     * @param members               the group members.
+     * @param state                 the classic group state.
+     * @param coordinator           the group coordinator.
+     * @param authorizedOperations  the authorized operations.
+     */
     public ClassicGroupDescription(String groupId,
                                    String protocol,
                                    String protocolData,
@@ -91,7 +114,9 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * The group protocol type.
+     * The group protocol type, e.g. {@code "consumer"} for classic consumer groups or
+     * {@code "connect"} for Connect groups. An empty string indicates a simple consumer group
+     * with no protocol (see {@link #isSimpleConsumerGroup()}).
      */
     public String protocol() {
         return protocol;
@@ -107,14 +132,17 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * If the group is a simple consumer group or not.
+     * Whether this is a simple consumer group, i.e., a group that has no protocol type set.
+     * Simple consumer groups use manual partition assignment and do not rely on the group
+     * coordinator for rebalancing.
      */
     public boolean isSimpleConsumerGroup() {
         return protocol.isEmpty();
     }
 
     /**
-     * A list of the members of the classic group.
+     * An immutable list of the members of the classic group. Returns an empty list if the group has
+     * no active members (e.g., when the group state is {@link ClassicGroupState#EMPTY}).
      */
     public Collection<MemberDescription> members() {
         return members;
@@ -135,7 +163,9 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * authorizedOperations for this group, or null if that information is not known.
+     * The set of ACL operations that the caller is authorized to perform on this group.
+     * This is only populated if the {@link DescribeClassicGroupsOptions} requested authorized
+     * operations to be included; otherwise, an empty set is returned.
      */
     public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;

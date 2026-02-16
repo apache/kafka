@@ -105,6 +105,10 @@ public class CreateTopicsResult {
         return futures.get(topic).thenApply(TopicMetadataAndConfig::replicationFactor);
     }
 
+    /**
+     * Encapsulates the topic metadata (topic ID, number of partitions, replication factor) and
+     * configuration returned from the broker after topic creation.
+     */
     public static class TopicMetadataAndConfig {
         private final ApiException exception;
         private final Uuid topicId;
@@ -112,6 +116,12 @@ public class CreateTopicsResult {
         private final int replicationFactor;
         private final Config config;
 
+        /**
+         * @param topicId           the topic ID.
+         * @param numPartitions     the number of partitions.
+         * @param replicationFactor the replication factor.
+         * @param config            the topic configuration.
+         */
         public TopicMetadataAndConfig(Uuid topicId, int numPartitions, int replicationFactor, Config config) {
             this.exception = null;
             this.topicId = topicId;
@@ -120,6 +130,12 @@ public class CreateTopicsResult {
             this.config = config;
         }
 
+        /**
+         * Create a failed instance with the provided exception. All accessor methods on
+         * the resulting instance will throw this exception when invoked.
+         *
+         * @param exception the exception that caused the topic creation failure.
+         */
         public TopicMetadataAndConfig(ApiException exception) {
             this.exception = exception;
             this.topicId = Uuid.ZERO_UUID;
@@ -128,21 +144,49 @@ public class CreateTopicsResult {
             this.config = null;
         }
         
+        /**
+         * The topic ID assigned by the broker, or {@link Uuid#ZERO_UUID} if the broker version
+         * does not support topic IDs.
+         *
+         * @throws ApiException if topic creation failed.
+         */
         public Uuid topicId() {
             ensureSuccess();
             return topicId;
         }
 
+        /**
+         * The number of partitions of the created topic. This reflects the actual partition
+         * count assigned by the broker, which may differ from the requested count if the broker
+         * applied a default.
+         *
+         * @throws ApiException if topic creation failed.
+         */
         public int numPartitions() {
             ensureSuccess();
             return numPartitions;
         }
 
+        /**
+         * The replication factor of the created topic. This reflects the actual replication
+         * factor assigned by the broker, which may differ from the requested value if the
+         * broker applied a default.
+         *
+         * @throws ApiException if topic creation failed.
+         */
         public int replicationFactor() {
             ensureSuccess();
             return replicationFactor;
         }
 
+        /**
+         * The topic configuration returned by the broker after topic creation. Note that
+         * the {@link org.apache.kafka.clients.admin.ConfigEntry#type() type} and
+         * {@link org.apache.kafka.clients.admin.ConfigEntry#documentation() documentation}
+         * fields of individual config entries will be null.
+         *
+         * @throws ApiException if topic creation failed.
+         */
         public Config config() {
             ensureSuccess();
             return config;
