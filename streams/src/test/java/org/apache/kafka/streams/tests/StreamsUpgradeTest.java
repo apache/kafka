@@ -100,9 +100,7 @@ public class StreamsUpgradeTest {
     public static KafkaStreams buildStreams(final Properties streamsProperties) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, Integer> dataTable = builder.table(
-            "data", 
-            Consumed.with(stringSerde, intSerde),
-            org.apache.kafka.streams.kstream.Materialized.as("data-store"));
+            "data", Consumed.with(stringSerde, intSerde));
         final KStream<String, Integer> dataStream = dataTable.toStream();
         dataStream.process(SmokeTestUtil.printProcessorSupplier("data"));
         dataStream.to("echo");

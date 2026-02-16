@@ -531,149 +531,131 @@ class StreamsUpgradeTest(Test):
                 raise Exception("Kafka Streams failed with 'group member upgraded to metadata 8 too early'")
 
 
-
     @cluster(num_nodes=6)
-    @matrix(from_version=[str(LATEST_3_9)],
+    @matrix(from_version=fk_join_versions,
             metadata_quorum=[quorum.combined_kraft])
-    def test_rocksdb_format_v5_upgrade(self, from_version, metadata_quorum):
+    def test_rocksdb_phased_upgrade_v5_to_v6(self, from_version, metadata_quorum):
         """
-        Tests RocksDB file format v5 → v6 upgrade compatibility (KAFKA-20096).
+        Tests phased RocksDB format migration: old→DEV(v5)→DEV(v6) (KAFKA-20096).
         
         Background:
-        - Kafka 3.9 uses RocksDB 7.9.2 which writes format v5
-        - Kafka 4.0+ uses RocksDB 9.7.3 which defaults to format v6
-        - RocksDB 9.7.3 CAN read format v5 (backward compatible)
+        - Cautious production upgrade: first upgrade binary while keeping v5, 
+          then migrate to v6 format in second rolling bounce
+        - Kafka 4.2+ uses RocksDB 9.7.3 which defaults to format v6
         
         Test flow:
-        1. Start 3 Kafka Streams instances with version 3.9
-        2. Process data to create state stores in format v5
-        3. Rolling upgrade each instance to DEV_VERSION (4.0+)
-        4. Verify upgrade succeeds (new RocksDB reads old format)
-        5. Verify processing continues correctly
+        1. Start with old version (v5 format)
+        2. Upgrade to DEV WITH v5 config (stays on v5)
+        3. Second rolling bounce: DEV without v5 config (migrates to v6)
         
-        Expected result: Upgrade succeeds without errors
+        Expected result: All phases succeed, format migrates v5→v6
         """
         to_version = str(DEV_VERSION)
         
-        # === SETUP PHASE ===
-        # Create Kafka broker and Streams services
-        self.set_up_services()
-        
-        # Start data producer (continuously produces records to 'data' topic)
-        self.driver.start()
-        self.logger.info("Data driver started - producing test records")
-        
-        # === PHASE 1: Start all nodes with OLD version (3.9) ===
-        # This creates state stores in RocksDB format v5
-        self.logger.info(f"PHASE 1: Starting all 3 Streams instances with version {from_version}")
-        self.logger.info(f"         RocksDB 7.9.2 will create state stores in format v5")
-        self.start_all_nodes_with(from_version, {})
-        
-        # Give time to process records and build state stores
-        # State stores will be written in format v5 on disk at:
-        # /mnt/streams-upgrade-test/kafka-streams/<app-id>/0_0/rocksdb/<store-name>/
-        self.logger.info("Waiting 30 seconds for state stores to be populated with format v5 data...")
-        time.sleep(30)
-        
-        # === PHASE 2: Rolling upgrade to NEW version (4.0+) ===
-        # Each instance upgraded one-by-one to minimize downtime
-        self.logger.info(f"PHASE 2: Rolling upgrade to version {to_version}")
-        self.logger.info(f"         RocksDB 9.7.3 must successfully READ format v5 state stores")
-        
-        counter = 1
-        random.seed()
-        random.shuffle(self.processors)  # Randomize upgrade order
-        for p in self.processors:
-            # CRITICAL: CLEAN_NODE_ENABLED = False
-            # This keeps existing state stores intact  upg(f upgraormat v5 files remain on disk)
-            # New RocksDB 9.7.3 must be able to read these v5 files
-            p.CLEAN_NODE_ENABLED = False
-            
-            self.logger.info(f"  Upgrading instance #{counter} to {to_version}")
-            self.logger.info(f"    - Stop instance (running {from_version})")
-            self.logger.info(f"    - Start instance with {to_version}")
-            self.logger.info(f"    - RocksDB 9.7.3 will open existing format v5 state stores")
-            
-            # upgrade_from=None means no metadata migration needed (no protocol change)
-            # We're only testing RocksDB format compatibility here
-            self.do_stop_start_bounce(p, None, to_version, counter, {})
-            
-            self.logger.info(f"    ✓ Instance #{counter} successfully upgraded and processing")
-            counter = counter + 1
-        
-        # === PHASE 3: Verification ===
-        # If we reach here, all instances upgraded successfully
-        # This means RocksDB 9.7.3 successfully read format v5 state stores
-        self.logger.info("PHASE 3: Verification")
-        self.logger.info("  Waiting 30 seconds to verify continued processing...")
-        time.sleep(30)
-        
-        # The do_stop_start_bounce already verified that each instance processes records
-        # (it waits for "processed * records from topic=data" in logs)
-        self.logger.info("  ✓ All instances processing records successfully")
-        self.logger.info("  ✓ RocksDB 9.7.3 successfully read format v5 state stores")
-        self.logger.info("  ✓ Upgrade test PASSED")
-        
-        # === CLEANUP ===
-        self.stop_and_await()
-        self.logger.info("Test completed successfully")
-
-    @cluster(num_nodes=6)
-    @matrix(to_version=[str(LATEST_3_9)],
-            metadata_quorum=[quorum.combined_kraft])
-    def test_rocksdb_format_v5_downgrade(self, to_version, metadata_quorum):
-        """
-        Tests RocksDB file format v6 → v5 downgrade compatibility (KAFKA-20096).
-        
-        Background:
-        - Kafka 4.0+ uses RocksDB 9.7.3 which defaults to format v6
-        - Kafka 3.9 uses RocksDB 7.9.2 which writes format v5
-        - RocksDB 7.9.2 should NOT be able to read format v6 (not forward compatible)
-        
-        Test flow:
-        1. Start 3 Kafka Streams instances with DEV_VERSION (4.0+)
-        2. Process data to create state stores in format v6
-        3. Attempt rolling downgrade to 3.9 WITHOUT wiping state stores
-        4. Check if downgrade succeeds or fails
-        
-        Expected result based on KAFKA-20096:
-        - Downgrade should FAIL (RocksDB 7.9.2 cannot read v6)
-        - If it succeeds, it means the incompatibility doesn't exist or was fixed
-        """
-        from_version = str(DEV_VERSION)
+        if KafkaVersion(from_version).supports_fk_joins() and KafkaVersion(to_version).supports_fk_joins():
+            extra_properties = {'test.run_fk_join': 'true'}
+        else:
+            extra_properties = {}
         
         self.set_up_services()
-        
         self.driver.start()
-        self.logger.info("Data driver started - producing test records")
         
-        self.logger.info(f"PHASE 1: Starting all 3 Streams instances with version {from_version}")
-        self.logger.info(f"         RocksDB 9.7.3 will create state stores in format v6")
-        self.start_all_nodes_with(from_version, {})
-        
-        self.logger.info("Waiting 30 seconds for state stores to be populated with format v6 data...")
+        self.logger.info(f"PHASE 1: Start with old version {from_version} (RocksDB v5)")
+        self.start_all_nodes_with(from_version, extra_properties)
         time.sleep(30)
-
-
         
-        self.logger.info(f"PHASE 2: Attempting rolling downgrade to version {to_version}")
-        self.logger.info(f"         WITHOUT wiping state stores - testing if RocksDB 7.9.2 can read v6")
+        self.logger.info(f"PHASE 2: Upgrade to DEV {to_version} KEEPING v5 format")
+        extra_properties_v5 = extra_properties.copy()
+        extra_properties_v5['rocksdb.config.setter'] = 'org.apache.kafka.streams.tests.RocksDBFormatV5ConfigSetter'
         
         counter = 1
         random.seed()
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.logger.info(f"  Downgrading instance #{counter} to {to_version}")
-            self.do_stop_start_bounce(p, None, to_version, counter, {})
-            self.logger.info(f"    ✓ Instance #{counter} successfully downgraded and processing")
+            self.do_stop_start_bounce(p, from_version[:-2], to_version, counter, extra_properties_v5)
+            counter = counter + 1
+
+        self.logger.info("PHASE 3: Second rolling bounce - migrate to v6 format")
+        time.sleep(30)
+
+        # Remove the rocksdb.config.setter to allow migration to default v6 format
+        for p in self.processors:
+            if 'rocksdb.config.setter' in p.extra_properties:
+                del p.extra_properties['rocksdb.config.setter']
+
+        counter = 1
+        random.shuffle(self.processors)
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
+            self.do_stop_start_bounce(p, None, to_version, counter, extra_properties)
+            counter = counter + 1
+
+        self.logger.info("✓ Phased upgrade test PASSED (v5→v5→v6)")
+        self.stop_and_await()
+
+    @cluster(num_nodes=6)
+    @matrix(from_version=fk_join_versions,
+            metadata_quorum=[quorum.combined_kraft])
+    def test_rocksdb_safe_downgrade_with_v5(self, from_version, metadata_quorum):
+        """
+        Tests safe RocksDB downgrade by forcing DEV to use format v5 (KAFKA-20096).
+
+        Background:
+        - Kafka 4.0+ uses RocksDB 9.7.3 which defaults to format v6
+        - RocksDB 7.9.2 (used in 3.4-4.1) cannot read format v6
+        - By forcing DEV to write v5, we enable safe downgrade
+
+        Test flow:
+        1. Start with old version (v5)
+        2. Upgrade to DEV, but configure DEV to use v5 format
+        3. Downgrade back to old version
+
+        Expected result: All steps succeed
+        """
+        to_version = str(DEV_VERSION)
+
+        if KafkaVersion(from_version).supports_fk_joins() and KafkaVersion(to_version).supports_fk_joins():
+            extra_properties = {'test.run_fk_join': 'true'}
+        else:
+            extra_properties = {}
+
+        self.set_up_services()
+        self.driver.start()
+
+        self.logger.info(f"PHASE 1: Starting with old version {from_version} (RocksDB v5)")
+        self.start_all_nodes_with(from_version, extra_properties)
+        time.sleep(30)
+
+        self.logger.info(f"PHASE 2: Upgrade to DEV {to_version} WITH v5 config")
+        extra_properties_v5 = extra_properties.copy()
+        extra_properties_v5['rocksdb.config.setter'] = 'org.apache.kafka.streams.tests.RocksDBFormatV5ConfigSetter'
+
+        counter = 1
+        random.seed()
+        random.shuffle(self.processors)
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
+            self.do_stop_start_bounce(p, from_version[:-2], to_version, counter, extra_properties_v5)
             counter = counter + 1
         
-        self.logger.info("PHASE 3: Verification")
-        self.logger.info("  ✓ All instances successfully downgraded")
-        self.logger.info("  ✓ RocksDB 7.9.2 can read format v6 state stores")
-        self.logger.info("  ✓ Downgrade compatibility confirmed")
+        self.logger.info("PHASE 3: Downgrade back to old version")
         time.sleep(30)
+        
+        # Remove the rocksdb.config.setter from processor configs before downgrade
+        # The old version doesn't have RocksDBFormatV5ConfigSetter class
+        for p in self.processors:
+            if 'rocksdb.config.setter' in p.extra_properties:
+                del p.extra_properties['rocksdb.config.setter']
+        
+        counter = 1
+        random.shuffle(self.processors)
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
+            self.do_stop_start_bounce(p, None, from_version, counter, extra_properties)
+            counter = counter + 1
+        
+        self.logger.info("✓ Safe downgrade test PASSED")
         self.stop_and_await()
 
     def confirm_topics_on_all_brokers(self, expected_topic_set):
