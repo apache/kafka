@@ -29,7 +29,7 @@ object Kafka extends Logging {
 
   def getPropsFromArgs(args: Array[String]): Properties = {
     val optionParser = new OptionParser(false)
-    val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
+    val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file (e.g. Key=value")
       .withRequiredArg()
       .describedAs("key=value")
       .ofType(classOf[String])
