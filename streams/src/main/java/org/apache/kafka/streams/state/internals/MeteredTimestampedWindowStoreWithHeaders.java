@@ -16,17 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 
 /**
  * A Metered {@link TimestampedWindowStoreWithHeaders} wrapper that is used for recording operation metrics,
@@ -58,40 +54,5 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
         } else {
             return super.prepareValueSerde(valueSerde, getter);
         }
-    }
-
-    @Override
-    public void put(final K key, final V value, final long windowStartTimestamp, final long timestamp, final Headers headers) {
-        put(key, ValueTimestampHeaders.make(value, timestamp, headers), windowStartTimestamp);
-    }
-
-    @Override
-    public WindowStoreIterator<ValueTimestampHeaders<V>> fetchWithHeaders(final K key, final long timeFrom, final long timeTo) {
-        return fetch(key, timeFrom, timeTo);
-    }
-
-    @Override
-    public WindowStoreIterator<ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K key, final long timeFrom, final long timeTo) {
-        return backwardFetch(key, timeFrom, timeTo);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchWithHeaders(final K keyFrom, final K keyTo, final long timeFrom, final long timeTo) {
-        return fetch(keyFrom, keyTo, timeFrom, timeTo);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchWithHeaders(final K keyFrom, final K keyTo, final long timeFrom, final long timeTo) {
-        return backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> fetchAllWithHeaders(final long timeFrom, final long timeTo) {
-        return fetchAll(timeFrom, timeTo);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> backwardFetchAllWithHeaders(final long timeFrom, final long timeTo) {
-        return backwardFetchAll(timeFrom, timeTo);
     }
 }
