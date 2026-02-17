@@ -102,7 +102,7 @@ public final class DefaultTaskManager implements TaskManager {
             }
 
             // the most naive scheduling algorithm for now: give the next unlocked, unassigned, and  processable task
-            for (final Task task : tasks.activeTasks()) {
+            for (final Task task : tasks.activeInitializedTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
                     canProgress((StreamTask) task, time.milliseconds()) &&
@@ -126,7 +126,7 @@ public final class DefaultTaskManager implements TaskManager {
     @Override
     public void awaitProcessableTasks(final Supplier<Boolean> isShuttingDown) throws InterruptedException {
         final boolean interrupted = returnWithTasksLocked(() -> {
-            for (final Task task : tasks.activeTasks()) {
+            for (final Task task : tasks.activeInitializedTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
                     canProgress((StreamTask) task, time.milliseconds()) &&
@@ -200,7 +200,7 @@ public final class DefaultTaskManager implements TaskManager {
             final Set<TaskId> remainingTaskIds = new ConcurrentSkipListSet<>(taskIds);
 
             for (final TaskId taskId : taskIds) {
-                final Task task = tasks.task(taskId);
+                final Task task = tasks.initializedTask(taskId);
 
                 if (task == null) {
                     throw new IllegalArgumentException("Trying to lock task " + taskId + " but it's not owned");
@@ -243,7 +243,7 @@ public final class DefaultTaskManager implements TaskManager {
     @Override
     public KafkaFuture<Void> lockAllTasks() {
         return returnWithTasksLocked(() ->
-            lockTasks(tasks.activeTasks().stream().map(Task::id).collect(Collectors.toSet()))
+            lockTasks(tasks.activeInitializedTasks().stream().map(Task::id).collect(Collectors.toSet()))
         );
     }
 
@@ -263,7 +263,7 @@ public final class DefaultTaskManager implements TaskManager {
 
     @Override
     public void unlockAllTasks() {
-        executeWithTasksLocked(() -> unlockTasks(tasks.activeTasks().stream().map(Task::id).collect(Collectors.toSet())));
+        executeWithTasksLocked(() -> unlockTasks(tasks.activeInitializedTasks().stream().map(Task::id).collect(Collectors.toSet())));
     }
 
     @Override
@@ -290,11 +290,11 @@ public final class DefaultTaskManager implements TaskManager {
                 throw new IllegalArgumentException("The task to remove is not locked yet by the task manager");
             }
 
-            if (!tasks.contains(taskId)) {
+            if (!tasks.containsInitialized(taskId)) {
                 throw new IllegalArgumentException("The task to remove is not owned by the task manager");
             }
 
-            tasks.removeTask(tasks.task(taskId));
+            tasks.removeTask(tasks.initializedTask(taskId));
         });
 
         log.info("Removed task {} from the task manager", taskId);
@@ -302,7 +302,7 @@ public final class DefaultTaskManager implements TaskManager {
 
     @Override
     public Set<ReadOnlyTask> getTasks() {
-        return returnWithTasksLocked(() -> tasks.activeTasks().stream().map(ReadOnlyTask::new).collect(Collectors.toSet()));
+        return returnWithTasksLocked(() -> tasks.activeInitializedTasks().stream().map(ReadOnlyTask::new).collect(Collectors.toSet()));
     }
 
     @Override

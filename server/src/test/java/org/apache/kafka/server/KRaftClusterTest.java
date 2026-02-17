@@ -1213,6 +1213,7 @@ public class KRaftClusterTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testCreateClusterAndRestartControllerNode() throws Exception {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
