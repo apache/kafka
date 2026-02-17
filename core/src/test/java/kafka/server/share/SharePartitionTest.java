@@ -12246,8 +12246,6 @@ public class SharePartitionTest {
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
     }
 
-    // Tests for dynamic maxDeliveryCount resolution via GroupConfigManager.
-
     @Test
     public void testMaxDeliveryCountUsesGroupConfigWhenPresent() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
