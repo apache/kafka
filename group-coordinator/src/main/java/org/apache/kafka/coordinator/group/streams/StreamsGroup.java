@@ -1076,16 +1076,22 @@ public class StreamsGroup implements Group {
     public StreamsGroupDescribeResponseData.DescribedGroup asDescribedGroup(
         long committedOffset
     ) {
+        StreamsGroupDescribeResponseData.Topology describeTopology = topology.get(committedOffset)
+            .map(StreamsTopology::asStreamsGroupDescribeTopology)
+            .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."));
+
+        // If the topology is validated, enrich the describe response with the resolved partition counts
+        // for internal topics (repartition source topics and state changelog topics).
+        configuredTopology.get(committedOffset)
+            .filter(ConfiguredTopology::isReady)
+            .ifPresent(ct -> enrichWithResolvedPartitionCounts(describeTopology, ct.resolvedPartitionCounts()));
+
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
-            .setTopology(
-                topology.get(committedOffset)
-                    .map(StreamsTopology::asStreamsGroupDescribeTopology)
-                    .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
-            );
+            .setTopology(describeTopology);
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
                 entry.getValue().asStreamsGroupDescribeMember(
@@ -1094,6 +1100,26 @@ public class StreamsGroup implements Group {
             )
         );
         return describedGroup;
+    }
+
+    private static void enrichWithResolvedPartitionCounts(
+        StreamsGroupDescribeResponseData.Topology describeTopology,
+        Map<String, Integer> resolvedPartitionCounts
+    ) {
+        for (StreamsGroupDescribeResponseData.Subtopology subtopology : describeTopology.subtopologies()) {
+            for (StreamsGroupDescribeResponseData.TopicInfo topicInfo : subtopology.repartitionSourceTopics()) {
+                Integer resolved = resolvedPartitionCounts.get(topicInfo.name());
+                if (resolved != null) {
+                    topicInfo.setPartitions(resolved);
+                }
+            }
+            for (StreamsGroupDescribeResponseData.TopicInfo topicInfo : subtopology.stateChangelogTopics()) {
+                Integer resolved = resolvedPartitionCounts.get(topicInfo.name());
+                if (resolved != null) {
+                    topicInfo.setPartitions(resolved);
+                }
+            }
+        }
     }
 
     public void setShutdownRequestMemberId(final String memberId) {

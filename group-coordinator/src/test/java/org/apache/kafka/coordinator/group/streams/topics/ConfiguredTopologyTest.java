@@ -39,7 +39,8 @@ public class ConfiguredTopologyTest {
                 0L,
                 null,
                 Optional.empty(),
-                Optional.of(Map.of("subtopology1", 10))
+                Optional.of(Map.of("subtopology1", 10)),
+                Map.of()
             )
         );
     }
@@ -52,7 +53,8 @@ public class ConfiguredTopologyTest {
                 0L,
                 Map.of(),
                 null,
-                Optional.of(Map.of("subtopology1", 10))
+                Optional.of(Map.of("subtopology1", 10)),
+                Map.of()
             )
         );
     }
@@ -65,6 +67,21 @@ public class ConfiguredTopologyTest {
                 0L,
                 Map.of(),
                 Optional.empty(),
+                null,
+                Map.of()
+            )
+        );
+    }
+
+    @Test
+    public void testConstructorWithNullResolvedPartitionCounts() {
+        assertThrows(NullPointerException.class,
+            () -> new ConfiguredTopology(
+                0,
+                0L,
+                Map.of(),
+                Optional.empty(),
+                Optional.of(Map.of("subtopology1", 10)),
                 null
             )
         );
@@ -78,7 +95,8 @@ public class ConfiguredTopologyTest {
                 0L,
                 Map.of(),
                 Optional.empty(),
-                Optional.of(Map.of("subtopology1", 10))
+                Optional.of(Map.of("subtopology1", 10)),
+                Map.of()
             )
         );
     }
@@ -91,7 +109,8 @@ public class ConfiguredTopologyTest {
                 0L,
                 Map.of(),
                 Optional.empty(),
-                Optional.empty()
+                Optional.empty(),
+                Map.of()
             )
         );
         assertEquals("numTasksBySubtopology must be present if topicConfigurationException is empty.", ex.getMessage());
@@ -101,11 +120,11 @@ public class ConfiguredTopologyTest {
     public void testIsReady() {
         Map<String, Integer> numTasksBySubtopology = Map.of("subtopology1", 10);
         ConfiguredTopology readyResult = new ConfiguredTopology(
-            1, 0L, new HashMap<>(), Optional.empty(), Optional.of(numTasksBySubtopology));
+            1, 0L, new HashMap<>(), Optional.empty(), Optional.of(numTasksBySubtopology), Map.of());
         assertTrue(readyResult.isReady());
 
         ConfiguredTopology notReadyResult = new ConfiguredTopology(
-            1, 0L, new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")), Optional.empty());
+            1, 0L, new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")), Optional.empty(), Map.of());
         assertFalse(notReadyResult.isReady());
     }
 
@@ -119,7 +138,8 @@ public class ConfiguredTopologyTest {
             42L,
             internalTopics,
             Optional.empty(),
-            Optional.of(numTasksBySubtopology)
+            Optional.of(numTasksBySubtopology),
+            Map.of()
         );
 
         assertEquals(1, result.topologyEpoch());

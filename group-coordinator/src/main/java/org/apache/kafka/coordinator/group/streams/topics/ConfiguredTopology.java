@@ -36,12 +36,15 @@ import java.util.Optional;
  *                                    reported back to the client.
  * @param numTasksBySubtopology       The number of tasks per subtopology. Present only when isReady() returns true.
  *                                    This is computed by InternalTopicManager and used by the task assignor.
+ * @param resolvedPartitionCounts     The resolved partition counts for internal topics. Maps internal topic name to its partition count.
+ *                                    This is used to enrich the describe response with the actual partition counts.
  */
 public record ConfiguredTopology(int topologyEpoch,
                                  long metadataHash,
                                  Map<String, CreatableTopic> internalTopicsToBeCreated,
                                  Optional<TopicConfigurationException> topicConfigurationException,
-                                 Optional<Map<String, Integer>> numTasksBySubtopology) {
+                                 Optional<Map<String, Integer>> numTasksBySubtopology,
+                                 Map<String, Integer> resolvedPartitionCounts) {
 
     public ConfiguredTopology {
         if (topologyEpoch < 0) {
@@ -53,6 +56,7 @@ public record ConfiguredTopology(int topologyEpoch,
         Objects.requireNonNull(internalTopicsToBeCreated, "internalTopicsToBeCreated can't be null");
         Objects.requireNonNull(topicConfigurationException, "topicConfigurationException can't be null");
         Objects.requireNonNull(numTasksBySubtopology, "numTasksBySubtopology can't be null");
+        Objects.requireNonNull(resolvedPartitionCounts, "resolvedPartitionCounts can't be null");
     }
 
     public boolean isReady() {

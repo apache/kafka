@@ -68,7 +68,8 @@ public class TargetAssignmentBuilderTest {
             0L,
             Map.of(),
             Optional.of(TopicConfigurationException.missingSourceTopics("missing")),
-            Optional.empty()
+            Optional.empty(),
+            Map.of()
         );
         Map<String, String> assignmentConfigs = new HashMap<>();
 
@@ -833,7 +834,8 @@ public class TargetAssignmentBuilderTest {
                 0L,
                 Map.of(),
                 Optional.empty(),
-                Optional.of(numTasksBySubtopology)
+                Optional.of(numTasksBySubtopology),
+                Map.of()
             );
 
             // Prepare the expected assignment spec.

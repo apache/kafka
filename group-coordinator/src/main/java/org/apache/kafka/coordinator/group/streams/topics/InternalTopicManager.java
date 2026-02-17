@@ -95,7 +95,8 @@ public class InternalTopicManager {
                     metadataHash,
                     internalTopicsToCreate,
                     topicConfigurationException,
-                    Optional.empty()
+                    Optional.empty(),
+                    decidedPartitionCountsForInternalTopics
                 );
             } else {
                 log.info("Valid topic configuration found in {}ms, topology epoch {} is now initialized.",
@@ -107,7 +108,8 @@ public class InternalTopicManager {
                     metadataHash,
                     internalTopicsToCreate,
                     Optional.empty(),
-                    Optional.of(numTasksBySubtopology)
+                    Optional.of(numTasksBySubtopology),
+                    decidedPartitionCountsForInternalTopics
                 );
             }
 
@@ -120,7 +122,8 @@ public class InternalTopicManager {
                 metadataHash,
                 Map.of(),
                 Optional.of(e),
-                Optional.empty()
+                Optional.empty(),
+                Map.of()
             );
         }
     }
