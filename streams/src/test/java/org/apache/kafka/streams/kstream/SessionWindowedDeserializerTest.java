@@ -24,8 +24,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
-
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
