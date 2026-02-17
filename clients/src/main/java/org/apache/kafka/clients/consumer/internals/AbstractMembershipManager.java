@@ -817,11 +817,13 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
      *
-     * @param canCommit Controls whether reconciliation can proceed when auto-commit is enabled.
-     *                  Set to true only when the current offset positions are safe to commit.
-     *                  If false and auto-commit enabled, the reconciliation will be skipped.
+     * @param invokedByPoll True if this reconciliation attempt is triggered by the application thread on consumer.poll().
+     *                      False if this is triggered by the background thread on regular manager poll.
+     *                      In both cases we want to resolve metadata to unresolved assignments,
+     *                      but the actual reconciliation (commit, callbacks, assignment updates)
+     *                      will only proceed if this is triggered from the application thread on consumer.poll
      */
-    public void maybeReconcile(boolean canCommit) {
+    public void maybeReconcile(boolean invokedByPoll) {
         if (state != MemberState.RECONCILING) {
             return;
         }
@@ -851,7 +853,11 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
-        if (autoCommitEnabled && !canCommit) return;
+        // Only proceed with reconciliation when invoked by poll()
+        // This ensures that assignment changes happen during poll()
+        if (!invokedByPoll) return;
+
+        // Start reconciliation process to commit, release removed partitions and accept new ones.
         markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
