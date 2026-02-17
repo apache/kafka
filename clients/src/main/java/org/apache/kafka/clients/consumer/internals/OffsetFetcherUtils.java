@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 /**
  * Utility functions for fetching offsets, validating and resetting positions.
  */
-public class OffsetFetcherUtils {
+class OffsetFetcherUtils {
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptionState;
     private final Time time;
