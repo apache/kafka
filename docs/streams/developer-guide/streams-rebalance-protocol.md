@@ -57,11 +57,13 @@ The following features are not yet available and should be avoided when using th
 
 * **Topology Updates**: If a topology is changed significantly (e.g., by adding new source topics or changing the number of subtopologies), a new streams group must be created.
 
-* **High Availability Assignor**: Only the sticky assignor is supported. This implies that "warmup tasks" are not supported yet.
+* **High Availability Assignor**: Only the sticky assignor is supported. This implies that "warmup tasks" and rack aware assignment are not supported yet.
 
 * **Regular Expressions**: Pattern-based topic subscription is not supported.
 
 * **Online Migration**: Group migration while the application is running is not available between the classic and new streams protocol.
+
+* **Custom Client Supplier**: Using a custom `KafkaClientSupplier` will only allow so provide restore/global consumer, producer, and admin client. It's not possible to provide the "main" consumer when "streams" groups are enabled. 
 
 # Why Use the Streams Rebalance Protocol?
 

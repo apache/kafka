@@ -26,7 +26,7 @@ import org.apache.kafka.common.{Endpoint, Node}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigException, SaslConfigs, SecurityConfig, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{CompressionType, Records}
+import org.apache.kafka.common.record.internal.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.utils.LogCaptureAppender
@@ -1572,31 +1572,6 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertEquals(dataDir1, config.metadataLogDir)
     assertEquals(util.List.of(dataDir1, dataDir2), config.logDirs)
-  }
-
-  @Test
-  def testPopulateSynonymsOnEmptyMap(): Unit = {
-    assertEquals(Collections.emptyMap(), KafkaConfig.populateSynonyms(Collections.emptyMap()))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutNodeId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
-  }
-
-  @Test
-  def testPopulateSynonymsOnMapWithoutBrokerId(): Unit = {
-    val input =  new util.HashMap[String, String]()
-    input.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    val expectedOutput = new util.HashMap[String, String]()
-    expectedOutput.put(ServerConfigs.BROKER_ID_CONFIG, "4")
-    expectedOutput.put(KRaftConfigs.NODE_ID_CONFIG, "4")
-    assertEquals(expectedOutput, KafkaConfig.populateSynonyms(input))
   }
 
   @Test

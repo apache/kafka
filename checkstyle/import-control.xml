@@ -78,11 +78,11 @@
       <allow pkg="net.jpountz.xxhash" />
       <allow pkg="org.xerial.snappy" />
       <allow pkg="org.apache.kafka.common.compress" />
-      <allow class="org.apache.kafka.common.record.CompressionType" />
-      <allow class="org.apache.kafka.common.record.CompressionType.GZIP" />
-      <allow class="org.apache.kafka.common.record.CompressionType.LZ4" />
-      <allow class="org.apache.kafka.common.record.CompressionType.ZSTD" />
-      <allow class="org.apache.kafka.common.record.RecordBatch" exact-match="true" />
+      <allow class="org.apache.kafka.common.record.internal.CompressionType" />
+      <allow class="org.apache.kafka.common.record.internal.CompressionType.GZIP" />
+      <allow class="org.apache.kafka.common.record.internal.CompressionType.LZ4" />
+      <allow class="org.apache.kafka.common.record.internal.CompressionType.ZSTD" />
+      <allow class="org.apache.kafka.common.record.internal.RecordBatch" exact-match="true" />
     </subpackage>
 
     <subpackage name="internals">

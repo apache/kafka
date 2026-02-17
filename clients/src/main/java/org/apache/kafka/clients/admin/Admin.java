@@ -1544,6 +1544,19 @@ public interface Admin extends AutoCloseable {
     DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
 
     /**
+     * Applies specified updates to finalized features.
+     * <p>
+     * This is a convenience method for {@link #updateFeatures(Map, UpdateFeaturesOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param featureUpdates the map of finalized feature name to {@link FeatureUpdate}
+     * @return the {@link UpdateFeaturesResult} containing the result
+     */
+    default UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates) {
+        return updateFeatures(featureUpdates, new UpdateFeaturesOptions());
+    }
+
+    /**
      * Applies specified updates to finalized features. This operation is not transactional so some
      * updates may succeed while the rest may fail.
      * <p>

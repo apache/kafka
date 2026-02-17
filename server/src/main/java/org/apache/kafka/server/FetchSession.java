@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
@@ -41,9 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * fields are read or modified. This includes modification of the session partition map.
  */
 public class FetchSession {
-    public static final String NUM_INCREMENTAL_FETCH_SESSIONS = "NumIncrementalFetchSessions";
-    public static final String NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached";
-    public static final String INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC = "IncrementalFetchSessionEvictionsPerSec";
+    static final String NUM_INCREMENTAL_FETCH_SESSIONS = "NumIncrementalFetchSessions";
+    static final String NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached";
+    static final String INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC = "IncrementalFetchSessionEvictionsPerSec";
     static final String EVICTIONS = "evictions";
 
     /**
@@ -73,13 +72,13 @@ public class FetchSession {
      *                           FetchSessionCache#touch.
      * @param epoch              The fetch session sequence number.
      */
-    public FetchSession(int id,
-                        boolean privileged,
-                        ImplicitLinkedHashCollection<CachedPartition> partitionMap,
-                        boolean usesTopicIds,
-                        long creationMs,
-                        long lastUsedMs,
-                        int epoch) {
+    FetchSession(int id,
+                 boolean privileged,
+                 ImplicitLinkedHashCollection<CachedPartition> partitionMap,
+                 boolean usesTopicIds,
+                 long creationMs,
+                 long lastUsedMs,
+                 int epoch) {
         this.id = id;
         this.privileged = privileged;
         this.partitionMap = partitionMap;
@@ -89,84 +88,81 @@ public class FetchSession {
         this.epoch = epoch;
     }
 
-    public static String partitionsToLogString(Collection<TopicIdPartition> partitions, boolean traceEnabled) {
+    static String partitionsToLogString(Collection<TopicIdPartition> partitions, boolean traceEnabled) {
         return traceEnabled
             ? "(" + String.join(", ", partitions.toString()) + ")"
             : partitions.size() + " partition(s)";
     }
 
-    public synchronized ImplicitLinkedHashCollection<CachedPartition> partitionMap() {
+    synchronized ImplicitLinkedHashCollection<CachedPartition> partitionMap() {
         return partitionMap;
     }
 
-    public int id() {
+    int id() {
         return id;
     }
 
-    public boolean privileged() {
+    boolean privileged() {
         return privileged;
     }
 
-    public boolean usesTopicIds() {
+    boolean usesTopicIds() {
         return usesTopicIds;
     }
 
-    public long creationMs() {
+    long creationMs() {
         return creationMs;
     }
 
-    public int epoch() {
+    int epoch() {
         return epoch;
     }
 
-    public void setEpoch(int epoch) {
+    void setEpoch(int epoch) {
         this.epoch = epoch;
     }
 
-    public long lastUsedMs() {
+    // Only for testing
+    long lastUsedMs() {
         return lastUsedMs;
     }
 
-    public void setLastUsedMs(long lastUsedMs) {
+    void setLastUsedMs(long lastUsedMs) {
         this.lastUsedMs = lastUsedMs;
     }
 
-    public synchronized int cachedSize() {
+    synchronized int cachedSize() {
         return cachedSize;
     }
 
-    public synchronized void setCachedSize(int cachedSize) {
+    synchronized void setCachedSize(int cachedSize) {
         this.cachedSize = cachedSize;
     }
 
-    public synchronized int size() {
+    synchronized int size() {
         return partitionMap.size();
     }
 
-    public synchronized boolean isEmpty() {
+    synchronized boolean isEmpty() {
         return partitionMap.isEmpty();
     }
 
-    public synchronized LastUsedKey lastUsedKey() {
+    synchronized LastUsedKey lastUsedKey() {
         return new LastUsedKey(lastUsedMs, id);
     }
 
-    public synchronized EvictableKey evictableKey() {
+    synchronized EvictableKey evictableKey() {
         return new EvictableKey(privileged, cachedSize, id);
     }
 
-    public synchronized FetchMetadata metadata() {
-        return new FetchMetadata(id, epoch);
-    }
-
-    public synchronized Optional<Long> getFetchOffset(TopicIdPartition topicIdPartition) {
+    synchronized Optional<Long> getFetchOffset(TopicIdPartition topicIdPartition) {
         return Optional.ofNullable(partitionMap.find(new CachedPartition(topicIdPartition)))
             .map(partition -> partition.fetchOffset);
     }
 
     // Update the cached partition data based on the request.
-    public synchronized List<List<TopicIdPartition>> update(Map<TopicIdPartition, FetchRequest.PartitionData> fetchData,
-                                                            List<TopicIdPartition> toForget) {
+    synchronized List<List<TopicIdPartition>> update(Map<TopicIdPartition, FetchRequest.PartitionData> fetchData,
+                                                     List<TopicIdPartition> toForget) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> updated = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();
@@ -221,7 +217,7 @@ public class FetchSession {
      * Note that fetcherLogStartOffset is the LSO of the follower performing the fetch, whereas
      * localLogStartOffset is the log start offset of the partition on this broker.
      */
-    public static class CachedPartition implements ImplicitLinkedHashCollection.Element {
+    static class CachedPartition implements ImplicitLinkedHashCollection.Element {
 
         private volatile int cachedNext = ImplicitLinkedHashCollection.INVALID_INDEX;
         private volatile int cachedPrev = ImplicitLinkedHashCollection.INVALID_INDEX;
@@ -237,34 +233,34 @@ public class FetchSession {
         private long localLogStartOffset;
         private Optional<Integer> lastFetchedEpoch;
 
-        public CachedPartition(String topic, Uuid topicId, int partition) {
+        CachedPartition(String topic, Uuid topicId, int partition) {
             this(topic, topicId, partition, -1, -1, -1, Optional.empty(), -1, -1, Optional.empty());
         }
 
-        public CachedPartition(TopicIdPartition part) {
+        CachedPartition(TopicIdPartition part) {
             this(part.topic(), part.topicId(), part.partition());
         }
 
-        public CachedPartition(TopicIdPartition part, FetchRequest.PartitionData reqData) {
+        CachedPartition(TopicIdPartition part, FetchRequest.PartitionData reqData) {
             this(part.topic(), part.topicId(), part.partition(), reqData.maxBytes, reqData.fetchOffset, -1,
                 reqData.currentLeaderEpoch, reqData.logStartOffset, -1, reqData.lastFetchedEpoch);
         }
 
-        public CachedPartition(TopicIdPartition part, FetchRequest.PartitionData reqData, FetchResponseData.PartitionData respData) {
+        CachedPartition(TopicIdPartition part, FetchRequest.PartitionData reqData, FetchResponseData.PartitionData respData) {
             this(part.topic(), part.topicId(), part.partition(), reqData.maxBytes, reqData.fetchOffset, respData.highWatermark(),
                 reqData.currentLeaderEpoch, reqData.logStartOffset, respData.logStartOffset(), reqData.lastFetchedEpoch);
         }
 
-        public CachedPartition(String topic,
-                               Uuid topicId,
-                               int partition,
-                               int maxBytes,
-                               long fetchOffset,
-                               long highWatermark,
-                               Optional<Integer> leaderEpoch,
-                               long fetcherLogStartOffset,
-                               long localLogStartOffset,
-                               Optional<Integer> lastFetchedEpoch) {
+        CachedPartition(String topic,
+                        Uuid topicId,
+                        int partition,
+                        int maxBytes,
+                        long fetchOffset,
+                        long highWatermark,
+                        Optional<Integer> leaderEpoch,
+                        long fetcherLogStartOffset,
+                        long localLogStartOffset,
+                        Optional<Integer> lastFetchedEpoch) {
             this.topic = topic;
             this.topicId = topicId;
             this.partition = partition;
@@ -297,23 +293,23 @@ public class FetchSession {
             this.cachedPrev = prev;
         }
 
-        public String topic() {
+        String topic() {
             return topic;
         }
 
-        public Uuid topicId() {
+        Uuid topicId() {
             return topicId;
         }
 
-        public int partition() {
+        int partition() {
             return partition;
         }
 
-        public FetchRequest.PartitionData reqData() {
+        FetchRequest.PartitionData reqData() {
             return new FetchRequest.PartitionData(topicId, fetchOffset, fetcherLogStartOffset, maxBytes, leaderEpoch, lastFetchedEpoch);
         }
 
-        public void updateRequestParams(FetchRequest.PartitionData reqData) {
+        void updateRequestParams(FetchRequest.PartitionData reqData) {
             // Update our cached request parameters.
             maxBytes = reqData.maxBytes;
             fetchOffset = reqData.fetchOffset;
@@ -322,7 +318,7 @@ public class FetchSession {
             lastFetchedEpoch = reqData.lastFetchedEpoch;
         }
 
-        public void maybeResolveUnknownName(Map<Uuid, String> topicNames) {
+        void maybeResolveUnknownName(Map<Uuid, String> topicNames) {
             if (topic == null)
                 topic = topicNames.get(topicId);
         }
@@ -337,7 +333,7 @@ public class FetchSession {
          * @param updateResponseData if set to true, update this CachedPartition with new request and response data.
          * @return True if this partition should be included in the response; false if it can be omitted.
          */
-        public boolean maybeUpdateResponseData(FetchResponseData.PartitionData respData, boolean updateResponseData) {
+        boolean maybeUpdateResponseData(FetchResponseData.PartitionData respData, boolean updateResponseData) {
             // Check the response data.
             boolean mustRespond = false;
             if (FetchResponse.recordsSize(respData) > 0) {
@@ -429,7 +425,7 @@ public class FetchSession {
         }
     }
 
-    public record LastUsedKey(long lastUsedMs, int id) implements Comparable<LastUsedKey> {
+    record LastUsedKey(long lastUsedMs, int id) implements Comparable<LastUsedKey> {
         @Override
         public int compareTo(LastUsedKey other) {
             if (this.lastUsedMs != other.lastUsedMs)
@@ -439,7 +435,7 @@ public class FetchSession {
         }
     }
 
-    public record EvictableKey(boolean privileged, int size, int id) implements Comparable<EvictableKey> {
+    record EvictableKey(boolean privileged, int size, int id) implements Comparable<EvictableKey> {
         @Override
         public int compareTo(EvictableKey other) {
             if (this.privileged != other.privileged)
@@ -472,7 +468,7 @@ public class FetchSession {
                 () -> cacheShards.stream().mapToLong(FetchSessionCacheShard::totalPartitions).sum());
         }
 
-        public FetchSessionCacheShard getCacheShard(int sessionId) {
+        FetchSessionCacheShard getCacheShard(int sessionId) {
             int shard = sessionId / cacheShards.get(0).sessionIdRange();
             // This assumes that cacheShards is sorted by shardNum
             return cacheShards.get(shard);
@@ -481,13 +477,9 @@ public class FetchSession {
         /**
          * @return The shard in round-robin
          */
-        public FetchSessionCacheShard getNextCacheShard() {
-            int shardNum = Utils.toPositive(FetchSessionCache.COUNTER.getAndIncrement()) % size();
+        FetchSessionCacheShard getNextCacheShard() {
+            int shardNum = Utils.toPositive(FetchSessionCache.COUNTER.getAndIncrement()) % cacheShards.size();
             return cacheShards.get(shardNum);
-        }
-
-        public int size() {
-            return cacheShards.size();
         }
     }
 }
