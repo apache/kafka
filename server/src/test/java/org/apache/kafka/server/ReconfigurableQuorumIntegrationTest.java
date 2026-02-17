@@ -341,6 +341,142 @@ public class ReconfigurableQuorumIntegrationTest {
         }
     }
 
+    @Test
+    public void testAddNewControllerFormattedWithFullVoterSet() throws Exception {
+        // The test tries to validate that even in case of scale up, the new controller can be formatted with -I with all voters
+        // 1. Initial cluster: format 3 controllers with -I "0,1,2"
+        // 2. Start those 3 controllers so active quorum [0,1,2]
+        // 3. Scale up: format a new 4th controller with -I "0,1,2,3" (includes all)
+        // 4. Start the 4th controller so it's an observer (local voter set != active quorum)
+        // 5. Run add-controller so now active quorum has [0,1,2,3]
+
+        final var nodes = new TestKitNodes.Builder()
+                .setNumBrokerNodes(3)
+                // even if the cluster has 3 controllers at the beginning, setting 4 because TestKitNodes is immutable
+                // and when building the cluster instance it leverages the controller nodes configured here
+                .setNumControllerNodes(4)
+                .build();
+
+        // Initial voter set, only first 3 controllers
+        final Map<Integer, Uuid> initialThreeVoters = new HashMap<>();
+        for (int id : new int[]{3000, 3001, 3002}) {
+            initialThreeVoters.put(id, nodes.controllerNodes().get(id).metadataDirectoryId());
+        }
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes)
+                .setInitialVoterSet(initialThreeVoters)
+                .build()
+        ) {
+            // doesn't work because cluster.format() formats all 4 controllers and cluster.startup() starts all 4 controllers
+            // cluster.format();
+            // cluster.startup();
+
+            // manually format only first 3 controllers + all brokers
+            // This leaves controller 3003 unformatted for later scale-up simulation
+
+            // Format first 3 controllers with initial voter set
+            for (int id : new int[]{3000, 3001, 3002}) {
+                cluster.formatController(id, initialThreeVoters); // formatController is a newly added method
+            }
+
+            // Format all brokers
+            for (int brokerId : cluster.brokers().keySet()) {
+                cluster.formatBroker(brokerId);
+            }
+
+            // Start only the formatted nodes (3 controllers + all brokers)
+            for (int id : new int[]{3000, 3001, 3002}) {
+                cluster.controllers().get(id).startup();
+            }
+            for (var broker : cluster.brokers().values()) {
+                broker.startup();
+            }
+
+            try (var admin = cluster.admin()) {
+                // Verify initial 3-controller quorum
+                retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002), voters.keySet(),
+                            "Initial quorum should only have 3 controllers");
+                    for (int replicaId : new int[]{3000, 3001, 3002}) {
+                        assertEquals(
+                                nodes.controllerNodes().get(replicaId).metadataDirectoryId(),
+                                voters.get(replicaId),
+                                "Directory ID should match for controller " + replicaId
+                        );
+                    }
+                });
+
+                // Ensure quorum has a stable leader before proceeding
+                retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                    assertTrue(quorumInfo.leaderId() >= 3000 && quorumInfo.leaderId() <= 3002,
+                            "Quorum should have a stable leader from initial 3 controllers");
+                });
+
+                // Given all the above checks, the cluster should be stable and the quorum formed
+                // Give the initial cluster more time to stabilize (the following should not be needed)
+                // Thread.sleep(5000);
+
+                // Scale-up a new controller, format 4th controller with all 4 in voter set
+                // This simulates formatting a new controller with -I containing all controllers
+                final Map<Integer, Uuid> allFourVoters = new HashMap<>(initialThreeVoters);
+                allFourVoters.put(3003, nodes.controllerNodes().get(3003).metadataDirectoryId());
+
+                cluster.formatController(3003, allFourVoters);
+
+                // Start the 4th controller
+                cluster.controllers().get(3003).startup();
+
+                // Verify the quorum is stable with 3 voters and 4 observers (3 brokers + controller 3003)
+                // This also implicitly verifies controller 3003 is running and connected
+                retryOnExceptionWithTimeout(60_000, 10, () -> {
+                    QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                    assertEquals(3, quorumInfo.voters().size(), "Should have 3 voters");
+                    assertEquals(4, quorumInfo.observers().size(), "Should have 4 observers (3 brokers + controller 3003)");
+                    assertTrue(quorumInfo.leaderId() >= 3000 && quorumInfo.leaderId() <= 3002,
+                            "Leader should be one of the 3 initial controllers");
+                    assertTrue(quorumInfo.observers().stream()
+                            .anyMatch(o -> o.replicaId() == 3003), "Controller 3003 should be an observer");
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    // IMPORTANT!!! formatting with -I all doesn't auto-add to quorum
+                    assertEquals(Set.of(3000, 3001, 3002), voters.keySet(),
+                            "Controller 3003 should NOT be in active quorum yet despite being formatted with all 4 in voter set");
+                });
+
+                // UP TO HERE everything seems to be ok then trying to add the new controller makes the test failing
+                // with nodes disconnections and more
+
+                // Add 4th controller to active quorum via add-controller command
+                admin.addRaftVoter(
+                        3003,
+                        nodes.controllerNodes().get(3003).metadataDirectoryId(),
+                        Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
+                ).all().get();
+
+                // Verify all 4 controllers are now in the active quorum
+                retryOnExceptionWithTimeout(30_000, 10, () -> {
+                    Map<Integer, Uuid> voters = findVoterDirs(admin);
+                    assertEquals(Set.of(3000, 3001, 3002, 3003), voters.keySet(),
+                            "All 4 controllers should be in active quorum after add-controller");
+                    for (int replicaId : new int[]{3000, 3001, 3002, 3003}) {
+                        assertEquals(
+                                nodes.controllerNodes().get(replicaId).metadataDirectoryId(),
+                                voters.get(replicaId),
+                                "Directory ID should match for controller " + replicaId
+                        );
+                    }
+                });
+
+                // Validate quorum health
+                QuorumInfo quorumInfo = admin.describeMetadataQuorum().quorumInfo().get();
+                assertEquals(4, quorumInfo.voters().size(), "Should have 4 voters");
+                assertTrue(quorumInfo.leaderId() >= 3000 && quorumInfo.leaderId() <= 3003,
+                        "Leader should be one of the 4 controllers");
+            }
+        }
+    }
+
     private static int port(Admin admin, int nodeId) throws Exception {
         return admin.describeMetadataQuorum().quorumInfo().get().nodes().get(nodeId).endpoints().stream()
             .findFirst().orElseThrow().port();

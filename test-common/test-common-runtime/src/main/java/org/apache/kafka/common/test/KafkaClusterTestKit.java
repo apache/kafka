@@ -60,15 +60,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.*;
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -519,6 +513,82 @@ public class KafkaClusterTestKit implements AutoCloseable {
         } catch (Exception e) {
             throw new RuntimeException("Failed to format node " + ensemble.nodeId(), e);
         }
+    }
+
+    /**
+     * Format a single controller with optional initial voter set.
+     * Useful for testing scale-up scenarios where a new controller is formatted after the initial cluster is already running.
+     * MOSTLY COPIED FROM THE PRIVATE formatNode but allowing to pass a specific controller and voterSet
+     *
+     * @param controllerId The ID of the controller to format
+     * @param voterSet The voter set to use for formatting. If null, formats with --no-initial-controllers.
+     *                 If provided, formats with --initial-controllers containing the specified voters.
+     * @throws Exception if formatting fails
+     */
+    public void formatController(int controllerId, Map<Integer, Uuid> voterSet) throws Exception {
+        try {
+            ControllerServer controller = controllers.get(controllerId);
+            if (controller == null) {
+                throw new IllegalArgumentException("Controller " + controllerId + " not found");
+            }
+
+            MetaPropertiesEnsemble ensemble = controller.sharedServer().metaPropsEnsemble();
+            Formatter formatter = new Formatter();
+            formatter.setNodeId(controllerId);
+            formatter.setClusterId(ensemble.clusterId().get());
+            formatter.setDirectories(ensemble.logDirProps().keySet());
+            if (formatter.directories().isEmpty()) {
+                return;
+            }
+            formatter.setReleaseVersion(nodes.bootstrapMetadata().metadataVersion());
+            formatter.setUnstableFeatureVersionsEnabled(true);
+            formatter.setIgnoreFormatted(false);
+            formatter.setControllerListenerName(controllerListenerName);
+            formatter.setMetadataLogDirectory(ensemble.metadataLogDir().get());
+
+            // Set dynamic quorum mode
+            formatter.setHasDynamicQuorum(true);
+
+            // Handle voter set: null means --no-initial-controllers (-N)
+            if (voterSet != null && !voterSet.isEmpty()) {
+                StringBuilder dynamicVotersBuilder = new StringBuilder();
+                String prefix = "";
+                for (var controllerNode : voterSet.entrySet()) {
+                    final var voterId = controllerNode.getKey();
+                    final var voterDirectoryId = controllerNode.getValue();
+                    dynamicVotersBuilder.append(prefix);
+                    prefix = ",";
+                    dynamicVotersBuilder.append(String.format(
+                            "%d@localhost:%d:%s",
+                            voterId,
+                            socketFactoryManager.getOrCreatePortForListener(voterId, controllerListenerName),
+                            voterDirectoryId
+                    ));
+                }
+                formatter.setInitialControllers(DynamicVoters.parse(dynamicVotersBuilder.toString()));
+            }
+            // If voterSet is null, don't call setInitialControllers, which is equivalent to -N
+
+            formatter.run();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to format controller " + controllerId, e);
+        }
+    }
+
+    /**
+     * Format a single broker. Useful for testing scale-up scenarios.
+     *
+     * @param brokerId The broker ID to format
+     * @throws Exception if formatting fails
+     */
+    public void formatBroker(int brokerId) throws Exception {
+        BrokerServer broker = brokers.get(brokerId);
+        if (broker == null) {
+            throw new IllegalArgumentException("Broker " + brokerId + " not found");
+        }
+
+        MetaPropertiesEnsemble ensemble = broker.sharedServer().metaPropsEnsemble();
+        formatNode(ensemble);
     }
 
     public void startup() throws ExecutionException, InterruptedException {
