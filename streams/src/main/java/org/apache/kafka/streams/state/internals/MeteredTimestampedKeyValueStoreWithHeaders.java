@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
@@ -28,6 +31,10 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+
+import java.util.Objects;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 
 /**
@@ -64,6 +71,34 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     }
 
     @Override
+    public void put(final K key,
+                    final ValueTimestampHeaders<V> value) {
+        Objects.requireNonNull(key, "key cannot be null");
+        try {
+            final Headers headers = value != null ? value.headers() : new RecordHeaders();
+            maybeMeasureLatency(() -> wrapped().put(keyBytes(key, headers), serdes.rawValue(value, headers)), time, putSensor);
+            maybeRecordE2ELatency();
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), key, value);
+            throw new ProcessorStateException(message, e);
+        }
+    }
+
+    @Override
+    public ValueTimestampHeaders<V> putIfAbsent(final K key,
+                         final ValueTimestampHeaders<V> value) {
+        Objects.requireNonNull(key, "key cannot be null");
+        final Headers headers = value != null ? value.headers() : new RecordHeaders();
+        final ValueTimestampHeaders<V> currentValue = maybeMeasureLatency(
+            () -> outerValue(wrapped().putIfAbsent(keyBytes(key, headers), serdes.rawValue(value, headers))),
+            time,
+            putIfAbsentSensor
+        );
+        maybeRecordE2ELatency();
+        return currentValue;
+    }
+
+    @Override
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
@@ -73,6 +108,10 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     @Override
     public Position getPosition() {
         throw new UnsupportedOperationException("Position is not supported for " + getClass().getSimpleName());
+    }
+
+    protected Bytes keyBytes(final K key, final Headers headers) {
+        return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
 }
