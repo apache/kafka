@@ -54,7 +54,9 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
             valueTimestampHeaders == null
                 ? internalContext.recordContext().timestamp()
                 : timestamp(valueTimestampHeaders),
-            headers(valueTimestampHeaders)
+            valueTimestampHeaders == null
+                ? internalContext.recordContext().headers()
+                : headers(valueTimestampHeaders)
         );
     }
 
@@ -70,7 +72,9 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
                 valueTimestampHeaders == null
                     ? internalContext.recordContext().timestamp()
                     : timestamp(valueTimestampHeaders),
-                headers(valueTimestampHeaders)
+                valueTimestampHeaders == null
+                    ? internalContext.recordContext().headers()
+                    : headers(valueTimestampHeaders)
             );
         }
         return previous;
@@ -87,7 +91,9 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
                 valueTimestampHeaders == null
                     ? internalContext.recordContext().timestamp()
                     : timestamp(valueTimestampHeaders),
-                headers(valueTimestampHeaders)
+                valueTimestampHeaders == null
+                    ? internalContext.recordContext().headers()
+                    : headers(valueTimestampHeaders)
             );
         }
     }

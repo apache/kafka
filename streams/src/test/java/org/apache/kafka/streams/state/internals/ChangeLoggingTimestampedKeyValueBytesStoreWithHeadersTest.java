@@ -258,32 +258,36 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest {
     public void shouldHandleNullValueInPut() {
         final InternalMockProcessorContext<String, Long> context = mockContext();
         context.setTime(42L);
+        context.headers().add("headerKey", "headerValue".getBytes());
         store.init(context, store);
 
         store.put(hi, null);
 
-        // Should log with context timestamp when value is null
         assertEquals(1, collector.collected().size());
         assertEquals(hi, collector.collected().get(0).key());
         assertNull(collector.collected().get(0).value());
         assertEquals(42L, collector.collected().get(0).timestamp());
-        assertEquals(0, collector.collected().get(0).headers().toArray().length);
+        assertEquals(1, collector.collected().get(0).headers().toArray().length);
+        assertEquals("headerKey", collector.collected().get(0).headers().toArray()[0].key());
+        assertArrayEquals("headerValue".getBytes(), collector.collected().get(0).headers().toArray()[0].value());
     }
 
     @Test
     public void shouldHandleNullValueInPutIfAbsent() {
         final InternalMockProcessorContext<String, Long> context = mockContext();
         context.setTime(50L);
+        context.headers().add("headerKey", "headerValue".getBytes());
         store.init(context, store);
 
         store.putIfAbsent(hi, null);
 
-        // Should log with context timestamp when value is null
         assertEquals(1, collector.collected().size());
         assertEquals(hi, collector.collected().get(0).key());
         assertNull(collector.collected().get(0).value());
         assertEquals(50L, collector.collected().get(0).timestamp());
-        assertEquals(0, collector.collected().get(0).headers().toArray().length);
+        assertEquals(1, collector.collected().get(0).headers().toArray().length);
+        assertEquals("headerKey", collector.collected().get(0).headers().toArray()[0].key());
+        assertArrayEquals("headerValue".getBytes(), collector.collected().get(0).headers().toArray()[0].value());
     }
 
     @Test
