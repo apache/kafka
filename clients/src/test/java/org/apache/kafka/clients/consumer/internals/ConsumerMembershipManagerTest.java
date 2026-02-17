@@ -2525,6 +2525,80 @@ public class ConsumerMembershipManagerTest {
         verifyReconciliationNotTriggered(membershipManager);
     }
 
+    /**
+     * Tests that when the membership manager poll() is called it attempts to resolve metadata
+     * to make progress, even though the actual reconciliation can only be performed when triggered
+     * from consumer.poll (assignment updates within poll).
+
+     * Also validates that when the resolved assignment equals the current assignment, the member
+     * transitions to ACKNOWLEDGING (to ack the partial assignment) while keeping unresolved topics
+     * awaiting reconciliation.
+     */
+    @Test
+    public void testManagerPollAttemptsToResolveMetadata() {
+        // Start with a member in STABLE state with topic1 assigned
+        Uuid topicId1 = Uuid.randomUuid();
+        String topicName1 = "topic1";
+        ConsumerMembershipManager membershipManager =
+                mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topicName1, Collections.singletonList(0));
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        clearInvocations(metadata, membershipManager);
+
+        // New assignment adds a new topic2 which is NOT in metadata.
+        // Topic 2 should be resolved, keeping it as ready to reconcile.
+        Uuid topicId2 = Uuid.randomUuid();
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId1, topicName1));
+        ConsumerGroupHeartbeatResponseData.Assignment newAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+                .setTopicPartitions(Arrays.asList(
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topicId1)
+                                .setPartitions(List.of(0)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                .setTopicId(topicId2)
+                                .setPartitions(List.of(0))));
+
+        // Receive new assignment - topic2 not in metadata
+        membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(newAssignment, membershipManager.memberId()));
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        clearInvocations(commitRequestManager);
+
+        // First poll() - resolves topic1 (already assigned), topic2 unresolved
+        // Since resolved assignment (topic1-0) equals current assignment (topic1-0),
+        // the member transitions to ACKNOWLEDGING to ack the partial assignment
+        membershipManager.poll(time.milliseconds());
+
+        // Metadata update should have been requested (topic2 still unresolved)
+        verify(metadata).requestUpdate(anyBoolean());
+        // Full reconciliation should not be triggered because this was a manager.poll not triggered from the consumer.poll
+        verify(membershipManager, never()).markReconciliationInProgress();
+
+        // After heartbeat is generated, member goes back to RECONCILING to wait for topic2
+        membershipManager.onHeartbeatRequestGenerated();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        // Make topic2 available in metadata and attempt reconciliation from background with manager.poll().
+        // It should resolve the target assignment and leave it ready to reconcile
+        clearInvocations(metadata);
+        when(metadata.topicNames()).thenReturn(Map.of(topicId1, topicName1, topicId2, "topic2"));
+        membershipManager.poll(time.milliseconds());
+        verify(metadata, never()).requestUpdate(anyBoolean());
+        verify(membershipManager, never()).markReconciliationInProgress();
+
+        // Attempt reconciliation from application thread on consumer.poll.
+        // Should reconcile the resolved assignment without needing metadata request or resolution
+        when(metadata.topicNames()).thenReturn(Map.of()); // mock empty metadata. The manager should still keep the resolved assignment ready to reconcile
+        membershipManager.maybeReconcile(true);
+        verify(metadata, never()).requestUpdate(anyBoolean());
+
+        List<TopicIdPartition> assignedPartitions =
+                List.of(
+                        new TopicIdPartition(topicId1, new TopicPartition("topic1", 0)),
+                        new TopicIdPartition(topicId2, new TopicPartition("topic2", 0))
+                );
+        verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
+    }
+
     private Object getMetricValue(Metrics metrics, MetricName name) {
         return metrics.metrics().get(name).metricValue();
     }
