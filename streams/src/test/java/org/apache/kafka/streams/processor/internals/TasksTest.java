@@ -75,25 +75,25 @@ public class TasksTest {
         tasks.addActiveTasks(Set.of(statefulTask, statelessTask));
         tasks.addStandbyTasks(Collections.singletonList(standbyTask));
 
-        assertEquals(statefulTask, tasks.task(statefulTask.id()));
-        assertEquals(statelessTask, tasks.task(statelessTask.id()));
-        assertEquals(standbyTask, tasks.task(standbyTask.id()));
+        assertEquals(statefulTask, tasks.initializedTask(statefulTask.id()));
+        assertEquals(statelessTask, tasks.initializedTask(statelessTask.id()));
+        assertEquals(standbyTask, tasks.initializedTask(standbyTask.id()));
 
-        assertEquals(Set.of(statefulTask, statelessTask), new HashSet<>(tasks.activeTasks()));
-        assertEquals(Set.of(standbyTask), new HashSet<>(tasks.standbyTasks()));
-        assertEquals(Set.of(statefulTask, statelessTask, standbyTask), tasks.allTasks());
-        assertEquals(Set.of(statefulTask, standbyTask), tasks.tasks(Set.of(statefulTask.id(), standbyTask.id())));
-        assertEquals(Set.of(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allTaskIds());
+        assertEquals(Set.of(statefulTask, statelessTask), new HashSet<>(tasks.activeInitializedTasks()));
+        assertEquals(Set.of(standbyTask), new HashSet<>(tasks.standbyInitializedTasks()));
+        assertEquals(Set.of(statefulTask, statelessTask, standbyTask), tasks.allInitializedTasks());
+        assertEquals(Set.of(statefulTask, standbyTask), tasks.initializedTasks(Set.of(statefulTask.id(), standbyTask.id())));
+        assertEquals(Set.of(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allInitializedTaskIds());
         assertEquals(
             mkMap(
                 mkEntry(statefulTask.id(), statefulTask),
                 mkEntry(statelessTask.id(), statelessTask),
                 mkEntry(standbyTask.id(), standbyTask)
             ),
-            tasks.allTasksPerId());
-        assertTrue(tasks.contains(statefulTask.id()));
-        assertTrue(tasks.contains(statelessTask.id()));
-        assertTrue(tasks.contains(statefulTask.id()));
+            tasks.allInitializedTasksPerId());
+        assertTrue(tasks.containsInitialized(statefulTask.id()));
+        assertTrue(tasks.containsInitialized(statelessTask.id()));
+        assertTrue(tasks.containsInitialized(statefulTask.id()));
     }
 
     @Test
@@ -192,12 +192,12 @@ public class TasksTest {
 
         tasks.addFailedTask(activeTask1);
 
-        assertEquals(activeTask1, tasks.task(TASK_0_0));
-        assertEquals(activeTask2, tasks.task(TASK_0_1));
-        assertTrue(tasks.allTasks().contains(activeTask1));
-        assertTrue(tasks.allTasks().contains(activeTask2));
-        assertFalse(tasks.allNonFailedTasks().contains(activeTask1));
-        assertTrue(tasks.allNonFailedTasks().contains(activeTask2));
+        assertEquals(activeTask1, tasks.initializedTask(TASK_0_0));
+        assertEquals(activeTask2, tasks.initializedTask(TASK_0_1));
+        assertTrue(tasks.allInitializedTasks().contains(activeTask1));
+        assertTrue(tasks.allInitializedTasks().contains(activeTask2));
+        assertFalse(tasks.allNonFailedInitializedTasks().contains(activeTask1));
+        assertTrue(tasks.allNonFailedInitializedTasks().contains(activeTask2));
     }
 
     @Test
@@ -207,11 +207,11 @@ public class TasksTest {
         tasks.addFailedTask(activeTask1);
 
         tasks.removeTask(activeTask1);
-        assertFalse(tasks.allNonFailedTasks().contains(activeTask1));
-        assertFalse(tasks.allTasks().contains(activeTask1));
+        assertFalse(tasks.allNonFailedInitializedTasks().contains(activeTask1));
+        assertFalse(tasks.allInitializedTasks().contains(activeTask1));
 
         tasks.addTask(activeTask1);
-        assertTrue(tasks.allNonFailedTasks().contains(activeTask1));
+        assertTrue(tasks.allNonFailedInitializedTasks().contains(activeTask1));
     }
 
     @Test
@@ -221,11 +221,11 @@ public class TasksTest {
         tasks.addFailedTask(activeTask1);
 
         tasks.clear();
-        assertFalse(tasks.allNonFailedTasks().contains(activeTask1));
-        assertFalse(tasks.allTasks().contains(activeTask1));
+        assertFalse(tasks.allNonFailedInitializedTasks().contains(activeTask1));
+        assertFalse(tasks.allInitializedTasks().contains(activeTask1));
 
         tasks.addTask(activeTask1);
-        assertTrue(tasks.allNonFailedTasks().contains(activeTask1));
+        assertTrue(tasks.allNonFailedInitializedTasks().contains(activeTask1));
     }
 
     @Test
@@ -260,6 +260,6 @@ public class TasksTest {
 
         tasks.removeTask(activeTask1);
         assertFalse(tasks.pendingTasksToInit().contains(activeTask1));
-        assertFalse(tasks.allTasks().contains(activeTask1));
+        assertFalse(tasks.allInitializedTasks().contains(activeTask1));
     }
 }

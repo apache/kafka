@@ -71,25 +71,25 @@ public interface TasksRegistry {
 
     void clear();
 
-    Task activeTasksForInputPartition(final TopicPartition partition);
+    Task activeInitializedTasksForInputPartition(final TopicPartition partition);
 
-    Task task(final TaskId taskId);
+    Task initializedTask(final TaskId taskId);
 
-    Collection<Task> tasks(final Collection<TaskId> taskIds);
+    Collection<Task> initializedTasks(final Collection<TaskId> taskIds);
 
-    Collection<TaskId> activeTaskIds();
+    Collection<TaskId> activeInitializedTaskIds();
 
-    Collection<Task> activeTasks();
+    Collection<Task> activeInitializedTasks();
 
-    Collection<Task> standbyTasks();
+    Collection<Task> standbyInitializedTasks();
 
-    Set<Task> allTasks();
+    Set<Task> allInitializedTasks();
 
-    Set<Task> allNonFailedTasks();
+    Set<Task> allNonFailedInitializedTasks();
 
-    Map<TaskId, Task> allTasksPerId();
+    Map<TaskId, Task> allInitializedTasksPerId();
 
-    Set<TaskId> allTaskIds();
+    Set<TaskId> allInitializedTaskIds();
 
-    boolean contains(final TaskId taskId);
+    boolean containsInitialized(final TaskId taskId);
 }
