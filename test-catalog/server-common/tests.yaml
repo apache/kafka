@@ -240,6 +240,21 @@ org.apache.kafka.server.quota.QuotaUtilsTest:
 - testThrottleTimeThrowsExceptionIfProvidedNonRateMetric
 org.apache.kafka.server.record.BrokerCompressionTypeTest:
 - testTargetCompressionType
+org.apache.kafka.server.share.SharePartitionKeyTest:
+- testGetInstanceFromKeyWithColonInGroupId
+- testGetInstanceFromKeyWithGroupIdEndingWithColon
+- testGetInstanceFromKeyWithGroupIdStartingWithColon
+- testGetInstanceFromKeyWithMultipleColonsInGroupId
+- testGetInstanceFromSimpleKey
+- testRoundTripWithCoordinatorKey
+- testValidateKeyWithColonInGroupId
+- testValidateRejectsEmpty
+- testValidateRejectsEmptyGroupId
+- testValidateRejectsInvalidPartition
+- testValidateRejectsInvalidTopicId
+- testValidateRejectsNull
+- testValidateRejectsTooFewSegments
+- testValidateSimpleKey
 org.apache.kafka.server.share.persister.DefaultStatePersisterTest:
 - testDefaultPersisterClose
 - testDeleteStateResponseToResultFailedFuture

@@ -4096,9 +4096,12 @@ org.apache.kafka.common.record.internal.ByteBufferLogInputStreamTest:
 org.apache.kafka.common.record.internal.CompressionRatioEstimatorTest:
 - testUpdateEstimation
 org.apache.kafka.common.record.internal.ControlRecordTypeTest:
+- testBackwardDeserializeCompatibility
+- testForwardDeserializeCompatibility
 - testParseUnknownType
 - testParseUnknownVersion
 - testRoundTrip
+- testValueControlRecordKeySize
 org.apache.kafka.common.record.internal.ControlRecordUtilsTest:
 - testCurrentVersions
 - testDeserializeByteData
