@@ -92,6 +92,12 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
+    public void unregister(final Collection<TopicPartition> partitions,
+                           final org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason reason) {
+        unregister(partitions);
+    }
+
+    @Override
     public boolean isEmpty() {
         return restoredOffsets.isEmpty() && restoringPartitions.isEmpty();
     }

@@ -1159,6 +1159,10 @@ public class TopologyTestDriver implements Closeable {
 
         @Override
         public void unregister(final Collection<TopicPartition> partitions) { }
+
+        @Override
+        public void unregister(final Collection<TopicPartition> partitions,
+                               final org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason reason) { }
     }
 
     static class MockTime implements Time {
