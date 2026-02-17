@@ -846,8 +846,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * metadata change. Note that it is not possible to use both manual partition assignment with {@link #assign(Collection)}
      * and group assignment with {@link #subscribe(Collection, ConsumerRebalanceListener)}.
      * <p>
-     * If auto-commit is enabled, an async commit (based on the old assignment) will be triggered before the new
-     * assignment replaces the old one.
+     * <b>Note:</b> Unlike {@link #close()}, this method does not guarantee that pending offsets are committed before
+     * unassigning, even if {@code enable.auto.commit} is enabled. To avoid duplicate processing upon re-joining,
+     * it is recommended to explicitly call {@link #commitSync()} before invoking this method.
      *
      * @param partitions The list of partitions to assign this consumer
      * @throws IllegalArgumentException If partitions is null or contains null or empty topics
