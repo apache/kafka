@@ -176,7 +176,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 String mechanism = entry.getKey();
                 // With static JAAS configuration, use KerberosLogin if Kerberos is enabled. With dynamic JAAS configuration,
                 // use KerberosLogin only for the LoginContext corresponding to GSSAPI
-                LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, defaultLoginClass, configs, metrics, extraMetricsTags);
+                LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, defaultLoginClass, configs, connectionMode, metrics, extraMetricsTags);
                 loginManagers.put(mechanism, loginManager);
                 Subject subject = loginManager.subject();
                 subjects.put(mechanism, subject);

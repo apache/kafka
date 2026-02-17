@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -67,12 +67,13 @@ public class LoginManager {
         String saslMechanism, 
         Map<String, ?> configs,
         LoginMetadata<?> loginMetadata,
+        ConnectionMode connectionMode,
         Metrics metrics,
         LinkedHashMap<String, String> extraMetricsTags
     ) throws LoginException {
         this.loginMetadata = loginMetadata;
         Login login = Utils.newInstance(loginMetadata.loginClass);
-        if (!extraMetricsTags.containsKey(CommonClientConfigs.CLIENT_ID_CONFIG)) {
+        if (connectionMode == ConnectionMode.SERVER) {
             extraMetricsTags.put("mechanism", saslMechanism);
         }
         this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS, extraMetricsTags);
@@ -108,6 +109,7 @@ public class LoginManager {
      *                      chosen based on this mechanism.
      * @param defaultLoginClass Default login class to use if an override is not specified in `configs`
      * @param configs Config options used to configure `Login` if a new login manager is created.
+     * @param connectionMode Connection mode for SSL and SASL connections.
      * @param metrics the metrics instance 
      * @param extraMetricsTags the metrics extra tags               
      *
@@ -117,6 +119,7 @@ public class LoginManager {
         String saslMechanism,
         Class<? extends Login> defaultLoginClass,
         Map<String, ?> configs,
+        ConnectionMode connectionMode,
         Metrics metrics,
         LinkedHashMap<String, String> extraMetricsTags
     ) throws LoginException {
@@ -134,14 +137,14 @@ public class LoginManager {
                 LoginMetadata<Password> loginMetadata = new LoginMetadata<>(jaasConfigValue, loginClass, loginCallbackClass, configs);
                 loginManager = DYNAMIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, metrics, extraMetricsTags);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, extraMetricsTags);
                     DYNAMIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             } else {
                 LoginMetadata<String> loginMetadata = new LoginMetadata<>(jaasContext.name(), loginClass, loginCallbackClass, configs);
                 loginManager = STATIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, metrics, extraMetricsTags);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics, extraMetricsTags);
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }
