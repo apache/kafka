@@ -52,7 +52,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
     }
 
     /**
-     * Return the list of principals that can renew the delegation token.
+     * The list of principals that can renew the delegation token.
      */
     public List<KafkaPrincipal> renewers() {
         return renewers;
@@ -71,7 +71,7 @@ public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegati
     }
 
     /**
-     * Return the owner of the delegation token, or empty if not set.
+     * The owner of the delegation token, or empty if not set.
      */
     public Optional<KafkaPrincipal> owner() {
         return Optional.ofNullable(owner);

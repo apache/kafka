@@ -32,7 +32,15 @@ import java.util.stream.Collectors;
  * <p>
  * This is the result type of {@link Admin#describeClassicGroups(java.util.Collection)}.
  * Classic groups are the legacy group coordination protocol used before KIP-848 introduced the new
- * consumer group protocol.
+ * consumer group protocol. They are used by classic consumers and Kafka Connect.
+ * <p>
+ * The {@link #protocol() protocol type} indicates the kind of group: {@code "consumer"} for
+ * classic consumer groups, {@code "connect"} for Connect groups, or an empty string for simple
+ * consumer groups that use manual partition assignment without coordinator-based rebalancing.
+ * <p>
+ * The {@link #protocolData() protocol data} depends on the protocol type: for a classic consumer
+ * group it is the partition assignor name; for a Connect group it indicates which Connect
+ * protocols are enabled.
  *
  * @see Admin#describeClassicGroups(java.util.Collection)
  */
@@ -114,35 +122,28 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * The group protocol type, e.g. {@code "consumer"} for classic consumer groups or
-     * {@code "connect"} for Connect groups. An empty string indicates a simple consumer group
-     * with no protocol (see {@link #isSimpleConsumerGroup()}).
+     * The group protocol type, or the empty string.
      */
     public String protocol() {
         return protocol;
     }
 
     /**
-     * The group protocol data. The meaning depends on the group protocol type.
-     * For a classic consumer group, this is the partition assignor name.
-     * For a classic connect group, this indicates which Connect protocols are enabled.
+     * The group protocol data.
      */
     public String protocolData() {
         return protocolData;
     }
 
     /**
-     * Whether this is a simple consumer group, i.e., a group that has no protocol type set.
-     * Simple consumer groups use manual partition assignment and do not rely on the group
-     * coordinator for rebalancing.
+     * Whether this is a simple consumer group (i.e., a group with an empty protocol type).
      */
     public boolean isSimpleConsumerGroup() {
         return protocol.isEmpty();
     }
 
     /**
-     * An immutable list of the members of the classic group. Returns an empty list if the group has
-     * no active members (e.g., when the group state is {@link ClassicGroupState#EMPTY}).
+     * A list of the members of the classic group.
      */
     public Collection<MemberDescription> members() {
         return members;
@@ -163,9 +164,7 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * The set of ACL operations that the caller is authorized to perform on this group.
-     * This is only populated if the {@link DescribeClassicGroupsOptions} requested authorized
-     * operations to be included; otherwise, an empty set is returned.
+     * authorizedOperations for this group, or null if that information is not known.
      */
     public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;

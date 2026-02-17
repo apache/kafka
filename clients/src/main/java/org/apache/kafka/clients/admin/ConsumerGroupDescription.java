@@ -230,9 +230,7 @@ public class ConsumerGroupDescription {
     }
 
     /**
-     * The set of ACL operations that the caller is authorized to perform on this group.
-     * This is only populated if the {@link DescribeConsumerGroupsOptions} requested authorized
-     * operations to be included; otherwise, it may be null.
+     * authorizedOperations for this group, or null if that information is not known.
      */
     public Set<AclOperation> authorizedOperations() {
         return authorizedOperations;

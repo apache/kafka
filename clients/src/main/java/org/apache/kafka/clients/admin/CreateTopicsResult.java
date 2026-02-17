@@ -131,8 +131,7 @@ public class CreateTopicsResult {
         }
 
         /**
-         * Create a failed instance with the provided exception. All accessor methods on
-         * the resulting instance will throw this exception when invoked.
+         * Create a failed instance with the provided exception.
          *
          * @param exception the exception that caused the topic creation failure.
          */
@@ -143,12 +142,9 @@ public class CreateTopicsResult {
             this.replicationFactor = UNKNOWN;
             this.config = null;
         }
-        
+
         /**
-         * The topic ID assigned by the broker, or {@link Uuid#ZERO_UUID} if the broker version
-         * does not support topic IDs.
-         *
-         * @throws ApiException if topic creation failed.
+         * The topic ID, or {@link Uuid#ZERO_UUID} if not supported by the broker.
          */
         public Uuid topicId() {
             ensureSuccess();
@@ -156,11 +152,7 @@ public class CreateTopicsResult {
         }
 
         /**
-         * The number of partitions of the created topic. This reflects the actual partition
-         * count assigned by the broker, which may differ from the requested count if the broker
-         * applied a default.
-         *
-         * @throws ApiException if topic creation failed.
+         * The number of partitions of the topic.
          */
         public int numPartitions() {
             ensureSuccess();
@@ -168,11 +160,7 @@ public class CreateTopicsResult {
         }
 
         /**
-         * The replication factor of the created topic. This reflects the actual replication
-         * factor assigned by the broker, which may differ from the requested value if the
-         * broker applied a default.
-         *
-         * @throws ApiException if topic creation failed.
+         * The replication factor of the topic.
          */
         public int replicationFactor() {
             ensureSuccess();
@@ -180,12 +168,7 @@ public class CreateTopicsResult {
         }
 
         /**
-         * The topic configuration returned by the broker after topic creation. Note that
-         * the {@link org.apache.kafka.clients.admin.ConfigEntry#type() type} and
-         * {@link org.apache.kafka.clients.admin.ConfigEntry#documentation() documentation}
-         * fields of individual config entries will be null.
-         *
-         * @throws ApiException if topic creation failed.
+         * The topic configuration.
          */
         public Config config() {
             ensureSuccess();

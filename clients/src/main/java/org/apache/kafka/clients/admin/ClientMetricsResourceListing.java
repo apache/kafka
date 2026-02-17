@@ -41,8 +41,7 @@ public class ClientMetricsResourceListing {
     }
 
     /**
-     * The name of the client metrics subscription resource. This name uniquely identifies the
-     * subscription configuration on the broker.
+     * The name of the client metrics subscription resource.
      */
     public String name() {
         return name;
