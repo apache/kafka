@@ -146,7 +146,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
             null);
     }
 
-    private void addVectorClockToHeaders(Headers headers, Position position) {
+    private void addVectorClockToHeaders(final Headers headers, final Position position) {
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
             PositionSerde.serialize(position).array()));
