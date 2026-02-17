@@ -18,7 +18,7 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.internal.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;

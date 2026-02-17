@@ -18,7 +18,7 @@ package org.apache.kafka.common.header.internals;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.utils.AbstractIterator;
 
 import java.util.ArrayList;

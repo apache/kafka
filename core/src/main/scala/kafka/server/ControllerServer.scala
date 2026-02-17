@@ -23,7 +23,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCachePublisher}
 
 import scala.collection.immutable
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -449,7 +449,7 @@ class ControllerServer(
       Utils.closeQuietly(registrationManager, "registration manager")
       registrationManager = null
       if (registrationChannelManager != null) {
-        CoreUtils.swallow(registrationChannelManager.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => registrationChannelManager.shutdown())
         registrationChannelManager = null
       }
       metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
@@ -464,24 +464,24 @@ class ControllerServer(
       Utils.closeQuietly(registrationsPublisher, "registrations publisher")
       registrationsPublisher = null
       if (socketServer != null)
-        CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
+        Utils.swallow(this.logger.underlying, () => socketServer.stopProcessingRequests())
       if (controller != null)
         controller.beginShutdown()
       if (socketServer != null)
-        CoreUtils.swallow(socketServer.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => socketServer.shutdown())
       if (controllerApisHandlerPool != null)
-        CoreUtils.swallow(controllerApisHandlerPool.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => controllerApisHandlerPool.shutdown())
       if (controllerApis != null)
-        CoreUtils.swallow(controllerApis.close(), this)
+        Utils.swallow(this.logger.underlying, () => controllerApis.close())
       if (quotaManagers != null)
-        CoreUtils.swallow(quotaManagers.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => quotaManagers.shutdown())
       Utils.closeQuietly(controller, "controller")
       Utils.closeQuietly(quorumControllerMetrics, "quorum controller metrics")
       authorizerPlugin.foreach(Utils.closeQuietly(_, "authorizer plugin"))
       createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "create topic policy"))
       alterConfigPolicy.foreach(policy => Utils.closeQuietly(policy, "alter config policy"))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
-      CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      Utils.swallow(this.logger.underlying, () => config.dynamicConfig.clear())
       sharedServer.stopForController()
     } catch {
       case e: Throwable =>

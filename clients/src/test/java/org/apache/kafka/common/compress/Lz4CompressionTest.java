@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.compress;
 
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ChunkedBytesStream;
@@ -45,7 +45,7 @@ import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.compress.Lz4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
-import static org.apache.kafka.common.record.CompressionType.LZ4;
+import static org.apache.kafka.common.record.internal.CompressionType.LZ4;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

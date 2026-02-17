@@ -119,6 +119,7 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParamet
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.PartitionMetadataClient;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
@@ -269,7 +270,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withPartitionWriter(writer)
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(supplier)
-                    .withDefaultWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs()))
+                    .withWriteTimeout(Duration.ofMillis(config.offsetCommitTimeoutMs()))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
                     .withSerializer(new GroupCoordinatorRecordSerde())
@@ -494,7 +495,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "consumer-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
             "consumer-group-heartbeat",
@@ -622,7 +622,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "streams-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.streamsGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
             "streams-group-heartbeat",
@@ -688,7 +687,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "share-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.shareGroupHeartbeat(context, request)
         ).thenCompose(result -> {
             if (result.getValue().isPresent()) {
@@ -868,7 +866,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "uninitialize-share-group-state",
             topicPartitionFor(groupId),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.uninitializeShareGroupState(groupId, topicPartitionMap)
         ).thenApply(__ -> new ShareGroupHeartbeatResponseData()
             .setErrorCode(error.code())
@@ -890,7 +887,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "initialize-share-group-state",
             topicPartitionFor(groupId),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.initializeShareGroupState(groupId, topicPartitionMap)
         ).handle((__, exp) -> {
             if (exp == null) {
@@ -938,7 +934,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         runtime.scheduleWriteOperation(
             "classic-group-join",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.classicGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
@@ -982,7 +977,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         runtime.scheduleWriteOperation(
             "classic-group-sync",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.classicGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
@@ -1023,7 +1017,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.classicGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
             "classic-group-heartbeat",
@@ -1066,7 +1059,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "classic-group-leave",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.classicGroupLeave(context, request)
         ).exceptionally(exception -> handleOperationException(
             "classic-group-leave",
@@ -1317,7 +1309,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "share-group-offsets-alter",
             topicPartitionFor(groupId),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.alterShareGroupOffsets(groupId, request)
         ).thenCompose(result ->
             persisterInitialize(result.getValue(), result.getKey())
@@ -1500,7 +1491,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "delete-groups",
             topicPartition,
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.deleteGroups(context, groupIds)
         ).exceptionally(exception -> handleOperationException(
             "delete-groups",
@@ -1519,7 +1509,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "delete-share-groups",
             topicPartition,
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.sharePartitionDeleteRequests(groupList)
         ).thenCompose(
             this::performShareGroupsDeletion
@@ -1650,7 +1639,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return runtime.scheduleWriteOperation(
                 name,
                 topicPartitionFor(request.groupId()),
-                Duration.ofMillis(config.offsetCommitTimeoutMs()),
                 coordinator -> new CoordinatorResult<>(
                     List.of(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
@@ -1953,7 +1941,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "initiate-delete-share-group-offsets",
             topicPartitionFor(groupId),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.initiateDeleteShareGroupOffsets(groupId, requestData)
         ).thenCompose(resultHolder -> deleteShareGroupOffsetsState(groupId, resultHolder)
         ).exceptionally(exception -> handleOperationException(
@@ -2058,7 +2045,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "complete-delete-share-group-offsets",
             topicPartitionFor(groupId),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.completeDeleteShareGroupOffsets(groupId, successTopics, errorTopicResponses)
         ).exceptionally(exception -> handleOperationException(
             "complete-delete-share-group-offsets",
@@ -2096,7 +2082,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "commit-offset",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.commitOffset(context, request)
         ).exceptionally(exception -> handleOperationException(
             "commit-offset",
@@ -2136,7 +2121,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request.transactionalId(),
             request.producerId(),
             request.producerEpoch(),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.commitTransactionalOffset(context, request),
             context.requestVersion()
         ).exceptionally(exception -> handleOperationException(
@@ -2172,7 +2156,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "delete-offsets",
             topicPartitionFor(request.groupId()),
-            Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.deleteOffsets(context, request)
         ).exceptionally(exception -> handleOperationException(
             "delete-offsets",
@@ -2184,7 +2167,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, short, Duration)}.
+     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, short)}.
      */
     @Override
     public CompletableFuture<Void> completeTransaction(
@@ -2193,15 +2176,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result,
-        short transactionVersion,
-        Duration timeout
+        short transactionVersion
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
         if (!tp.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
-            return FutureUtils.failedFuture(new IllegalStateException(
+            return CompletableFuture.failedFuture(new IllegalStateException(
                 "Completing a transaction for " + tp + " is not expected"
             ));
         }
@@ -2213,8 +2195,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             producerEpoch,
             coordinatorEpoch,
             result,
-            transactionVersion,
-            timeout
+            transactionVersion
         );
     }
 
@@ -2297,7 +2278,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
                         "on-topics-deleted",
-                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
                         coordinator -> coordinator.onTopicsDeleted(deletedTopics)
                     ),
                     exception -> {
@@ -2315,7 +2295,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 FutureUtils.mapExceptionally(
                     runtime.scheduleWriteAllOperation(
                         "maybe-cleanup-share-group-state",
-                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
                         coordinator -> coordinator.maybeCleanupShareGroupState(deletedTopicIds)
                     ),
                     exception -> {
