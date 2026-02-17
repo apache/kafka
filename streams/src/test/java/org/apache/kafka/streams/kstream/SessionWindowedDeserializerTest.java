@@ -116,6 +116,7 @@ public class SessionWindowedDeserializerTest {
         props.put(SessionWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS, "some.non.existent.class");
         assertThrows(ConfigException.class, () -> sessionWindowedDeserializer.configure(props, false));
     }
+
     @Test
     public void shouldPassHeadersToUnderlyingSerializer() {
         final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
