@@ -35,7 +35,7 @@ import java.util.stream.Stream;
  * Contains the topology sent by a Streams client in the Streams heartbeat during initialization.
  * <p>
  * This topology is used together with the partition metadata on the broker to create a
- * {@link org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology configured topology}.
+ * {@link org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology topology validation result}.
  * This class allows to look-up subtopologies by subtopology ID in constant time by getting the subtopologies map.
  * The information in this class is fully backed by records stored in the __consumer_offsets topic.
  *

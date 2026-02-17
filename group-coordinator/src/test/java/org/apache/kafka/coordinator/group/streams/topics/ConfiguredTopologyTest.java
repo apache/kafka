@@ -17,48 +17,29 @@
 package org.apache.kafka.coordinator.group.streams.topics;
 
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
-import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class ConfiguredTopologyTest {
-
-    @Test
-    public void testConstructorWithNullSubtopologies() {
-        assertThrows(NullPointerException.class,
-            () -> new ConfiguredTopology(
-                0,
-                0,
-                null,
-                Map.of(),
-                Optional.empty()
-            )
-        );
-    }
 
     @Test
     public void testConstructorWithNullInternalTopicsToBeCreated() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                0,
-                Optional.of(new TreeMap<>()),
+                0L,
                 null,
-                Optional.empty()
+                Optional.empty(),
+                Optional.of(Map.of("subtopology1", 10))
             )
         );
     }
@@ -68,9 +49,22 @@ public class ConfiguredTopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredTopology(
                 0,
-                0,
-                Optional.empty(),
+                0L,
                 Map.of(),
+                null,
+                Optional.of(Map.of("subtopology1", 10))
+            )
+        );
+    }
+
+    @Test
+    public void testConstructorWithNullNumTasksBySubtopology() {
+        assertThrows(NullPointerException.class,
+            () -> new ConfiguredTopology(
+                0,
+                0L,
+                Map.of(),
+                Optional.empty(),
                 null
             )
         );
@@ -81,56 +75,58 @@ public class ConfiguredTopologyTest {
         assertThrows(IllegalArgumentException.class,
             () -> new ConfiguredTopology(
                 -1,
-                0,
-                Optional.of(new TreeMap<>()),
+                0L,
                 Map.of(),
-                Optional.empty()
+                Optional.empty(),
+                Optional.of(Map.of("subtopology1", 10))
             )
         );
     }
 
     @Test
-    public void testNoExceptionButNoSubtopologies() {
+    public void testNoExceptionButNoNumTasksBySubtopology() {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> new ConfiguredTopology(
                 1,
-                0,
-                Optional.empty(),
+                0L,
                 Map.of(),
+                Optional.empty(),
                 Optional.empty()
             )
         );
-        assertEquals("Subtopologies must be present if topicConfigurationException is empty.", ex.getMessage());
+        assertEquals("numTasksBySubtopology must be present if topicConfigurationException is empty.", ex.getMessage());
     }
 
     @Test
     public void testIsReady() {
-        ConfiguredTopology readyTopology = new ConfiguredTopology(
-            1, 0, Optional.of(new TreeMap<>()), new HashMap<>(), Optional.empty());
-        assertTrue(readyTopology.isReady());
+        Map<String, Integer> numTasksBySubtopology = Map.of("subtopology1", 10);
+        ConfiguredTopology readyResult = new ConfiguredTopology(
+            1, 0L, new HashMap<>(), Optional.empty(), Optional.of(numTasksBySubtopology));
+        assertTrue(readyResult.isReady());
 
-        ConfiguredTopology notReadyTopology = new ConfiguredTopology(
-            1, 0, Optional.empty(), new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")));
-        assertFalse(notReadyTopology.isReady());
+        ConfiguredTopology notReadyResult = new ConfiguredTopology(
+            1, 0L, new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")), Optional.empty());
+        assertFalse(notReadyResult.isReady());
     }
 
     @Test
-    public void testAsStreamsGroupDescribeTopology() {
-        int topologyEpoch = 1;
-        ConfiguredSubtopology subtopologyMock = mock(ConfiguredSubtopology.class);
-        StreamsGroupDescribeResponseData.Subtopology subtopologyResponse = new StreamsGroupDescribeResponseData.Subtopology();
-        when(subtopologyMock.asStreamsGroupDescribeSubtopology(Mockito.anyString())).thenReturn(subtopologyResponse);
-        SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
-        subtopologies.put("subtopology1", subtopologyMock);
-        Map<String, CreatableTopic> internalTopicsToBeCreated = new HashMap<>();
-        Optional<TopicConfigurationException> topicConfigurationException = Optional.empty();
-        ConfiguredTopology configuredTopology = new ConfiguredTopology(
-            topologyEpoch, 0, Optional.of(subtopologies), internalTopicsToBeCreated, topicConfigurationException);
+    public void testAccessors() {
+        Map<String, Integer> numTasksBySubtopology = Map.of("subtopology1", 10, "subtopology2", 5);
+        Map<String, CreatableTopic> internalTopics = new HashMap<>();
 
-        StreamsGroupDescribeResponseData.Topology topology = configuredTopology.asStreamsGroupDescribeTopology();
+        ConfiguredTopology result = new ConfiguredTopology(
+            1,
+            42L,
+            internalTopics,
+            Optional.empty(),
+            Optional.of(numTasksBySubtopology)
+        );
 
-        assertEquals(topologyEpoch, topology.epoch());
-        assertEquals(1, topology.subtopologies().size());
-        assertEquals(subtopologyResponse, topology.subtopologies().get(0));
+        assertEquals(1, result.topologyEpoch());
+        assertEquals(42L, result.metadataHash());
+        assertEquals(internalTopics, result.internalTopicsToBeCreated());
+        assertTrue(result.topicConfigurationException().isEmpty());
+        assertTrue(result.numTasksBySubtopology().isPresent());
+        assertEquals(numTasksBySubtopology, result.numTasksBySubtopology().get());
     }
 }

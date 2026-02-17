@@ -34,12 +34,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InternalTopicManagerTest {
@@ -63,16 +60,17 @@ class InternalTopicManagerTest {
         // SOURCE_TOPIC_2 is missing from topicMetadata
         StreamsTopology topology = makeTestTopology();
 
-        final ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+        final ConfiguredTopology result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
 
-        assertEquals(Optional.empty(), configuredTopology.subtopologies());
-        assertTrue(configuredTopology.topicConfigurationException().isPresent());
-        assertEquals(Status.MISSING_SOURCE_TOPICS, configuredTopology.topicConfigurationException().get().status());
-        assertEquals(String.format("Source topics %s are missing.", SOURCE_TOPIC_2), configuredTopology.topicConfigurationException().get().getMessage());
+        assertFalse(result.isReady());
+        assertTrue(result.numTasksBySubtopology().isEmpty());
+        assertTrue(result.topicConfigurationException().isPresent());
+        assertEquals(Status.MISSING_SOURCE_TOPICS, result.topicConfigurationException().get().status());
+        assertEquals(String.format("Source topics %s are missing.", SOURCE_TOPIC_2), result.topicConfigurationException().get().getMessage());
     }
 
     @Test
-    void testConfigureTopics() {
+    void testConfigureTopicsWithMissingInternalTopics() {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), SOURCE_TOPIC_1, 2)
             .addTopic(Uuid.randomUuid(), SOURCE_TOPIC_2, 2)
@@ -80,8 +78,14 @@ class InternalTopicManagerTest {
             .build();
         StreamsTopology topology = makeTestTopology();
 
-        ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), 0, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
-        final Map<String, CreatableTopic> internalTopicsToBeCreated = configuredTopology.internalTopicsToBeCreated();
+        ConfiguredTopology result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+        final Map<String, CreatableTopic> internalTopicsToBeCreated = result.internalTopicsToBeCreated();
+
+        // Not ready because internal topics are missing
+        assertFalse(result.isReady());
+        assertTrue(result.numTasksBySubtopology().isEmpty());
+        assertTrue(result.topicConfigurationException().isPresent());
+        assertEquals(Status.MISSING_INTERNAL_TOPICS, result.topicConfigurationException().get().status());
 
         assertEquals(2, internalTopicsToBeCreated.size());
         assertEquals(
@@ -101,48 +105,29 @@ class InternalTopicManagerTest {
                         List.of(new CreatableTopicConfig().setName(CONFIG_KEY).setValue(CONFIG_VALUE)).iterator())
                 ),
             internalTopicsToBeCreated.get(STATE_CHANGELOG_TOPIC_1));
-
-        Optional<Map<String, ConfiguredSubtopology>> expectedConfiguredTopology = Optional.of(makeExpectedConfiguredSubtopologies());
-        assertEquals(expectedConfiguredTopology, configuredTopology.subtopologies());
     }
 
-    private static Map<String, ConfiguredSubtopology> makeExpectedConfiguredSubtopologies() {
-        return mkMap(
-            mkEntry(SUBTOPOLOGY_1,
-                new ConfiguredSubtopology(
-                    2,
-                    Set.of(SOURCE_TOPIC_1),
-                    Map.of(),
-                    Set.of(REPARTITION_TOPIC),
-                    Map.of(STATE_CHANGELOG_TOPIC_1,
-                        new ConfiguredInternalTopic(
-                            STATE_CHANGELOG_TOPIC_1,
-                            2,
-                            Optional.empty(),
-                            Map.of(CONFIG_KEY, CONFIG_VALUE)
-                        ))
-                )
-            ),
-            mkEntry(SUBTOPOLOGY_2,
-                new ConfiguredSubtopology(
-                    2,
-                    Set.of(SOURCE_TOPIC_2),
-                    Map.of(REPARTITION_TOPIC,
-                        new ConfiguredInternalTopic(REPARTITION_TOPIC,
-                            2,
-                            Optional.of((short) 3),
-                            Map.of()
-                        )
-                    ),
-                    Set.of(),
-                    Map.of(STATE_CHANGELOG_TOPIC_2,
-                        new ConfiguredInternalTopic(STATE_CHANGELOG_TOPIC_2,
-                            2,
-                            Optional.empty(),
-                            Map.of()
-                        )))
-            )
-        );
+    @Test
+    void testConfigureTopicsAllTopicsExist() {
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), SOURCE_TOPIC_1, 2)
+            .addTopic(Uuid.randomUuid(), SOURCE_TOPIC_2, 2)
+            .addTopic(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_1, 2)
+            .addTopic(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_2, 2)
+            .addTopic(Uuid.randomUuid(), REPARTITION_TOPIC, 2)
+            .build();
+        StreamsTopology topology = makeTestTopology();
+
+        ConfiguredTopology result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+
+        assertTrue(result.isReady());
+        assertTrue(result.numTasksBySubtopology().isPresent());
+        assertTrue(result.topicConfigurationException().isEmpty());
+        assertTrue(result.internalTopicsToBeCreated().isEmpty());
+
+        // Verify numTasksBySubtopology is correctly populated
+        assertEquals(2, result.numTasksBySubtopology().get().get(SUBTOPOLOGY_1));
+        assertEquals(2, result.numTasksBySubtopology().get().get(SUBTOPOLOGY_2));
     }
 
     private static StreamsTopology makeTestTopology() {

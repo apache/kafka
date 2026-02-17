@@ -561,7 +561,7 @@ public class GroupMetadataManagerTestContext {
                 if (group.topology().isPresent()) {
                     group.setConfiguredTopology(InternalTopicManager.configureTopics(
                         new LogContext(),
-                        0,
+                        group.metadataHash(),
                         group.topology().get(),
                         metadataImage,
                         time)

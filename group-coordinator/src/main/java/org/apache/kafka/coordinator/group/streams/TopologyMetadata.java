@@ -16,28 +16,46 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.SortedMap;
 
 /**
  * The topology metadata class is used by the {@link org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor} to get topic and
- * partition metadata for the topology that the streams group using.
- *
- * @param metadataImage  The metadata image
- * @param subtopologyMap The configured subtopologies
+ * partition metadata for the topology that the streams group is using.
+ * <p>
+ * This class uses pre-computed partition counts (computed by InternalTopicManager),
+ * providing O(1) lookups for maxNumInputPartitions.
  */
-public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap<String, ConfiguredSubtopology> subtopologyMap) implements TopologyDescriber {
+public class TopologyMetadata implements TopologyDescriber {
 
-    public TopologyMetadata {
-        Objects.requireNonNull(metadataImage);
-        subtopologyMap = Collections.unmodifiableSortedMap(Objects.requireNonNull(subtopologyMap));
+    private final StreamsTopology topology;
+    private final Map<String, Integer> numTasksBySubtopology;
+
+    /**
+     * Constructs TopologyMetadata with pre-computed max partition counts for each subtopology.
+     *
+     * @param topology                    The streams topology.
+     * @param numTasksBySubtopology Pre-computed max partition counts per subtopology.
+     */
+    public TopologyMetadata(StreamsTopology topology, Map<String, Integer> numTasksBySubtopology) {
+        this.topology = Objects.requireNonNull(topology, "topology can't be null");
+        Objects.requireNonNull(numTasksBySubtopology, "numTasksBySubtopology can't be null");
+        this.numTasksBySubtopology = Collections.unmodifiableMap(numTasksBySubtopology);
+    }
+
+    /**
+     * Returns the underlying StreamsTopology.
+     *
+     * @return The streams topology.
+     */
+    public StreamsTopology topology() {
+        return topology;
     }
 
     /**
@@ -49,7 +67,7 @@ public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap
      */
     @Override
     public boolean isStateful(String subtopologyId) {
-        final ConfiguredSubtopology subtopology = getSubtopologyOrFail(subtopologyId);
+        StreamsGroupTopologyValue.Subtopology subtopology = getSubtopologyOrFail(subtopologyId);
         return !subtopology.stateChangelogTopics().isEmpty();
     }
 
@@ -60,7 +78,7 @@ public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap
      */
     @Override
     public List<String> subtopologies() {
-        return subtopologyMap.keySet().stream().toList();
+        return topology.subtopologies().keySet().stream().toList();
     }
 
     /**
@@ -69,20 +87,44 @@ public record TopologyMetadata(CoordinatorMetadataImage metadataImage, SortedMap
      * @param subtopologyId String identifying the subtopology.
      *
      * @throws NoSuchElementException if the subtopology ID does not exist.
-     * @throws IllegalStateException if the subtopology contains no source topics.
      * @return The maximal number of input partitions among all source topics for the given subtopology.
      */
     @Override
     public int maxNumInputPartitions(String subtopologyId) {
-        final ConfiguredSubtopology subtopology = getSubtopologyOrFail(subtopologyId);
-        return subtopology.numberOfTasks();
-    }
-
-    private ConfiguredSubtopology getSubtopologyOrFail(String subtopologyId) {
-        if (!subtopologyMap.containsKey(subtopologyId)) {
+        Integer cached = numTasksBySubtopology.get(subtopologyId);
+        if (cached == null) {
             throw new NoSuchElementException(String.format("Topology does not contain subtopology %s", subtopologyId));
         }
-        return subtopologyMap.get(subtopologyId);
+        return cached;
     }
 
+    private StreamsGroupTopologyValue.Subtopology getSubtopologyOrFail(String subtopologyId) {
+        StreamsGroupTopologyValue.Subtopology subtopology = topology.subtopologies().get(subtopologyId);
+        if (subtopology == null) {
+            throw new NoSuchElementException(String.format("Topology does not contain subtopology %s", subtopologyId));
+        }
+        return subtopology;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TopologyMetadata that = (TopologyMetadata) o;
+        return Objects.equals(topology, that.topology) &&
+               Objects.equals(numTasksBySubtopology, that.numTasksBySubtopology);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(topology, numTasksBySubtopology);
+    }
+
+    @Override
+    public String toString() {
+        return "TopologyMetadata{" +
+            "topology=" + topology +
+            ", numTasksBySubtopology=" + numTasksBySubtopology +
+            '}';
+    }
 }

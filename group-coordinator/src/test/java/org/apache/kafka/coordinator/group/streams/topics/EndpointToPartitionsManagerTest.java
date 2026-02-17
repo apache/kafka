@@ -21,8 +21,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
-import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.image.MetadataImage;
 
@@ -32,16 +33,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -54,27 +49,32 @@ import static org.mockito.Mockito.when;
 
 class EndpointToPartitionsManagerTest {
 
-    private StreamsGroup streamsGroup;
     private StreamsGroupMember streamsGroupMember;
-    private ConfiguredTopology configuredTopology;
-    private ConfiguredSubtopology configuredSubtopologyOne;
-    private ConfiguredSubtopology configuredSubtopologyTwo;
+    private StreamsTopology streamsTopology;
     private final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
 
     @BeforeEach
     public void setUp() {
-        streamsGroup = mock(StreamsGroup.class);
         streamsGroupMember = mock(StreamsGroupMember.class);
-        configuredTopology = mock(ConfiguredTopology.class);
-        configuredSubtopologyOne = new ConfiguredSubtopology(1, Set.of("Topic-A"), new HashMap<>(), new HashSet<>(), new HashMap<>());
-        Map<String, ConfiguredInternalTopic> repartitionSourceTopics = Map.of("Topic-B",  new ConfiguredInternalTopic("Topic-B", 1, Optional.of((short) 1), Collections.emptyMap()));
-        configuredSubtopologyTwo = new ConfiguredSubtopology(1, new HashSet<>(), repartitionSourceTopics, new HashSet<>(), new HashMap<>());
-        SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
-        configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
-        SortedMap<String, ConfiguredSubtopology> configuredSubtopologyTwoMap = new TreeMap<>();
-        configuredSubtopologyOneMap.put("1", configuredSubtopologyTwo);
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyOneMap));
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyTwoMap));
+
+        // Create subtopologies using the actual StreamsGroupTopologyValue.Subtopology
+        StreamsGroupTopologyValue.Subtopology subtopologyOne = new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("Topic-A"));
+
+        StreamsGroupTopologyValue.Subtopology subtopologyTwo = new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("1")
+            .setRepartitionSourceTopics(List.of(
+                new StreamsGroupTopologyValue.TopicInfo()
+                    .setName("Topic-B")
+                    .setReplicationFactor((short) 1)
+            ));
+
+        streamsTopology = new StreamsTopology(1, Map.of(
+            "0", subtopologyOne,
+            "1", subtopologyTwo
+        ));
+
         responseEndpoint.setHost("localhost");
         responseEndpoint.setPort(9092);
     }
@@ -93,14 +93,9 @@ class EndpointToPartitionsManagerTest {
                 Map.of()
             )
         );
-        when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
-        SortedMap<String, ConfiguredSubtopology> configuredSubtopologyMap = new TreeMap<>();
-        configuredSubtopologyMap.put("0", configuredSubtopologyOne);
-        configuredSubtopologyMap.put("1", configuredSubtopologyTwo);
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyMap));
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
-                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
+            EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsTopology, new KRaftCoordinatorMetadataImage(metadataImage));
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(1, result.activePartitions().size());
@@ -126,12 +121,18 @@ class EndpointToPartitionsManagerTest {
                                                                      List<Integer> topicAExpectedPartitions,
                                                                      List<Integer> topicBExpectedPartitions,
                                                                      String testName
-                                                                     ) {
+    ) {
         MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "Topic-A", topicAPartitions)
             .addTopic(Uuid.randomUuid(), "Topic-B", topicBPartitions)
             .build();
-        configuredSubtopologyOne = new ConfiguredSubtopology(Math.max(topicAPartitions, topicBPartitions), Set.of("Topic-A", "Topic-B"), new HashMap<>(), new HashSet<>(), new HashMap<>());
+
+        // Create a subtopology with two source topics
+        StreamsGroupTopologyValue.Subtopology subtopologyOne = new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("0")
+            .setSourceTopics(List.of("Topic-A", "Topic-B"));
+
+        StreamsTopology topology = new StreamsTopology(1, Map.of("0", subtopologyOne));
 
         when(streamsGroupMember.assignedTasks()).thenReturn(
             new TasksTupleWithEpochs(
@@ -140,12 +141,8 @@ class EndpointToPartitionsManagerTest {
                 Map.of()
             )
         );
-        when(streamsGroup.configuredTopology()).thenReturn(Optional.of(configuredTopology));
-        SortedMap<String, ConfiguredSubtopology> configuredSubtopologyOneMap = new TreeMap<>();
-        configuredSubtopologyOneMap.put("0", configuredSubtopologyOne);
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(configuredSubtopologyOneMap));
 
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup, new KRaftCoordinatorMetadataImage(metadataImage));
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, topology, new KRaftCoordinatorMetadataImage(metadataImage));
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(2, result.activePartitions().size());
@@ -156,7 +153,7 @@ class EndpointToPartitionsManagerTest {
         StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = result.activePartitions().get(0);
         assertEquals("Topic-A", topicAPartition.topic());
         assertEquals(topicAExpectedPartitions, topicAPartition.partitions().stream().sorted().toList());
-        
+
         StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = result.activePartitions().get(1);
         assertEquals("Topic-B", topicBPartition.topic());
         assertEquals(topicBExpectedPartitions, topicBPartition.partitions().stream().sorted().toList());
@@ -164,8 +161,8 @@ class EndpointToPartitionsManagerTest {
 
     static Stream<Arguments> argsProvider() {
         return Stream.of(
-                arguments(2, 5, List.of(0, 1), List.of(0, 1, 2, 3, 4), "Should assign correct partitions when partitions differ between topics"),
-                arguments(3, 3, List.of(0, 1, 2), List.of(0, 1, 2), "Should assign correct partitions when partitions same between topics")
+            arguments(2, 5, List.of(0, 1), List.of(0, 1, 2, 3, 4), "Should assign correct partitions when partitions differ between topics"),
+            arguments(3, 3, List.of(0, 1, 2), List.of(0, 1, 2), "Should assign correct partitions when partitions same between topics")
         );
     }
 }

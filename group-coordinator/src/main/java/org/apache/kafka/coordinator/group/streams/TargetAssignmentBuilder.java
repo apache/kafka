@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
@@ -76,19 +75,19 @@ public class TargetAssignmentBuilder {
     private Map<String, StreamsGroupMember> members = Map.of();
 
     /**
-     * The metadata image.
-     */
-    private CoordinatorMetadataImage metadataImage = CoordinatorMetadataImage.EMPTY;
-
-    /**
      * The existing target assignment.
      */
     private Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment = Map.of();
 
     /**
-     * The topology.
+     * The configured topology.
      */
-    private ConfiguredTopology topology;
+    private ConfiguredTopology configuredTopology;
+
+    /**
+     * The streams topology.
+     */
+    private StreamsTopology topology;
 
     /**
      * The static members in the group.
@@ -158,19 +157,6 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the metadata image to use.
-     *
-     * @param metadataImage The metadata image.
-     * @return This object.
-     */
-    public TargetAssignmentBuilder withMetadataImage(
-        CoordinatorMetadataImage metadataImage
-    ) {
-        this.metadataImage = metadataImage;
-        return this;
-    }
-
-    /**
      * Adds the existing target assignment.
      *
      * @param targetAssignment The existing target assignment.
@@ -184,13 +170,26 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the topology image.
+     * Adds the configured topology.
      *
-     * @param topology The topology.
+     * @param configuredTopology The configured topology.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withConfiguredTopology(
+        ConfiguredTopology configuredTopology
+    ) {
+        this.configuredTopology = configuredTopology;
+        return this;
+    }
+
+    /**
+     * Adds the streams topology.
+     *
+     * @param topology The streams topology.
      * @return This object.
      */
     public TargetAssignmentBuilder withTopology(
-        ConfiguredTopology topology
+        StreamsTopology topology
     ) {
         this.topology = topology;
         return this;
@@ -265,16 +264,23 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
-        if (topology.isReady()) {
-            if (topology.subtopologies().isEmpty()) {
-                throw new IllegalStateException("Subtopologies must be present if topology is ready.");
+        if (configuredTopology.isReady()) {
+            if (configuredTopology.numTasksBySubtopology().isEmpty()) {
+                throw new IllegalStateException("numTasksBySubtopology must be present if topology is ready.");
             }
+            if (topology == null) {
+                throw new IllegalStateException("topology must be set if topology is ready.");
+            }
+            TopologyMetadata topologyMetadata = new TopologyMetadata(
+                topology,
+                configuredTopology.numTasksBySubtopology().get()
+            );
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(
                     Collections.unmodifiableMap(memberSpecs),
                     assignmentConfigs
                 ),
-                new TopologyMetadata(metadataImage, topology.subtopologies().get())
+                topologyMetadata
             );
         } else {
             newGroupAssignment = new GroupAssignment(

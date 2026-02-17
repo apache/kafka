@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.assignor;
 
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.TopologyMetadata;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
@@ -27,7 +26,6 @@ import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -48,7 +46,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -97,11 +94,10 @@ public class StreamsStickyAssignorBenchmark {
     public void setup() {
         List<String> allTopicNames = AssignorBenchmarkUtils.createTopicNames(subtopologyCount);
 
-        SortedMap<String, ConfiguredSubtopology> subtopologyMap = StreamsAssignorBenchmarkUtils.createSubtopologyMap(partitionCount, allTopicNames);
+        StreamsAssignorBenchmarkUtils.TopologyData topologyData =
+            StreamsAssignorBenchmarkUtils.createTopologyData(partitionCount, allTopicNames);
 
-        CoordinatorMetadataImage metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionCount);
-
-        topologyDescriber = new TopologyMetadata(metadataImage, subtopologyMap);
+        topologyDescriber = new TopologyMetadata(topologyData.topology(), topologyData.numTasksBySubtopology());
 
         taskAssignor = new StickyTaskAssignor();
 

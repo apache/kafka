@@ -63,7 +63,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
@@ -499,7 +498,7 @@ public class StreamsGroupTest {
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
-        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10))));
         streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(MemberState.STABLE, member1.state());
@@ -800,7 +799,7 @@ public class StreamsGroupTest {
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
         group.setValidatedTopologyEpoch(1);
-        group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10))));
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)
@@ -865,7 +864,7 @@ public class StreamsGroupTest {
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
-        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10))));
         streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
@@ -911,7 +910,7 @@ public class StreamsGroupTest {
 
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
-        group.setConfiguredTopology(new ConfiguredTopology(1, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10))));
         group.setValidatedTopologyEpoch(1);
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
@@ -1182,12 +1181,12 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testAsDescribedGroupPrefersConfiguredTopologyOverStreamsTopology() {
+    public void testAsDescribedGroupUsesStreamsTopology() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-configured");
         snapshotRegistry.idempotentCreateSnapshot(0);
 
-        // Create both StreamsTopology and ConfiguredTopology
+        // Create StreamsTopology with subtopologies
         Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
             "sub-1", new StreamsGroupTopologyValue.Subtopology()
                 .setSubtopologyId("sub-1")
@@ -1196,45 +1195,18 @@ public class StreamsGroupTest {
 
         group.setGroupEpoch(3);
         group.setTopology(new StreamsTopology(2, subtopologies));
-        group.setConfiguredTopology(new ConfiguredTopology(3, 0, Optional.of(new TreeMap<>()), Map.of(), Optional.empty()));
+        group.setConfiguredTopology(new ConfiguredTopology(2, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10))));
         group.setTargetAssignmentEpoch(3);
         snapshotRegistry.idempotentCreateSnapshot(1);
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
 
-        // Should prefer ConfiguredTopology over StreamsTopology
+        // Should use StreamsTopology for describe
         assertNotNull(describedGroup.topology());
-        assertEquals(3, describedGroup.topology().epoch()); // ConfiguredTopology epoch
-        assertEquals(0, describedGroup.topology().subtopologies().size()); // Empty configured topology
-    }
-
-    @Test
-    public void testAsDescribedGroupFallbackToStreamsTopologyWhenConfiguredTopologyEmpty() {
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-id-fallback");
-        snapshotRegistry.idempotentCreateSnapshot(0);
-
-        // Create StreamsTopology with subtopologies
-        Map<String, StreamsGroupTopologyValue.Subtopology> subtopologies = Map.of(
-            "sub-1", new StreamsGroupTopologyValue.Subtopology()
-                .setSubtopologyId("sub-1")
-                .setSourceTopics(List.of("fallback-topic"))
-        );
-
-        group.setGroupEpoch(4);
-        group.setTopology(new StreamsTopology(4, subtopologies));
-        // No ConfiguredTopology set, so should fallback to StreamsTopology
-        group.setTargetAssignmentEpoch(4);
-        snapshotRegistry.idempotentCreateSnapshot(1);
-
-        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = group.asDescribedGroup(1);
-
-        // Should use StreamsTopology when ConfiguredTopology is not available
-        assertNotNull(describedGroup.topology());
-        assertEquals(4, describedGroup.topology().epoch()); // StreamsTopology epoch
+        assertEquals(2, describedGroup.topology().epoch()); // StreamsTopology epoch
         assertEquals(1, describedGroup.topology().subtopologies().size());
         assertEquals("sub-1", describedGroup.topology().subtopologies().get(0).subtopologyId());
-        assertEquals(List.of("fallback-topic"), describedGroup.topology().subtopologies().get(0).sourceTopics());
+        assertEquals(List.of("streams-topic"), describedGroup.topology().subtopologies().get(0).sourceTopics());
     }
 
     @SuppressWarnings("unchecked")

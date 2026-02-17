@@ -16,20 +16,16 @@
  */
 package org.apache.kafka.jmh.assignor;
 
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredInternalTopic;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 
 public class StreamsAssignorBenchmarkUtils {
@@ -99,7 +95,12 @@ public class StreamsAssignorBenchmarkUtils {
     }
 
     /**
-     * Creates a subtopology map with the given number of partitions per topic and a list of topic names.
+     * Container for topology data used in benchmarks.
+     */
+    public record TopologyData(StreamsTopology topology, Map<String, Integer> numTasksBySubtopology) { }
+
+    /**
+     * Creates topology data with the given number of partitions per topic and a list of topic names.
      * For simplicity, each subtopology is associated with a single topic, and every second subtopology
      * is stateful (i.e., has a changelog topic).
      *
@@ -108,28 +109,37 @@ public class StreamsAssignorBenchmarkUtils {
      *
      * @param partitionsPerTopic The number of partitions per topic, implies the number of tasks for the subtopology.
      * @param allTopicNames All topics names.
-     * @return A sorted map of subtopology IDs to ConfiguredSubtopology objects.
+     * @return TopologyData containing the StreamsTopology and max partitions per subtopology.
      */
-    public static SortedMap<String, ConfiguredSubtopology> createSubtopologyMap(
+    public static TopologyData createTopologyData(
         int partitionsPerTopic,
         List<String> allTopicNames
     ) {
-        TreeMap<String, ConfiguredSubtopology> subtopologyMap = new TreeMap<>();
+        Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = new HashMap<>();
+        Map<String, Integer> numTasksBySubtopology = new HashMap<>();
+
         for (int i = 0; i < allTopicNames.size(); i++) {
             String topicName = allTopicNames.get(i);
+            String subtopologyId = topicName + "_subtopology";
+
+            StreamsGroupTopologyValue.Subtopology subtopology = new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopologyId(subtopologyId)
+                .setSourceTopics(List.of(topicName));
+
+            // Every second subtopology is stateful (has a changelog topic)
             if (i % 2 == 0) {
-                subtopologyMap.put(topicName + "_subtopology", new ConfiguredSubtopology(partitionsPerTopic, Set.of(topicName), Map.of(), Set.of(), Map.of(
-                    topicName + "_changelog", new ConfiguredInternalTopic(
-                        topicName + "_changelog",
-                        partitionsPerTopic,
-                        Optional.empty(),
-                        Map.of()
-                    )
-                )));
-            } else {
-                subtopologyMap.put(topicName + "_subtopology", new ConfiguredSubtopology(partitionsPerTopic, Set.of(topicName), Map.of(), Set.of(), Map.of()));
+                subtopology.setStateChangelogTopics(List.of(
+                    new StreamsGroupTopologyValue.TopicInfo()
+                        .setName(topicName + "_changelog")
+                        .setPartitions(partitionsPerTopic)
+                ));
             }
+
+            subtopologyMap.put(subtopologyId, subtopology);
+            numTasksBySubtopology.put(subtopologyId, partitionsPerTopic);
         }
-        return subtopologyMap;
+
+        StreamsTopology topology = new StreamsTopology(1, subtopologyMap);
+        return new TopologyData(topology, numTasksBySubtopology);
     }
 }

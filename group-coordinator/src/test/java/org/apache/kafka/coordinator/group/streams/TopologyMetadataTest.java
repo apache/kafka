@@ -16,12 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
-import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredInternalTopic;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,75 +24,72 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 
 class TopologyMetadataTest {
 
-    private CoordinatorMetadataImage metadataImage;
-    private SortedMap<String, ConfiguredSubtopology> subtopologyMap;
+    private StreamsTopology topology;
     private TopologyMetadata topologyMetadata;
+    private Map<String, Integer> numTasksBySubtopology;
 
     @BeforeEach
     void setUp() {
-        metadataImage = new KRaftCoordinatorMetadataImage(new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "source_topic", 3)
-            .addTopic(Uuid.randomUuid(), "repartition_source_topic", 4)
-            .build());
-        subtopologyMap = new TreeMap<>();
-        topologyMetadata = new TopologyMetadata(metadataImage, subtopologyMap);
-    }
+        StreamsGroupTopologyValue.Subtopology subtopology1 = new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("subtopology1")
+            .setSourceTopics(List.of("source_topic"))
+            .setStateChangelogTopics(List.of(
+                new StreamsGroupTopologyValue.TopicInfo().setName("changelog_topic")
+            ));
 
-    @Test
-    void testMetadataImage() {
-        assertEquals(metadataImage, topologyMetadata.metadataImage());
+        StreamsGroupTopologyValue.Subtopology subtopology2 = new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("subtopology2")
+            .setSourceTopics(List.of())
+            .setRepartitionSourceTopics(List.of(
+                new StreamsGroupTopologyValue.TopicInfo().setName("repartition_source_topic")
+            ));
+
+        topology = new StreamsTopology(1, Map.of(
+            "subtopology1", subtopology1,
+            "subtopology2", subtopology2
+        ));
+
+        // Pre-computed max partitions (simulating what InternalTopicManager computes)
+        numTasksBySubtopology = Map.of(
+            "subtopology1", 3,
+            "subtopology2", 4
+        );
+
+        topologyMetadata = new TopologyMetadata(topology, numTasksBySubtopology);
     }
 
     @Test
     void testTopology() {
-        assertEquals(subtopologyMap, topologyMetadata.subtopologyMap());
+        assertEquals(topology, topologyMetadata.topology());
     }
 
     @Test
     void testIsStateful() {
-        ConfiguredInternalTopic internalTopic = mock(ConfiguredInternalTopic.class);
-        ConfiguredSubtopology subtopology1 = mock(ConfiguredSubtopology.class);
-        ConfiguredSubtopology subtopology2 = mock(ConfiguredSubtopology.class);
-        subtopologyMap.put("subtopology1", subtopology1);
-        subtopologyMap.put("subtopology2", subtopology2);
-        when(subtopology1.stateChangelogTopics()).thenReturn(Map.of("state_changelog_topic", internalTopic));
-        when(subtopology2.stateChangelogTopics()).thenReturn(Map.of());
-
         assertTrue(topologyMetadata.isStateful("subtopology1"));
         assertFalse(topologyMetadata.isStateful("subtopology2"));
     }
 
     @Test
     void testMaxNumInputPartitions() {
-        ConfiguredSubtopology subtopology = mock(ConfiguredSubtopology.class);
-        subtopologyMap.put("subtopology1", subtopology);
-        when(subtopology.numberOfTasks()).thenReturn(4);
-
-        assertEquals(4, topologyMetadata.maxNumInputPartitions("subtopology1"));
+        assertEquals(3, topologyMetadata.maxNumInputPartitions("subtopology1"));
+        assertEquals(4, topologyMetadata.maxNumInputPartitions("subtopology2"));
     }
 
     @Test
     void testSubtopologies() {
-        ConfiguredSubtopology subtopology1 = mock(ConfiguredSubtopology.class);
-        ConfiguredSubtopology subtopology2 = mock(ConfiguredSubtopology.class);
-        subtopologyMap.put("subtopology1", subtopology1);
-        subtopologyMap.put("subtopology2", subtopology2);
-
-        List<String> expectedSubtopologies = List.of("subtopology1", "subtopology2");
-        assertEquals(expectedSubtopologies, topologyMetadata.subtopologies());
+        List<String> subtopologies = topologyMetadata.subtopologies();
+        assertEquals(2, subtopologies.size());
+        assertTrue(subtopologies.contains("subtopology1"));
+        assertTrue(subtopologies.contains("subtopology2"));
     }
 
     @Test
@@ -108,5 +100,32 @@ class TopologyMetadataTest {
     @Test
     void testMaxNumInputPartitionsThrowsExceptionWhenSubtopologyIdDoesNotExist() {
         assertThrows(NoSuchElementException.class, () -> topologyMetadata.maxNumInputPartitions("non_existent_subtopology"));
+    }
+
+    @Test
+    void testConstructorWithNullTopology() {
+        assertThrows(NullPointerException.class, () -> new TopologyMetadata(null, numTasksBySubtopology));
+    }
+
+    @Test
+    void testConstructorWithNullMaxPartitionsPerSubtopology() {
+        assertThrows(NullPointerException.class, () -> new TopologyMetadata(topology, null));
+    }
+
+    @Test
+    void testMaxNumInputPartitionsWithMultipleSourceTopics() {
+        StreamsGroupTopologyValue.Subtopology subtopology = new StreamsGroupTopologyValue.Subtopology()
+            .setSubtopologyId("multi_source")
+            .setSourceTopics(List.of("topic_a", "topic_b"));
+
+        StreamsTopology multiTopology = new StreamsTopology(1, Map.of("multi_source", subtopology));
+
+        // Pre-computed value simulating max(5, 10) = 10
+        Map<String, Integer> multiMaxPartitions = Map.of("multi_source", 10);
+
+        TopologyMetadata multiTopologyMetadata = new TopologyMetadata(multiTopology, multiMaxPartitions);
+
+        // Should return max(5, 10) = 10
+        assertEquals(10, multiTopologyMetadata.maxNumInputPartitions("multi_source"));
     }
 }

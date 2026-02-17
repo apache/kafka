@@ -159,7 +159,6 @@ import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
@@ -189,7 +188,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -1730,21 +1728,20 @@ public class GroupMetadataManager {
      * Validates that the requested tasks exist in the configured topology and partitions are valid.
      * If tasks is null, does nothing. If an invalid task is found, throws InvalidRequestException.
      *
-     * @param subtopologySortedMap The configured topology.
-     * @param tasks                The list of requested tasks.
+     * @param numTasksBySubtopology The number of tasks per subtopology.
+     * @param tasks                 The list of requested tasks.
      */
     private static void throwIfRequestContainsInvalidTasks(
-        SortedMap<String, ConfiguredSubtopology> subtopologySortedMap,
+        Map<String, Integer> numTasksBySubtopology,
         List<StreamsGroupHeartbeatRequestData.TaskIds> tasks
     ) {
         if (tasks == null || tasks.isEmpty()) return;
         for (StreamsGroupHeartbeatRequestData.TaskIds task : tasks) {
             String subtopologyId = task.subtopologyId();
-            ConfiguredSubtopology subtopology = subtopologySortedMap.get(subtopologyId);
-            if (subtopology == null) {
+            Integer numTasks = numTasksBySubtopology.get(subtopologyId);
+            if (numTasks == null) {
                 throw new InvalidRequestException("Subtopology " + subtopologyId + " does not exist in the topology.");
             }
-            int numTasks = subtopology.numberOfTasks();
             for (Integer partition : task.partitions()) {
                 if (partition < 0 || partition >= numTasks) {
                     throw new InvalidRequestException("Task " + partition + " for subtopology " + subtopologyId +
@@ -2011,10 +2008,10 @@ public class GroupMetadataManager {
         int validatedTopologyEpoch = -1;
         if (updatedConfiguredTopology.isReady()) {
             validatedTopologyEpoch = updatedTopology.topologyEpoch();
-            SortedMap<String, ConfiguredSubtopology> subtopologySortedMap = updatedConfiguredTopology.subtopologies().get();
-            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedActiveTasks);
-            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedStandbyTasks);
-            throwIfRequestContainsInvalidTasks(subtopologySortedMap, ownedWarmupTasks);
+            Map<String, Integer> numTasksBySubtopology = updatedConfiguredTopology.numTasksBySubtopology().get();
+            throwIfRequestContainsInvalidTasks(numTasksBySubtopology, ownedActiveTasks);
+            throwIfRequestContainsInvalidTasks(numTasksBySubtopology, ownedStandbyTasks);
+            throwIfRequestContainsInvalidTasks(numTasksBySubtopology, ownedWarmupTasks);
         }
         // We validated a topology that was not validated before, so bump the group epoch as we may have to reassign tasks.
         if (validatedTopologyEpoch != group.validatedTopologyEpoch()) {
@@ -2080,8 +2077,8 @@ public class GroupMetadataManager {
                     group,
                     groupEpoch,
                     Optional.of(updatedMember),
+                    updatedTopology,
                     updatedConfiguredTopology,
-                    metadataImage,
                     records,
                     currentAssignmentConfigs
                 );
@@ -2133,7 +2130,7 @@ public class GroupMetadataManager {
         }
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
-            response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group, updatedMember));
+            response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group, updatedMember, updatedTopology));
         }
         if (groups.containsKey(group.groupId())) {
             // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
@@ -2250,8 +2247,11 @@ public class GroupMetadataManager {
             .collect(Collectors.toList());
     }
 
-    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group,
-                                                                                                        StreamsGroupMember updatedMember) {
+    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(
+        StreamsGroup group,
+        StreamsGroupMember updatedMember,
+        StreamsTopology topology
+    ) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
         final Map<String, StreamsGroupMember> members = group.members();
         // Build endpoint information for all members except the updated member
@@ -2259,12 +2259,12 @@ public class GroupMetadataManager {
             if (updatedMember != null && entry.getKey().equals(updatedMember.memberId())) {
                 continue;
             }
-            EndpointToPartitionsManager.maybeEndpointToPartitions(entry.getValue(), group, metadataImage)
+            EndpointToPartitionsManager.maybeEndpointToPartitions(entry.getValue(), topology, metadataImage)
                 .ifPresent(endpointToPartitionsList::add);
         }
         // Always build endpoint information for the updated member (whether new or existing)
         if (updatedMember != null) {
-            EndpointToPartitionsManager.maybeEndpointToPartitions(updatedMember, group, metadataImage)
+            EndpointToPartitionsManager.maybeEndpointToPartitions(updatedMember, topology, metadataImage)
                 .ifPresent(endpointToPartitionsList::add);
         }
         return endpointToPartitionsList;
@@ -3943,19 +3943,21 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and metadata image.
      *
-     * @param group                The StreamsGroup.
-     * @param groupEpoch           The group epoch.
-     * @param updatedMember        The updated member (optional).
-     * @param metadataImage        The metadata image.
-     * @param records              The list to accumulate any new records.
+     * @param group              The StreamsGroup.
+     * @param groupEpoch         The group epoch.
+     * @param updatedMember      The updated member (optional).
+     * @param topology           The streams topology.
+     * @param configuredTopology The configured topology.
+     * @param records            The list to accumulate any new records.
+     * @param assignmentConfigs  The assignment configurations.
      * @return The new target assignment for the updated member, or EMPTY if no member specified.
      */
     private TasksTuple updateStreamsTargetAssignment(
         StreamsGroup group,
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
+        StreamsTopology topology,
         ConfiguredTopology configuredTopology,
-        CoordinatorMetadataImage metadataImage,
         List<CoordinatorRecord> records,
         Map<String, String> assignmentConfigs
     ) {
@@ -3969,9 +3971,9 @@ public class GroupMetadataManager {
                     assignmentConfigs
                 )
                 .withMembers(group.members())
-                .withTopology(configuredTopology)
+                .withTopology(topology)
+                .withConfiguredTopology(configuredTopology)
                 .withStaticMembers(group.staticMembers())
-                .withMetadataImage(metadataImage)
                 .withTargetAssignment(group.targetAssignment());
 
             updatedMember.ifPresent(member ->
@@ -4030,13 +4032,18 @@ public class GroupMetadataManager {
                 return EMPTY_RESULT;
             }
 
+            if (group.topology().isEmpty()) {
+                log.warn("[GroupId {}] Cannot compute delayed target assignment: topology is not present", groupId);
+                return EMPTY_RESULT;
+            }
+
             List<CoordinatorRecord> records = new ArrayList<>();
             updateStreamsTargetAssignment(
                 group,
                 group.groupEpoch(),
                 Optional.empty(),
+                group.topology().get(),
                 group.configuredTopology().get(),
-                metadataImage,
                 records,
                 group.lastAssignmentConfigs()
             );

@@ -1082,14 +1082,9 @@ public class StreamsGroup implements Group {
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset))
             .setTopology(
-                configuredTopology.get(committedOffset)
-                    .filter(ConfiguredTopology::isReady)
-                    .map(ConfiguredTopology::asStreamsGroupDescribeTopology)
-                    .orElse(
-                        topology.get(committedOffset)
-                            .map(StreamsTopology::asStreamsGroupDescribeTopology)
-                            .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
-                    )
+                topology.get(committedOffset)
+                    .map(StreamsTopology::asStreamsGroupDescribeTopology)
+                    .orElseThrow(() -> new IllegalStateException("There should always be a topology for a streams group."))
             );
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
