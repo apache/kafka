@@ -46,7 +46,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopologyValidationResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -498,7 +498,7 @@ public class StreamsGroupTest {
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
-        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
+        streamsGroup.setTopologyValidationResult(new TopologyValidationResult(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
         streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(MemberState.STABLE, member1.state());
@@ -799,7 +799,7 @@ public class StreamsGroupTest {
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
         group.setValidatedTopologyEpoch(1);
-        group.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
+        group.setTopologyValidationResult(new TopologyValidationResult(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)
@@ -864,7 +864,7 @@ public class StreamsGroupTest {
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
 
         streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
-        streamsGroup.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
+        streamsGroup.setTopologyValidationResult(new TopologyValidationResult(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
         streamsGroup.setValidatedTopologyEpoch(1);
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
@@ -910,7 +910,7 @@ public class StreamsGroupTest {
 
         group.setGroupEpoch(1);
         group.setTopology(new StreamsTopology(1, Map.of()));
-        group.setConfiguredTopology(new ConfiguredTopology(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
+        group.setTopologyValidationResult(new TopologyValidationResult(1, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
         group.setValidatedTopologyEpoch(1);
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
@@ -1195,7 +1195,7 @@ public class StreamsGroupTest {
 
         group.setGroupEpoch(3);
         group.setTopology(new StreamsTopology(2, subtopologies));
-        group.setConfiguredTopology(new ConfiguredTopology(2, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
+        group.setTopologyValidationResult(new TopologyValidationResult(2, 0L, Map.of(), Optional.empty(), Optional.of(Map.of("subtopology1", 10)), Map.of()));
         group.setTargetAssignmentEpoch(3);
         snapshotRegistry.idempotentCreateSnapshot(1);
 

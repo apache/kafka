@@ -29,7 +29,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopologyValidationResult;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 
 import org.junit.jupiter.api.Test;
@@ -63,7 +63,7 @@ public class TargetAssignmentBuilderTest {
         String groupId = "test-group";
         int groupEpoch = 1;
         TaskAssignor assignor = mock(TaskAssignor.class);
-        ConfiguredTopology configuredTopology = new ConfiguredTopology(
+        TopologyValidationResult topologyValidationResult = new TopologyValidationResult(
             0,
             0L,
             Map.of(),
@@ -74,7 +74,7 @@ public class TargetAssignmentBuilderTest {
         Map<String, String> assignmentConfigs = new HashMap<>();
 
         TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor, assignmentConfigs)
-            .withConfiguredTopology(configuredTopology);
+            .withTopologyValidationResult(topologyValidationResult);
 
         TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
 
@@ -828,8 +828,8 @@ public class TargetAssignmentBuilderTest {
             // Prepare the expected topology metadata.
             TopologyMetadata topologyMetadata = new TopologyMetadata(topology, numTasksBySubtopology);
 
-            // Create the ConfiguredTopology
-            ConfiguredTopology configuredTopology = new ConfiguredTopology(
+            // Create the TopologyValidationResult
+            TopologyValidationResult topologyValidationResult = new TopologyValidationResult(
                 1,
                 0L,
                 Map.of(),
@@ -851,7 +851,7 @@ public class TargetAssignmentBuilderTest {
                 groupId, groupEpoch, assignor, Map.of())
                 .withMembers(members)
                 .withTopology(topology)
-                .withConfiguredTopology(configuredTopology)
+                .withTopologyValidationResult(topologyValidationResult)
                 .withStaticMembers(staticMembers)
                 .withTargetAssignment(targetAssignment);
 

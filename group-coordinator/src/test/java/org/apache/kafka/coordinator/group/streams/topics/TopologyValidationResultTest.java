@@ -29,12 +29,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ConfiguredTopologyTest {
+public class TopologyValidationResultTest {
 
     @Test
     public void testConstructorWithNullInternalTopicsToBeCreated() {
         assertThrows(NullPointerException.class,
-            () -> new ConfiguredTopology(
+            () -> new TopologyValidationResult(
                 0,
                 0L,
                 null,
@@ -48,7 +48,7 @@ public class ConfiguredTopologyTest {
     @Test
     public void testConstructorWithNullTopicConfigurationException() {
         assertThrows(NullPointerException.class,
-            () -> new ConfiguredTopology(
+            () -> new TopologyValidationResult(
                 0,
                 0L,
                 Map.of(),
@@ -62,7 +62,7 @@ public class ConfiguredTopologyTest {
     @Test
     public void testConstructorWithNullNumTasksBySubtopology() {
         assertThrows(NullPointerException.class,
-            () -> new ConfiguredTopology(
+            () -> new TopologyValidationResult(
                 0,
                 0L,
                 Map.of(),
@@ -76,7 +76,7 @@ public class ConfiguredTopologyTest {
     @Test
     public void testConstructorWithNullResolvedPartitionCounts() {
         assertThrows(NullPointerException.class,
-            () -> new ConfiguredTopology(
+            () -> new TopologyValidationResult(
                 0,
                 0L,
                 Map.of(),
@@ -90,7 +90,7 @@ public class ConfiguredTopologyTest {
     @Test
     public void testConstructorWithInvalidTopologyEpoch() {
         assertThrows(IllegalArgumentException.class,
-            () -> new ConfiguredTopology(
+            () -> new TopologyValidationResult(
                 -1,
                 0L,
                 Map.of(),
@@ -104,7 +104,7 @@ public class ConfiguredTopologyTest {
     @Test
     public void testNoExceptionButNoNumTasksBySubtopology() {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-            () -> new ConfiguredTopology(
+            () -> new TopologyValidationResult(
                 1,
                 0L,
                 Map.of(),
@@ -119,11 +119,11 @@ public class ConfiguredTopologyTest {
     @Test
     public void testIsReady() {
         Map<String, Integer> numTasksBySubtopology = Map.of("subtopology1", 10);
-        ConfiguredTopology readyResult = new ConfiguredTopology(
+        TopologyValidationResult readyResult = new TopologyValidationResult(
             1, 0L, new HashMap<>(), Optional.empty(), Optional.of(numTasksBySubtopology), Map.of());
         assertTrue(readyResult.isReady());
 
-        ConfiguredTopology notReadyResult = new ConfiguredTopology(
+        TopologyValidationResult notReadyResult = new TopologyValidationResult(
             1, 0L, new HashMap<>(), Optional.of(TopicConfigurationException.missingSourceTopics("missing")), Optional.empty(), Map.of());
         assertFalse(notReadyResult.isReady());
     }
@@ -133,7 +133,7 @@ public class ConfiguredTopologyTest {
         Map<String, Integer> numTasksBySubtopology = Map.of("subtopology1", 10, "subtopology2", 5);
         Map<String, CreatableTopic> internalTopics = new HashMap<>();
 
-        ConfiguredTopology result = new ConfiguredTopology(
+        TopologyValidationResult result = new TopologyValidationResult(
             1,
             42L,
             internalTopics,

@@ -47,15 +47,15 @@ public class InternalTopicManager {
 
     /**
      * Configures the internal topics for the given topology. Given a topology and the metadata image, this method determines the number of
-     * partitions for all internal topics and returns a {@link ConfiguredTopology} object.
+     * partitions for all internal topics and returns a {@link TopologyValidationResult} object.
      *
      * @param logContext    The log context.
      * @param metadataHash  The metadata hash of the group.
      * @param topology      The topology.
      * @param metadataImage The metadata image.
-     * @return The configured topology.
+     * @return The topology validation result.
      */
-    public static ConfiguredTopology configureTopics(LogContext logContext,
+    public static TopologyValidationResult configureTopics(LogContext logContext,
                                                      long metadataHash,
                                                      StreamsTopology topology,
                                                      CoordinatorMetadataImage metadataImage,
@@ -90,7 +90,7 @@ public class InternalTopicManager {
                 log.info("Valid topic configuration found in {}ms, but internal topics are missing for topology epoch {}: {}",
                     elapsedMs, topology.topologyEpoch(), summarizeTopics(internalTopicsToCreate.keySet()));
 
-                return new ConfiguredTopology(
+                return new TopologyValidationResult(
                     topology.topologyEpoch(),
                     metadataHash,
                     internalTopicsToCreate,
@@ -103,7 +103,7 @@ public class InternalTopicManager {
                     elapsedMs, topology.topologyEpoch());
 
                 Map<String, Integer> numTasksBySubtopology = computeAllMaxPartitions(metadataImage, topology);
-                return new ConfiguredTopology(
+                return new TopologyValidationResult(
                     topology.topologyEpoch(),
                     metadataHash,
                     internalTopicsToCreate,
@@ -117,7 +117,7 @@ public class InternalTopicManager {
             long elapsedMs = time.milliseconds() - startTimeMs;
             log.warn("Topic configuration failed for topology epoch {} in {}ms: {}",
                 topology.topologyEpoch(), elapsedMs, e.getMessage());
-            return new ConfiguredTopology(
+            return new TopologyValidationResult(
                 topology.topologyEpoch(),
                 metadataHash,
                 Map.of(),

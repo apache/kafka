@@ -34,7 +34,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopologyValidationResult;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
@@ -184,9 +184,9 @@ public class StreamsGroup implements Group {
     private final TimelineObject<Optional<StreamsTopology>> topology;
 
     /**
-     * The configured topology including resolved regular expressions.
+     * The topology validation result including resolved regular expressions.
      */
-    private final TimelineObject<Optional<ConfiguredTopology>> configuredTopology;
+    private final TimelineObject<Optional<TopologyValidationResult>> topologyValidationResult;
 
     /**
      * The last used assignment configurations for this streams group.
@@ -237,7 +237,7 @@ public class StreamsGroup implements Group {
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
-        this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.topologyValidationResult = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.lastAssignmentConfigs = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
@@ -275,8 +275,8 @@ public class StreamsGroup implements Group {
             .setGroupType(type().toString());
     }
 
-    public Optional<ConfiguredTopology> configuredTopology() {
-        return configuredTopology.get();
+    public Optional<TopologyValidationResult> topologyValidationResult() {
+        return topologyValidationResult.get();
     }
 
     public Optional<StreamsTopology> topology() {
@@ -288,8 +288,8 @@ public class StreamsGroup implements Group {
         maybeUpdateGroupState();
     }
 
-    public void setConfiguredTopology(ConfiguredTopology configuredTopology) {
-        this.configuredTopology.set(Optional.ofNullable(configuredTopology));
+    public void setTopologyValidationResult(TopologyValidationResult topologyValidationResult) {
+        this.topologyValidationResult.set(Optional.ofNullable(topologyValidationResult));
     }
 
     /**
@@ -1082,8 +1082,8 @@ public class StreamsGroup implements Group {
 
         // If the topology is validated, enrich the describe response with the resolved partition counts
         // for internal topics (repartition source topics and state changelog topics).
-        configuredTopology.get(committedOffset)
-            .filter(ConfiguredTopology::isReady)
+        topologyValidationResult.get(committedOffset)
+            .filter(TopologyValidationResult::isReady)
             .ifPresent(ct -> enrichWithResolvedPartitionCounts(describeTopology, ct.resolvedPartitionCounts()));
 
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()

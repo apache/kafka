@@ -39,14 +39,14 @@ import java.util.Optional;
  * @param resolvedPartitionCounts     The resolved partition counts for internal topics. Maps internal topic name to its partition count.
  *                                    This is used to enrich the describe response with the actual partition counts.
  */
-public record ConfiguredTopology(int topologyEpoch,
+public record TopologyValidationResult(int topologyEpoch,
                                  long metadataHash,
                                  Map<String, CreatableTopic> internalTopicsToBeCreated,
                                  Optional<TopicConfigurationException> topicConfigurationException,
                                  Optional<Map<String, Integer>> numTasksBySubtopology,
                                  Map<String, Integer> resolvedPartitionCounts) {
 
-    public ConfiguredTopology {
+    public TopologyValidationResult {
         if (topologyEpoch < 0) {
             throw new IllegalArgumentException("Topology epoch must be non-negative.");
         }

@@ -559,7 +559,7 @@ public class GroupMetadataManagerTestContext {
                 builder.build().forEach(context::replay);
                 StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
                 if (group.topology().isPresent()) {
-                    group.setConfiguredTopology(InternalTopicManager.configureTopics(
+                    group.setTopologyValidationResult(InternalTopicManager.configureTopics(
                         new LogContext(),
                         group.metadataHash(),
                         group.topology().get(),

@@ -1166,7 +1166,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    public void shouldUseConfiguredTopologyOverrideDslStoreSuppliersForAllOuterJoinOperationBetweenKStreamAndKStream() {
+    public void shouldUseTopologyValidationResultOverrideDslStoreSuppliersForAllOuterJoinOperationBetweenKStreamAndKStream() {
         final Properties topoOverrides = new Properties();
         topoOverrides.putAll(props);
         topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);

@@ -23,7 +23,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.streams.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopologyValidationResult;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -80,9 +80,9 @@ public class TargetAssignmentBuilder {
     private Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment = Map.of();
 
     /**
-     * The configured topology.
+     * The topology validation result.
      */
-    private ConfiguredTopology configuredTopology;
+    private TopologyValidationResult topologyValidationResult;
 
     /**
      * The streams topology.
@@ -170,15 +170,15 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the configured topology.
+     * Adds the topology validation result.
      *
-     * @param configuredTopology The configured topology.
+     * @param topologyValidationResult The topology validation result.
      * @return This object.
      */
-    public TargetAssignmentBuilder withConfiguredTopology(
-        ConfiguredTopology configuredTopology
+    public TargetAssignmentBuilder withTopologyValidationResult(
+        TopologyValidationResult topologyValidationResult
     ) {
-        this.configuredTopology = configuredTopology;
+        this.topologyValidationResult = topologyValidationResult;
         return this;
     }
 
@@ -264,8 +264,8 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
-        if (configuredTopology.isReady()) {
-            if (configuredTopology.numTasksBySubtopology().isEmpty()) {
+        if (topologyValidationResult.isReady()) {
+            if (topologyValidationResult.numTasksBySubtopology().isEmpty()) {
                 throw new IllegalStateException("numTasksBySubtopology must be present if topology is ready.");
             }
             if (topology == null) {
@@ -273,7 +273,7 @@ public class TargetAssignmentBuilder {
             }
             TopologyMetadata topologyMetadata = new TopologyMetadata(
                 topology,
-                configuredTopology.numTasksBySubtopology().get()
+                topologyValidationResult.numTasksBySubtopology().get()
             );
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(

@@ -159,7 +159,7 @@ import org.apache.kafka.coordinator.group.streams.TasksTupleWithEpochs;
 import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.TopologyValidationResult;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
@@ -1725,7 +1725,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates that the requested tasks exist in the configured topology and partitions are valid.
+     * Validates that the requested tasks exist in the topology validation result and partitions are valid.
      * If tasks is null, does nothing. If an invalid task is found, throws InvalidRequestException.
      *
      * @param numTasksBySubtopology The number of tasks per subtopology.
@@ -1974,10 +1974,10 @@ public class GroupMetadataManager {
         maybeSetTopologyStaleStatus(group, updatedMember, returnedStatus);
 
         // 3. Determine any internal topics if needed.
-        ConfiguredTopology updatedConfiguredTopology;
+        TopologyValidationResult updatedTopologyValidationResult;
         boolean reconfigureTopology = group.topology().isEmpty();
         long metadataHash = group.metadataHash();
-        if (reconfigureTopology || group.configuredTopology().isEmpty() || group.hasMetadataExpired(currentTimeMs)) {
+        if (reconfigureTopology || group.topologyValidationResult().isEmpty() || group.hasMetadataExpired(currentTimeMs)) {
 
             metadataHash = group.computeMetadataHash(
                 metadataImage,
@@ -1992,23 +1992,23 @@ public class GroupMetadataManager {
                 reconfigureTopology = true;
             }
 
-            if (reconfigureTopology || group.configuredTopology().isEmpty()) {
+            if (reconfigureTopology || group.topologyValidationResult().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology.topologyEpoch());
                 LogContext topicManagerLogContext = new LogContext(String.format("%s[GroupId %s][MemberId %s] ", logContext.logPrefix(), groupId, memberId));
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(topicManagerLogContext, metadataHash, updatedTopology, metadataImage, time);
-                group.setConfiguredTopology(updatedConfiguredTopology);
+                updatedTopologyValidationResult = InternalTopicManager.configureTopics(topicManagerLogContext, metadataHash, updatedTopology, metadataImage, time);
+                group.setTopologyValidationResult(updatedTopologyValidationResult);
             } else {
-                updatedConfiguredTopology = group.configuredTopology().get();
+                updatedTopologyValidationResult = group.topologyValidationResult().get();
             }
         } else {
-            updatedConfiguredTopology = group.configuredTopology().get();
+            updatedTopologyValidationResult = group.topologyValidationResult().get();
         }
 
         // 3b. If the topology is validated, persist the fact that it is validated.
         int validatedTopologyEpoch = -1;
-        if (updatedConfiguredTopology.isReady()) {
+        if (updatedTopologyValidationResult.isReady()) {
             validatedTopologyEpoch = updatedTopology.topologyEpoch();
-            Map<String, Integer> numTasksBySubtopology = updatedConfiguredTopology.numTasksBySubtopology().get();
+            Map<String, Integer> numTasksBySubtopology = updatedTopologyValidationResult.numTasksBySubtopology().get();
             throwIfRequestContainsInvalidTasks(numTasksBySubtopology, ownedActiveTasks);
             throwIfRequestContainsInvalidTasks(numTasksBySubtopology, ownedStandbyTasks);
             throwIfRequestContainsInvalidTasks(numTasksBySubtopology, ownedWarmupTasks);
@@ -2078,7 +2078,7 @@ public class GroupMetadataManager {
                     groupEpoch,
                     Optional.of(updatedMember),
                     updatedTopology,
-                    updatedConfiguredTopology,
+                    updatedTopologyValidationResult,
                     records,
                     currentAssignmentConfigs
                 );
@@ -2139,9 +2139,9 @@ public class GroupMetadataManager {
         }
 
         Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
-        if (updatedConfiguredTopology.topicConfigurationException().isPresent()) {
-            TopicConfigurationException exception = updatedConfiguredTopology.topicConfigurationException().get();
-            internalTopicsToBeCreated = updatedConfiguredTopology.internalTopicsToBeCreated();
+        if (updatedTopologyValidationResult.topicConfigurationException().isPresent()) {
+            TopicConfigurationException exception = updatedTopologyValidationResult.topicConfigurationException().get();
+            internalTopicsToBeCreated = updatedTopologyValidationResult.internalTopicsToBeCreated();
             returnedStatus.add(
                 new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(exception.status().code())
@@ -3947,7 +3947,7 @@ public class GroupMetadataManager {
      * @param groupEpoch         The group epoch.
      * @param updatedMember      The updated member (optional).
      * @param topology           The streams topology.
-     * @param configuredTopology The configured topology.
+     * @param topologyValidationResult The topology validation result.
      * @param records            The list to accumulate any new records.
      * @param assignmentConfigs  The assignment configurations.
      * @return The new target assignment for the updated member, or EMPTY if no member specified.
@@ -3957,7 +3957,7 @@ public class GroupMetadataManager {
         int groupEpoch,
         Optional<StreamsGroupMember> updatedMember,
         StreamsTopology topology,
-        ConfiguredTopology configuredTopology,
+        TopologyValidationResult topologyValidationResult,
         List<CoordinatorRecord> records,
         Map<String, String> assignmentConfigs
     ) {
@@ -3972,7 +3972,7 @@ public class GroupMetadataManager {
                 )
                 .withMembers(group.members())
                 .withTopology(topology)
-                .withConfiguredTopology(configuredTopology)
+                .withTopologyValidationResult(topologyValidationResult)
                 .withStaticMembers(group.staticMembers())
                 .withTargetAssignment(group.targetAssignment());
 
@@ -4027,8 +4027,8 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Group epoch should be always larger to assignment epoch");
             }
 
-            if (group.configuredTopology().isEmpty()) {
-                log.warn("[GroupId {}] Cannot compute delayed target assignment: configured topology is not present", groupId);
+            if (group.topologyValidationResult().isEmpty()) {
+                log.warn("[GroupId {}] Cannot compute delayed target assignment: topology validation result is not present", groupId);
                 return EMPTY_RESULT;
             }
 
@@ -4043,7 +4043,7 @@ public class GroupMetadataManager {
                 group.groupEpoch(),
                 Optional.empty(),
                 group.topology().get(),
-                group.configuredTopology().get(),
+                group.topologyValidationResult().get(),
                 records,
                 group.lastAssignmentConfigs()
             );

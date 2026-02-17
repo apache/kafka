@@ -60,7 +60,7 @@ class InternalTopicManagerTest {
         // SOURCE_TOPIC_2 is missing from topicMetadata
         StreamsTopology topology = makeTestTopology();
 
-        final ConfiguredTopology result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+        final TopologyValidationResult result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
 
         assertFalse(result.isReady());
         assertTrue(result.numTasksBySubtopology().isEmpty());
@@ -78,7 +78,7 @@ class InternalTopicManagerTest {
             .build();
         StreamsTopology topology = makeTestTopology();
 
-        ConfiguredTopology result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+        TopologyValidationResult result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
         final Map<String, CreatableTopic> internalTopicsToBeCreated = result.internalTopicsToBeCreated();
 
         // Not ready because internal topics are missing
@@ -118,7 +118,7 @@ class InternalTopicManagerTest {
             .build();
         StreamsTopology topology = makeTestTopology();
 
-        ConfiguredTopology result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
+        TopologyValidationResult result = InternalTopicManager.configureTopics(new LogContext(), 0L, topology, new KRaftCoordinatorMetadataImage(metadataImage), TIME);
 
         assertTrue(result.isReady());
         assertTrue(result.numTasksBySubtopology().isPresent());
