@@ -325,7 +325,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 /**
@@ -11802,29 +11801,16 @@ public class KafkaAdminClientTest {
                 AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "100")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            // Create a spy of MetadataResponse that throws OutOfMemoryError when topicMetadata() is accessed
-            // The AdminClient calls response.topicMetadata() in listTopics handleResponse(), which will trigger the OOM
-            MetadataResponseData data = new MetadataResponseData();
-            MetadataResponse realResponse = new MetadataResponse(data, ApiKeys.METADATA.latestVersion());
-            MetadataResponse spyResponse = spy(realResponse);
+            OutOfMemoryError oomError = new OutOfMemoryError("Simulated OOM during response handling");
+            MetadataResponse mockResponse = mock(MetadataResponse.class);
+            doThrow(oomError).when(mockResponse).topicMetadata();
 
-            // Configure the spy to throw OutOfMemoryError when topicMetadata() is called
-            // This simulates an OOM occurring during response processing
-            doThrow(new OutOfMemoryError("Simulated OOM during response handling"))
-                .when(spyResponse).topicMetadata();
-
-            // Prepare the mocked response that will throw OOM
-            env.kafkaClient().prepareResponse(spyResponse);
+            env.kafkaClient().prepareResponse(mockResponse);
 
             // Make the listTopics call - this will internally trigger a metadata request
             ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(10000));
 
-            // The OOM should propagate as-is, not be wrapped in TimeoutException
-            // We expect ExecutionException wrapping the OutOfMemoryError (this is standard Future behavior)
-            ExecutionException exception = assertThrows(ExecutionException.class, () -> result.names().get());
-            assertInstanceOf(OutOfMemoryError.class, exception.getCause(),
-                    "Expected OutOfMemoryError to be propagated, but got: " + exception.getCause());
-            assertEquals("Simulated OOM during response handling", exception.getCause().getMessage());
+            TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
         }
     }
 
@@ -11841,18 +11827,11 @@ public class KafkaAdminClientTest {
                 AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            // Create a spy that throws OOM when accessed
-            MetadataResponseData data = new MetadataResponseData();
-            MetadataResponse realResponse = new MetadataResponse(data, ApiKeys.METADATA.latestVersion());
-            MetadataResponse spyResponse = spy(realResponse);
+            OutOfMemoryError oomError = new OutOfMemoryError("Simulated OOM during response handling with timeout");
+            MetadataResponse mockResponse = mock(MetadataResponse.class);
+            doThrow(oomError).when(mockResponse).topicMetadata();
 
-            // Configure spy to throw OOM when topicMetadata() is accessed
-            // This is the actual method called by AdminClient during response processing
-            doThrow(new OutOfMemoryError("Simulated OOM during response handling with timeout"))
-                .when(spyResponse).topicMetadata();
-
-            // Prepare the response
-            env.kafkaClient().prepareResponse(spyResponse);
+            env.kafkaClient().prepareResponse(mockResponse);
 
             // Make the call with a short timeout
             ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
@@ -11861,11 +11840,7 @@ public class KafkaAdminClientTest {
             // the OOM error is still propagated instead of being masked by TimeoutException
             time.sleep(1500);
 
-            // Even with timeout expired, OOM should still propagate as-is, not wrapped in TimeoutException
-            ExecutionException exception = assertThrows(ExecutionException.class, () -> result.names().get());
-            assertInstanceOf(OutOfMemoryError.class, exception.getCause(),
-                    "Expected OutOfMemoryError to be propagated even on timeout, but got: " + exception.getCause());
-            assertEquals("Simulated OOM during response handling with timeout", exception.getCause().getMessage());
+            TestUtils.assertFutureThrows(OutOfMemoryError.class, result.names());
         }
     }
 }
