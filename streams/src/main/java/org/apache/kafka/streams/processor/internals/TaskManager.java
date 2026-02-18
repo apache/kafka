@@ -1528,8 +1528,8 @@ public class TaskManager {
 
     // Returns the set of active tasks that must be closed dirty
     private Collection<StreamTask> tryCloseCleanActiveTasks(final Collection<StreamTask> activeTasksToClose,
-                                                      final boolean clean,
-                                                      final AtomicReference<RuntimeException> firstException) {
+                                                            final boolean clean,
+                                                            final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
             return activeTasksToClose;
         }
@@ -1621,8 +1621,8 @@ public class TaskManager {
 
     // Returns the set of standby tasks that must be closed dirty
     private Collection<StandbyTask> tryCloseCleanStandbyTasks(final Collection<StandbyTask> standbyTasksToClose,
-                                                       final boolean clean,
-                                                       final AtomicReference<RuntimeException> firstException) {
+                                                              final boolean clean,
+                                                              final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
             return standbyTasksToClose;
         }

@@ -132,7 +132,7 @@ class ActiveTaskCreator {
     }
 
     public Collection<StreamTask> createTasks(final Consumer<byte[], byte[]> consumer,
-                                        final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+                                              final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         final List<StreamTask> createdTasks = new ArrayList<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {

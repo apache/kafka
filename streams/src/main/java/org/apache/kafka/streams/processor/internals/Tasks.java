@@ -197,7 +197,14 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized void addActiveTask(final StreamTask task) {
         final TaskId taskId = task.id();
-        checkTaskDoesNotExist(taskId);
+
+        if (activeTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
+        }
+
+        if (standbyTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
+        }
 
         activeTasksPerId.put(taskId, task);
         pendingActiveTasksToCreate.remove(taskId);
@@ -209,15 +216,16 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized void addStandbyTask(final StandbyTask task) {
         final TaskId taskId = task.id();
-        checkTaskDoesNotExist(taskId);
+
+        if (standbyTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an standby task that we already own: " + taskId);
+        }
+
+        if (activeTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an standby task while we already own its active: " + taskId);
+        }
 
         standbyTasksPerId.put(taskId, task);
-    }
-
-    private void checkTaskDoesNotExist(final TaskId taskId) {
-        if (activeTasksPerId.containsKey(taskId) || standbyTasksPerId.containsKey(taskId)) {
-            throw new IllegalStateException("Attempted to create a task that we already own: " + taskId);
-        }
     }
 
     @Override
