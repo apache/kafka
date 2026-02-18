@@ -558,12 +558,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     "outbound buffer: {}", fetchRequest);
             }
 
-            // Success: no group-level error and no partition-level errors
-            if (error == null && !res.hasRetriablePartitionErrors()) {
-                handleSuccessfulOffsetFetch(result, res);
-                return;
-            }
-
             // Group-level error
             if (error != null) {
                 handleGroupLevelError(fetchRequest, result, error);
@@ -571,7 +565,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
 
             // Partition-level errors
-            handleRetriablePartitionErrors(fetchRequest, result, res);
+            if (res.hasRetriablePartitionErrors()) {
+                handleRetriablePartitionErrors(fetchRequest, result, res);
+                return;
+            }
+
+            handleSuccessfulOffsetFetch(result, res);
+
         });
     }
 
