@@ -116,8 +116,6 @@ public final class Stores {
         return new RocksDBKeyValueBytesStoreSupplier(name, true, false);
     }
 
-    }
-
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
      * <p>
