@@ -1309,4 +1309,132 @@ public class RemoteIndexCacheTest {
                 .filter(t -> t.isAlive() && t.getName().startsWith(REMOTE_LOG_INDEX_CACHE_CLEANER_THREAD))
                 .collect(Collectors.toSet());
     }
+
+    @Test
+    public void testCacheTtlCanBeDisabled() throws IOException {
+        // Test that TTL can be disabled by setting it to -1
+        long ttlMs = -1L;
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            RemoteIndexCache.Entry entry = ttlCache.getIndexEntry(rlsMetadata);
+            assertNotNull(entry);
+
+            fakeTicker.advance(TimeUnit.MINUTES.toNanos(15));
+            ttlCache.internalCache().cleanUp();
+
+            RemoteIndexCache.Entry cachedEntry = ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id());
+            assertNotNull(cachedEntry, "Entry should remain cached when TTL disabled");
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testCacheTtlEviction() throws IOException {
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            RemoteIndexCache.Entry entry = ttlCache.getIndexEntry(rlsMetadata);
+            assertNotNull(entry);
+
+            fakeTicker.advance(TimeUnit.MILLISECONDS.toNanos(ttlMs - 1000));
+            ttlCache.internalCache().cleanUp();
+            assertEquals(1, ttlCache.internalCache().estimatedSize());
+
+            fakeTicker.advance(TimeUnit.MILLISECONDS.toNanos(2000));
+            ttlCache.internalCache().cleanUp();
+            assertEquals(0, ttlCache.internalCache().estimatedSize());
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testCacheTtlRefreshOnAccess() throws IOException {
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            ttlCache.getIndexEntry(rlsMetadata);
+
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(8));
+            ttlCache.getIndexEntry(rlsMetadata);
+
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(8));
+            ttlCache.internalCache().cleanUp();
+
+            RemoteIndexCache.Entry cachedEntry = ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id());
+            assertNotNull(cachedEntry, "Entry should remain after access refreshes TTL");
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testCacheTtlWithMultipleEntries() throws IOException, RemoteStorageException {
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(1024 * 1024L, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+        try {
+            RemoteLogSegmentId remoteLogSegmentId2 = RemoteLogSegmentId.generateNew(idPartition);
+            RemoteLogSegmentMetadata rlsMetadata2 = new RemoteLogSegmentMetadata(remoteLogSegmentId2, baseOffset + 100, lastOffset + 100,
+                    time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
+
+            ttlCache.getIndexEntry(rlsMetadata);
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(5));
+
+            ttlCache.getIndexEntry(rlsMetadata2);
+            fakeTicker.advance(TimeUnit.SECONDS.toNanos(6));
+            ttlCache.internalCache().cleanUp();
+
+            assertNull(ttlCache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()));
+            assertNotNull(ttlCache.internalCache().getIfPresent(rlsMetadata2.remoteLogSegmentId().id()));
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    @Test
+    public void testSizeAndTimeBasedEviction() throws IOException, RemoteStorageException, InterruptedException {
+        long estimateEntryBytesSize = estimateOneEntryBytesSize();
+        long ttlMs = TimeUnit.SECONDS.toMillis(10);
+        FakeTicker fakeTicker = new FakeTicker();
+        RemoteIndexCache ttlCache = new RemoteIndexCache(2 * estimateEntryBytesSize, ttlMs, false, rsm, logDir.toString(), fakeTicker);
+
+        try {
+            TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+            List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
+
+            ttlCache.getIndexEntry(metadataList.get(0));
+            ttlCache.getIndexEntry(metadataList.get(1));
+            TestUtils.waitForCondition(() -> ttlCache.internalCache().estimatedSize() == 2,
+                    "Cache size should be 2 after adding 2 entries");
+
+            ttlCache.getIndexEntry(metadataList.get(2));
+            TestUtils.waitForCondition(() -> ttlCache.internalCache().estimatedSize() == 2,
+                    "Size-based eviction should keep cache at 2 entries");
+
+            fakeTicker.advance(TimeUnit.MILLISECONDS.toNanos(ttlMs + 1000));
+            ttlCache.internalCache().cleanUp();
+            assertEquals(0, ttlCache.internalCache().estimatedSize(),
+                    "Time-based eviction should remove all expired entries");
+        } finally {
+            Utils.closeQuietly(ttlCache, "RemoteIndexCache");
+        }
+    }
+
+    static class FakeTicker implements com.github.benmanes.caffeine.cache.Ticker {
+        private long nanos = 0;
+
+        public void advance(long nanoseconds) {
+            nanos += nanoseconds;
+        }
+
+        @Override
+        public long read() {
+            return nanos;
+        }
+    }
 }

@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.server;
 
-import kafka.server.ControllerInformation;
-import kafka.server.ControllerNodeProvider;
+
 import kafka.server.ControllerServer;
-import kafka.server.NodeToControllerChannelManagerImpl;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Node;
@@ -48,8 +46,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import scala.Option;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -125,7 +122,7 @@ class BrokerRegistrationRequestTest {
         }
 
         @Override
-        public void close() {
+        public void close() throws InterruptedException {
             channelManager.shutdown();
             metrics.close();
         }
@@ -213,7 +210,7 @@ class BrokerRegistrationRequestTest {
     }
 
     record TestControllerNodeProvider(ClusterInstance clusterInstance)
-            implements ControllerNodeProvider {
+            implements Supplier<ControllerInformation> {
 
         public Optional<Node> node() {
             return Optional.of(new Node(
@@ -236,9 +233,9 @@ class BrokerRegistrationRequestTest {
         }
 
         @Override
-        public ControllerInformation getControllerInfo() {
-            return ControllerInformation.apply(
-                    Option.apply(node().orElse(null)),
+        public ControllerInformation get() {
+            return new ControllerInformation(
+                    node(),
                     listenerName(),
                     securityProtocol(),
                     saslMechanism()

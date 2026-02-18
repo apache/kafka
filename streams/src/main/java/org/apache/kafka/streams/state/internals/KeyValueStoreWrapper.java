@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -29,6 +30,8 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+
+import java.util.Map;
 
 /**
  * A wrapper class for non-windowed key-value stores used within the DSL. All such stores are
@@ -127,8 +130,8 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     }
 
     @Override
-    public void flush() {
-        store.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        store.commit(changelogOffsets);
     }
 
     @Override

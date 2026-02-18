@@ -39,11 +39,19 @@ public interface TasksRegistry {
 
     Set<Task> drainPendingActiveTasksToInit();
 
+    Set<Task> drainPendingStandbyTasksToInit();
+
     Set<Task> pendingTasksToInit();
 
     void addPendingTasksToInit(final Collection<Task> tasks);
 
     boolean hasPendingTasksToInit();
+
+    Set<Task> pendingTasksToClose();
+
+    void addPendingTasksToClose(final Collection<Task> tasks);
+
+    boolean hasPendingTasksToClose();
 
     void addActiveTasks(final Collection<Task> tasks);
 
@@ -55,31 +63,31 @@ public interface TasksRegistry {
 
     void removeTask(final Task taskToRemove);
 
-    void replaceActiveWithStandby(final StandbyTask standbyTask);
-
     void replaceStandbyWithActive(final StreamTask activeTask);
 
     boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions);
 
     void clear();
 
-    Task activeTasksForInputPartition(final TopicPartition partition);
+    Task activeInitializedTasksForInputPartition(final TopicPartition partition);
 
-    Task task(final TaskId taskId);
+    Task initializedTask(final TaskId taskId);
 
-    Collection<Task> tasks(final Collection<TaskId> taskIds);
+    Collection<Task> initializedTasks(final Collection<TaskId> taskIds);
 
-    Collection<TaskId> activeTaskIds();
+    Collection<TaskId> activeInitializedTaskIds();
 
-    Collection<Task> activeTasks();
+    Collection<Task> activeInitializedTasks();
 
-    Set<Task> allTasks();
+    Collection<Task> standbyInitializedTasks();
 
-    Set<Task> allNonFailedTasks();
+    Set<Task> allInitializedTasks();
 
-    Map<TaskId, Task> allTasksPerId();
+    Set<Task> allNonFailedInitializedTasks();
 
-    Set<TaskId> allTaskIds();
+    Map<TaskId, Task> allInitializedTasksPerId();
 
-    boolean contains(final TaskId taskId);
+    Set<TaskId> allInitializedTaskIds();
+
+    boolean containsInitialized(final TaskId taskId);
 }

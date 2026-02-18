@@ -57,7 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -151,9 +151,7 @@ public class TaskManager {
     }
 
     void init() {
-        if (stateUpdater != null) {
-            this.stateUpdater.start();
-        }
+        this.stateUpdater.start();
     }
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
@@ -198,18 +196,14 @@ public class TaskManager {
     void handleRebalanceComplete() {
         // we should pause consumer only within the listener since
         // before then the assignment has not been updated yet.
-        if (stateUpdater == null) {
-            mainConsumer.pause(mainConsumer.assignment());
-        } else {
-            // All tasks that are owned by the task manager are ready and do not need to be paused
-            final Set<TopicPartition> partitionsNotToPause = tasks.allNonFailedTasks()
-                .stream()
-                .flatMap(task -> task.inputPartitions().stream())
-                .collect(Collectors.toSet());
-            final Set<TopicPartition> partitionsToPause = new HashSet<>(mainConsumer.assignment());
-            partitionsToPause.removeAll(partitionsNotToPause);
-            mainConsumer.pause(partitionsToPause);
-        }
+        // All tasks that are owned by the task manager are ready and do not need to be paused
+        final Set<TopicPartition> partitionsNotToPause = tasks.allNonFailedInitializedTasks()
+            .stream()
+            .flatMap(task -> task.inputPartitions().stream())
+            .collect(Collectors.toSet());
+        final Set<TopicPartition> partitionsToPause = new HashSet<>(mainConsumer.assignment());
+        partitionsToPause.removeAll(partitionsNotToPause);
+        mainConsumer.pause(partitionsToPause);
 
         releaseLockedUnassignedTaskDirectories();
 
@@ -220,7 +214,7 @@ public class TaskManager {
      * @throws TaskMigratedException
      */
     boolean handleCorruption(final Set<TaskId> corruptedTasks) {
-        final Set<TaskId> activeTasks = new HashSet<>(tasks.activeTaskIds());
+        final Set<TaskId> activeTasks = new HashSet<>(tasks.activeInitializedTaskIds());
 
         // We need to stop all processing, since we need to commit non-corrupted tasks as well.
         maybeLockTasks(activeTasks);
@@ -229,7 +223,7 @@ public class TaskManager {
         final Set<Task> corruptedStandbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
 
         for (final TaskId taskId : corruptedTasks) {
-            final Task task = tasks.task(taskId);
+            final Task task = tasks.initializedTask(taskId);
             if (task.isActive()) {
                 corruptedActiveTasks.add(task);
             } else {
@@ -243,7 +237,7 @@ public class TaskManager {
 
         // We need to commit before closing the corrupted active tasks since this will force the ongoing txn to abort
         try {
-            final Collection<Task> tasksToCommit = tasks.allTasksPerId()
+            final Collection<Task> tasksToCommit = tasks.allInitializedTasksPerId()
                 .values()
                 .stream()
                 .filter(t -> t.state() == Task.State.RUNNING)
@@ -253,10 +247,10 @@ public class TaskManager {
         } catch (final TaskCorruptedException e) {
             log.info("Some additional tasks were found corrupted while trying to commit, these will be added to the " +
                          "tasks to clean and revive: {}", e.corruptedTasks());
-            corruptedActiveTasks.addAll(tasks.tasks(e.corruptedTasks()));
+            corruptedActiveTasks.addAll(tasks.initializedTasks(e.corruptedTasks()));
         } catch (final TimeoutException e) {
             log.info("Hit TimeoutException when committing all non-corrupted tasks, these will be closed and revived");
-            final Collection<Task> uncorruptedTasks = new HashSet<>(tasks.activeTasks());
+            final Collection<Task> uncorruptedTasks = new HashSet<>(tasks.activeInitializedTasks());
             uncorruptedTasks.removeAll(corruptedActiveTasks);
             // Those tasks which just timed out can just be closed dirty without marking changelogs as corrupted
             closeDirtyAndRevive(uncorruptedTasks, false);
@@ -272,14 +266,6 @@ public class TaskManager {
     private void closeDirtyAndRevive(final Collection<Task> taskWithChangelogs, final boolean markAsCorrupted) {
         for (final Task task : taskWithChangelogs) {
             if (task.state() != State.CLOSED) {
-                final Collection<TopicPartition> corruptedPartitions = task.changelogPartitions();
-
-                // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-                // TODO: this step should be removed as we complete migrating to state updater
-                if (markAsCorrupted && stateUpdater == null) {
-                    task.markChangelogAsCorrupted(corruptedPartitions);
-                }
-
                 try {
                     // we do not need to take the returned offsets since we are not going to commit anyways;
                     // this call is only used for active tasks to flush the cache before suspending and
@@ -324,20 +310,15 @@ public class TaskManager {
 
                 task.addPartitionsForOffsetReset(assignedToPauseAndReset);
             }
-            if (stateUpdater != null) {
-                tasks.removeTask(task);
-            }
+
+            tasks.removeTask(task);
             task.revive();
-            if (stateUpdater != null) {
-                tasks.addPendingTasksToInit(Collections.singleton(task));
-            }
+            tasks.addPendingTasksToInit(Collections.singleton(task));
         }
     }
 
     private Map<Task, Set<TopicPartition>> assignStartupTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign,
-                                                              final String threadLogPrefix,
-                                                              final TopologyMetadata topologyMetadata,
-                                                              final ChangelogRegister changelogReader) {
+                                                              final String threadLogPrefix) {
         if (stateDirectory.hasStartupTasks()) {
             final Map<Task, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
@@ -346,7 +327,7 @@ public class TaskManager {
                 if (task != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
-                    task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);
+                    task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), inputPartitions);
                     updateInputPartitionsOfStandbyTaskIfTheyChanged(task, inputPartitions);
 
                     assignedTasks.put(task, inputPartitions);
@@ -385,7 +366,7 @@ public class TaskManager {
         final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
 
         final Set<TaskId> tasksToLock =
-            tasks.allTaskIds().stream()
+            tasks.allInitializedTaskIds().stream()
                 .filter(x -> activeTasksToCreate.containsKey(x) || standbyTasksToCreate.containsKey(x))
                 .collect(Collectors.toSet());
 
@@ -401,18 +382,14 @@ public class TaskManager {
         // 2. for tasks that have changed active/standby status, just recycle and skip re-creating them
         // 3. otherwise, close them since they are no longer owned
         final Map<TaskId, RuntimeException> failedTasks = new LinkedHashMap<>();
-        if (stateUpdater == null) {
-            handleTasksWithoutStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
-        } else {
-            handleTasksWithStateUpdater(
-                activeTasksToCreate,
-                standbyTasksToCreate,
-                tasksToRecycle,
-                tasksToCloseClean,
-                failedTasks
-            );
-            failedTasks.putAll(collectExceptionsAndFailedTasksFromStateUpdater());
-        }
+        handleTasks(
+            activeTasksToCreate,
+            standbyTasksToCreate,
+            tasksToRecycle,
+            tasksToCloseClean,
+            failedTasks
+        );
+        failedTasks.putAll(collectExceptionsAndFailedTasksFromStateUpdater());
 
         final Map<TaskId, RuntimeException> taskCloseExceptions = closeAndRecycleTasks(tasksToRecycle, tasksToCloseClean);
 
@@ -475,53 +452,8 @@ public class TaskManager {
         final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
         final Collection<Task> newStandbyTasks = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
-        if (stateUpdater == null) {
-            tasks.addActiveTasks(newActiveTasks);
-            tasks.addStandbyTasks(newStandbyTasks);
-        } else {
-            tasks.addPendingTasksToInit(newActiveTasks);
-            tasks.addPendingTasksToInit(newStandbyTasks);
-        }
-    }
-
-    private void handleTasksWithoutStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                                final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                                final Map<Task, Set<TopicPartition>> tasksToRecycle,
-                                                final Set<Task> tasksToCloseClean) {
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-
-        // recycle the startup standbys to active
-        tasks.addStandbyTasks(startupStandbyTasksToRecycle.keySet());
-
-        // use startup Standbys as real Standby tasks
-        tasks.addStandbyTasks(startupStandbyTasksToUse.keySet());
-
-        for (final Task task : tasks.allTasks()) {
-            final TaskId taskId = task.id();
-            if (activeTasksToCreate.containsKey(taskId)) {
-                if (task.isActive()) {
-                    final Set<TopicPartition> topicPartitions = activeTasksToCreate.get(taskId);
-                    if (tasks.updateActiveTaskInputPartitions(task, topicPartitions)) {
-                        task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                    }
-                    task.resume();
-                } else {
-                    tasksToRecycle.put(task, activeTasksToCreate.get(taskId));
-                }
-                activeTasksToCreate.remove(taskId);
-            } else if (standbyTasksToCreate.containsKey(taskId)) {
-                if (!task.isActive()) {
-                    updateInputPartitionsOfStandbyTaskIfTheyChanged(task, standbyTasksToCreate.get(taskId));
-                    task.resume();
-                } else {
-                    tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
-                }
-                standbyTasksToCreate.remove(taskId);
-            } else {
-                tasksToCloseClean.add(task);
-            }
-        }
+        tasks.addPendingTasksToInit(newActiveTasks);
+        tasks.addPendingTasksToInit(newStandbyTasks);
     }
 
     private void updateInputPartitionsOfStandbyTaskIfTheyChanged(final Task task,
@@ -545,11 +477,11 @@ public class TaskManager {
         }
     }
 
-    private void handleTasksWithStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                             final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                             final Map<Task, Set<TopicPartition>> tasksToRecycle,
-                                             final Set<Task> tasksToCloseClean,
-                                             final Map<TaskId, RuntimeException> failedTasks) {
+    private void handleTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                             final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                             final Map<Task, Set<TopicPartition>> tasksToRecycle,
+                             final Set<Task> tasksToCloseClean,
+                             final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
         handleStartupTaskReuse(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
@@ -572,8 +504,8 @@ public class TaskManager {
     private void handleStartupTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                         final Map<TaskId, RuntimeException> failedTasks) {
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix);
+        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix);
 
         // recycle the startup standbys to active, and remove them from the set of actives that need to be created
         if (!startupStandbyTasksToRecycle.isEmpty()) {
@@ -601,7 +533,7 @@ public class TaskManager {
                                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                                 final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                                 final Set<Task> tasksToCloseClean) {
-        for (final Task task : tasks.allNonFailedTasks()) {
+        for (final Task task : tasks.allNonFailedInitializedTasks()) {
             if (!task.isActive()) {
                 throw new IllegalStateException("Standby tasks should only be managed by the state updater, " +
                     "but standby task " + task.id() + " is managed by the stream thread");
@@ -801,8 +733,8 @@ public class TaskManager {
         while (iter.hasNext()) {
             final Map.Entry<TaskId, Set<TopicPartition>> entry = iter.next();
             final TaskId taskId = entry.getKey();
-            final boolean taskIsOwned = tasks.allTaskIds().contains(taskId)
-                || (stateUpdater != null && stateUpdater.tasks().stream().anyMatch(task -> task.id() == taskId));
+            final boolean taskIsOwned = tasks.allInitializedTaskIds().contains(taskId)
+                || (stateUpdater.tasks().stream().anyMatch(task -> task.id().equals(taskId)));
             if (taskId.topologyName() != null && !taskIsOwned && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
                 log.info("Cannot create the assigned task {} since it's topology name cannot be recognized, will put it " +
                         "aside as pending for now and create later when topology metadata gets refreshed", taskId);
@@ -880,12 +812,8 @@ public class TaskManager {
             try {
                 if (oldTask.isActive()) {
                     final StandbyTask standbyTask = convertActiveToStandby((StreamTask) oldTask, inputPartitions);
-                    if (stateUpdater != null) {
-                        tasks.removeTask(oldTask);
-                        tasks.addPendingTasksToInit(Collections.singleton(standbyTask));
-                    } else {
-                        tasks.replaceActiveWithStandby(standbyTask);
-                    }
+                    tasks.removeTask(oldTask);
+                    tasks.addPendingTasksToInit(Collections.singleton(standbyTask));
                 } else {
                     final StreamTask activeTask = convertStandbyToActive((StandbyTask) oldTask, inputPartitions);
                     tasks.replaceStandbyWithActive(activeTask);
@@ -913,77 +841,6 @@ public class TaskManager {
 
     private StreamTask convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
         return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
-    }
-
-    /**
-     * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
-     *
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     * @return {@code true} if all tasks are fully restored
-     */
-    boolean tryToCompleteRestoration(final long now,
-                                     final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-        boolean allRunning = true;
-
-        // transit to restore active is idempotent so we can call it multiple times
-        changelogReader.enforceRestoreActive();
-
-        final List<Task> activeTasks = new LinkedList<>();
-        for (final Task task : tasks.allTasks()) {
-            try {
-                task.initializeIfNeeded();
-                task.clearTaskTimeout();
-            } catch (final LockException lockException) {
-                // it is possible that if there are multiple threads within the instance that one thread
-                // trying to grab the task from the other, while the other has not released the lock since
-                // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                log.debug("Could not initialize task {} since: {}; will retry", task.id(), lockException.getMessage());
-                allRunning = false;
-            } catch (final TimeoutException timeoutException) {
-                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                allRunning = false;
-            }
-
-            if (task.isActive()) {
-                activeTasks.add(task);
-            }
-        }
-
-        if (allRunning && !activeTasks.isEmpty()) {
-
-            final Set<TopicPartition> restored = changelogReader.completedChangelogs();
-
-            for (final Task task : activeTasks) {
-                if (restored.containsAll(task.changelogPartitions())) {
-                    try {
-                        task.completeRestoration(offsetResetter);
-                        task.clearTaskTimeout();
-                    } catch (final TimeoutException timeoutException) {
-                        task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                        log.debug(
-                            String.format(
-                                "Could not complete restoration for %s due to the following exception; will retry",
-                                task.id()),
-                            timeoutException
-                        );
-
-                        allRunning = false;
-                    }
-                } else {
-                    // we found a restoring task that isn't done restoring, which is evidence that
-                    // not all tasks are running
-                    allRunning = false;
-                }
-            }
-        }
-        if (allRunning) {
-            // we can call resume multiple times since it is idempotent.
-            mainConsumer.resume(mainConsumer.assignment());
-            changelogReader.transitToUpdateStandby();
-        }
-
-        return allRunning;
     }
 
     public boolean checkStateUpdater(final long now,
@@ -1046,9 +903,12 @@ public class TaskManager {
         }
     }
 
+    /**
+     * @throws StreamsException if fetching committed offsets timed out often enough to exceed task timeout
+     */
     private void transitRestoredTaskToRunning(final Task task,
                                               final long now,
-                                              final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+                                              final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) throws StreamsException {
         try {
             task.completeRestoration(offsetResetter);
             tasks.addTask(task);
@@ -1134,8 +994,22 @@ public class TaskManager {
     private void handleRestoredTasksFromStateUpdater(final long now,
                                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         final Duration timeout = Duration.ZERO;
-        for (final Task task : stateUpdater.drainRestoredActiveTasks(timeout)) {
-            transitRestoredTaskToRunning(task, now, offsetResetter);
+        // Create a mutable copy to support iterator.remove()
+        final Set<StreamTask> restoredTasks = new LinkedHashSet<>(stateUpdater.drainRestoredActiveTasks(timeout));
+        final Iterator<StreamTask> iterator = restoredTasks.iterator();
+
+        try {
+            while (iterator.hasNext()) {
+                final Task task = iterator.next();
+                transitRestoredTaskToRunning(task, now, offsetResetter);
+                iterator.remove(); // Remove successfully transitioned tasks
+            }
+        } finally {
+            // Add back any tasks that we drained but didn't successfully transition
+            // from the state updater, so that they are closed during shutdown.
+            for (final Task task : restoredTasks) {
+                stateUpdater.add(task);
+            }
         }
     }
 
@@ -1205,7 +1079,7 @@ public class TaskManager {
                      e.corruptedTasks());
 
             // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
-            dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
+            dirtyTasks.addAll(tasks.initializedTasks(e.corruptedTasks()));
             closeDirtyAndRevive(dirtyTasks, true);
         } catch (final TimeoutException e) {
             log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
@@ -1265,24 +1139,22 @@ public class TaskManager {
     }
 
     private void revokeTasksInStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
-        if (stateUpdater != null) {
-            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
-            final Map<TaskId, RuntimeException> failedTasksFromStateUpdater = new HashMap<>();
-            for (final Task restoringTask : stateUpdater.tasks()) {
-                if (restoringTask.isActive()) {
-                    if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
-                        futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
-                        remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
-                    }
+        final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
+        final Map<TaskId, RuntimeException> failedTasksFromStateUpdater = new HashMap<>();
+        for (final Task restoringTask : stateUpdater.tasks()) {
+            if (restoringTask.isActive()) {
+                if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
+                    futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
+                    remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
                 }
             }
-            getNonFailedTasks(futures, failedTasksFromStateUpdater).forEach(task -> {
-                task.suspend();
-                tasks.addTask(task);
-            });
-
-            maybeThrowTaskExceptions(failedTasksFromStateUpdater);
         }
+        getNonFailedTasks(futures, failedTasksFromStateUpdater).forEach(task -> {
+            task.suspend();
+            tasks.addTask(task);
+        });
+
+        maybeThrowTaskExceptions(failedTasksFromStateUpdater);
     }
 
     private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
@@ -1321,8 +1193,8 @@ public class TaskManager {
     }
 
     private void closeRunningTasksDirty() {
-        final Set<Task> allTask = tasks.allTasks();
-        final Set<TaskId> allTaskIds = tasks.allTaskIds();
+        final Set<Task> allTask = tasks.allInitializedTasks();
+        final Set<TaskId> allTaskIds = tasks.allInitializedTaskIds();
         maybeLockTasks(allTaskIds);
         for (final Task task : allTask) {
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
@@ -1335,31 +1207,27 @@ public class TaskManager {
     }
 
     private void removeLostActiveTasksFromStateUpdaterAndPendingTasksToInit() {
-        if (stateUpdater != null) {
-            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
-            final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
-            tasksToCloseClean.addAll(tasks.drainPendingActiveTasksToInit());
-            final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
-            for (final Task restoringTask : stateUpdater.tasks()) {
-                if (restoringTask.isActive()) {
-                    futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
-                }
+        final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
+        final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
+        tasksToCloseClean.addAll(tasks.drainPendingActiveTasksToInit());
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
+        for (final Task restoringTask : stateUpdater.tasks()) {
+            if (restoringTask.isActive()) {
+                futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
             }
+        }
 
-            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
-            for (final Task task : tasksToCloseClean) {
-                closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
-            }
-            for (final Task task : tasksToCloseDirty) {
-                closeTaskDirty(task, false);
-            }
+        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+        for (final Task task : tasksToCloseClean) {
+            closeTaskClean(task, tasksToCloseDirty, new HashMap<>());
+        }
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task, false);
         }
     }
 
     public void signalResume() {
-        if (stateUpdater != null) {
-            stateUpdater.signalResume();
-        }
+        stateUpdater.signalResume();
         if (schedulingTaskManager != null) {
             schedulingTaskManager.signalTaskExecutors();
         }
@@ -1545,11 +1413,21 @@ public class TaskManager {
 
         // TODO: change type to `StreamTask`
         final Set<Task> activeTasks = new TreeSet<>(Comparator.comparing(Task::id));
-        activeTasks.addAll(tasks.activeTasks());
+        activeTasks.addAll(tasks.activeInitializedTasks());
+        // TODO: change type to `StandbyTask`
+        final Set<Task> standbyTasks = new TreeSet<>(Comparator.comparing(Task::id));
+        standbyTasks.addAll(tasks.standbyInitializedTasks());
+
+        final Set<Task> pendingActiveTasks = tasks.drainPendingActiveTasksToInit();
+        activeTasks.addAll(pendingActiveTasks);
+        tasks.addPendingTasksToClose(pendingActiveTasks);
+        final Set<Task> pendingStandbyTasks = tasks.drainPendingStandbyTasksToInit();
+        standbyTasks.addAll(pendingStandbyTasks);
+        tasks.addPendingTasksToClose(pendingStandbyTasks);
 
         executeAndMaybeSwallow(
             clean,
-            () -> closeAndCleanUpTasks(activeTasks, standbyTaskIterable(), clean),
+            () -> closeAndCleanUpTasks(activeTasks, standbyTasks, clean),
             e -> firstException.compareAndSet(null, e),
             e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
         );
@@ -1581,40 +1459,38 @@ public class TaskManager {
     }
 
     private void shutdownStateUpdater() {
-        if (stateUpdater != null) {
-            // If there are failed tasks handling them first
-            for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
-                final Task failedTask = exceptionAndTask.task();
-                closeTaskDirty(failedTask, false);
-            }
+        // If there are failed tasks handling them first
+        for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
+            final Task failedTask = exceptionAndTask.task();
+            closeTaskDirty(failedTask, false);
+        }
 
-            final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
-            for (final Task task : stateUpdater.tasks()) {
-                final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
-                futures.put(task.id(), future);
-            }
-            final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
-            final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
-            addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
-            // at this point we removed all tasks, so the shutdown should not take a lot of time
-            stateUpdater.shutdown(Duration.ofMinutes(1L));
+        final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
+        for (final Task task : stateUpdater.tasks()) {
+            final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+            futures.put(task.id(), future);
+        }
+        final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
+        addToTasksToClose(futures, tasksToCloseClean, tasksToCloseDirty);
+        // at this point we removed all tasks, so the shutdown should not take a lot of time
+        stateUpdater.shutdown(Duration.ofMinutes(1L));
 
-            for (final Task task : tasksToCloseClean) {
-                tasks.addTask(task);
-            }
-            for (final Task task : tasksToCloseDirty) {
-                closeTaskDirty(task, false);
-            }
-            // Handling all failures that occurred during the remove process
-            for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
-                final Task failedTask = exceptionAndTask.task();
-                closeTaskDirty(failedTask, false);
-            }
+        for (final Task task : tasksToCloseClean) {
+            tasks.addTask(task);
+        }
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task, false);
+        }
+        // Handling all failures that occurred during the remove process
+        for (final StateUpdater.ExceptionAndTask exceptionAndTask : stateUpdater.drainExceptionsAndFailedTasks()) {
+            final Task failedTask = exceptionAndTask.task();
+            closeTaskDirty(failedTask, false);
+        }
 
-            // If there is anything left unhandled due to timeouts, handling now
-            for (final Task task : stateUpdater.tasks()) {
-                closeTaskDirty(task, false);
-            }
+        // If there is anything left unhandled due to timeouts, handling now
+        for (final Task task : stateUpdater.tasks()) {
+            closeTaskDirty(task, false);
         }
     }
 
@@ -1657,7 +1533,7 @@ public class TaskManager {
                                                       final boolean clean,
                                                       final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
-            return activeTaskIterable();
+            return activeTasksToClose;
         }
         final Comparator<Task> byId = Comparator.comparing(Task::id);
         final Set<Task> tasksToCommit = new TreeSet<>(byId);
@@ -1715,7 +1591,7 @@ public class TaskManager {
                 }
             }
 
-            for (final Task task : activeTaskIterable()) {
+            for (final Task task : activeTasksToClose) {
                 try {
                     task.postCommit(true);
                 } catch (final RuntimeException e) {
@@ -1750,7 +1626,7 @@ public class TaskManager {
                                                        final boolean clean,
                                                        final AtomicReference<RuntimeException> firstException) {
         if (!clean) {
-            return standbyTaskIterable();
+            return standbyTasksToClose;
         }
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
 
@@ -1793,43 +1669,33 @@ public class TaskManager {
     Map<TaskId, Task> allTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
-        if (stateUpdater != null) {
-            final Map<TaskId, Task> ret = stateUpdater.tasks().stream().collect(Collectors.toMap(Task::id, x -> x));
-            ret.putAll(tasks.allTasksPerId());
-            ret.putAll(tasks.pendingTasksToInit().stream().collect(Collectors.toMap(Task::id, x -> x)));
-            return ret;
-        } else {
-            return tasks.allTasksPerId();
-        }
+        final Map<TaskId, Task> ret = stateUpdater.tasks().stream().collect(Collectors.toMap(Task::id, x -> x));
+        ret.putAll(tasks.allInitializedTasksPerId());
+        ret.putAll(tasks.pendingTasksToInit().stream().collect(Collectors.toMap(Task::id, x -> x)));
+        return ret;
     }
 
     /**
-     * Returns tasks owned by the stream thread. With state updater disabled, these are all tasks. With
-     * state updater enabled, this does not return any tasks currently owned by the state updater.
+     * Returns tasks owned by the stream thread.
+     * This does not return any tasks currently owned by the state updater.
      *
-     * TODO: after we complete switching to state updater, we could rename this function as allRunningTasks
-     *       to be differentiated from allTasks including running and restoring tasks
      */
-    Map<TaskId, Task> allOwnedTasks() {
+    Map<TaskId, Task> allRunningTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
-        return tasks.allTasksPerId();
+        return tasks.allInitializedTasksPerId();
     }
 
     Set<Task> readOnlyAllTasks() {
         // not bothering with an unmodifiable map, since the tasks themselves are mutable, but
         // if any outside code modifies the map or the tasks, it would be a severe transgression.
-        if (stateUpdater != null) {
-            final HashSet<Task> ret = new HashSet<>(stateUpdater.tasks());
-            ret.addAll(tasks.allTasks());
-            return Collections.unmodifiableSet(ret);
-        } else {
-            return Collections.unmodifiableSet(tasks.allTasks());
-        }
+        final HashSet<Task> ret = new HashSet<>(stateUpdater.tasks());
+        ret.addAll(tasks.allInitializedTasks());
+        return Collections.unmodifiableSet(ret);
     }
 
     Map<TaskId, Task> notPausedTasks() {
-        return Collections.unmodifiableMap(tasks.allTasks()
+        return Collections.unmodifiableMap(tasks.allInitializedTasks()
             .stream()
             .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
             .collect(Collectors.toMap(Task::id, v -> v)));
@@ -1848,17 +1714,14 @@ public class TaskManager {
     }
 
     private Stream<Task> activeTaskStream() {
-        if (stateUpdater != null) {
-            return Stream.concat(
-                activeRunningTaskStream(),
-                stateUpdater.tasks().stream().filter(Task::isActive)
-            );
-        }
-        return activeRunningTaskStream();
+        return Stream.concat(
+            activeRunningTaskStream(),
+            stateUpdater.tasks().stream().filter(Task::isActive)
+        );
     }
 
     private Stream<Task> activeRunningTaskStream() {
-        return tasks.allTasks().stream().filter(Task::isActive);
+        return tasks.allInitializedTasks().stream().filter(Task::isActive);
     }
 
     Map<TaskId, Task> standbyTaskMap() {
@@ -1870,19 +1733,15 @@ public class TaskManager {
     }
 
     private Stream<Task> standbyTaskStream() {
-        final Stream<Task> standbyTasksInTaskRegistry = tasks.allTasks().stream().filter(t -> !t.isActive());
-        if (stateUpdater != null) {
-            return Stream.concat(
-                stateUpdater.standbyTasks().stream(),
-                standbyTasksInTaskRegistry
-            );
-        } else {
-            return standbyTasksInTaskRegistry;
-        }
+        final Stream<Task> standbyTasksInTaskRegistry = tasks.allInitializedTasks().stream().filter(t -> !t.isActive());
+        return Stream.concat(
+            stateUpdater.standbyTasks().stream(),
+            standbyTasksInTaskRegistry
+        );
     }
     // For testing only.
     int commitAll() {
-        return commit(tasks.allTasks());
+        return commit(tasks.allInitializedTasks());
     }
 
     /**
@@ -1890,7 +1749,7 @@ public class TaskManager {
      * the corresponding record queues have capacity (again).
      */
     public void resumePollingForPartitionsWithAvailableSpace() {
-        for (final Task t: tasks.activeTasks()) {
+        for (final Task t: tasks.activeInitializedTasks()) {
             t.resumePollingForPartitionsWithAvailableSpace();
         }
     }
@@ -1899,7 +1758,7 @@ public class TaskManager {
      * Fetches up-to-date lag information from the consumer.
      */
     public void updateLags() {
-        for (final Task t: tasks.activeTasks()) {
+        for (final Task t: tasks.activeInitializedTasks()) {
             t.updateLags();
         }
     }
@@ -1944,14 +1803,12 @@ public class TaskManager {
         final long nowMs
     ) {
         for (final TopicPartition partition : partitions) {
-            final Task task = getActiveTask(partition);
-            task.maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
-            stateUpdater.add(task);
+            getActiveTask(partition).maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
         }
     }
 
     private Task getActiveTask(final TopicPartition partition) {
-        final Task activeTask = tasks.activeTasksForInputPartition(partition);
+        final Task activeTask = tasks.activeInitializedTasksForInputPartition(partition);
 
         if (activeTask == null) {
             log.error("Unable to locate active task for received-record partition {}. Current tasks: {}",
@@ -2055,7 +1912,7 @@ public class TaskManager {
     }
 
     public void updateTaskEndMetadata(final TopicPartition topicPartition, final Long offset) {
-        for (final Task task : tasks.activeTasks()) {
+        for (final Task task : tasks.activeInitializedTasks()) {
             if (task instanceof StreamTask) {
                 if (task.inputPartitions().contains(topicPartition)) {
                     ((StreamTask) task).updateEndOffsets(topicPartition, offset);
@@ -2086,7 +1943,7 @@ public class TaskManager {
         try {
             final Set<Task> activeTasksToRemove = new TreeSet<>(Comparator.comparing(Task::id));
             final Set<Task> standbyTasksToRemove = new TreeSet<>(Comparator.comparing(Task::id));
-            for (final Task task : tasks.allTasks()) {
+            for (final Task task : tasks.allInitializedTasks()) {
                 if (!currentNamedTopologies.contains(task.id().topologyName())) {
                     if (task.isActive()) {
                         activeTasksToRemove.add(task);
@@ -2175,7 +2032,7 @@ public class TaskManager {
         stringBuilder.append("TaskManager\n");
         stringBuilder.append(indent).append("\tMetadataState:\n");
         stringBuilder.append(indent).append("\tTasks:\n");
-        for (final Task task : tasks.allTasks()) {
+        for (final Task task : tasks.allInitializedTasks()) {
             stringBuilder.append(indent)
                          .append("\t\t")
                          .append(task.id())
@@ -2244,15 +2101,6 @@ public class TaskManager {
                 throw e;
             },
             e -> log.debug("Ignoring error in unclean {}", name));
-    }
-
-    boolean needsInitializationOrRestoration() {
-        return activeTaskStream().anyMatch(Task::needsInitializationOrRestoration);
-    }
-
-    // for testing only
-    void addTask(final Task task) {
-        tasks.addTask(task);
     }
 
     private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {

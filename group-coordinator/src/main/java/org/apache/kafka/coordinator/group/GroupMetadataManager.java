@@ -77,7 +77,6 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
@@ -145,6 +144,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
+import org.apache.kafka.coordinator.group.modern.consumer.TopicRegexResolver;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.InitMapValue;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupStatePartitionMetadataInfo;
@@ -164,9 +164,7 @@ import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
-import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
-import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
@@ -177,9 +175,6 @@ import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
-
-import com.google.re2j.Pattern;
-import com.google.re2j.PatternSyntaxException;
 
 import org.slf4j.Logger;
 
@@ -204,7 +199,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
@@ -212,8 +206,6 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
-import static org.apache.kafka.common.resource.PatternType.LITERAL;
-import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.SHARE;
@@ -289,7 +281,7 @@ public class GroupMetadataManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
-        private CoordinatorTimer<Void, CoordinatorRecord> timer = null;
+        private CoordinatorTimer<CoordinatorRecord> timer = null;
         private CoordinatorExecutor<CoordinatorRecord> executor = null;
         private GroupCoordinatorConfig config = null;
         private GroupConfigManager groupConfigManager = null;
@@ -314,7 +306,7 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withTimer(CoordinatorTimer<Void, CoordinatorRecord> timer) {
+        Builder withTimer(CoordinatorTimer<CoordinatorRecord> timer) {
             this.timer = timer;
             return this;
         }
@@ -429,7 +421,7 @@ public class GroupMetadataManager {
     /**
      * The system timer.
      */
-    private final CoordinatorTimer<Void, CoordinatorRecord> timer;
+    private final CoordinatorTimer<CoordinatorRecord> timer;
 
     /**
      * The executor to executor asynchronous tasks.
@@ -514,15 +506,15 @@ public class GroupMetadataManager {
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     /**
-     * The authorizer to validate the regex subscription topics.
+     * The topic regex resolver to resolve the regex subscription topics.
      */
-    private final Optional<Plugin<Authorizer>> authorizerPlugin;
+    private final TopicRegexResolver topicRegexResolver;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
         Time time,
-        CoordinatorTimer<Void, CoordinatorRecord> timer,
+        CoordinatorTimer<CoordinatorRecord> timer,
         CoordinatorExecutor<CoordinatorRecord> executor,
         GroupCoordinatorMetricsShard metrics,
         CoordinatorMetadataImage metadataImage,
@@ -551,8 +543,8 @@ public class GroupMetadataManager {
         this.shareGroupStatePartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
-        this.authorizerPlugin = authorizerPlugin;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
+        this.topicRegexResolver = new TopicRegexResolver(() -> authorizerPlugin, this.time);
         this.topicHashCache = new HashMap<>();
     }
 
@@ -815,10 +807,10 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            return new ConsumerGroup(snapshotRegistry, groupId);
+            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
         } else if (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records)) {
             log.info("[GroupId {}] Converted the empty classic group to a consumer group.", groupId);
-            return new ConsumerGroup(snapshotRegistry, groupId);
+            return new ConsumerGroup(logContext, snapshotRegistry, groupId);
         } else {
             if (group.type() == CONSUMER) {
                 return (ConsumerGroup) group;
@@ -982,7 +974,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
+            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
@@ -992,7 +984,7 @@ public class GroupMetadataManager {
             // offsets if no group existed. Simple classic groups are not backed by any records
             // in the __consumer_offsets topic hence we can safely replace it here. Without this,
             // replaying consumer group records after offset commit records would not work.
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
+            ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else {
@@ -1297,8 +1289,8 @@ public class GroupMetadataManager {
                 metadataImage
             );
         } catch (SchemaException e) {
-            log.warn("Cannot downgrade the consumer group " + consumerGroup.groupId() + ": fail to parse " +
-                "the Consumer Protocol " + ConsumerProtocol.PROTOCOL_TYPE + ".", e);
+            log.warn("Cannot downgrade the consumer group {}: fail to parse the Consumer Protocol {}.",
+                consumerGroup.groupId(), ConsumerProtocol.PROTOCOL_TYPE, e);
 
             throw new GroupIdNotFoundException(String.format("Cannot downgrade the classic group %s: %s.",
                 consumerGroup.groupId(), e.getMessage()));
@@ -1371,22 +1363,21 @@ public class GroupMetadataManager {
         ConsumerGroup consumerGroup;
         try {
             consumerGroup = ConsumerGroup.fromClassicGroup(
+                logContext,
                 snapshotRegistry,
                 classicGroup,
                 topicHashCache,
                 metadataImage
             );
         } catch (SchemaException e) {
-            log.warn("Cannot upgrade classic group " + classicGroup.groupId() +
-                " to consumer group because the embedded consumer protocol is malformed: "
-                + e.getMessage() + ".", e);
+            log.warn("Cannot upgrade classic group {} to consumer group because the embedded consumer protocol is malformed: {}.",
+                classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because the embedded consumer protocol is malformed.", classicGroup.groupId())
             );
         } catch (UnsupportedVersionException e) {
-            log.warn("Cannot upgrade classic group " + classicGroup.groupId() +
-                " to consumer group: " + e.getMessage() + ".", e);
+            log.warn("Cannot upgrade classic group {} to consumer group: {}.", classicGroup.groupId(), e.getMessage(), e);
 
             throw new GroupIdNotFoundException(
                 String.format("Cannot upgrade classic group %s to consumer group because an unsupported custom assignor is in use. " +
@@ -1573,6 +1564,10 @@ public class GroupMetadataManager {
         int receivedMemberEpoch,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) {
+        // Epoch 0 is a special value indicating the member wants to (re)join the group.
+        // This is valid per KIP-848 fenced member recovery protocol.
+        if (receivedMemberEpoch == 0) return;
+
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The consumer group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
@@ -1601,6 +1596,9 @@ public class GroupMetadataManager {
         ShareGroupMember member,
         int receivedMemberEpoch
     ) {
+        // Epoch 0 is a special value indicating the member wants to (re)join the group.
+        if (receivedMemberEpoch == 0) return;
+
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The share group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
@@ -1707,6 +1705,9 @@ public class GroupMetadataManager {
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks
     ) {
+        // Epoch 0 is a special value indicating the member wants to (re)join the group.
+        if (receivedMemberEpoch == 0) return;
+
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The streams group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
@@ -1995,8 +1996,8 @@ public class GroupMetadataManager {
             }
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
-                log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology);
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(logContext, metadataHash, updatedTopology, metadataImage);
+                log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology.topologyEpoch());
+                updatedConfiguredTopology = InternalTopicManager.configureTopics(log, groupId, memberId, metadataHash, updatedTopology, metadataImage, time);
                 group.setConfiguredTopology(updatedConfiguredTopology);
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
@@ -2067,6 +2068,12 @@ public class GroupMetadataManager {
                 // During initial rebalance delay, return empty assignment to first joining members.
                 targetAssignmentEpoch = Math.max(1, group.assignmentEpoch());
                 targetAssignment = TasksTuple.EMPTY;
+
+                returnedStatus.add(
+                    new Status()
+                        .setStatusCode(StreamsGroupHeartbeatResponse.Status.ASSIGNMENT_DELAYED.code())
+                        .setStatusDetail("Assignment delayed due to the configured initial rebalance delay.")
+                );
             } else {
                 targetAssignment = updateStreamsTargetAssignment(
                     group,
@@ -2154,6 +2161,7 @@ public class GroupMetadataManager {
         ));
 
         response.setStatus(returnedStatus);
+
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
     }
 
@@ -2356,7 +2364,7 @@ public class GroupMetadataManager {
             updatedMember,
             records
         );
-        UpdateRegularExpressionsResult updateRegularExpressionsResult = maybeUpdateRegularExpressions(
+        UpdateRegularExpressionStatus updateRegularExpressionStatus = maybeUpdateRegularExpressions(
             context,
             group,
             member,
@@ -2366,7 +2374,7 @@ public class GroupMetadataManager {
 
         // The subscription has changed when either the subscribed topic names or subscribed topic
         // regex has changed.
-        boolean hasSubscriptionChanged = subscribedTopicNamesChanged || updateRegularExpressionsResult.regexUpdated();
+        boolean hasSubscriptionChanged = subscribedTopicNamesChanged || updateRegularExpressionStatus.regexUpdated();
         int groupEpoch = group.groupEpoch();
         SubscriptionType subscriptionType = group.subscriptionType();
 
@@ -2380,7 +2388,7 @@ public class GroupMetadataManager {
             // bumping the group epoch when the new subscribed topic regex has not been resolved
             // yet, since we will have to update the target assignment again later.
             subscribedTopicNamesChanged ||
-            updateRegularExpressionsResult == UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+            updateRegularExpressionStatus == UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED;
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -2558,7 +2566,7 @@ public class GroupMetadataManager {
 
         // Maybe create tombstone for the regex if the joining member replaces a static member
         // with regex subscription.
-        UpdateRegularExpressionsResult updateRegularExpressionsResult = maybeUpdateRegularExpressions(
+        UpdateRegularExpressionStatus updateRegularExpressionStatus = maybeUpdateRegularExpressions(
             context,
             group,
             member,
@@ -2566,7 +2574,7 @@ public class GroupMetadataManager {
             records
         );
 
-        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionsResult.regexUpdated();
+        boolean bumpGroupEpoch = hasMemberSubscriptionChanged || updateRegularExpressionStatus.regexUpdated();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
             // The subscription metadata is updated in two cases:
@@ -3242,7 +3250,7 @@ public class GroupMetadataManager {
         return value != null && !value.isEmpty();
     }
 
-    private enum UpdateRegularExpressionsResult {
+    private enum UpdateRegularExpressionStatus {
         NO_CHANGE,
         REGEX_UPDATED,
         REGEX_UPDATED_AND_RESOLVED;
@@ -3265,7 +3273,7 @@ public class GroupMetadataManager {
      * @param records       The records accumulator.
      * @return The result of the update.
      */
-    private UpdateRegularExpressionsResult maybeUpdateRegularExpressions(
+    private UpdateRegularExpressionStatus maybeUpdateRegularExpressions(
         AuthorizableRequestContext context,
         ConsumerGroup group,
         ConsumerGroupMember member,
@@ -3279,7 +3287,7 @@ public class GroupMetadataManager {
         String newSubscribedTopicRegex = updatedMember.subscribedTopicRegex();
 
         boolean requireRefresh = false;
-        UpdateRegularExpressionsResult updateRegularExpressionsResult = UpdateRegularExpressionsResult.NO_CHANGE;
+        UpdateRegularExpressionStatus updateRegularExpressionStatus = UpdateRegularExpressionStatus.NO_CHANGE;
 
         // Check whether the member has changed its subscribed regex.
         boolean subscribedTopicRegexChanged = !Objects.equals(oldSubscribedTopicRegex, newSubscribedTopicRegex);
@@ -3287,7 +3295,7 @@ public class GroupMetadataManager {
             log.debug("[GroupId {}] Member {} updated its subscribed regex to: {}.",
                 groupId, memberId, newSubscribedTopicRegex);
 
-            updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED;
+            updateRegularExpressionStatus = UpdateRegularExpressionStatus.REGEX_UPDATED;
 
             if (isNotEmpty(oldSubscribedTopicRegex) && group.numSubscribedMembers(oldSubscribedTopicRegex) == 1) {
                 // If the member was the last one subscribed to the regex, we delete the
@@ -3308,11 +3316,11 @@ public class GroupMetadataManager {
                     // If the new regex is already resolved, we trigger a rebalance
                     // by bumping the group epoch.
                     if (group.resolvedRegularExpression(newSubscribedTopicRegex).isPresent()) {
-                        updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+                        updateRegularExpressionStatus = UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED;
                     }
                 }
             } else if (isNotEmpty(oldSubscribedTopicRegex)) {
-                updateRegularExpressionsResult = UpdateRegularExpressionsResult.REGEX_UPDATED_AND_RESOLVED;
+                updateRegularExpressionStatus = UpdateRegularExpressionStatus.REGEX_UPDATED_AND_RESOLVED;
             }
         }
 
@@ -3327,20 +3335,20 @@ public class GroupMetadataManager {
         // 0. The group is subscribed to regular expressions. We also take the one
         //    that the current may have just introduced.
         if (!requireRefresh && group.subscribedRegularExpressions().isEmpty()) {
-            return updateRegularExpressionsResult;
+            return updateRegularExpressionStatus;
         }
 
         // 1. There is no ongoing refresh for the group.
         String key = group.groupId() + "-regex";
         if (executor.isScheduled(key)) {
-            return updateRegularExpressionsResult;
+            return updateRegularExpressionStatus;
         }
 
         // 2. The last refresh is older than 10s. If the group does not have any regular
         //    expressions but the current member just brought a new one, we should continue.
         long lastRefreshTimeMs = group.lastResolvedRegularExpressionRefreshTimeMs();
         if (currentTimeMs <= lastRefreshTimeMs + REGEX_BATCH_REFRESH_MIN_INTERVAL_MS) {
-            return updateRegularExpressionsResult;
+            return updateRegularExpressionStatus;
         }
 
         // 3.1 The group has unresolved regular expressions.
@@ -3364,124 +3372,12 @@ public class GroupMetadataManager {
             Set<String> regexes = Collections.unmodifiableSet(subscribedRegularExpressions.keySet());
             executor.schedule(
                 key,
-                () -> refreshRegularExpressions(context, groupId, log, time, metadataImage, authorizerPlugin, regexes),
+                () -> topicRegexResolver.resolveRegularExpressions(context, groupId, log, metadataImage, regexes),
                 (result, exception) -> handleRegularExpressionsResult(groupId, memberId, result, exception)
             );
         }
 
-        return updateRegularExpressionsResult;
-    }
-
-    /**
-     * Resolves the provided regular expressions. Note that this static method is executed
-     * as an asynchronous task in the executor. Hence, it should not access any state from
-     * the manager.
-     *
-     * @param context       The request context.
-     * @param groupId       The group id.
-     * @param log           The log instance.
-     * @param time          The time instance.
-     * @param image         The metadata image to use for listing the topics.
-     * @param authorizerPlugin    The authorizer.
-     * @param regexes       The list of regular expressions that must be resolved.
-     * @return The list of resolved regular expressions.
-     *
-     * public for benchmarks.
-     */
-    public static Map<String, ResolvedRegularExpression> refreshRegularExpressions(
-        AuthorizableRequestContext context,
-        String groupId,
-        Logger log,
-        Time time,
-        CoordinatorMetadataImage image,
-        Optional<Plugin<Authorizer>> authorizerPlugin,
-        Set<String> regexes
-    ) {
-        long startTimeMs = time.milliseconds();
-        log.debug("[GroupId {}] Refreshing regular expressions: {}", groupId, regexes);
-
-        Map<String, Set<String>> resolvedRegexes = new HashMap<>(regexes.size());
-        List<Pattern> compiledRegexes = new ArrayList<>(regexes.size());
-        for (String regex : regexes) {
-            resolvedRegexes.put(regex, new HashSet<>());
-            try {
-                compiledRegexes.add(Pattern.compile(regex));
-            } catch (PatternSyntaxException ex) {
-                // This should not happen because the regular expressions are validated
-                // when received from the members. If for some reason, it would
-                // happen, we log it and ignore it.
-                log.error("[GroupId {}] Couldn't parse regular expression '{}' due to `{}`. Ignoring it.",
-                    groupId, regex, ex.getDescription());
-            }
-        }
-
-        for (String topicName : image.topicNames()) {
-            for (Pattern regex : compiledRegexes) {
-                if (regex.matcher(topicName).matches()) {
-                    resolvedRegexes.get(regex.pattern()).add(topicName);
-                }
-            }
-        }
-
-        filterTopicDescribeAuthorizedTopics(
-            context,
-            authorizerPlugin,
-            resolvedRegexes
-        );
-
-        long version = image.version();
-        Map<String, ResolvedRegularExpression> result = new HashMap<>(resolvedRegexes.size());
-        for (Map.Entry<String, Set<String>> resolvedRegex : resolvedRegexes.entrySet()) {
-            result.put(
-                resolvedRegex.getKey(),
-                new ResolvedRegularExpression(resolvedRegex.getValue(), version, startTimeMs)
-            );
-        }
-
-        log.info("[GroupId {}] Scanned {} topics to refresh regular expressions {} in {}ms.",
-            groupId, image.topicNames().size(), resolvedRegexes.keySet(),
-            time.milliseconds() - startTimeMs);
-
-        return result;
-    }
-
-    /**
-     * This method filters the topics in the resolved regexes
-     * that the member is authorized to describe.
-     *
-     * @param context           The request context.
-     * @param authorizerPlugin  The authorizer.
-     * @param resolvedRegexes   The map of the regex pattern and its set of matched topics.
-     */
-    private static void filterTopicDescribeAuthorizedTopics(
-        AuthorizableRequestContext context,
-        Optional<Plugin<Authorizer>> authorizerPlugin,
-        Map<String, Set<String>> resolvedRegexes
-    ) {
-        if (authorizerPlugin.isEmpty()) return;
-
-        Map<String, Integer> topicNameCount = new HashMap<>();
-        resolvedRegexes.values().forEach(topicNames ->
-            topicNames.forEach(topicName ->
-                topicNameCount.compute(topicName, Utils::incValue)
-            )
-        );
-
-        List<Action> actions = topicNameCount.entrySet().stream().map(entry -> {
-            ResourcePattern resource = new ResourcePattern(TOPIC, entry.getKey(), LITERAL);
-            return new Action(DESCRIBE, resource, entry.getValue(), true, false);
-        }).collect(Collectors.toList());
-
-        List<AuthorizationResult> authorizationResults = authorizerPlugin.get().get().authorize(context, actions);
-        Set<String> deniedTopics = new HashSet<>();
-        IntStream.range(0, actions.size()).forEach(i -> {
-            if (authorizationResults.get(i) == AuthorizationResult.DENIED) {
-                String deniedTopic = actions.get(i).resourcePattern().name();
-                deniedTopics.add(deniedTopic);
-            }
-        });
-
-        resolvedRegexes.forEach((__, topicNames) -> topicNames.removeAll(deniedTopics));
+        return updateRegularExpressionStatus;
     }
 
     /**
@@ -3631,7 +3527,7 @@ public class GroupMetadataManager {
         String memberId = updatedMember.memberId();
         if (!updatedMember.equals(member)) {
             records.add(newStreamsGroupMemberRecord(groupId, updatedMember));
-            log.info("[GroupId {}] Member {} updated its member metdata to {}.",
+            log.info("[GroupId {}][MemberId {}] Member updated its member metadata to {}.",
                 groupId, memberId, updatedMember);
 
             return true;
@@ -4128,7 +4024,7 @@ public class GroupMetadataManager {
                 throw new IllegalStateException("Group epoch should be always larger to assignment epoch");
             }
 
-            if (!group.configuredTopology().isPresent()) {
+            if (group.configuredTopology().isEmpty()) {
                 log.warn("[GroupId {}] Cannot compute delayed target assignment: configured topology is not present", groupId);
                 return EMPTY_RESULT;
             }
@@ -4451,9 +4347,8 @@ public class GroupMetadataManager {
         StreamsGroupMember member,
         T response
     ) {
-        List<CoordinatorRecord> records = new ArrayList<>();
 
-        records.addAll(removeStreamsMember(group.groupId(), member.memberId()));
+        List<CoordinatorRecord> records = new ArrayList<>(removeStreamsMember(group.groupId(), member.memberId()));
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
@@ -7388,12 +7283,11 @@ public class GroupMetadataManager {
      * @return whether the group can accept a joining member.
      */
     private boolean acceptJoiningMember(ClassicGroup group, String memberId) {
-        switch (group.currentState()) {
-            case EMPTY:
-            case DEAD:
+        return switch (group.currentState()) {
+            case EMPTY, DEAD ->
                 // Always accept the request when the group is empty or dead
-                return true;
-            case PREPARING_REBALANCE:
+                true;
+            case PREPARING_REBALANCE ->
                 // An existing member is accepted if it is already awaiting. New members are accepted
                 // up to the max group size. Note that the number of awaiting members is used here
                 // for two reasons:
@@ -7401,17 +7295,14 @@ public class GroupMetadataManager {
                 //    if the max group size was reduced.
                 // 2) using the number of awaiting members allows to kick out the last rejoining
                 //    members of the group.
-                return (group.hasMember(memberId) && group.member(memberId).isAwaitingJoin()) ||
-                    group.numAwaitingJoinResponse() < config.classicGroupMaxSize();
-            case COMPLETING_REBALANCE:
-            case STABLE:
+                (group.hasMember(memberId) && group.member(memberId).isAwaitingJoin()) ||
+                        group.numAwaitingJoinResponse() < config.classicGroupMaxSize();
+            case COMPLETING_REBALANCE, STABLE ->
                 // An existing member is accepted. New members are accepted up to the max group size.
                 // Note that the group size is used here. When the group transitions to CompletingRebalance,
                 // members who haven't rejoined are removed.
-                return group.hasMember(memberId) || group.numMembers() < config.classicGroupMaxSize();
-            default:
-                throw new IllegalStateException("Unknown group state: " + group.stateAsString());
-        }
+                group.hasMember(memberId) || group.numMembers() < config.classicGroupMaxSize();
+        };
     }
 
     /**
@@ -7746,24 +7637,12 @@ public class GroupMetadataManager {
 
     // Visible for testing
     static Errors appendGroupMetadataErrorToResponseError(Errors appendError) {
-        switch (appendError) {
-            case UNKNOWN_TOPIC_OR_PARTITION:
-            case NOT_ENOUGH_REPLICAS:
-            case REQUEST_TIMED_OUT:
-                return COORDINATOR_NOT_AVAILABLE;
-
-            case NOT_LEADER_OR_FOLLOWER:
-            case KAFKA_STORAGE_ERROR:
-                return NOT_COORDINATOR;
-
-            case MESSAGE_TOO_LARGE:
-            case RECORD_LIST_TOO_LARGE:
-            case INVALID_FETCH_SIZE:
-                return UNKNOWN_SERVER_ERROR;
-
-            default:
-                return appendError;
-        }
+        return switch (appendError) {
+            case UNKNOWN_TOPIC_OR_PARTITION, NOT_ENOUGH_REPLICAS, REQUEST_TIMED_OUT -> COORDINATOR_NOT_AVAILABLE;
+            case NOT_LEADER_OR_FOLLOWER, KAFKA_STORAGE_ERROR -> NOT_COORDINATOR;
+            case MESSAGE_TOO_LARGE, RECORD_LIST_TOO_LARGE, INVALID_FETCH_SIZE -> UNKNOWN_SERVER_ERROR;
+            default -> appendError;
+        };
     }
 
     private Optional<Errors> validateSyncGroup(
@@ -7869,35 +7748,31 @@ public class GroupMetadataManager {
     ) {
         validateClassicGroupHeartbeat(group, request.memberId(), request.groupInstanceId(), request.generationId());
 
-        switch (group.currentState()) {
-            case EMPTY:
-                return new CoordinatorResult<>(
-                    List.of(),
-                    new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                );
-
-            case PREPARING_REBALANCE:
+        return switch (group.currentState()) {
+            case EMPTY -> new CoordinatorResult<>(
+                List.of(),
+                new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+            );
+            case PREPARING_REBALANCE -> {
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
-                return new CoordinatorResult<>(
+                yield new CoordinatorResult<>(
                     List.of(),
                     new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
                 );
-
-            case COMPLETING_REBALANCE:
-            case STABLE:
+            }
+            case COMPLETING_REBALANCE, STABLE -> {
                 // Consumers may start sending heartbeats after join-group response, while the group
                 // is in CompletingRebalance state. In this case, we should treat them as
                 // normal heartbeat requests and reset the timer
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
-                return new CoordinatorResult<>(
+                yield new CoordinatorResult<>(
                     List.of(),
                     new HeartbeatResponseData()
                 );
-
-            default:
-                throw new IllegalStateException("Reached unexpected state " +
+            }
+            default -> throw new IllegalStateException("Reached unexpected state " +
                     group.currentState() + " for group " + group.groupId());
-        }
+        };
     }
 
     /**
@@ -8753,7 +8628,7 @@ public class GroupMetadataManager {
      * Checks whether the given protocol type or name in the request is inconsistent with the group's.
      *
      * @param protocolTypeOrName       The request's protocol type or name.
-     * @param groupProtocolTypeOrName  The group's protoocl type or name.
+     * @param groupProtocolTypeOrName  The group's protocol type or name.
      *
      * @return  True if protocol is inconsistent, false otherwise.
      */

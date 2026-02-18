@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -25,6 +26,7 @@ import java.util.TreeMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BytesTest {
 
@@ -80,5 +82,38 @@ public class BytesTest {
         subMapExpected.put(key3, val);
 
         assertEquals(subMapExpected.keySet(), subMapResults.keySet());
+    }
+
+    @Test
+    public void testBytesLexicographicCases() {
+        assertEquals(0, cmp("", ""));
+        assertTrue(cmp("", "aaa") < 0);
+        assertTrue(cmp("aaa", "") > 0);
+
+        assertEquals(0, cmp("aaa", "aaa"));
+        assertTrue(cmp("aaa", "bbb") < 0);
+        assertTrue(cmp("bbb", "aaa") > 0);
+
+        assertTrue(cmp("aaaaaa", "bbb") < 0);
+        assertTrue(cmp("aaa", "bbbbbb") < 0);
+        assertTrue(cmp("bbbbbb", "aaa") > 0);
+        assertTrue(cmp("bbb", "aaaaaa") > 0);
+
+        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbb") < 0);
+        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaa") > 0);
+
+        assertTrue(cmp("common_prefix_aaaaaa", "common_prefix_bbb") < 0);
+        assertTrue(cmp("common_prefix_aaa", "common_prefix_bbbbbb") < 0);
+        assertTrue(cmp("common_prefix_bbbbbb", "common_prefix_aaa") > 0);
+        assertTrue(cmp("common_prefix_bbb", "common_prefix_aaaaaa") > 0);
+
+        assertTrue(cmp("common_prefix", "common_prefix_aaa") < 0);
+        assertTrue(cmp("common_prefix_aaa", "common_prefix") > 0);
+    }
+
+    private int cmp(String l, String r) {
+        return Bytes.BYTES_LEXICO_COMPARATOR.compare(
+            l.getBytes(StandardCharsets.UTF_8),
+            r.getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -296,7 +296,7 @@ public class InternalTopicManagerTest {
     }
 
     @Test
-    public void shouldThrowTimeoutExceptionIfTopicExistsDuringSetup() {
+    public void shouldThrowSetupTimeoutExceptionIfTopicExistsDuringSetup() {
         setupTopicInMockAdminClient(topic1, Collections.emptyMap());
         final MockTime time = new MockTime(
             (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 15
@@ -312,7 +312,7 @@ public class InternalTopicManagerTest {
 
         assertThat(
             exception.getMessage(),
-            is("Could not create internal topics within " +
+            is("Setup timeout: Could not create internal topics within " +
                     (Integer) config.get(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) / 2 +
                 " milliseconds. This can happen if the Kafka cluster is temporarily not available or a topic is marked" +
                     " for deletion and the broker did not complete its deletion within the timeout." +
@@ -782,16 +782,17 @@ public class InternalTopicManagerTest {
         // let the first describe succeed on topic, and fail on topic2, and then let creation throws topics-existed;
         // it should retry with just topic2 and then let it succeed
         when(admin.describeTopics(Set.of(topic1, topic2)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
-                mkEntry(topic1, topicDescriptionSuccessFuture),
-                mkEntry(topic2, topicDescriptionFailFuture)
-            )));
+                .thenAnswer(answer -> new MockDescribeTopicsResult(mkMap(
+                        mkEntry(topic1, topicDescriptionSuccessFuture),
+                        mkEntry(topic2, topicDescriptionFailFuture) // first call: missing
+                )));
+
         when(admin.createTopics(Collections.singleton(new NewTopic(topic2, Optional.of(1), Optional.of((short) 1))
             .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT),
                                  mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"))))))
             .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic2, topicCreationFuture)));
-        when(admin.describeTopics(Collections.singleton(topic2)))
-            .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
+        when(admin.describeTopics(Set.of(topic2)))
+                .thenAnswer(answer -> new MockDescribeTopicsResult(Collections.singletonMap(topic2, topicDescriptionSuccessFuture)));
 
         final InternalTopicConfig topicConfig = new UnwindowedUnversionedChangelogTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
@@ -864,7 +865,7 @@ public class InternalTopicManagerTest {
             topicManager.makeReady(Collections.singletonMap(topic1, internalTopicConfig));
             fail("Should have thrown TimeoutException.");
         } catch (final TimeoutException expected) {
-            assertThat(expected.getMessage(), is("Could not create topics within 50 milliseconds. " +
+            assertThat(expected.getMessage(), is("MakeReady timeout: Could not create topics within 50 milliseconds. " +
                     "This can happen if the Kafka cluster is temporarily not available."));
         }
     }
@@ -995,7 +996,7 @@ public class InternalTopicManagerTest {
         assertNull(exception.getCause());
         assertThat(
             exception.getMessage(),
-            equalTo("Could not create topics within 50 milliseconds." +
+            equalTo("MakeReady timeout: Could not create topics within 50 milliseconds." +
                 " This can happen if the Kafka cluster is temporarily not available.")
         );
     }
@@ -1024,7 +1025,7 @@ public class InternalTopicManagerTest {
         assertNull(exception.getCause());
         assertThat(
             exception.getMessage(),
-            equalTo("Could not create topics within 50 milliseconds." +
+            equalTo("MakeReady timeout: Could not create topics within 50 milliseconds." +
                 " This can happen if the Kafka cluster is temporarily not available.")
         );
     }

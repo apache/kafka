@@ -35,6 +35,7 @@ import static java.lang.String.format;
  * Helper functions for writing unit tests.
  * <p>
  * <b>Package-private:</b> Not intended for use outside {@code org.apache.kafka.common.test}.
+ * Use {@code org/apache/kafka/test/TestUtils} instead.
  */
 class TestUtils {
     private static final Logger log = LoggerFactory.getLogger(TestUtils.class);

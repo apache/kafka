@@ -467,7 +467,7 @@ public class StateStoreMetrics {
                 storeName,
                 OLDEST_ITERATOR_OPEN_SINCE_MS,
                 OLDEST_ITERATOR_OPEN_SINCE_MS_DESCRIPTION,
-                RecordingLevel.INFO,
+                RecordingLevel.DEBUG,
                 oldestOpenIteratorGauge
         );
     }

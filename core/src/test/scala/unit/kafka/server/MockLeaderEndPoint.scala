@@ -20,7 +20,7 @@ package kafka.server
 import org.apache.kafka.common.message.{FetchResponseData, OffsetForLeaderEpochRequestData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.server.common.OffsetAndEpoch
@@ -133,6 +133,17 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
     val leaderState = leaderPartitionState(topicPartition)
     checkLeaderEpochAndThrow(leaderEpoch, leaderState)
     new OffsetAndEpoch(leaderState.localLogStartOffset, leaderState.leaderEpoch)
+  }
+
+  override def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, leaderEpoch: Int): OffsetAndEpoch = {
+    val leaderState = leaderPartitionState(topicPartition)
+    checkLeaderEpochAndThrow(leaderEpoch, leaderState)
+    leaderState.earliestPendingUploadOffset match {
+      case -1L => new OffsetAndEpoch(-1L, -1)
+      case _ => new OffsetAndEpoch(
+        math.max(leaderState.earliestPendingUploadOffset, math.max(leaderState.localLogStartOffset, leaderState.logStartOffset)),
+        leaderState.leaderEpoch)
+    }
   }
 
   override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
@@ -262,13 +273,14 @@ class PartitionState(var log: mutable.Buffer[RecordBatch],
                      var logEndOffset: Long,
                      var highWatermark: Long,
                      var rlmEnabled: Boolean = false,
-                     var localLogStartOffset: Long)
+                     var localLogStartOffset: Long,
+                     var earliestPendingUploadOffset: Long)
 
 object PartitionState {
-  def apply(log: Seq[RecordBatch], leaderEpoch: Int, highWatermark: Long, rlmEnabled: Boolean = false): PartitionState = {
+  def apply(log: Seq[RecordBatch], leaderEpoch: Int, highWatermark: Long, rlmEnabled: Boolean = false, earliestPendingUploadOffset: Long = -1L): PartitionState = {
     val logStartOffset = log.headOption.map(_.baseOffset).getOrElse(0L)
     val logEndOffset = log.lastOption.map(_.nextOffset).getOrElse(0L)
-    new PartitionState(log.toBuffer, leaderEpoch, logStartOffset, logEndOffset, highWatermark, rlmEnabled, logStartOffset)
+    new PartitionState(log.toBuffer, leaderEpoch, logStartOffset, logEndOffset, highWatermark, rlmEnabled, logStartOffset, earliestPendingUploadOffset)
   }
 
   def apply(leaderEpoch: Int): PartitionState = {

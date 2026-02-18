@@ -17,11 +17,14 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +34,13 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class SessionWindowedSerializerTest {
     private final SessionWindowedSerializer<?> sessionWindowedSerializer = new SessionWindowedSerializer<>(Serdes.String().serializer());
@@ -105,5 +115,22 @@ public class SessionWindowedSerializerTest {
     public void shouldThrowConfigExceptionWhenInvalidWindowedInnerSerializerClassSupplied() {
         props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, "some.non.existent.class");
         assertThrows(ConfigException.class, () -> sessionWindowedSerializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingSerializer() {
+        final Serializer<String> mockSerializer = mock(StringSerializer.class);
+        when(mockSerializer.serialize(anyString(), any(Headers.class), anyString())).thenReturn("test-value".getBytes());
+
+        final String key = "test-key";
+        final Windowed<String> data = new Windowed<>(key, new TimeWindow(0, 1));
+        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
+
+        final SessionWindowedSerializer<String> testSerializer = new SessionWindowedSerializer<>(mockSerializer);
+
+        testSerializer.serialize("dummy", headers, data);
+
+        verify(mockSerializer).serialize(anyString(), eq(headers), eq(key));
+        verify(mockSerializer, never()).serialize(anyString(), eq(key));
     }
 }

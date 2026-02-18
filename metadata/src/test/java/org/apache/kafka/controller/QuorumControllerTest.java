@@ -1405,6 +1405,32 @@ public class QuorumControllerTest {
     }
 
     @Test
+    public void testIsNodeIdRegisteredWithDynamicQuorum() throws Throwable {
+        try (
+            MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).build()
+        ) {
+            QuorumController active = controlEnv.activeController();
+            ConfigResourceExistenceChecker checker = active.new ConfigResourceExistenceChecker();
+            
+            // Register dynamic controller with ID 100
+            active.registerController(ANONYMOUS_CONTEXT,
+                new ControllerRegistrationRequestData()
+                    .setControllerId(100)
+                    .setIncarnationId(Uuid.randomUuid())
+                    .setZkMigrationReady(false)
+                    .setListeners(new ControllerRegistrationRequestData.ListenerCollection())
+                    .setFeatures(new ControllerRegistrationRequestData.FeatureCollection())).get();
+            
+            checker.accept(new ConfigResource(BROKER, "100"));
+            
+            // Unregistered node should throw exception
+            assertThrows(BrokerIdNotRegisteredException.class,
+                () -> checker.accept(new ConfigResource(BROKER, "999")));
+        }
+    }
+
+    @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {
         try (
             MockRaftClientTestEnv clientEnv = new MockRaftClientTestEnv.Builder(3).

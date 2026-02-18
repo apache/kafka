@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -1078,10 +1077,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             );
         } catch (final TimeoutException timeoutException) {
             log.warn(
-                "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
-                    "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                timeoutException.toString(),
-                ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+                "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop.",
+                timeoutException.toString()
+            );
 
             // re-throw to trigger `task.timeout.ms`
             throw timeoutException;
