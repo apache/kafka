@@ -138,10 +138,14 @@ public class OffsetFetcher {
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                  Timer timer,
                                                  boolean requireTimestamps,
-                                                 boolean shouldClearPartitionEndOffsets) {
+                                                 boolean shouldUpdatePartitionEndOffsets) {
         ListOffsetResult result = new ListOffsetResult();
         if (timestampsToSearch.isEmpty())
             return result;
+
+        if (shouldUpdatePartitionEndOffsets) {
+            timestampsToSearch.keySet().forEach(subscriptions::requestPartitionEndOffset);
+        }
 
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
@@ -156,14 +160,14 @@ public class OffsetFetcher {
 
                         offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
 
-                        if (shouldClearPartitionEndOffsets)
+                        if (shouldUpdatePartitionEndOffsets)
                             offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
                     }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    if (shouldClearPartitionEndOffsets)
+                    if (shouldUpdatePartitionEndOffsets)
                         offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
 
                     if (!(e instanceof RetriableException)) {
@@ -217,7 +221,6 @@ public class OffsetFetcher {
                     log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", topicPartition);
                 } else {
                     log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                    subscriptions.requestPartitionEndOffset(topicPartition);
                     beginningOrEndOffset(
                         Set.of(topicPartition),
                         ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -236,14 +239,14 @@ public class OffsetFetcher {
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
                                                            Timer timer,
-                                                           boolean shouldClearPartitionEndOffsets) {
+                                                           boolean shouldUpdatePartitionEndOffsets) {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
                     .distinct()
                     .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
 
-            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false, shouldClearPartitionEndOffsets);
+            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false, shouldUpdatePartitionEndOffsets);
 
             return result.fetchedOffsets.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
