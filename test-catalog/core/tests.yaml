@@ -711,6 +711,7 @@ kafka.coordinator.group.CoordinatorPartitionWriterTest:
 - testRegisterDeregisterListener
 - testWriteRecords
 - testWriteRecordsWithFailure
+- testWriteRecordsWithFailureAndCustomErrorMessage
 - testWriteTransactionMarker
 - testWriteTransactionMarkerWithTVUnknownThrowsException
 kafka.coordinator.transaction.ProducerIntegrationTest:
