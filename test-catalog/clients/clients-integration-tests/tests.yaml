@@ -428,6 +428,11 @@ org.apache.kafka.clients.producer.ProducerIdExpirationTest:
 - testDynamicProducerIdExpirationMs
 - testProducerIdExpirationWithNoTransactions
 - testTransactionAfterTransactionIdExpiresButProducerIdRemains
+org.apache.kafka.clients.producer.ProducerIntegrationTest:
+- testTransactionWithAndWithoutSend
+- testTransactionWithInvalidSendAndEndTxnRequestSent
+- testTransactionWithSendOffset
+- testUniqueProducerIds
 org.apache.kafka.clients.producer.ProducerSendWhileDeletionTest:
 - testSendWhileTopicGetRecreated
 - testSendWithRecreatedTopic

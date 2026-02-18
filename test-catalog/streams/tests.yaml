@@ -4064,6 +4064,26 @@ org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValueBytesSt
 - shouldWriteKeyValueBytesToInnerStoreOnPut
 - shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue
 - shouldWriteToInnerOnPutIfAbsentNoPreviousValue
+org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValueBytesStoreWithHeadersTest:
+- shouldDelegateInit
+- shouldHandleEmptyHeaders
+- shouldHandleMultipleHeadersInSingleRecord
+- shouldHandleNullValueInPut
+- shouldHandleNullValueInPutIfAbsent
+- shouldLogChangesOnPutAll
+- shouldLogKeyNullOnDelete
+- shouldNotWriteToChangeLogOnPutIfAbsentWhenValueForKeyExists
+- shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists
+- shouldPropagateDelete
+- shouldReturnCurrentValueOnPutIfAbsent
+- shouldReturnNullOnGetWhenDoesntExist
+- shouldReturnNullOnPutIfAbsentWhenNoPreviousValue
+- shouldReturnOldValueOnDelete
+- shouldReturnValueOnGetWhenExists
+- shouldWriteAllKeyValueToInnerStoreOnPutAll
+- shouldWriteKeyValueBytesToInnerStoreOnPut
+- shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue
+- shouldWriteToInnerOnPutIfAbsentNoPreviousValue
 org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedWindowBytesStoreTest:
 - shouldDelegateInit
 - shouldDelegateToUnderlyingStoreWhenFetching

@@ -714,11 +714,6 @@ kafka.coordinator.group.CoordinatorPartitionWriterTest:
 - testWriteRecordsWithFailureAndCustomErrorMessage
 - testWriteTransactionMarker
 - testWriteTransactionMarkerWithTVUnknownThrowsException
-kafka.coordinator.transaction.ProducerIntegrationTest:
-- testTransactionWithAndWithoutSend
-- testTransactionWithInvalidSendAndEndTxnRequestSent
-- testTransactionWithSendOffset
-- testUniqueProducerIds
 kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest:
 - testConcurrentContinuingInitProducerIdRequests
 - testConcurrentGoodPathSequence
