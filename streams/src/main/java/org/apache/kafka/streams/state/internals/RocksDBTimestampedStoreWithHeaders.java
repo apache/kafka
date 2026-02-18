@@ -50,7 +50,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     private static final byte[] LEGACY_TIMESTAMPED_CF_NAME =
         RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME;
 
-    private static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
+    static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
         "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBTimestampedStoreWithHeaders(final String name,

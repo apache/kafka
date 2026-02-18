@@ -552,6 +552,52 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         }
     }
 
+    @Test
+    public void shouldNotSupportDowngradeFromHeadersAwareToRegularStore() {
+        // prepare headers-aware store with data
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(new Bytes("key1".getBytes()), "headers-aware-value1".getBytes());
+        rocksDBStore.put(new Bytes("key2".getBytes()), "headers-aware-value2".getBytes());
+        rocksDBStore.close();
+
+        final RocksDBStore regularStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
+        try {
+            final ProcessorStateException exception = assertThrows(
+                ProcessorStateException.class,
+                () -> regularStore.init(context, regularStore)
+            );
+
+            assertTrue(exception.getMessage().contains("Store " + DB_NAME + " is a headers-aware store"));
+            assertTrue(exception.getMessage().contains("cannot be opened as a regular key-value store"));
+            assertTrue(exception.getMessage().contains("Downgrade from headers-aware to regular store is not supported"));
+        } finally {
+            regularStore.close();
+        }
+    }
+
+    @Test
+    public void shouldNotSupportDowngradeFromHeadersAwareToTimestampedStore() {
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(new Bytes("key1".getBytes()), "headers-aware-value1".getBytes());
+        rocksDBStore.put(new Bytes("key2".getBytes()), "headers-aware-value2".getBytes());
+        rocksDBStore.close();
+
+        final RocksDBTimestampedStore timestampedStore = new RocksDBTimestampedStore(DB_NAME, METRICS_SCOPE);
+        try {
+            final ProcessorStateException exception = assertThrows(
+                ProcessorStateException.class,
+                () -> timestampedStore.init(context, timestampedStore)
+            );
+
+            assertTrue(exception.getMessage().contains("Store " + DB_NAME + " is a headers-aware store"));
+            assertTrue(exception.getMessage().contains("cannot be opened as a timestamped store"));
+            assertTrue(exception.getMessage().contains("Downgrade from headers-aware to timestamped store is not supported"));
+            assertTrue(exception.getMessage().contains("To downgrade, you can delete the local state in the state directory, and rebuild the store as timestamped store from the changelog"));
+        } finally {
+            timestampedStore.close();
+        }
+    }
+
     private void prepareKeyValueStore() {
         // Create a plain RocksDBStore (key-value, not timestamped) with data in default column family
         final RocksDBStore kvStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);

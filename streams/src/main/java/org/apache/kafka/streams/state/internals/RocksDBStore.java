@@ -305,12 +305,25 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 final boolean isExpected = allDescriptors.stream()
                         .anyMatch(descriptor -> Arrays.equals(descriptor.getName(), existingFamily));
                 if (!isExpected) {
-                    // Check specifically for timestamped store column family
                     if (Arrays.equals(existingFamily, RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME)) {
                         throw new ProcessorStateException(
                                 "Store " + name + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
                                 "Downgrade from timestamped to regular store is not supported directly. " +
                                 "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog.");
+                    }
+                    if (Arrays.equals(existingFamily, RocksDBTimestampedStoreWithHeaders.TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME)) {
+                        final boolean openingAsTimestampedStore = allDescriptors.stream()
+                                .anyMatch(descriptor -> Arrays.equals(descriptor.getName(), RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME));
+                        if (openingAsTimestampedStore) {
+                            throw new ProcessorStateException(
+                                    "Store " + name + " is a headers-aware store and cannot be opened as a timestamped store. " +
+                                    "Downgrade from headers-aware to timestamped store is not supported. " +
+                                    "To downgrade, you can delete the local state in the state directory, and rebuild the store as timestamped store from the changelog.");
+                        } else {
+                            throw new ProcessorStateException(
+                                    "Store " + name + " is a headers-aware store and cannot be opened as a regular key-value store. " +
+                                    "Downgrade from headers-aware to regular store is not supported.");
+                        }
                     }
 
                     final String unexpectedFamily = new String(existingFamily, StandardCharsets.UTF_8);

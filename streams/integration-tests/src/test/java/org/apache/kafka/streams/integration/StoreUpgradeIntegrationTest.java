@@ -1002,7 +1002,7 @@ public class StoreUpgradeIntegrationTest {
     }
 
     @Test
-    public void shouldSuccessfullyDowngradeAfterCleanup() throws Exception {
+    public void shouldSuccessfullyDowngradeFromTimestampedToRegularKeyValueStoreAfterCleanup() throws Exception {
         final Properties props = props();
         setupAndPopulateTimestampedStore(props);
 
