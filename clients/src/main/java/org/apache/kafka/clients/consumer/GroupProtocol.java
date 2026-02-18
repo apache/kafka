@@ -19,15 +19,11 @@ package org.apache.kafka.clients.consumer;
 import java.util.Locale;
 
 /**
- * Enum representing the consumer group protocol type.
- * <p>
- * Kafka supports two types of consumer group protocols:
- * </p>
+ * Enum representing the supported consumer group protocols.
  * <ul>
- *     <li>{@link #CLASSIC} - The original consumer group protocol</li>
- *     <li>{@link #CONSUMER} - The consumer group protocol introduced in Kafka 4.0 (KIP-848)</li>
+ *     <li>{@link #CLASSIC} - The Classic consumer group protocol (pre KIP-848)</li>
+ *     <li>{@link #CONSUMER} - The Consumer rebalance protocol (KIP-848)</li>
  * </ul>
- *
  */
 public enum GroupProtocol {
     /** Classic group protocol.  */
