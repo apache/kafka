@@ -69,12 +69,12 @@ public class MeteredWindowStore<K, V>
 
     private final long windowSizeMs;
     private final String metricsScope;
-    private final Time time;
+    protected final Time time;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private StateSerdes<K, V> serdes;
+    protected StateSerdes<K, V> serdes;
     private StreamsMetricsImpl streamsMetrics;
-    private Sensor putSensor;
+    protected Sensor putSensor;
     private Sensor fetchSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
@@ -520,7 +520,7 @@ public class MeteredWindowStore<K, V>
         return value != null ? serdes.valueFrom(value, new RecordHeaders()) : null;
     }
 
-    private void maybeRecordE2ELatency() {
+    protected void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && internalContext != null) {

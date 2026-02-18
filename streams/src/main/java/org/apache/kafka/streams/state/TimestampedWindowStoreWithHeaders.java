@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.header.Headers;
 
 /**
  * Interface for storing the aggregated values of fixed-size time windows with headers support.
@@ -32,20 +31,4 @@ import org.apache.kafka.common.header.Headers;
  * @param <V> Type of values
  */
 public interface TimestampedWindowStoreWithHeaders<K, V> extends WindowStore<K, ValueTimestampHeaders<V>> {
-
-    /**
-     * Convenience method to put a key-value-timestamp pair with headers into the window store.
-     * <p>
-     * This is a convenience wrapper around {@link #put(Object, Object, long)} that constructs
-     * the {@link ValueTimestampHeaders} instance for you.
-     *
-     * @param key                  The key to associate the value to
-     * @param value                The value; can be null
-     * @param windowStartTimestamp The timestamp of the beginning of the window
-     * @param timestamp            The record timestamp
-     * @param headers              The Kafka headers associated with the record
-     */
-    default void put(final K key, final V value, final long windowStartTimestamp, final long timestamp, final Headers headers) {
-        put(key, ValueTimestampHeaders.make(value, timestamp, headers), windowStartTimestamp);
-    }
 }

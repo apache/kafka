@@ -226,11 +226,15 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
         final Deserializer<ValueTimestampHeaders<String>> valueDeserializer = mock(Deserializer.class);
         final Serializer<ValueTimestampHeaders<String>> valueSerializer = mock(Serializer.class);
         when(keySerde.serializer()).thenReturn(keySerializer);
+        // For fetch: key serialization uses empty headers (no value context available)
         when(keySerializer.serialize(topic, new RecordHeaders(), KEY)).thenReturn(KEY.getBytes());
+        // For put: key serialization uses value's headers
+        when(keySerializer.serialize(topic, HEADERS, KEY)).thenReturn(KEY.getBytes());
         when(valueSerde.deserializer()).thenReturn(valueDeserializer);
         when(valueDeserializer.deserialize(topic, new RecordHeaders(), VALUE_TIMESTAMP_HEADERS_BYTES)).thenReturn(VALUE_TIMESTAMP_HEADERS);
         when(valueSerde.serializer()).thenReturn(valueSerializer);
-        when(valueSerializer.serialize(topic, new RecordHeaders(), VALUE_TIMESTAMP_HEADERS)).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
+        // For put: value serialization uses value's headers
+        when(valueSerializer.serialize(topic, HEADERS, VALUE_TIMESTAMP_HEADERS)).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
         when(innerStoreMock.fetch(KEY_BYTES, TIMESTAMP)).thenReturn(VALUE_TIMESTAMP_HEADERS_BYTES);
         store = new MeteredTimestampedWindowStoreWithHeaders<>(
             innerStoreMock,
