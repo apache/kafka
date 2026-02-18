@@ -76,14 +76,23 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private long commitCount = 0L;
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
+    /** Exception to throw when {@link #initTransactions(boolean)} is called */
     public RuntimeException initTransactionException = null;
+    /** Exception to throw when {@link #beginTransaction()} is called */
     public RuntimeException beginTransactionException = null;
+    /** Exception to throw when {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} is called */
     public RuntimeException sendOffsetsToTransactionException = null;
+    /** Exception to throw when {@link #commitTransaction()} is called */
     public RuntimeException commitTransactionException = null;
+    /** Exception to throw when {@link #abortTransaction()} is called */
     public RuntimeException abortTransactionException = null;
+    /** Exception to throw when {@link #send(ProducerRecord)} or {@link #send(ProducerRecord, Callback)} is called */
     public RuntimeException sendException = null;
+    /** Exception to throw when {@link #flush()} is called */
     public RuntimeException flushException = null;
+    /** Exception to throw when {@link #partitionsFor(String)} is called */
     public RuntimeException partitionsForException = null;
+    /** Exception to throw when {@link #close()} or {@link #close(Duration)} is called */
     public RuntimeException closeException = null;
     private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
@@ -396,17 +405,27 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.cluster.partitionsForTopic(topic);
     }
 
+    /**
+     * Disables telemetry for this mock producer for testing purposes.
+     */
     public void disableTelemetry() {
         telemetryDisabled = true;
     }
 
     /**
-     * @param injectTimeoutExceptionCounter use -1 for infinite
+     * Injects timeout exceptions into {@link #clientInstanceId(Duration)} calls for testing purposes.
+     *
+     * @param injectTimeoutExceptionCounter Number of times to inject timeout exceptions, or -1 for infinite
      */
     public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
         this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
     }
 
+    /**
+     * Sets the client instance ID for this mock producer.
+     *
+     * @param instanceId The client instance ID to set
+     */
     public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;
     }
@@ -455,10 +474,18 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.closed = true;
     }
 
+    /**
+     * Checks whether this mock producer has been closed.
+     *
+     * @return {@code true} if the producer has been closed, {@code false} otherwise
+     */
     public boolean closed() {
         return this.closed;
     }
 
+    /**
+     * Fences this mock producer, causing it to throw {@link ProducerFencedException} on subsequent transactional operations.
+     */
     public synchronized void fenceProducer() {
         verifyNotClosed();
         verifyNotFenced();
@@ -466,30 +493,65 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.producerFenced = true;
     }
 
+    /**
+     * Checks whether transactions have been initialized for this mock producer.
+     *
+     * @return {@code true} if transactions have been initialized, {@code false} otherwise
+     */
     public boolean transactionInitialized() {
         return this.transactionInitialized;
     }
 
+    /**
+     * Checks whether a transaction is currently in progress.
+     *
+     * @return {@code true} if a transaction is in progress, {@code false} otherwise
+     */
     public boolean transactionInFlight() {
         return this.transactionInFlight;
     }
 
+    /**
+     * Checks whether the current transaction has been committed.
+     *
+     * @return {@code true} if the transaction was committed, {@code false} otherwise
+     */
     public boolean transactionCommitted() {
         return this.transactionCommitted;
     }
 
+    /**
+     * Checks whether the current transaction has been aborted.
+     *
+     * @return {@code true} if the transaction was aborted, {@code false} otherwise
+     */
     public boolean transactionAborted() {
         return this.transactionAborted;
     }
 
+    /**
+     * Checks whether all sent records have been completed (no pending completions).
+     *
+     * @return {@code true} if there are no pending completions, {@code false} otherwise
+     */
     public boolean flushed() {
         return this.completions.isEmpty();
     }
 
+    /**
+     * Checks whether offsets have been sent to the current transaction.
+     *
+     * @return {@code true} if offsets were sent in the current transaction, {@code false} otherwise
+     */
     public boolean sentOffsets() {
         return this.sentOffsets;
     }
 
+    /**
+     * Gets the total number of transactions committed by this mock producer.
+     *
+     * @return The commit count
+     */
     public long commitCount() {
         return this.commitCount;
     }
@@ -501,6 +563,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return new ArrayList<>(this.sent);
     }
 
+    /**
+     * Gets the list of records sent in the current transaction that have not yet been committed.
+     *
+     * @return A list of uncommitted producer records
+     */
     public synchronized List<ProducerRecord<K, V>> uncommittedRecords() {
         return new ArrayList<>(this.uncommittedSends);
     }
@@ -513,6 +580,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return new ArrayList<>(this.consumerGroupOffsets);
     }
 
+    /**
+     * Gets the consumer group offsets sent in the current transaction that have not yet been committed.
+     *
+     * @return A map of consumer group IDs to their uncommitted offsets
+     */
     public synchronized Map<String, Map<TopicPartition, OffsetAndMetadata>> uncommittedOffsets() {
         return this.uncommittedConsumerGroupOffsets;
     }
@@ -614,6 +686,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
     }
 
+    /**
+     * Gets the list of metrics that have been registered for subscription.
+     *
+     * @return An unmodifiable list of added metrics
+     */
     public List<KafkaMetric> addedMetrics() {
         return Collections.unmodifiableList(addedMetrics);
     }

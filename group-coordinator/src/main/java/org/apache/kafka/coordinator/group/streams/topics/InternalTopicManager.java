@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.streams.topics;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicConfigCollection;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
@@ -51,18 +50,21 @@ public class InternalTopicManager {
      * Configures the internal topics for the given topology. Given a topology and the metadata image, this method determines the number of
      * partitions for all internal topics and returns a {@link ConfiguredTopology} object.
      *
-     * @param logContext    The log context.
+     * @param log           The logger.
+     * @param groupId       The group id.
+     * @param memberId      The member id.
      * @param metadataHash  The metadata hash of the group.
      * @param topology      The topology.
      * @param metadataImage The metadata image.
      * @return The configured topology.
      */
-    public static ConfiguredTopology configureTopics(LogContext logContext,
+    public static ConfiguredTopology configureTopics(Logger log,
+                                                     String groupId,
+                                                     String memberId,
                                                      long metadataHash,
                                                      StreamsTopology topology,
                                                      CoordinatorMetadataImage metadataImage,
                                                      Time time) {
-        final Logger log = logContext.logger(InternalTopicManager.class);
         final long startTimeMs = time.milliseconds();
         final Collection<StreamsGroupTopologyValue.Subtopology> subtopologies = topology.subtopologies().values();
 
@@ -79,7 +81,7 @@ public class InternalTopicManager {
             throwOnMissingSourceTopics(topology, metadataImage);
 
             Map<String, Integer> decidedPartitionCountsForInternalTopics =
-                decidePartitionCounts(logContext, topology, metadataImage, copartitionGroupsBySubtopology);
+                decidePartitionCounts(log, topology, metadataImage, copartitionGroupsBySubtopology);
 
             final SortedMap<String, ConfiguredSubtopology> configuredSubtopologies =
                 subtopologies.stream()
@@ -98,11 +100,11 @@ public class InternalTopicManager {
                 topicConfigurationException = Optional.of(TopicConfigurationException.missingInternalTopics(
                     "Internal topics are missing: " + summarizeTopics(internalTopicsToCreate.keySet())
                 ));
-                log.info("Valid topic configuration found in {}ms, but internal topics are missing for topology epoch {}: {}",
-                    elapsedMs, topology.topologyEpoch(), summarizeTopics(internalTopicsToCreate.keySet()));
+                log.info("[GroupId {}][MemberId {}] Valid topic configuration found in {}ms, but internal topics are missing for topology epoch {}: {}",
+                    groupId, memberId, elapsedMs, topology.topologyEpoch(), summarizeTopics(internalTopicsToCreate.keySet()));
             } else {
-                log.info("Valid topic configuration found in {}ms, topology epoch {} is now initialized.",
-                    elapsedMs, topology.topologyEpoch());
+                log.info("[GroupId {}][MemberId {}] Valid topic configuration found in {}ms, topology epoch {} is now initialized.",
+                    groupId, memberId, elapsedMs, topology.topologyEpoch());
             }
 
             return new ConfiguredTopology(
@@ -115,8 +117,8 @@ public class InternalTopicManager {
 
         } catch (TopicConfigurationException e) {
             long elapsedMs = time.milliseconds() - startTimeMs;
-            log.warn("Topic configuration failed for topology epoch {} in {}ms: {}",
-                topology.topologyEpoch(), elapsedMs, e.getMessage());
+            log.warn("[GroupId {}][MemberId {}] Topic configuration failed for topology epoch {} in {}ms: {}",
+                groupId, memberId, topology.topologyEpoch(), elapsedMs, e.getMessage());
             return new ConfiguredTopology(
                 topology.topologyEpoch(),
                 metadataHash,
@@ -143,7 +145,7 @@ public class InternalTopicManager {
         }
     }
 
-    private static Map<String, Integer> decidePartitionCounts(final LogContext logContext,
+    private static Map<String, Integer> decidePartitionCounts(final Logger log,
                                                               final StreamsTopology topology,
                                                               final CoordinatorMetadataImage metadataImage,
                                                               final Map<String, Collection<Set<String>>> copartitionGroupsBySubtopology) {
@@ -151,13 +153,13 @@ public class InternalTopicManager {
         final Function<String, OptionalInt> topicPartitionCountProvider =
             topic -> getPartitionCount(metadataImage, topic, decidedPartitionCountsForInternalTopics);
         final RepartitionTopics repartitionTopics = new RepartitionTopics(
-            logContext,
+            log,
             topology.subtopologies().values(),
             topicPartitionCountProvider);
         final CopartitionedTopicsEnforcer copartitionedTopicsEnforcer = new CopartitionedTopicsEnforcer(
-            logContext,
+            log,
             topicPartitionCountProvider);
-        final ChangelogTopics changelogTopics = new ChangelogTopics(logContext,
+        final ChangelogTopics changelogTopics = new ChangelogTopics(log,
             topology.subtopologies().values(),
             topicPartitionCountProvider);
 
