@@ -659,7 +659,7 @@ public class SubscriptionState {
 
     public synchronized void requestPartitionEndOffset(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
-        topicPartitionState.setRequestEndOffset(true);
+        topicPartitionState.requestEndOffset();
     }
 
     public synchronized boolean partitionEndOffsetRequested(TopicPartition tp) {
@@ -671,7 +671,7 @@ public class SubscriptionState {
         TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
 
         if (topicPartitionState != null && topicPartitionState.endOffsetRequested()) {
-            topicPartitionState.setRequestEndOffset(false);
+            topicPartitionState.clearEndOffset();
             return true;
         } else {
             return false;
@@ -1044,8 +1044,12 @@ public class SubscriptionState {
             return endOffsetRequested;
         }
 
-        public void setRequestEndOffset(boolean endOffsetRequested) {
-            this.endOffsetRequested = endOffsetRequested;
+        public void requestEndOffset() {
+            this.endOffsetRequested = true;
+        }
+
+        public void clearEndOffset() {
+            this.endOffsetRequested = false;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -1249,7 +1253,7 @@ public class SubscriptionState {
 
         private void highWatermark(Long highWatermark) {
             this.highWatermark = highWatermark;
-            setRequestEndOffset(false);
+            this.endOffsetRequested = false;
         }
 
         private void logStartOffset(Long logStartOffset) {
@@ -1258,7 +1262,7 @@ public class SubscriptionState {
 
         private void lastStableOffset(Long lastStableOffset) {
             this.lastStableOffset = lastStableOffset;
-            setRequestEndOffset(false);
+            this.endOffsetRequested = false;
         }
 
         private AutoOffsetResetStrategy resetStrategy() {
