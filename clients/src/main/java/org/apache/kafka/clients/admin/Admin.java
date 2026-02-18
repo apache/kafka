@@ -1205,7 +1205,7 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the current reassignments for the given partitions
+     * List the current reassignments for the given partitions.
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
      * the returned {@code ListPartitionReassignmentsResult}:</p>
@@ -1229,7 +1229,7 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List all the current partition reassignments
+     * List all the current partition reassignments.
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
      * the returned {@code ListPartitionReassignmentsResult}:</p>

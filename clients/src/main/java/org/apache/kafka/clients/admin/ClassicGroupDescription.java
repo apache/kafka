@@ -129,7 +129,9 @@ public class ClassicGroupDescription {
     }
 
     /**
-     * The group protocol data.
+     * The group protocol data. The meaning depends on the group protocol type.
+     * For a classic consumer group, this is the partition assignor name.
+     * For a classic connect group, this indicates which Connect protocols are enabled.
      */
     public String protocolData() {
         return protocolData;

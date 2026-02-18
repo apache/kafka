@@ -80,7 +80,7 @@ public class AlterConfigOp {
         }
 
         /**
-         * Returns the byte ID associated with this operation type. This ID is used for serialization 
+         * Returns the byte id associated with this operation type. This id is used for serialization 
          * and protocol communication.
          */
         public byte id() {
@@ -88,8 +88,8 @@ public class AlterConfigOp {
         }
 
         /**
-         * Returns the {@code OpType} corresponding to the given byte ID, or {@code null} if the
-         * ID does not match any known operation type.
+         * Returns the {@code OpType} corresponding to the given byte id, or {@code null} if the
+         * id does not match any known operation type.
          */
         public static OpType forId(final byte id) {
             return OP_TYPES.get(id);
