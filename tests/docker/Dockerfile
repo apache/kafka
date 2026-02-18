@@ -62,7 +62,7 @@ LABEL ducker.creator=$ducker_creator
 # Update Linux and install necessary utilities.
 RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python3-pip python3-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute iproute2 iputils-ping && apt-get -y clean
 RUN python3 -m pip install -U pip==21.1.1;
-# NOTE: ducktape 0.12.0 supports py 3.9, 3.10, 3.11 and 3.12
+# NOTE: ducktape 0.13.0 supports py 3.9, 3.10, 3.11, 3.12 and 3.13
 COPY requirements.txt requirements.txt
 RUN pip3 install --upgrade -r requirements.txt
 
