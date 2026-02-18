@@ -116,6 +116,15 @@ public class TransactionMetadata {
         return nextProducerEpoch != RecordBatch.NO_PRODUCER_EPOCH;
     }
 
+    // When InitProducerId keeps an Ongoing transaction (which is "prepared" from
+    // the 2PC protocol perspective) it needs to preserve the producerId / epoch of
+    // the transaction (that will be used for sending markers), but update the
+    // producerId / epoch that's going to be used by client (so that we could fence
+    // stale client requests). For backward compatibility (in case of server
+    // downgrade) we keep the producerId / epoch of the transaction in the
+    // producer* fields and the other pair in the nextProducer* fields.
+    // Note that we check hasNextProducerEpoch because nextProducerId could
+    // be set in other conditions, not related to "prepared" 2PC transactions
     public long clientProducerId() {
         return hasNextProducerEpoch() ? nextProducerId : producerId;
     }
@@ -171,7 +180,7 @@ public class TransactionMetadata {
         int newTxnTimeoutMs,
         Optional<Short> expectedProducerEpoch,
         long updateTimestamp) {
-        if (isProducerEpochExhausted())
+        if (isEpochExhausted(producerEpoch))
             throw new IllegalStateException("Cannot allocate any more producer epochs for producerId " + producerId);
 
         TransitionData data = new TransitionData(TransactionState.EMPTY);
@@ -228,9 +237,10 @@ public class TransactionMetadata {
     }
 
     public TxnTransitMetadata prepareIncrementProducerEpochForOngoing(long updateTimestamp) {
-        if (isEpochExhausted(clientProducerEpoch()))
+        if (isProducerEpochExhausted())
             throw new IllegalStateException("Cannot allocate any more producer epochs for producerId " + nextProducerId);
 
+        // Note that we need to set nextProducerId because it's not set when we first call InitProducerId(keepPreparedTxn)
         TransitionData data = new TransitionData(state);
         data.nextProducerId = clientProducerId();
         data.nextProducerEpoch = (short) (clientProducerEpoch() + 1);
@@ -333,7 +343,7 @@ public class TransactionMetadata {
      * epoch equal to Short.MaxValue to ensure that the coordinator will always be able to fence an existing producer.
      */
     public boolean isProducerEpochExhausted() {
-        return isEpochExhausted(producerEpoch);
+        return isEpochExhausted(clientProducerEpoch());
     }
 
     /**

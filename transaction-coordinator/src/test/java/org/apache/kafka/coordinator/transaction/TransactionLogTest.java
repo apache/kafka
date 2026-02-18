@@ -82,6 +82,7 @@ class TransactionLogTest {
             RecordBatch.NO_PRODUCER_ID,
             (short) 0,
             RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_PRODUCER_EPOCH,
             1000,
             state,
             Set.of(),
@@ -140,14 +141,14 @@ class TransactionLogTest {
   
     @Test
     void testSerializeTransactionLogValueToHighestNonFlexibleVersion() {
-        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_0);
+        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_0);
         var txnLogValueBuffer = wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_0));
         assertEquals(TV_0.transactionLogValueVersion(), txnLogValueBuffer.getShort());
     }
 
     @Test
     void testSerializeTransactionLogValueToFlexibleVersion() {
-        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
+        var txnTransitMetadata = new TxnTransitMetadata(1L, 1L, 1L, (short) 1, (short) 1, RecordBatch.NO_PRODUCER_EPOCH, 1000, TransactionState.COMPLETE_COMMIT, new HashSet<>(), 500L, 500L, TV_2);
         var txnLogValueBuffer = wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_2));
         assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort());
     }

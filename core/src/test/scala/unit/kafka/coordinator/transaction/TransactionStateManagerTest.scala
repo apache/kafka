@@ -878,8 +878,8 @@ class TransactionStateManagerTest {
     // is left at it is. If the transactional id is never reused, the TransactionMetadata
     // will be expired and it should succeed.
     val timestamp = time.milliseconds()
-    val txnMetadata = new TransactionMetadata(transactionalId, 1, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
-      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.EMPTY, util.Set.of, timestamp, timestamp, TV_0)
+    val txnMetadata = new TransactionMetadata(transactionalId, 1, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, 0,
+      RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, TransactionState.EMPTY, util.Set.of, timestamp, timestamp, TV_0)
     transactionManager.putTransactionStateIfNotExists(txnMetadata)
 
     time.sleep(txnConfig.transactionalIdExpirationMs + 1)
@@ -1224,7 +1224,7 @@ class TransactionStateManagerTest {
                                   txnTimeout: Int = transactionTimeoutMs): TransactionMetadata = {
     val timestamp = time.milliseconds()
     new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, 0.toShort,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeout, state, util.Set.of, timestamp, timestamp, TV_0)
+      RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH, txnTimeout, state, util.Set.of, timestamp, timestamp, TV_0)
   }
 
   private def prepareTxnLog(topicPartition: TopicPartition,

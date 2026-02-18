@@ -139,7 +139,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       responseCallback(initTransactionError(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
     } else if (keepPreparedTxn && expectedProducerIdAndEpoch.nonEmpty) {
       // keepPreparedTxn can only be specified in the initial call of InitProducerId, so
-      // no exposed producerId / epoch should be set
+      // no expected producerId / epoch should be set
       responseCallback(initTransactionError(Errors.INVALID_REQUEST))
     } else if (!txnManager.validateTransactionTimeoutMs(enableTwoPCFlag, transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
@@ -882,6 +882,11 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   RecordBatch.NO_PRODUCER_EPOCH
                 }
 
+                if (nextState == TransactionState.PREPARE_ABORT && isEpochFence) {
+                  // We should clear the pending state to make way for the transition to PrepareAbort
+                  txnMetadata.pendingState(util.Optional.empty())
+                  // For TV2+, don't manually set the epoch - let prepareAbortOrCommit handle it naturally.
+                }
 
                 nextProducerIdOrErrors.flatMap {
                   nextProducerId =>
