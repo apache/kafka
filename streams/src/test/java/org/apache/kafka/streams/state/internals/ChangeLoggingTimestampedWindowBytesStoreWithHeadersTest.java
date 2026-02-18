@@ -49,6 +49,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -61,6 +62,7 @@ import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -71,11 +73,13 @@ import static org.mockito.Mockito.when;
 public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
     private final byte[] value = {0};
-    // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
-    // With empty headers: [0x00][timestamp=42][value=0]
-    private final byte[] valueTimestampHeaders = {0, 0, 0, 0, 0, 0, 0, 0, 42, 0};
     private final Bytes bytesKey = Bytes.wrap(value);
     private final StreamsConfig streamsConfig = streamsConfigMock();
+    private final Headers testHeaders = new RecordHeaders()
+        .add(new RecordHeader("key1", "value1".getBytes()))
+        .add(new RecordHeader("key2", "value2".getBytes()));
+    private final long testTimestamp = 42L;
+    private byte[] valueTimestampHeaders;
 
     @Mock
     private WindowStore<Bytes, byte[]> inner;
@@ -87,6 +91,12 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
     @BeforeEach
     public void setUp() {
+        final ValueTimestampHeaders<byte[]> valueWithHeaders =
+            ValueTimestampHeaders.make(value, testTimestamp, testHeaders);
+        final ValueTimestampHeadersSerializer<byte[]> serializer =
+            new ValueTimestampHeadersSerializer<>(new ByteArraySerializer());
+        valueTimestampHeaders = serializer.serialize("topic", valueWithHeaders);
+
         store = new ChangeLoggingTimestampedWindowBytesStoreWithHeaders(inner, false);
         store.init(context, store);
     }
@@ -115,7 +125,21 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
         store.put(bytesKey, valueTimestampHeaders, context.recordContext().timestamp());
 
         verify(inner).put(bytesKey, valueTimestampHeaders, 0);
-        verify(context).logChange(store.name(), key, value, 42, Position.emptyPosition(), new RecordHeaders());
+
+        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        verify(context).logChange(
+            ArgumentMatchers.eq(store.name()),
+            ArgumentMatchers.eq(key),
+            ArgumentMatchers.eq(value),
+            ArgumentMatchers.eq(testTimestamp),
+            ArgumentMatchers.eq(Position.emptyPosition()),
+            headersCaptor.capture()
+        );
+
+        final Headers capturedHeaders = headersCaptor.getValue();
+        assertEquals(2, capturedHeaders.toArray().length);
+        assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
+        assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
     }
 
     @Test
@@ -127,7 +151,21 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
         store.put(bytesKey, valueTimestampHeaders, context.recordContext().timestamp());
 
         verify(inner).put(bytesKey, valueTimestampHeaders, 0);
-        verify(context).logChange(store.name(), key, value, 42, POSITION, new RecordHeaders());
+
+        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        verify(context).logChange(
+            ArgumentMatchers.eq(store.name()),
+            ArgumentMatchers.eq(key),
+            ArgumentMatchers.eq(value),
+            ArgumentMatchers.eq(testTimestamp),
+            ArgumentMatchers.eq(POSITION),
+            headersCaptor.capture()
+        );
+
+        final Headers capturedHeaders = headersCaptor.getValue();
+        assertEquals(2, capturedHeaders.toArray().length);
+        assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
+        assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
     }
 
     @SuppressWarnings({"resource", "unused"})
@@ -150,8 +188,6 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingTimestampedWindowBytesStoreWithHeaders(inner, true);
         store.init(context, store);
-        final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
-        final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
         when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
 
@@ -159,17 +195,31 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
         store.put(bytesKey, valueTimestampHeaders, context.recordContext().timestamp());
 
         verify(inner, times(2)).put(bytesKey, valueTimestampHeaders, 0);
-        verify(context).logChange(store.name(), key1, value, 42L, Position.emptyPosition(), new RecordHeaders());
-        verify(context).logChange(store.name(), key2, value, 42L, Position.emptyPosition(), new RecordHeaders());
+
+        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        verify(context, times(2)).logChange(
+            ArgumentMatchers.eq(store.name()),
+            ArgumentMatchers.any(Bytes.class),
+            ArgumentMatchers.eq(value),
+            ArgumentMatchers.eq(testTimestamp),
+            ArgumentMatchers.eq(Position.emptyPosition()),
+            headersCaptor.capture()
+        );
+
+        final Headers capturedHeaders = headersCaptor.getValue();
+        assertEquals(2, capturedHeaders.toArray().length);
+        assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
+        assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
     }
 
     @Test
-    public void shouldLogPutsWithNonEmptyHeaders() {
-        final Headers businessHeaders = new RecordHeaders();
-        businessHeaders.add(new RecordHeader("trace-id", "abc123".getBytes()));
-        businessHeaders.add(new RecordHeader("tenant-id", "customer-1".getBytes()));
+    public void shouldLogPutsWithComplexHeaders() {
+        final Headers complexHeaders = new RecordHeaders();
+        complexHeaders.add(new RecordHeader("trace-id", "abc123".getBytes()));
+        complexHeaders.add(new RecordHeader("tenant-id", "customer-1".getBytes()));
+        complexHeaders.add(new RecordHeader("nullable-header", null));
 
-        final ValueTimestampHeaders<byte[]> valueWithHeaders = ValueTimestampHeaders.make(value, 99L, businessHeaders);
+        final ValueTimestampHeaders<byte[]> valueWithHeaders = ValueTimestampHeaders.make(value, 99L, complexHeaders);
         final ValueTimestampHeadersSerializer<byte[]> serializer = new ValueTimestampHeadersSerializer<>(new ByteArraySerializer());
         final byte[] serializedValue = serializer.serialize("topic", valueWithHeaders);
 
@@ -183,22 +233,25 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
         final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
         verify(context).logChange(
-            org.mockito.ArgumentMatchers.eq(store.name()),
-            org.mockito.ArgumentMatchers.eq(key),
-            org.mockito.ArgumentMatchers.eq(value),
-            org.mockito.ArgumentMatchers.eq(99L),
-            org.mockito.ArgumentMatchers.eq(Position.emptyPosition()),
+            ArgumentMatchers.eq(store.name()),
+            ArgumentMatchers.eq(key),
+            ArgumentMatchers.eq(value),
+            ArgumentMatchers.eq(99L),
+            ArgumentMatchers.eq(Position.emptyPosition()),
             headersCaptor.capture()
         );
 
         final Headers capturedHeaders = headersCaptor.getValue();
-        assertEquals(2, capturedHeaders.toArray().length);
+        assertEquals(3, capturedHeaders.toArray().length);
 
         final Header traceId = capturedHeaders.lastHeader("trace-id");
         assertEquals("abc123", new String(traceId.value()));
 
         final Header tenantId = capturedHeaders.lastHeader("tenant-id");
         assertEquals("customer-1", new String(tenantId.value()));
+
+        final Header nullableHeader = capturedHeaders.lastHeader("nullable-header");
+        assertNull(nullableHeader.value());
     }
 
     private InternalMockProcessorContext mockContext() {

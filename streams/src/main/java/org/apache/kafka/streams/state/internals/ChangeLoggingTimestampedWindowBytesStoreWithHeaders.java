@@ -48,8 +48,13 @@ class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingW
             name(),
             key,
             rawValue(valueTimestampHeaders),
-            valueTimestampHeaders != null ? timestamp(valueTimestampHeaders) : internalContext.recordContext().timestamp(),
+            valueTimestampHeaders != null
+                ? timestamp(valueTimestampHeaders)
+                : internalContext.recordContext().timestamp(),
             wrapped().getPosition(),
-            headers(valueTimestampHeaders));
+            valueTimestampHeaders != null
+                ? headers(valueTimestampHeaders)
+                : internalContext.recordContext().headers()
+        );
     }
 }
