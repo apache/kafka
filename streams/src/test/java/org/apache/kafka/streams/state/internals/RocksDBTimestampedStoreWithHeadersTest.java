@@ -413,7 +413,10 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         assertNull(db.get(legacyTimestampedColumnFamily, "key6".getBytes())); // migrated
         assertEquals(8 + 7, db.get(legacyTimestampedColumnFamily, "key7".getBytes()).length); // not migrated
         assertNull(db.get(legacyTimestampedColumnFamily, "key8new".getBytes()));
+        assertNull(db.get(legacyTimestampedColumnFamily, "key9new".getBytes()));
         assertNull(db.get(legacyTimestampedColumnFamily, "key11new".getBytes()));
+        assertNull(db.get(legacyTimestampedColumnFamily, "key12new".getBytes()));
+
     }
 
     private void verifyHeadersColumnFamily(final RocksDB db, final ColumnFamilyHandle headersColumnFamily) throws Exception {
@@ -427,6 +430,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         assertNull(db.get(headersColumnFamily, "key6".getBytes())); // migrated by delete() => deleted
         assertNull(db.get(headersColumnFamily, "key7".getBytes())); // not migrated, should still be in legacy column family
         assertEquals("headers+timestamp+88888888".getBytes().length, db.get(headersColumnFamily, "key8new".getBytes()).length); // added by put() => value is inserted without any conversion
+        assertNull(db.get(headersColumnFamily, "key9new".getBytes()));
         assertEquals("headers+timestamp+11111111111".getBytes().length, db.get(headersColumnFamily, "key11new".getBytes()).length); // inserted (newly added) by putIfAbsent() => value is inserted without any conversion
         assertNull(db.get(headersColumnFamily, "key12new".getBytes())); // putIfAbsent with null value on non-existing key should not create any entry
     }
