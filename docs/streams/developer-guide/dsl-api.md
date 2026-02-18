@@ -189,7 +189,7 @@ If you do not specify Serdes explicitly, the default Serdes from the [configurat
 
 You **must specify Serdes explicitly** if the key or value types of the records in the Kafka input topics do not match the configured default Serdes. For information about configuring default Serdes, available Serdes, and implementing your own custom Serdes see [Data Types and Serialization](datatypes.html#streams-developer-guide-serdes).
 
-Several variants of `stream` exist. For example, you can specify a regex pattern for input topics to read from (note that all matching topics will be part of the same input topic group, and the work will not be parallelized for different topics if subscribed to in this way).
+Several variants of `stream` exist. For example, you can specify a regex pattern for input topics to read from (note that all matching topics will be part of the same input topic group, and the work will not be parallelized for different topics if subscribed to in this way). To learn how to increase parallelism when reading from multiple topics, see [Increasing Parallelism with Multiple Input Topics](../../architecture/#streams_architecture_subtopology).
 
 
 </td> </tr>  

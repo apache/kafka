@@ -91,6 +91,8 @@ The parallelism of a Kafka Streams application is primarily determined by how ma
 
 The number of topic partitions is the upper limit for the parallelism of your Kafka Streams application and for the number of running instances of your application.
 
+If your application reads from multiple topics, see [Increasing Parallelism with Multiple Input Topics](../../architecture/#streams_architecture_subtopology) for how to maximize parallelism.
+
 To achieve balanced workload processing across application instances and to prevent processing hotpots, you should distribute data and processing workloads:
 
   * Data should be equally distributed across topic partitions. For example, if two topic partitions each have 1 million messages, this is better than a single partition with 2 million messages and none in the other.
