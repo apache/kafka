@@ -29,8 +29,6 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import com.yammer.metrics.core.MetricsRegistry;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -117,13 +115,6 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             throw new IllegalArgumentException("ShareCoordinatorMetrics can only deactivate ShareCoordinatorMetricShard");
         }
         shards.remove(shard.topicPartition());
-    }
-
-    @Override
-    public MetricsRegistry registry() {
-        // we are not using MetricsRegistry in share coordinator
-        // but this method is part for implemented interface
-        return null;
     }
 
     @Override

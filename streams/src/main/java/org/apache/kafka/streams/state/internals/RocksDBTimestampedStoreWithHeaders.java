@@ -43,11 +43,13 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
 
     private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStoreWithHeaders.class);
 
-    // Legacy column family name - must match RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME
-    private static final byte[] LEGACY_TIMESTAMPED_CF_NAME =
-        "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
+    /**
+     * Legacy column family name - must match {@code RocksDBTimestampedStore#TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME} 
+     */
 
-    // New column family for header-aware timestamped values.
+    private static final byte[] LEGACY_TIMESTAMPED_CF_NAME =
+        RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME;
+
     private static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
         "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8);
 
@@ -67,29 +69,24 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                      final ColumnFamilyOptions columnFamilyOptions) {
         // Check if we're upgrading from RocksDBTimestampedStore (which uses keyValueWithTimestamp CF)
         final List<byte[]> existingCFs;
-        try {
-            final Options options = new Options(dbOptions, new ColumnFamilyOptions());
+        try (final Options options = new Options(dbOptions, new ColumnFamilyOptions())) {
             existingCFs = RocksDB.listColumnFamilies(options, dbDir.getAbsolutePath());
-            options.close();
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error listing column families for store " + name, e);
         }
+
 
         final boolean upgradingFromTimestampedStore = existingCFs.stream()
             .anyMatch(cf -> Arrays.equals(cf, LEGACY_TIMESTAMPED_CF_NAME));
 
         if (upgradingFromTimestampedStore) {
-            openWithLegacyTimestampedCF(dbOptions, columnFamilyOptions);
+            openInUpgradeMode(dbOptions, columnFamilyOptions);
         } else {
-            openWith2CFs(dbOptions, columnFamilyOptions);
+            openInRegularMode(dbOptions, columnFamilyOptions);
         }
     }
 
-    /**
-     * Opens store when upgrading from RocksDBTimestampedStore (3 CFs).
-     * CFs: DEFAULT (closed), keyValueWithTimestamp (legacy), headers (new)
-     */
-    private void openWithLegacyTimestampedCF(final DBOptions dbOptions,
+    private void openInUpgradeMode(final DBOptions dbOptions,
                                               final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
@@ -98,16 +95,15 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             new ColumnFamilyDescriptor(LEGACY_TIMESTAMPED_CF_NAME, columnFamilyOptions),
             new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions)
         );
-        // Close unused default CF
-        columnFamilies.get(0).close();
+
+        verifyAndCloseEmptyDefaultColumnFamily(columnFamilies.get(0));
 
         final ColumnFamilyHandle legacyCf = columnFamilies.get(1);
         final ColumnFamilyHandle headersCf = columnFamilies.get(2);
 
         // Check if legacy CF has data
-        final RocksIterator legacyIter = db.newIterator(legacyCf);
-        legacyIter.seekToFirst();
-        try {
+        try (final RocksIterator legacyIter = db.newIterator(legacyCf)) {
+            legacyIter.seekToFirst();
             if (legacyIter.isValid()) {
                 log.info("Opening store {} in upgrade mode", name);
                 cfAccessor = new DualColumnFamilyAccessor(legacyCf, headersCf,
@@ -115,18 +111,18 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             } else {
                 log.info("Opening store {} in regular headers-aware mode", name);
                 cfAccessor = new SingleColumnFamilyAccessor(headersCf);
-                legacyCf.close();
+                try {
+                    db.dropColumnFamily(legacyCf);
+                } catch (final RocksDBException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    legacyCf.close();
+                }
             }
-        } finally {
-            legacyIter.close();
-        }
+        } 
     }
 
-    /**
-     * Opens store with 2-CF design.
-     * CFs: DEFAULT (legacy timestamped without headers), headers (new)
-     */
-    private void openWith2CFs(final DBOptions dbOptions,
+    private void openInRegularMode(final DBOptions dbOptions,
                               final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
@@ -135,11 +131,21 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions)
         );
 
-        // Close unused default CF
-        columnFamilies.get(0).close();
+        verifyAndCloseEmptyDefaultColumnFamily(columnFamilies.get(0));
+
         final ColumnFamilyHandle headersCf = columnFamilies.get(1);
         log.info("Opening store {} in regular headers-aware mode", name);
         cfAccessor = new SingleColumnFamilyAccessor(headersCf);
+    }
+
+    private void verifyAndCloseEmptyDefaultColumnFamily(final ColumnFamilyHandle columnFamilyHandle) {
+        try (final RocksIterator defaultIter = db.newIterator(columnFamilyHandle)) {
+            defaultIter.seekToFirst();
+            if (defaultIter.isValid()) {
+                throw new ProcessorStateException("Cannot upgrade directly from key-value store to headers-aware store for " + name + ". " +
+                    "Please first upgrade to RocksDBTimestampedStore, then upgrade to RocksDBTimestampedStoreWithHeaders.");
+            }
+        }
     }
 
 }

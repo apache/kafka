@@ -280,6 +280,7 @@ class Tasks implements TasksRegistry {
     @Override
     public synchronized void clear() {
         pendingTasksToInit.clear();
+        pendingTasksToClose.clear();
         pendingActiveTasksToCreate.clear();
         pendingStandbyTasksToCreate.clear();
         activeTasksPerId.clear();
@@ -290,7 +291,7 @@ class Tasks implements TasksRegistry {
 
     // TODO: change return type to `StreamTask`
     @Override
-    public Task activeTasksForInputPartition(final TopicPartition partition) {
+    public Task activeInitializedTasksForInputPartition(final TopicPartition partition) {
         return activeTasksPerPartition.get(partition);
     }
 
@@ -305,7 +306,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Task task(final TaskId taskId) {
+    public Task initializedTask(final TaskId taskId) {
         final Task task = getTask(taskId);
 
         if (task != null)
@@ -315,26 +316,26 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public Collection<Task> tasks(final Collection<TaskId> taskIds) {
+    public Collection<Task> initializedTasks(final Collection<TaskId> taskIds) {
         final Set<Task> tasks = new HashSet<>();
         for (final TaskId taskId : taskIds) {
-            tasks.add(task(taskId));
+            tasks.add(initializedTask(taskId));
         }
         return tasks;
     }
 
     @Override
-    public synchronized Collection<TaskId> activeTaskIds() {
+    public synchronized Collection<TaskId> activeInitializedTaskIds() {
         return Collections.unmodifiableCollection(activeTasksPerId.keySet());
     }
 
     @Override
-    public synchronized Collection<Task> activeTasks() {
+    public synchronized Collection<Task> activeInitializedTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
     }
 
     @Override
-    public synchronized Collection<Task> standbyTasks() {
+    public synchronized Collection<Task> standbyInitializedTasks() {
         return Collections.unmodifiableCollection(standbyTasksPerId.values());
     }
 
@@ -343,12 +344,12 @@ class Tasks implements TasksRegistry {
      * and the returned task could be modified by other threads concurrently
      */
     @Override
-    public synchronized Set<Task> allTasks() {
+    public synchronized Set<Task> allInitializedTasks() {
         return union(HashSet::new, new HashSet<>(activeTasksPerId.values()), new HashSet<>(standbyTasksPerId.values()));
     }
 
     @Override
-    public synchronized Set<Task> allNonFailedTasks() {
+    public synchronized Set<Task> allNonFailedInitializedTasks() {
         final Set<Task> nonFailedActiveTasks = activeTasksPerId.values().stream()
             .filter(task -> !failedTaskIds.contains(task.id()))
             .collect(Collectors.toSet());
@@ -359,12 +360,12 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public synchronized Set<TaskId> allTaskIds() {
+    public synchronized Set<TaskId> allInitializedTaskIds() {
         return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }
 
     @Override
-    public synchronized Map<TaskId, Task> allTasksPerId() {
+    public synchronized Map<TaskId, Task> allInitializedTasksPerId() {
         final Map<TaskId, Task> ret = new HashMap<>();
         ret.putAll(activeTasksPerId);
         ret.putAll(standbyTasksPerId);
@@ -372,7 +373,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public boolean contains(final TaskId taskId) {
+    public boolean containsInitialized(final TaskId taskId) {
         return getTask(taskId) != null;
     }
 

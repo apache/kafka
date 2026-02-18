@@ -18,7 +18,6 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.log.LogManager
-
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils
@@ -30,7 +29,7 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.internal.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
+import org.apache.kafka.common.record.internal.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
@@ -40,7 +39,7 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.config.ReplicationConfigs
-import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogConfig, RecordValidationStats, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}

@@ -118,7 +118,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    default WindowStoreIterator<V> backwardFetch(K key, Instant timeFrom, Instant timeTo) throws IllegalArgumentException  {
+    default WindowStoreIterator<V> backwardFetch(final K key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException  {
         throw new UnsupportedOperationException();
     }
 
@@ -156,7 +156,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    default KeyValueIterator<Windowed<K>, V> backwardFetch(K keyFrom, K keyTo, Instant timeFrom, Instant timeTo)
+    default KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom, final K keyTo, final Instant timeFrom, final Instant timeTo)
         throws IllegalArgumentException  {
         throw new UnsupportedOperationException();
     }
@@ -204,7 +204,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for any key
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(Instant timeFrom, Instant timeTo) throws IllegalArgumentException  {
+    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException  {
         throw new UnsupportedOperationException();
     }
 }

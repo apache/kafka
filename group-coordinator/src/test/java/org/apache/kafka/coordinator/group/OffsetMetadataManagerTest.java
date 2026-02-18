@@ -477,18 +477,6 @@ public class OffsetMetadataManagerTest {
             ));
         }
 
-        public void deleteOffset(
-            String groupId,
-            String topic,
-            int partition
-        ) {
-            replay(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
-                groupId,
-                topic,
-                partition
-            ));
-        }
-
         private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
             if (apiMessageAndVersion == null) {
                 return null;
