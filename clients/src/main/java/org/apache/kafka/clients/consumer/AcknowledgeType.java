@@ -50,9 +50,9 @@ public enum AcknowledgeType {
     /**
      * Returns the AcknowledgeType for the given identifier.
      *
-     * @param id the identifier for the acknowledge type
-     * @return the corresponding AcknowledgeType
-     * @throws IllegalArgumentException if the id is not recognized
+     * @param id The identifier for the acknowledge type
+     * @return The corresponding AcknowledgeType
+     * @throws IllegalArgumentException If the ID is not recognized
      */
     public static AcknowledgeType forId(byte id) {
         switch (id) {

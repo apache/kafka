@@ -36,8 +36,8 @@ public class LogTruncationException extends OffsetOutOfRangeException {
     /**
      * Constructs a new LogTruncationException with the fetch offsets and divergent offsets.
      *
-     * @param fetchOffsets the fetch offsets that were out of range
-     * @param divergentOffsets the offsets where the consumer's log diverged from the broker's log
+     * @param fetchOffsets The fetch offsets that were out of range
+     * @param divergentOffsets The offsets where the consumer's log diverged from the broker's log
      */
     public LogTruncationException(Map<TopicPartition, Long> fetchOffsets,
                                   Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
@@ -47,9 +47,9 @@ public class LogTruncationException extends OffsetOutOfRangeException {
     /**
      * Constructs a new LogTruncationException with a custom message.
      *
-     * @param message the detail message
-     * @param fetchOffsets the fetch offsets that were out of range
-     * @param divergentOffsets the offsets where the consumer's log diverged from the broker's log
+     * @param message The detail message
+     * @param fetchOffsets The fetch offsets that were out of range
+     * @param divergentOffsets The offsets where the consumer's log diverged from the broker's log
      */
     public LogTruncationException(String message,
                                   Map<TopicPartition, Long> fetchOffsets,

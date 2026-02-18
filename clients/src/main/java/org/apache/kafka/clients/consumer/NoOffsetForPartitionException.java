@@ -35,7 +35,7 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
     /**
      * Constructs a new NoOffsetForPartitionException for a single partition.
      *
-     * @param partition the partition for which no offset is defined
+     * @param partition The partition for which no offset is defined
      */
     public NoOffsetForPartitionException(TopicPartition partition) {
         super("Undefined offset with no reset policy for partition: " + partition);
@@ -45,7 +45,7 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
     /**
      * Constructs a new NoOffsetForPartitionException for multiple partitions.
      *
-     * @param partitions the partitions for which no offset is defined
+     * @param partitions The partitions for which no offset is defined
      */
     public NoOffsetForPartitionException(Collection<TopicPartition> partitions) {
         super("Undefined offset with no reset policy for partitions: " + partitions);
@@ -53,8 +53,8 @@ public class NoOffsetForPartitionException extends InvalidOffsetException {
     }
 
     /**
-     * returns all partitions for which no offsets are defined.
-     * @return all partitions without offsets
+     * Returns all partitions for which no offsets are defined.
+     * @return All partitions without offsets
      */
     public Set<TopicPartition> partitions() {
         return partitions;

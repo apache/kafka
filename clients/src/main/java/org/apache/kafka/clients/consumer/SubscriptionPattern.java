@@ -33,7 +33,7 @@ public class SubscriptionPattern {
     /**
      * Constructs a new subscription pattern.
      *
-     * @param pattern the regular expression pattern compatible with RE2/J
+     * @param pattern The regular expression pattern compatible with RE2/J
      */
     public SubscriptionPattern(String pattern) {
         this.pattern = pattern;

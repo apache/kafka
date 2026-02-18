@@ -791,7 +791,7 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * Constructs a new ConsumerConfig with the given properties.
      *
-     * @param props the consumer configuration properties
+     * @param props The consumer configuration properties
      */
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
@@ -800,7 +800,7 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * Constructs a new ConsumerConfig with the given properties.
      *
-     * @param props the consumer configuration properties
+     * @param props The consumer configuration properties
      */
     public ConsumerConfig(Map<String, Object> props) {
         super(CONFIG, props);
@@ -813,7 +813,7 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * Returns the set of all configuration keys.
      *
-     * @return the set of configuration keys
+     * @return The set of configuration keys
      */
     public static Set<String> configNames() {
         return CONFIG.names();
@@ -822,7 +822,7 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * Returns the configuration definition.
      *
-     * @return the configuration definition
+     * @return The configuration definition
      */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);

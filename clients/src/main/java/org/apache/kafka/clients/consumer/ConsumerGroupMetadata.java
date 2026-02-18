@@ -59,7 +59,7 @@ public class ConsumerGroupMetadata {
     /**
      * Returns the consumer group id.
      *
-     * @return the group id
+     * @return The group id
      */
     public String groupId() {
         return groupId;
@@ -68,7 +68,7 @@ public class ConsumerGroupMetadata {
     /**
      * Returns the generation id of the consumer group.
      *
-     * @return the generation id
+     * @return The generation id
      */
     public int generationId() {
         return generationId;
@@ -77,7 +77,7 @@ public class ConsumerGroupMetadata {
     /**
      * Returns the member id of this consumer.
      *
-     * @return the member id
+     * @return The member id
      */
     public String memberId() {
         return memberId;
@@ -86,7 +86,7 @@ public class ConsumerGroupMetadata {
     /**
      * Returns the group instance id if this is a static member.
      *
-     * @return the group instance id, or empty if this is a dynamic member
+     * @return The group instance id, or empty if this is a dynamic member
      */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;

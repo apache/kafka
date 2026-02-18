@@ -44,9 +44,9 @@ public enum GroupProtocol {
     /**
      * Case-insensitive group protocol lookup by string name.
      *
-     * @param name the name of the group protocol
-     * @return the corresponding GroupProtocol
-     * @throws IllegalArgumentException if the name does not match any protocol
+     * @param name The name of the group protocol
+     * @return The corresponding GroupProtocol
+     * @throws IllegalArgumentException If the name does not match any protocol
      */
     public static GroupProtocol of(final String name) {
         return GroupProtocol.valueOf(name.toUpperCase(Locale.ROOT));

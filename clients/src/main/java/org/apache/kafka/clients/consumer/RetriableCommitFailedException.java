@@ -34,7 +34,7 @@ public class RetriableCommitFailedException extends RetriableException {
     /**
      * Constructs a new RetriableCommitFailedException with the specified cause.
      *
-     * @param t the cause of the exception
+     * @param t The cause of the exception
      */
     public RetriableCommitFailedException(Throwable t) {
         super("Offset commit failed with a retriable exception. You should retry committing " +
@@ -44,7 +44,7 @@ public class RetriableCommitFailedException extends RetriableException {
     /**
      * Constructs a new RetriableCommitFailedException with the specified detail message.
      *
-     * @param message the detail message
+     * @param message The detail message
      */
     public RetriableCommitFailedException(String message) {
         super(message);
@@ -53,8 +53,8 @@ public class RetriableCommitFailedException extends RetriableException {
     /**
      * Constructs a new RetriableCommitFailedException with the specified detail message and cause.
      *
-     * @param message the detail message
-     * @param t the cause of the exception
+     * @param message The detail message
+     * @param t The cause of the exception
      */
     public RetriableCommitFailedException(String message, Throwable t) {
         super(message, t);
