@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
@@ -34,7 +36,12 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
 
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final K key, final V value, final int numPartitions) {
-        final byte[] keyBytes = keySerializer.serialize(topic, key);
+        return partitions(topic, new RecordHeaders(), key, value, numPartitions);
+    }
+
+    @Override
+    public Optional<Set<Integer>> partitions(String topic, Headers headers, K key, V value, int numPartitions) {
+        final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
 
         // if the key bytes are not available, we just return empty optional to let the producer decide
         // which partition to send internally; otherwise stick with the same built-in partitioner

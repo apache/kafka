@@ -54,10 +54,13 @@ import java.util.Set;
 @FunctionalInterface
 public interface StreamPartitioner<K, V> {
 
+    Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions);
+
     /**
-     * Determine the number(s) of the partition(s) to which a record with the given key and value should be sent, 
+     * Determine the number(s) of the partition(s) to which a record with the given key and value should be sent,
      * for the given topic and current partition count
      * @param topic the topic name this record is sent to
+     * @param headers the headers of the record
      * @param key the key of the record
      * @param value the value of the record
      * @param numPartitions the total number of partitions
@@ -66,8 +69,6 @@ public interface StreamPartitioner<K, V> {
      * Optional of an empty set means the record won't be sent to any partitions i.e drop it.
      * Optional of Set of integers means the partitions to which the record should be sent to.
      * */
-    Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions);
-
     default Optional<Set<Integer>> partitions(final String topic, final Headers headers, final K key, final V value, final int numPartitions) {
         return partitions(topic, key, value, numPartitions);
     }

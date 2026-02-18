@@ -34,22 +34,23 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
         this.serializer = serializer;
     }
 
+    @Override
+    public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
+        return partitions(topic, new RecordHeaders(), windowedKey, value, numPartitions);
+    }
+
     /**
      * WindowedStreamPartitioner determines the partition number for a record with the given windowed key and value
      * and the current number of partitions. The partition number id determined by the original key of the windowed key
      * using the same logic as DefaultPartitioner so that the topic is partitioned by the original key.
      *
      * @param topic the topic name this record is sent to
+     * @param headers the record headers of the record
      * @param windowedKey the key of the record
      * @param value the value of the record
      * @param numPartitions the total number of partitions
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
-    @Override
-    public Optional<Set<Integer>> partitions(final String topic, final Windowed<K> windowedKey, final V value, final int numPartitions) {
-        return partitions(topic, new RecordHeaders(), windowedKey, value, numPartitions);
-    }
-
     @Override
     public Optional<Set<Integer>> partitions(final String topic, final Headers headers, final Windowed<K> windowedKey, final V value, final int numPartitions) {
         // for windowed key, the key bytes should never be null
