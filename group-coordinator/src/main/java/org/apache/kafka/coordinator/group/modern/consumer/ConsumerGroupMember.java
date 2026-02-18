@@ -329,7 +329,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
     /**
      * The epoch at which each partition was assigned to this member.
      * Map: topicId -> partitionId -> assignmentEpoch
-     * Used to validate offset commits with older member epochs (KIP-1251).
      */
     private final Map<Uuid, Map<Integer, Integer>> assignedPartitionsWithEpochs;
 
