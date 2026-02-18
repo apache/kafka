@@ -1045,11 +1045,11 @@ public class SubscriptionState {
         }
 
         public void requestEndOffset() {
-            this.endOffsetRequested = true;
+            endOffsetRequested = true;
         }
 
         public void clearEndOffset() {
-            this.endOffsetRequested = false;
+            endOffsetRequested = false;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
