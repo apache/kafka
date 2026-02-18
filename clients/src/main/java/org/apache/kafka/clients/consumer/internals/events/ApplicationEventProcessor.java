@@ -656,27 +656,21 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
             final OptionalLong lagOpt;
             if (lag == null) {
-                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
-                    // The LIST_OFFSETS lag lookup is serialized, so if there's an inflight request it must
-                    // finish before another request can be issued. This serialization mechanism is controlled
-                    // by the 'end offset requested' flag in SubscriptionState.
-                    if (subscriptions.partitionEndOffsetRequested(topicPartition)) {
-                        log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", topicPartition);
-                    } else {
-                        // If the log end offset is unknown and there isn't already an in-flight list offset
-                        // request, issue one with the goal that the lag will be available the next time the
-                        // user calls currentLag().
-                        log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                        subscriptions.requestPartitionEndOffset(topicPartition);
+                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
+                    !subscriptions.partitionEndOffsetRequested(topicPartition)) {
+                    // If the log end offset is unknown and there isn't already an in-flight list offset
+                    // request, issue one with the goal that the lag will be available the next time the
+                    // user calls currentLag().
+                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
+                    subscriptions.requestPartitionEndOffset(topicPartition);
 
-                        // Emulates the Consumer.endOffsets() logic...
-                        Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(
-                            topicPartition,
-                            ListOffsetsRequest.LATEST_TIMESTAMP
-                        );
+                    // Emulates the Consumer.endOffsets() logic...
+                    Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(
+                        topicPartition,
+                        ListOffsetsRequest.LATEST_TIMESTAMP
+                    );
 
-                        requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false);
-                    }
+                    requestManagers.offsetsRequestManager.fetchOffsets(timestampToSearch, false);
                 }
 
                 lagOpt = OptionalLong.empty();
