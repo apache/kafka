@@ -955,11 +955,11 @@ public class StoreUpgradeIntegrationTest {
 
     @Test
     public void shouldFailDowngradeFromTimestampedToRegularKeyValueStore() throws Exception {
-        setupAndPopulateTimestampedStore();
+        final Properties props = props();
+        setupAndPopulateTimestampedStore(props);
         kafkaStreams = null;
 
         // Attempt to downgrade to regular key-value store - this should fail
-        final Properties props = props();
         final StreamsBuilder streamsBuilderForRegularStore = new StreamsBuilder();
 
         streamsBuilderForRegularStore.addStateStore(
@@ -1002,13 +1002,13 @@ public class StoreUpgradeIntegrationTest {
 
     @Test
     public void shouldSuccessfullyDowngradeAfterCleanup() throws Exception {
-        setupAndPopulateTimestampedStore();
+        final Properties props = props();
+        setupAndPopulateTimestampedStore(props);
 
         kafkaStreams.cleanUp(); // Delete local state
         kafkaStreams = null;
 
         // Now downgrade to regular key-value store - this should succeed because we cleaned up
-        final Properties props = props();
         final StreamsBuilder streamsBuilderForRegularStore = new StreamsBuilder();
 
         streamsBuilderForRegularStore.addStateStore(
@@ -1030,7 +1030,7 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams.close();
     }
 
-    private void setupAndPopulateTimestampedStore() throws Exception {
+    private void setupAndPopulateTimestampedStore(final Properties props) throws Exception {
         final StreamsBuilder streamsBuilderForTimestampedStore = new StreamsBuilder();
 
         streamsBuilderForTimestampedStore.addStateStore(
@@ -1041,7 +1041,6 @@ public class StoreUpgradeIntegrationTest {
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedKeyValueProcessor::new, STORE_NAME);
 
-        final Properties props = props();
         kafkaStreams = new KafkaStreams(streamsBuilderForTimestampedStore.build(), props);
         kafkaStreams.start();
 
