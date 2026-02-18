@@ -232,6 +232,28 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
+        /**
+         * Resets the assignment epochs to 0 for all assigned partitions.
+         * Used when a static member leaves, so that the rejoining member
+         * partitions will be assigned from epoch 0 to the new member ID.
+         * All commits using the old member ID will be fenced.
+         */
+        public Builder resetAssignedPartitionsEpochsToZero() {
+            if (this.assignedPartitionsWithEpochs.isEmpty()) {
+                return this;
+            }
+            Map<Uuid, Map<Integer, Integer>> resetEpochs = new HashMap<>();
+            for (Map.Entry<Uuid, Map<Integer, Integer>> entry : this.assignedPartitionsWithEpochs.entrySet()) {
+                Map<Integer, Integer> partitionEpochs = new HashMap<>();
+                for (Integer partitionId : entry.getValue().keySet()) {
+                    partitionEpochs.put(partitionId, 0);
+                }
+                resetEpochs.put(entry.getKey(), Collections.unmodifiableMap(partitionEpochs));
+            }
+            this.assignedPartitionsWithEpochs = Collections.unmodifiableMap(resetEpochs);
+            return this;
+        }
+
         private static Map<Uuid, Map<Integer, Integer>> assignmentWithEpochsFromTopicPartitions(
             List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
             int defaultEpoch
