@@ -1049,35 +1049,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public OptionalLong currentLag(TopicPartition topicPartition) {
         acquireAndEnsureOpen();
         try {
-            final Long lag = subscriptions.partitionLag(topicPartition, isolationLevel);
-
-            // if the log end offset is not known and hence cannot return lag and there is
-            // no in-flight list offset requested yet,
-            // issue a list offset request for that partition so that next time
-            // we may get the answer; we do not need to wait for the return value
-            // since we would not try to poll the network client synchronously
-            if (lag == null) {
-                if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
-                    // The LIST_OFFSETS lag lookup is serialized, so if there's an inflight request it must
-                    // finish before another request can be issued. This serialization mechanism is controlled
-                    // by the 'end offset requested' flag in SubscriptionState.
-                    if (subscriptions.partitionEndOffsetRequested(topicPartition)) {
-                        log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", topicPartition);
-                    } else {
-                        log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                        subscriptions.requestPartitionEndOffset(topicPartition);
-                        offsetFetcher.endOffsets(
-                            Collections.singleton(topicPartition),
-                            time.timer(0L),
-                            true
-                        );
-                    }
-                }
-
-                return OptionalLong.empty();
-            }
-
-            return OptionalLong.of(lag);
+            return offsetFetcher.currentLag(topicPartition);
         } finally {
             release();
         }
