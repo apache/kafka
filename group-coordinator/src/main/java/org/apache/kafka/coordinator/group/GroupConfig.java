@@ -276,7 +276,7 @@ public final class GroupConfig extends AbstractConfig {
                     ShareGroupConfig.SHARE_GROUP_MIN_DELIVERY_COUNT_LIMIT_CONFIG);
         }
         if (shareDeliveryCountLimit > shareGroupConfig.shareGroupMaxDeliveryCountLimit()) {
-            throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be greater than or equal to " +
+            throw new InvalidConfigurationException(SHARE_DELIVERY_COUNT_LIMIT_CONFIG + " must be less than or equal to " +
                     ShareGroupConfig.SHARE_GROUP_MAX_DELIVERY_COUNT_LIMIT_CONFIG);
         }
         if (streamsHeartbeatIntervalMs < groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs()) {
