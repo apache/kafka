@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.hamcrest.core.IsNull;
@@ -42,6 +43,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
@@ -461,6 +463,33 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             rocksDBStore.init(context, rocksDBStore);
 
             assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+        }
+    }
+
+    @Test
+    public void shouldNotSupportDowngradeFromTimestampedToRegularStore() throws Exception {
+        // prepare timestamped store with data
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(new Bytes("key1".getBytes()), "timestamped-value1".getBytes());
+        rocksDBStore.put(new Bytes("key2".getBytes()), "timestamped-value2".getBytes());
+        rocksDBStore.close();
+
+        // attempt to open the same store as a regular (non-timestamped) RocksDB store
+        // this should fail because the timestamped store uses a different column family
+        final RocksDBStore regularStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
+        try {
+            final ProcessorStateException exception = assertThrows(
+                ProcessorStateException.class,
+                () -> regularStore.init(context, regularStore)
+            );
+
+            // verify that the exception has a descriptive message about the downgrade not being supported
+            assertThat(exception.getMessage(), is(
+                "Store " + DB_NAME + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
+                "Downgrade from timestamped to regular store is not supported directly. " +
+                "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog."));
+        } finally {
+            regularStore.close();
         }
     }
 

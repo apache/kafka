@@ -69,6 +69,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -298,6 +299,26 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         try {
             final List<byte[]> allExisting = RocksDB.listColumnFamilies(userSpecifiedOptions, absolutePath);
+
+            // Check for unexpected column families
+            for (final byte[] existingFamily : allExisting) {
+                final boolean isExpected = allDescriptors.stream()
+                        .anyMatch(descriptor -> Arrays.equals(descriptor.getName(), existingFamily));
+                if (!isExpected) {
+                    // Check specifically for timestamped store column family
+                    if (Arrays.equals(existingFamily, RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME)) {
+                        throw new ProcessorStateException(
+                                "Store " + name + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
+                                "Downgrade from timestamped to regular store is not supported directly. " +
+                                "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog.");
+                    }
+
+                    final String unexpectedFamily = new String(existingFamily, StandardCharsets.UTF_8);
+                    throw new ProcessorStateException(
+                            "Unexpected column family '" + unexpectedFamily + "' found in store " + name + ". " +
+                            "The store may have been created with incompatible settings.");
+                }
+            }
 
             final List<ColumnFamilyDescriptor> existingDescriptors = new LinkedList<>();
             existingDescriptors.add(defaultColumnFamilyDescriptor);
