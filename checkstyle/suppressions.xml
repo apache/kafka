@@ -222,8 +222,11 @@
     <suppress checks="(NPathComplexity|CyclomaticComplexity)"
               files="(KStreamSlidingWindowAggregate|RackAwareTaskAssignor).java"/>
 
-    <!-- suppress FinalLocalVariable outside of the streams package. -->
+    <!-- suppress FinalLocalVariable and FinalParameters outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
+              files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
+
+    <suppress checks="FinalParameters"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
     <!-- Generated code -->
@@ -374,8 +377,5 @@
 
      <!-- Add the new suppression rule for JaasTestUtils.java -->
     <suppress checks="ImportControl" files="(JaasTestUtils).java" />
-
-    <suppress checks="FinalLocalVariable" files="."/>
-    <suppress checks="FinalParameters" files="."/>
 
 </suppressions>

@@ -103,7 +103,7 @@ public class EndTransactionMarkerTest {
             EndTransactionMarker marker = new EndTransactionMarker(type, 1);
             int offsetSize = ByteUtils.sizeOfVarint(0);
             int timestampSize = ByteUtils.sizeOfVarlong(0);
-            int keySize = ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE;
+            int keySize = type.controlRecordKeySize();
             int valueSize = marker.serializeValue().remaining();
             int headerSize = ByteUtils.sizeOfVarint(Record.EMPTY_HEADERS.length);
             int totalSize = 1 + offsetSize + timestampSize + ByteUtils.sizeOfVarint(keySize) + keySize + ByteUtils.sizeOfVarint(valueSize) + valueSize + headerSize;

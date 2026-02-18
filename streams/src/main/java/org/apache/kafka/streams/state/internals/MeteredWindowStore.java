@@ -60,6 +60,8 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class MeteredWindowStore<K, V>
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
     implements WindowStore<K, V>, MeteredStateStore {

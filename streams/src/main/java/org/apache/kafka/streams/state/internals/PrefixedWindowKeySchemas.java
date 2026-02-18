@@ -30,6 +30,8 @@ import java.util.List;
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
 
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class PrefixedWindowKeySchemas {
 
     private static final int PREFIX_SIZE = 1;

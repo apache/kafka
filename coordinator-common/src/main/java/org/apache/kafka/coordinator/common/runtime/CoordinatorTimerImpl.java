@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -97,6 +98,11 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<U> {
                         return operation.generateRecords();
                     }
                 ).exceptionally(ex -> {
+                    // Exceptions may be wrapped in CompletionException when propagated
+                    // through CompletableFuture chains, so we unwrap them before
+                    // checking types with instanceof.
+                    ex = Errors.maybeUnwrapException(ex);
+
                     // Remove the task after a failure.
                     tasks.remove(key, this);
 

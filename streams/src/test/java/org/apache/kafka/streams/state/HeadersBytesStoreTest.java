@@ -46,7 +46,7 @@ public class HeadersBytesStoreTest {
         assertNotNull(converted);
         assertEquals(legacyValue.length + 1, converted.length, "converted bytes should have empty header bytes");
         assertEquals(0x00, converted[0], "First byte for empty header should be the 0x00");
-        byte[] actualPayload = Arrays.copyOfRange(converted, 1, converted.length);
+        final byte[] actualPayload = Arrays.copyOfRange(converted, 1, converted.length);
         assertArrayEquals(legacyValue, actualPayload);
     }
 

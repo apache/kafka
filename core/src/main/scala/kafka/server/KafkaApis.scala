@@ -69,7 +69,7 @@ import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, ShareParti
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
-import org.apache.kafka.storage.internals.log.AppendOrigin
+import org.apache.kafka.storage.internals.log.{AppendOrigin, RecordValidationStats}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.util

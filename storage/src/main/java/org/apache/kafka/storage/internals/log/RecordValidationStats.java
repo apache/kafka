@@ -14,32 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.streams.processor;
-
-
-import org.apache.kafka.streams.KeyValue;
-
-import java.util.Collection;
+package org.apache.kafka.storage.internals.log;
 
 /**
- * Interface for batching restoration of a {@link StateStore}
- *
- * It is expected that implementations of this class will not call the {@link StateRestoreCallback#restore(byte[],
- * byte[])} method.
+ * This class tracks resource usage during broker record validation for eventual reporting in metrics.
+ * Record validation covers integrity checks on inbound data (e.g. checksum verification), structural
+ * validation to make sure that records are well-formed, and conversion between record formats if needed.
  */
-public interface BatchingStateRestoreCallback extends StateRestoreCallback {
+public record RecordValidationStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
 
-    /**
-     * Called to restore a number of records. This method is called repeatedly until the {@link StateStore} is fully
-     * restored.
-     *
-     * @param records the records to restore.
-     */
-    void restoreAll(Collection<KeyValue<byte[], byte[]>> records);
+    public static final RecordValidationStats EMPTY = new RecordValidationStats(0, 0, 0);
 
-    @Override
-    default void restore(final byte[] key, final byte[] value) {
-        throw new UnsupportedOperationException();
-    }
 }
