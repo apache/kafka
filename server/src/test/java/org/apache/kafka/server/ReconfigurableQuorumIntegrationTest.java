@@ -368,16 +368,12 @@ public class ReconfigurableQuorumIntegrationTest {
                 .setInitialVoterSet(initialThreeVoters)
                 .build()
         ) {
-            // doesn't work because cluster.format() formats all 4 controllers and cluster.startup() starts all 4 controllers
-            // cluster.format();
-            // cluster.startup();
-
             // manually format only first 3 controllers + all brokers
             // This leaves controller 3003 unformatted for later scale-up simulation
 
             // Format first 3 controllers with initial voter set
             for (int id : new int[]{3000, 3001, 3002}) {
-                cluster.formatController(id, initialThreeVoters); // formatController is a newly added method
+                cluster.formatController(id, initialThreeVoters);
             }
 
             // Format all brokers
@@ -415,10 +411,6 @@ public class ReconfigurableQuorumIntegrationTest {
                             "Quorum should have a stable leader from initial 3 controllers");
                 });
 
-                // Given all the above checks, the cluster should be stable and the quorum formed
-                // Give the initial cluster more time to stabilize (the following should not be needed)
-                // Thread.sleep(5000);
-
                 // Scale-up a new controller, format 4th controller with all 4 in voter set
                 // This simulates formatting a new controller with -I containing all controllers
                 final Map<Integer, Uuid> allFourVoters = new HashMap<>(initialThreeVoters);
@@ -444,9 +436,6 @@ public class ReconfigurableQuorumIntegrationTest {
                     assertEquals(Set.of(3000, 3001, 3002), voters.keySet(),
                             "Controller 3003 should NOT be in active quorum yet despite being formatted with all 4 in voter set");
                 });
-
-                // UP TO HERE everything seems to be ok then trying to add the new controller makes the test failing
-                // with nodes disconnections and more
 
                 int port = cluster.controllers().get(3003).socketServer().boundPort(new ListenerName("CONTROLLER"));
                 // Add 4th controller to active quorum via add-controller command
