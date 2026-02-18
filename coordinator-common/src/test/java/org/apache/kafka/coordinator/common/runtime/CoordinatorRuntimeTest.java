@@ -3444,6 +3444,7 @@ public class CoordinatorRuntimeTest {
         assertTrue(ctx.bufferSupplier.get(1).capacity() > INITIAL_BUFFER_SIZE);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testBufferShrinkWhenCachedBufferMaxBytesReducedBelowBatchSize() {
         MockTimer timer = new MockTimer();

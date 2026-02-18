@@ -671,7 +671,13 @@ abstract class AbstractFetcherThread(name: String,
      */
     val offsetAndEpoch = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch)
     val leaderEndOffset = offsetAndEpoch.offset
-    if (leaderEndOffset < replicaEndOffset) {
+    val fetchFromLastTieredOffset = shouldFetchFromLastTieredOffset(topicPartition, leaderEndOffset, replicaEndOffset)
+
+    if (fetchFromLastTieredOffset) {
+      val leaderStartOffsetAndEpoch = leader.fetchEarliestOffset(topicPartition, currentLeaderEpoch)
+      val earliestPendingUploadOffsetAndEpoch = fetchEarliestPendingUploadOffset(topicPartition, currentLeaderEpoch, leaderStartOffsetAndEpoch)
+      fetchTierStateMachine.start(topicPartition, topicId.toJava, currentLeaderEpoch, earliestPendingUploadOffsetAndEpoch, leaderStartOffsetAndEpoch.offset())
+    } else if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
       truncate(topicPartition, OffsetTruncationState(leaderEndOffset, truncationCompleted = true))
@@ -781,7 +787,15 @@ abstract class AbstractFetcherThread(name: String,
                                                 leaderEpochInRequest: Optional[Integer],
                                                 fetchPartitionData: PartitionData): Boolean = {
     try {
-      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState, fetchPartitionData)
+      val isLastTieredOffsetFetchEnabled = shouldFetchFromLastTieredOffset(topicPartition, fetchState)
+      val leaderLogStartOffsetAndEpoch = leader.fetchEarliestOffset(topicPartition, fetchState.currentLeaderEpoch())
+      val fetchOffsetAndEpoch = if (isLastTieredOffsetFetchEnabled) {
+        fetchEarliestPendingUploadOffset(topicPartition, fetchState.currentLeaderEpoch(), leaderLogStartOffsetAndEpoch)
+      } else {
+        leader.fetchEarliestLocalOffset(topicPartition, fetchState.currentLeaderEpoch())
+      }
+      val newFetchState = fetchTierStateMachine.start(topicPartition, fetchState.topicId(), fetchState.currentLeaderEpoch(),
+        fetchOffsetAndEpoch, leaderLogStartOffsetAndEpoch.offset())
 
       // TODO: use fetchTierStateMachine.maybeAdvanceState when implementing async tiering logic in KAFKA-13560
 
@@ -803,6 +817,29 @@ abstract class AbstractFetcherThread(name: String,
         error(s"Error building remote log auxiliary state for $topicPartition", e)
         false
     }
+  }
+
+  /**
+   * Determines the earliest offset for pending uploads, taking into account
+   * both local and remote storage conditions.
+   */
+  private def fetchEarliestPendingUploadOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, leaderLogStartOffsetAndEpoch: OffsetAndEpoch): OffsetAndEpoch = {
+    val earliestPendingUploadOffset = leader.fetchEarliestPendingUploadOffset(topicPartition, currentLeaderEpoch)
+    if (earliestPendingUploadOffset.offset == -1L) {
+      val leaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch)
+      if (leaderLocalStartOffset.offset == leaderLogStartOffsetAndEpoch.offset) {
+        return leaderLocalStartOffset
+      }
+      throw new OffsetNotAvailableException("Segments are uploaded to remote storage, but the leader does not know the earliest pending upload offset.")
+    }
+    earliestPendingUploadOffset
+  }
+
+  private def shouldFetchFromLastTieredOffset(topicPartition: TopicPartition, fetchState: PartitionFetchState): Boolean = {
+    val leaderEndOffset = leader.fetchLatestOffset(topicPartition, fetchState.currentLeaderEpoch())
+    val replicaEndOffset = logEndOffset(topicPartition)
+
+    shouldFetchFromLastTieredOffset(topicPartition, leaderEndOffset.offset(), replicaEndOffset)
   }
 
   private def delayPartitions(partitions: Iterable[TopicPartition], delay: Long): Unit = {
