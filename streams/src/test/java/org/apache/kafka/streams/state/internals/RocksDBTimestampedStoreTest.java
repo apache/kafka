@@ -191,21 +191,21 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         assertThat(rocksDBStore.approximateNumEntries(), is(5L));
 
         // should be no-op on both CF
-        assertThat(rocksDBStore.putIfAbsent(new Bytes("key12".getBytes()), null), new IsNull<>());
-        // two delete operation, however, only one is counted because old CF count was zero before already
-        // approx: 0 entries on old CF, 4 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(4L));
+        assertThat(rocksDBStore.putIfAbsent(new Bytes("key12new".getBytes()), null), new IsNull<>());
+        // one delete operation, however, not counted because old CF count was zero before already
+        // approx: 0 entries on old CF, 5 in new CF
+        assertThat(rocksDBStore.approximateNumEntries(), is(5L));
 
         // delete()
 
         // should delete key6 from old and new CF
         assertThat(rocksDBStore.delete(new Bytes("key6".getBytes())).length, is(8 + 6));
         // two delete operation, however, only one is counted because old CF count was zero before already
-        // approx: 0 entries on old CF, 3 in new CF
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+        // approx: 0 entries on old CF, 4 in new CF
+        assertThat(rocksDBStore.approximateNumEntries(), is(4L));
 
         iteratorsShouldNotMigrateData();
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+        assertThat(rocksDBStore.approximateNumEntries(), is(4L));
 
         rocksDBStore.close();
 
@@ -404,7 +404,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             assertThat(db.get(withTimestampColumnFamily, "key7".getBytes()), new IsNull<>());
             assertThat(db.get(withTimestampColumnFamily, "key8".getBytes()).length, is(18));
             assertThat(db.get(withTimestampColumnFamily, "key11".getBytes()).length, is(21));
-            assertThat(db.get(withTimestampColumnFamily, "key12".getBytes()), new IsNull<>());
+            assertThat(db.get(withTimestampColumnFamily, "key12new".getBytes()), new IsNull<>());
         } catch (final RuntimeException fatal) {
             errorOccurred = true;
         } finally {
@@ -467,29 +467,25 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     }
 
     @Test
-    public void shouldNotSupportDowngradeFromTimestampedToRegularStore() throws Exception {
-        // prepare timestamped store with data
+    public void shouldNotSupportDowngradeFromTimestampedToPlainKeyValueStore() {
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(new Bytes("key1".getBytes()), "timestamped-value1".getBytes());
         rocksDBStore.put(new Bytes("key2".getBytes()), "timestamped-value2".getBytes());
         rocksDBStore.close();
 
-        // attempt to open the same store as a regular (non-timestamped) RocksDB store
-        // this should fail because the timestamped store uses a different column family
-        final RocksDBStore regularStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
+        final RocksDBStore kvStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
         try {
             final ProcessorStateException exception = assertThrows(
                 ProcessorStateException.class,
-                () -> regularStore.init(context, regularStore)
+                () -> kvStore.init(context, kvStore)
             );
 
-            // verify that the exception has a descriptive message about the downgrade not being supported
             assertThat(exception.getMessage(), is(
                 "Store " + DB_NAME + " is a timestamped key-value store and cannot be opened as a regular key-value store. " +
                 "Downgrade from timestamped to regular store is not supported directly. " +
                 "To downgrade, you can delete the local state in the state directory, and rebuild the store as regular key-value store from the changelog."));
         } finally {
-            regularStore.close();
+            kvStore.close();
         }
     }
 

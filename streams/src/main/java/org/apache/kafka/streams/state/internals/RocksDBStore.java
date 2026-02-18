@@ -412,7 +412,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                            final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         final byte[] originalValue = get(key);
-        if (originalValue == null) {
+        if (originalValue == null && value != null) {
             put(key, value);
         }
         return originalValue;

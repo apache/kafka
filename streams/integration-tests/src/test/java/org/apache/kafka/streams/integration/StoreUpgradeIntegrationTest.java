@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -978,7 +979,7 @@ public class StoreUpgradeIntegrationTest {
         } catch (final Exception e) {
             Throwable cause = e;
             while (cause != null) {
-                if (cause instanceof org.apache.kafka.streams.errors.ProcessorStateException &&
+                if (cause instanceof ProcessorStateException &&
                     cause.getMessage() != null &&
                     cause.getMessage().contains("timestamped key-value store") &&
                     cause.getMessage().contains("Downgrade from timestamped to regular store is not supported")) {
