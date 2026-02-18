@@ -22,10 +22,10 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.internal.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
+import org.apache.kafka.common.record.internal.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.common.TransactionVersion
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, RecordValidationStats, VerificationGuard}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
@@ -350,6 +350,52 @@ class CoordinatorPartitionWriterTest {
       batch,
       TransactionVersion.TV_UNKNOWN
     ))
+  }
+
+  @Test
+  def testWriteRecordsWithFailureAndCustomErrorMessage(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val topicId = Uuid.fromString("TbEp6-A4s3VPT1TwiI5COw")
+    val replicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.topicIdPartition(tp)).thenReturn(new TopicIdPartition(topicId, tp))
+
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+
+    val customMessage = "custom error message"
+
+    when(replicaManager.appendRecordsToLeader(
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
+      ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
+      LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+      Some(Errors.NOT_LEADER_OR_FOLLOWER.exception(customMessage)),
+      hasCustomErrorMessage = true
+    )))
+
+    val batch = MemoryRecords.withRecords(
+      Compression.NONE,
+      new SimpleRecord(
+        0L,
+        "foo".getBytes(Charset.defaultCharset()),
+        "bar".getBytes(Charset.defaultCharset())
+      )
+    )
+
+    val exception = assertThrows(classOf[NotLeaderOrFollowerException], () => partitionRecordWriter.append(
+      tp,
+      VerificationGuard.SENTINEL,
+      batch,
+      TransactionVersion.TV_UNKNOWN
+    ))
+    assertEquals(customMessage, exception.getMessage)
   }
 
   @Test

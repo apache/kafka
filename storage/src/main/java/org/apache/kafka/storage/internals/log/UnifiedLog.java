@@ -38,7 +38,6 @@ import org.apache.kafka.common.record.internal.MemoryRecords;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.record.internal.RecordValidationStats;
 import org.apache.kafka.common.record.internal.RecordVersion;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;

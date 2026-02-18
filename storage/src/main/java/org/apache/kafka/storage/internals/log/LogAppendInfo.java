@@ -18,7 +18,6 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.record.internal.CompressionType;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.record.internal.RecordValidationStats;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 
 import java.util.List;

@@ -14,29 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.producer;
-
-import org.apache.kafka.common.errors.TimeoutException;
+package org.apache.kafka.storage.internals.log;
 
 /**
- * This exception is thrown if the producer cannot allocate memory for a record within max.block.ms due to the buffer
- * being too full.
- *
- * In earlier versions a TimeoutException was thrown instead of this. To keep existing catch-clauses working
- * this class extends TimeoutException.
- *
+ * This class tracks resource usage during broker record validation for eventual reporting in metrics.
+ * Record validation covers integrity checks on inbound data (e.g. checksum verification), structural
+ * validation to make sure that records are well-formed, and conversion between record formats if needed.
  */
-public class BufferExhaustedException extends TimeoutException {
+public record RecordValidationStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
 
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * Constructs a new BufferExhaustedException with the specified detail message.
-     *
-     * @param message The error message
-     */
-    public BufferExhaustedException(String message) {
-        super(message);
-    }
+    public static final RecordValidationStats EMPTY = new RecordValidationStats(0, 0, 0);
 
 }

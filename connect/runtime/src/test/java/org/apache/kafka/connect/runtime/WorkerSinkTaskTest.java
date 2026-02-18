@@ -193,7 +193,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState, keyConverter, valueConverter, headerConverter);
     }
 
-    private void createTask(TargetState initialState, TransformationChain transformationChain, RetryWithToleranceOperator toleranceOperator) {
+    private void createTask(TargetState initialState, TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain, RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> toleranceOperator) {
         createTask(initialState, keyConverter, valueConverter, headerConverter, toleranceOperator, List::of, transformationChain);
     }
 
@@ -925,8 +925,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testRaisesFailedRetriableExceptionFromTransform() {
-        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.noneOperator();
-        TransformationChain<RetriableException, SinkRecord> transformationChainRetriableException = getTransformationChain(
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = RetryWithToleranceOperatorTest.noneOperator();
+        TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChainRetriableException = getTransformationChain(
                 retryWithToleranceOperator, List.of(new RetriableException("Test")));
         createTask(initialState, transformationChainRetriableException, retryWithToleranceOperator);
 
@@ -950,8 +950,8 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testSkipsFailedRetriableExceptionFromTransform() {
-        RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.allOperator();
-        TransformationChain<RetriableException, SinkRecord> transformationChainRetriableException = getTransformationChain(
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = RetryWithToleranceOperatorTest.allOperator();
+        TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChainRetriableException = getTransformationChain(
                 retryWithToleranceOperator, List.of(new RetriableException("Test")));
         createTask(initialState, transformationChainRetriableException, retryWithToleranceOperator);
 
@@ -1364,6 +1364,7 @@ public class WorkerSinkTaskTest {
     // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a
     // rebalance occurs, the async callback does not reset the last committed offset from the rebalance.
     // See KAFKA-5731 for more information.
+    @SuppressWarnings("unchecked")
     @Test
     public void testCommitWithOutOfOrderCallback() {
         createTask(initialState);

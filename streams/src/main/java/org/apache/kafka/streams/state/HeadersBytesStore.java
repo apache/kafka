@@ -39,11 +39,11 @@ public interface HeadersBytesStore {
      * <p>
      * Empty headers are represented as 0 bytes (headersSize=0, no headersBytes),
      *
-     * @param plainValue the legacy timestamped value bytes
+     * @param valueAndTimestamp the legacy timestamped value bytes
      * @return the value in header-embedded format with empty headers
      */
-    static byte[] convertToHeaderFormat(final byte[] plainValue) {
-        if (plainValue == null) {
+    static byte[] convertToHeaderFormat(final byte[] valueAndTimestamp) {
+        if (valueAndTimestamp == null) {
             return null;
         }
 
@@ -53,9 +53,9 @@ public interface HeadersBytesStore {
         //   headersBytes = [] (empty, 0 bytes)
         // Result: [0x00][payload]
         return ByteBuffer
-            .allocate(1 + plainValue.length)
+            .allocate(1 + valueAndTimestamp.length)
             .put((byte) 0x00)
-            .put(plainValue)
+            .put(valueAndTimestamp)
             .array();
     }
 }
