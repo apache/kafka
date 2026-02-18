@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.RaftVoterEndpoint;
 import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.test.api.TestKitDefaults;
@@ -447,11 +448,12 @@ public class ReconfigurableQuorumIntegrationTest {
                 // UP TO HERE everything seems to be ok then trying to add the new controller makes the test failing
                 // with nodes disconnections and more
 
+                int port = cluster.controllers().get(3003).socketServer().boundPort(new ListenerName("CONTROLLER"));
                 // Add 4th controller to active quorum via add-controller command
                 admin.addRaftVoter(
-                        3003,
-                        nodes.controllerNodes().get(3003).metadataDirectoryId(),
-                        Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
+                    3003,
+                    nodes.controllerNodes().get(3003).metadataDirectoryId(),
+                    Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port))
                 ).all().get();
 
                 // Verify all 4 controllers are now in the active quorum
