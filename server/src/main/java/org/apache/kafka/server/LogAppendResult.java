@@ -30,19 +30,19 @@ import java.util.Optional;
  * Result metadata of a log append operation on the log
  */
 public record LogAppendResult(
-        LogAppendSummary logAppendSummary,
-        Optional<Throwable> exception,
-        boolean hasCustomErrorMessage
+    LogAppendSummary logAppendSummary,
+    Optional<Throwable> exception,
+    boolean hasCustomErrorMessage
 ) {
 
     public record LogAppendSummary(
-            long firstOffset,
-            long lastOffset,
-            long logAppendTime,
-            long logStartOffset,
-            RecordValidationStats recordValidationStats,
-            List<ProduceResponse.RecordError> recordErrors,
-            LeaderHwChange leaderHwChange
+        long firstOffset,
+        long lastOffset,
+        long logAppendTime,
+        long logStartOffset,
+        RecordValidationStats recordValidationStats,
+        List<ProduceResponse.RecordError> recordErrors,
+        LeaderHwChange leaderHwChange
     ) {
         public LogAppendSummary {
             recordErrors = List.copyOf(recordErrors);
@@ -53,13 +53,13 @@ public record LogAppendResult(
 
         public static LogAppendSummary fromAppendInfo(LogAppendInfo info) {
             return new LogAppendSummary(
-                    info.firstOffset(),
-                    info.lastOffset(),
-                    info.logAppendTime(),
-                    info.logStartOffset(),
-                    info.recordValidationStats(),
-                    info.recordErrors(),
-                    info.leaderHwChange()
+                info.firstOffset(),
+                info.lastOffset(),
+                info.logAppendTime(),
+                info.logStartOffset(),
+                info.recordValidationStats(),
+                info.recordErrors(),
+                info.leaderHwChange()
             );
         }
     }

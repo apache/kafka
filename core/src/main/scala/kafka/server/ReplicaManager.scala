@@ -747,7 +747,7 @@ class ReplicaManager(val config: KafkaConfig,
             }
           new TopicIdPartition(topicIds.getOrElse(topicPartition.topic(), Uuid.ZERO_UUID), topicPartition) -> new LogAppendResult(
             LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
-            Optional.of(customException.getOrElse(error.exception)),
+            Optional.ofNullable(customException.getOrElse(error.exception)),
             customException.isDefined
           )
       }
