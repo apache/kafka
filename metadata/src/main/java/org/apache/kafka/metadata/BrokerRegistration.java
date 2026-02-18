@@ -273,6 +273,10 @@ public class BrokerRegistration {
         return directories;
     }
 
+    public List<Uuid> cordonedDirectories() {
+        return cordonedDirectories;
+    }
+
     public boolean hasOnlineDir(Uuid dir) {
         return DirectoryId.isOnline(dir, directories);
     }
@@ -409,7 +413,10 @@ public class BrokerRegistration {
         List<Uuid> newDirectories = directoriesChange.orElse(directories);
         List<Uuid> newCordonedDirectories = cordonedDirectoriesChange.orElse(cordonedDirectories);
 
-        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown && newDirectories.equals(directories))
+        if (newFenced == fenced
+                && newInControlledShutdownChange == inControlledShutdown
+                && newDirectories.equals(directories)
+                && newCordonedDirectories.equals(cordonedDirectories))
             return this;
 
         return new BrokerRegistration(

@@ -3411,6 +3411,27 @@ public class ReplicationControlManagerTest {
         return records.stream().filter(r -> clazz.equals(r.message().getClass())).collect(Collectors.toList());
     }
 
+    @Test
+    void testHandleDirectoriesCordoned() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        int b1 = 101;
+        Uuid dir1b1 = Uuid.fromString("suitdzfTTdqoWcy8VqmkUg");
+        Uuid dir2b1 = Uuid.fromString("yh3acnzGSeurSTj8aIhOjw");
+        ctx.registerBrokersWithDirs(b1, List.of(dir1b1, dir2b1));
+        ctx.unfenceBrokers(b1);
+        assertEquals(List.of(), ctx.clusterControl.registration(b1).cordonedDirectories());
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesCordoned(b1, defaultBrokerEpoch(b1), List.of(dir1b1), records);
+        assertEquals(
+                List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                        .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                        .setCordonedLogDirs(List.of(dir1b1)), (short) 2)),
+                filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        ctx.replay(records);
+        assertEquals(List.of(dir1b1), ctx.clusterControl.registration(b1).cordonedDirectories());
+    }
+
     @ParameterizedTest
     @CsvSource({"false, false", "false, true", "true, false", "true, true"})
     void testElrsRemovedOnMinIsrUpdate(boolean clusterLevel, boolean useLegacyAlterConfigs) {

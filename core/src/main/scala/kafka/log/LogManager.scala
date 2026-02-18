@@ -100,7 +100,7 @@ class LogManager(logDirs: Seq[File],
   private val strayLogs = new ConcurrentHashMap[TopicPartition, UnifiedLog]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
-  private var _cordonedLogDirs: Set[String] = Set()
+  @volatile private var _cordonedLogDirs: Set[String] = Set()
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
