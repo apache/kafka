@@ -220,6 +220,29 @@ org.apache.kafka.tools.DeleteRecordsCommandTest:
 - testParse
 - testWrongPartitions
 - testWrongVersion
+org.apache.kafka.tools.DumpLogSegmentsTest:
+- testBatchAndRecordMetadataOutput
+- testDumpControlRecord
+- testDumpEmptyIndex
+- testDumpIndexMismatches
+- testDumpMetadataRecords
+- testDumpMetadataSnapshot
+- testDumpRemoteLogMetadataEmpty
+- testDumpRemoteLogMetadataIoException
+- testDumpRemoteLogMetadataMultipleRecordsMultipleBatches
+- testDumpRemoteLogMetadataMultipleRecordsOneBatch
+- testDumpRemoteLogMetadataNoFilesFlag
+- testDumpRemoteLogMetadataNoSuchFileException
+- testDumpRemoteLogMetadataNonZeroStartingOffset
+- testDumpRemoteLogMetadataOneRecordOneBatch
+- testDumpRemoteLogMetadataWithCorruption
+- testDumpTimeIndexErrors
+- testLegacyRecordBatchOutputFormat
+- testOffsetsMessageParser
+- testPrintDataLog
+- testPrintDataLogPartialBatches
+- testShareGroupStateMessageParser
+- testTransactionLogMessageParser
 org.apache.kafka.tools.EndToEndLatencyTest:
 - shouldFailWhenConsumerRecordsIsEmpty
 - shouldFailWhenReceivedMoreThanOneRecord
