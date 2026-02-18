@@ -672,9 +672,23 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
                 "by members using the modern group protocol");
         }
+        // For member using the classic protocol, use strict epoch validation.
+        if (member.useClassicProtocol()) {
+            validateMemberEpoch(memberEpoch, member.memberEpoch(), true);
+            return CommitPartitionValidator.NO_OP;
+        }
 
-        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
-        return CommitPartitionValidator.NO_OP;
+        // For member using the consumer protocol
+        // Case 1: Strict epoch match
+        if (memberEpoch == member.memberEpoch()) {
+            return CommitPartitionValidator.NO_OP;
+        }
+        // Case 2:Client epoch > broker epoch, which is an invalid request
+        if (memberEpoch > member.memberEpoch()) {
+            throw new StaleMemberEpochException(String.format("The received member epoch %d is larger than "
+                + "the expected member epoch %d.", memberEpoch, member.memberEpoch()));
+        }
+        return createAssignmentEpochValidator(member, memberEpoch);
     }
 
     /**
@@ -835,6 +849,46 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                     + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
             }
         }
+    }
+
+    /**
+     * Creates a validator that checks per-partition assignment epochs.
+     * A commit is rejected if the partition is not assigned to the member
+     * or if the received client-side epoch is older than the partition's assignment epoch(KIP-1251).
+     *
+     * @param member              The consumer group member.
+     * @param receivedMemberEpoch The member epoch from the offset commit request.
+     * @return A validator that checks each partition's assignment epoch.
+     */
+    private CommitPartitionValidator createAssignmentEpochValidator(
+        ConsumerGroupMember member,
+        int receivedMemberEpoch
+    ) {
+        return (topicName, topicId, partitionId) -> {
+            // Check if the partition is in the assigned partitions.
+            // If not found in assigned, check partitions pending revocation.
+            Integer assignmentEpoch = member.getAssignmentEpoch(topicId, partitionId);
+            if (assignmentEpoch == null) {
+                assignmentEpoch = member.getPendingRevocationEpoch(topicId, partitionId);
+            }
+
+            // If the partition is not assigned to this member, reject.
+            if (assignmentEpoch == null) {
+                throw new StaleMemberEpochException(
+                    String.format("Partition %s-%d is not assigned to member %s.",
+                        topicName, partitionId, member.memberId())
+                );
+            }
+
+            // If the received epoch is older than when this partition was assigned,
+            // It is a zombie commit and should be rejected.
+            if (receivedMemberEpoch < assignmentEpoch) {
+                throw new StaleMemberEpochException(
+                    String.format("The received member epoch %d is older than the assignment epoch %d for partition %s-%d.",
+                        receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
+                );
+            }
+        };
     }
 
     /**

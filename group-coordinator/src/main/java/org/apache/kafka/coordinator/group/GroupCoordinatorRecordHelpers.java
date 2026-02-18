@@ -289,8 +289,8 @@ public class GroupCoordinatorRecordHelpers {
                     .setMemberEpoch(member.memberEpoch())
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
                     .setState(member.state().value())
-                    .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
-                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation())),
+                    .setAssignedPartitions(toTopicPartitions(member.assignedPartitionsWithEpochs()))
+                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocationWithEpochs())),
                 (short) 0
             )
         );
@@ -804,13 +804,19 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     private static List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> toTopicPartitions(
-        Map<Uuid, Set<Integer>> topicPartitions
+        Map<Uuid, Map<Integer, Integer>> topicPartitionsWithEpochs
     ) {
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(topicPartitions.size());
-        topicPartitions.forEach((topicId, partitions) ->
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(topicPartitionsWithEpochs.size());
+        topicPartitionsWithEpochs.forEach((topicId, partitionEpochMap) -> {
+            List<Integer> partitionList = new ArrayList<>(partitionEpochMap.keySet());
+            List<Integer> epochList = partitionList.stream()
+                .map(partitionId -> partitionEpochMap.getOrDefault(partitionId, 0))
+                .toList();
             topics.add(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId)
-                .setPartitions(new ArrayList<>(partitions)))
+                .setPartitions(partitionList)
+                .setAssignmentEpochs(epochList));
+            }
         );
         return topics;
     }
