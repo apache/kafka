@@ -864,6 +864,16 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         .setGroupId("grp")
         .setTopics(List(
           new OffsetFetchResponseData.OffsetFetchResponseTopics()
+            .setName("bar")
+            .setPartitions(List(
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(0)
+                .setCommittedOffset(-1L),
+              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                .setPartitionIndex(1)
+                .setCommittedOffset(-1L)
+            ).asJava),
+          new OffsetFetchResponseData.OffsetFetchResponseTopics()
             .setName("foo")
             .setPartitions(List(
               new OffsetFetchResponseData.OffsetFetchResponsePartitions()
@@ -875,16 +885,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
               new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                 .setPartitionIndex(2)
                 .setCommittedOffset(102L)
-            ).asJava),
-          new OffsetFetchResponseData.OffsetFetchResponseTopics()
-            .setName("bar")
-            .setPartitions(List(
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(0)
-                .setCommittedOffset(-1L),
-              new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                .setPartitionIndex(1)
-                .setCommittedOffset(-1L)
             ).asJava)
         ).asJava)
 
