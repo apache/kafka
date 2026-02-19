@@ -66,6 +66,11 @@ class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<V
     }
 
     @Override
+    public byte[] serialize(final String topic, final Headers headers, final ValueTimestampHeaders<V> valueTimestampHeaders) {
+        throw new UnsupportedOperationException("Headers need to be passed in via ValueTimestampHeaders type. Use `serialize(String topic, ValueTimestampHeaders<V> valueTimestampHeaders)` instead.");
+    }
+
+    @Override
     public byte[] serialize(final String topic, final ValueTimestampHeaders<V> valueTimestampHeaders) {
         if (valueTimestampHeaders == null) {
             return null;

@@ -29,6 +29,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Iterator;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -51,6 +52,7 @@ public class ValueTimestampHeadersDeserializerTest {
     private ValueTimestampHeadersSerializer<String> serializer;
     private ValueTimestampHeadersDeserializer<String> deserializer;
 
+    @SuppressWarnings("resource")
     @BeforeEach
     void setup() {
         serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
@@ -65,6 +67,12 @@ public class ValueTimestampHeadersDeserializerTest {
         if (deserializer != null) {
             deserializer.close();
         }
+    }
+
+    @Test
+    public void shouldNotAllowToPassInHeaders() {
+        assertThrows(UnsupportedOperationException.class, () -> deserializer.deserialize(null, null, (byte[]) null));
+        assertThrows(UnsupportedOperationException.class, () -> deserializer.deserialize(null, null, (ByteBuffer) null));
     }
 
     @Test

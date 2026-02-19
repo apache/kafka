@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -47,6 +48,7 @@ public class ValueTimestampHeadersSerializerTest {
     private ValueTimestampHeadersSerializer<String> serializer;
     private ValueTimestampHeadersDeserializer<String> deserializer;
 
+    @SuppressWarnings("resource")
     @BeforeEach
     void setup() {
         serializer = new ValueTimestampHeadersSerializer<>(Serdes.String().serializer());
@@ -61,6 +63,11 @@ public class ValueTimestampHeadersSerializerTest {
         if (deserializer != null) {
             deserializer.close();
         }
+    }
+
+    @Test
+    public void shouldNotAllowToPassInHeaders() {
+        assertThrows(UnsupportedOperationException.class, () -> serializer.serialize(null, null, null));
     }
 
     @Test

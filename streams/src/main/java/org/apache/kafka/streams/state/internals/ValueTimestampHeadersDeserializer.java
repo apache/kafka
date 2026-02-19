@@ -66,6 +66,11 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
     }
 
     @Override
+    public ValueTimestampHeaders<V>  deserialize(final String topic, final Headers headers, final byte[] valueTimestampHeaders) {
+        throw new UnsupportedOperationException("Headers are encoded inside `valueTimestampHeaders` byte[] array and cannot be passed as parameter. Use `deserialize(String topic, byte[] valueTimestampHeaders)` instead.");
+    }
+
+    @Override
     public ValueTimestampHeaders<V> deserialize(final String topic, final byte[] valueTimestampHeaders) {
         if (valueTimestampHeaders == null) {
             return null;
