@@ -63,10 +63,10 @@ public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
     implements SessionStore<K, V>, MeteredStateStore {
 
-    private final String metricsScope;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Time time;
+    protected final String metricsScope;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valueSerde;
+    protected final Time time;
     private StateSerdes<K, V> serdes;
     private StreamsMetricsImpl streamsMetrics;
     private Sensor putSensor;

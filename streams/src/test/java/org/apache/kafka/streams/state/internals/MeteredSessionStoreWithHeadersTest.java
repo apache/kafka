@@ -55,14 +55,18 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -128,6 +132,14 @@ public class MeteredSessionStoreWithHeadersTest {
 
     private KafkaMetric metric(final String name) {
         return this.metrics.metric(new MetricName(name, STORE_LEVEL_GROUP, "", this.tags));
+    }
+
+    private List<MetricName> storeMetrics() {
+        return metrics.metrics()
+            .keySet()
+            .stream()
+            .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
+            .collect(Collectors.toList());
     }
 
     @Test
@@ -453,5 +465,255 @@ public class MeteredSessionStoreWithHeadersTest {
         store.close();
 
         verify(innerStore).close();
+    }
+
+    @Test
+    public void shouldSetFlushListenerOnWrappedCachingStore() {
+        final CachingSessionStore cachedSessionStore = mock(CachingSessionStore.class);
+
+        when(cachedSessionStore.setFlushListener(any(CacheFlushListener.class), any(Boolean.class)))
+            .thenReturn(true);
+
+        final MeteredSessionStoreWithHeaders<String, String> cachedStore = new MeteredSessionStoreWithHeaders<>(
+            cachedSessionStore,
+            STORE_TYPE,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+
+        assertTrue(cachedStore.setFlushListener(null, false));
+    }
+
+    @Test
+    public void shouldBackwardFetchRangeFromStoreAndRecordFetchMetric() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        when(innerStore.backwardFetch(KEY_BYTES, KEY_BYTES))
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFetch(KEY, KEY);
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        assertEquals(VALUE, next.value.aggregation());
+        assertNotNull(next.value.headers());
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldBackwardFindSessionRangeFromStoreAndRecordFetchMetric() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        when(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, 0, 0))
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.backwardFindSessions(KEY, KEY, 0, 0);
+
+        assertTrue(iterator.hasNext());
+        final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
+        assertEquals(VALUE, next.value.aggregation());
+        assertNotNull(next.value.headers());
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        final KafkaMetric metric = metric("fetch-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        when(innerStore.fetch(KEY_BYTES))
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertNotNull(openIteratorsMetric);
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
+
+        iterator.close();
+
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
+    }
+
+    @Test
+    public void shouldTrackOldestOpenIteratorTimestamp() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        when(innerStore.fetch(KEY_BYTES))
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+
+        final KafkaMetric oldestIteratorMetric = metric("oldest-iterator-open-since-ms");
+        assertNotNull(oldestIteratorMetric);
+
+        assertThat(oldestIteratorMetric.metricValue(), equalTo(0L));
+
+        final long beforeOpen = mockTime.milliseconds();
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+        final long afterOpen = mockTime.milliseconds();
+
+        final long oldestTimestamp = (Long) oldestIteratorMetric.metricValue();
+        assertTrue(oldestTimestamp >= beforeOpen && oldestTimestamp <= afterOpen);
+
+        iterator.close();
+
+        assertThat(oldestIteratorMetric.metricValue(), equalTo(0L));
+    }
+
+    @Test
+    public void shouldTimeIteratorDuration() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        headers.add("key1", "value1".getBytes());
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        final AggregationWithHeadersSerializer<String> serializer = new AggregationWithHeadersSerializer<>(Serdes.String().serializer());
+        final byte[] serializedValue = serializer.serialize(CHANGELOG_TOPIC, valueAndHeaders);
+
+        when(innerStore.fetch(KEY_BYTES))
+            .thenReturn(new KeyValueIteratorStub<>(
+                Collections.singleton(KeyValue.pair(WINDOWED_KEY_BYTES, serializedValue)).iterator()));
+
+        final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> iterator = store.fetch(KEY);
+
+        mockTime.sleep(100L);
+
+        iterator.close();
+
+        final KafkaMetric iteratorDurationMetric = metric("iterator-duration-avg");
+        assertTrue((Double) iteratorDurationMetric.metricValue() > 0.0);
+    }
+
+    @Test
+    public void shouldRemoveMetricsOnClose() {
+        setUp();
+        init();
+
+        doNothing().when(innerStore).close();
+
+        assertNotNull(metric("put-rate"));
+        assertNotNull(metric("fetch-rate"));
+
+        store.close();
+
+        assertNull(metric("put-rate"));
+        assertNull(metric("fetch-rate"));
+    }
+
+    @Test
+    public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
+        setUp();
+        doThrow(new RuntimeException("Oops!")).when(innerStore).close();
+        init();
+
+        assertThat(storeMetrics(), not(empty()));
+        assertThrows(RuntimeException.class, store::close);
+        assertThat(storeMetrics(), empty());
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfKeyIsNull() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        try {
+            store.put(new Windowed<>(null, new SessionWindow(0, 0)), valueAndHeaders);
+            throw new AssertionError("Should have thrown NullPointerException");
+        } catch (final NullPointerException expected) {
+            // Expected
+        }
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnPutIfWrappedKeyIsNull() {
+        setUp();
+        init();
+
+        final Headers headers = new RecordHeaders();
+        final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
+
+        try {
+            store.put(null, valueAndHeaders);
+            throw new AssertionError("Should have thrown NullPointerException");
+        } catch (final NullPointerException expected) {
+            // Expected
+        }
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnRemoveIfKeyIsNull() {
+        setUp();
+        init();
+
+        try {
+            store.remove(new Windowed<>(null, new SessionWindow(0, 0)));
+            throw new AssertionError("Should have thrown NullPointerException");
+        } catch (final NullPointerException expected) {
+            // Expected
+        }
+    }
+
+    @Test
+    public void shouldThrowNullPointerOnFetchSessionIfKeyIsNull() {
+        setUp();
+        init();
+
+        try {
+            store.fetchSession(null, START_TIMESTAMP, END_TIMESTAMP);
+            throw new AssertionError("Should have thrown NullPointerException");
+        } catch (final NullPointerException expected) {
+            // Expected
+        }
     }
 }
