@@ -2740,8 +2740,14 @@ public class KafkaConsumerTest {
             consumer.poll(Duration.ofMillis(0));
         }
 
-        long count = client.requests().stream().filter(request -> request.requestBuilder().apiKey().equals(ApiKeys.LIST_OFFSETS)).count();
-        assertEquals(1L, count);
+        long count = client.requests().stream()
+            .filter(request -> request.requestBuilder().apiKey().equals(ApiKeys.LIST_OFFSETS))
+            .count();
+        assertEquals(
+            1L,
+            count,
+            "Expected only one in-flight LIST_OFFSETS request for consumerLag(), but consumer submitted " + count + " requests"
+        );
     }
 
     // TODO: this test validate that the consumer clears the endOffsetRequested flag, but this is not yet implemented
