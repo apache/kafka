@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.io.ByteArrayOutputStream;
