@@ -1699,11 +1699,11 @@ public class TaskManager {
             .collect(Collectors.toMap(Task::id, v -> v)));
     }
 
-    Map<TaskId, StreamTask> activeTaskMap() {
+    Map<TaskId, Task> activeTaskMap() {
         return activeTaskStream().collect(Collectors.toMap(Task::id, t -> t));
     }
 
-    List<StreamTask> activeTaskIterable() {
+    List<Task> activeTaskIterable() {
         return activeTaskStream().collect(Collectors.toList());
     }
 
@@ -1711,10 +1711,10 @@ public class TaskManager {
         return activeRunningTaskStream().collect(Collectors.toList());
     }
 
-    private Stream<StreamTask> activeTaskStream() {
+    private Stream<Task> activeTaskStream() {
         return Stream.concat(
             activeRunningTaskStream(),
-            stateUpdater.tasks().stream().filter(Task::isActive).map(StreamTask.class::cast)
+            stateUpdater.tasks().stream().filter(Task::isActive)
         );
     }
 

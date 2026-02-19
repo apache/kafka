@@ -1925,10 +1925,10 @@ public class StreamThread extends Thread implements ProcessingThread {
         return this;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+    private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
                                       final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
+        for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadataImpl(
                 task.getValue().id(),
                 task.getValue().inputPartitions(),
