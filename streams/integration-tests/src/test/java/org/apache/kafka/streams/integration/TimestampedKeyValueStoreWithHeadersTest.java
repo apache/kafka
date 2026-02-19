@@ -77,15 +77,15 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    private final static Headers headers1 = new RecordHeaders()
+    private static final Headers HEADERS1 = new RecordHeaders()
         .add("source", "test".getBytes())
         .add("version", "1.0".getBytes());
 
-    private final static Headers headers2 = new RecordHeaders()
+    private static final Headers HEADERS2 = new RecordHeaders()
         .add("source", "test".getBytes())
         .add("version", "2.0".getBytes());
 
-    private final static Headers emptyHeaders = new RecordHeaders();
+    private static final Headers EMPTY_HEADERS = new RecordHeaders();
 
     public TestInfo testInfo;
 
@@ -143,14 +143,14 @@ public class TimestampedKeyValueStoreWithHeadersTest {
         // produce source data with headers
         int numRecordsProduced = 0;
 
-        numRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp, headers1,
+        numRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS1,
             KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
 
-        numRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 5, headers2,
+        numRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 5, HEADERS2,
             KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
 
         numRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 2,
-            emptyHeaders,
+            EMPTY_HEADERS,
             KeyValue.pair(1, "a2"), KeyValue.pair(2, "b2"), KeyValue.pair(3, null));
 
         // wait for output and verify
@@ -229,23 +229,23 @@ public class TimestampedKeyValueStoreWithHeadersTest {
         final Map<Integer, Optional<ValueTimestampHeaders<String>>> expectedData = new HashMap<>();
         int initialRecordsProduced = 0;
 
-        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp, headers1,
+        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp, HEADERS1,
             KeyValue.pair(1, "a0"), KeyValue.pair(2, "b0"), KeyValue.pair(3, null));
-        expectedData.put(1, Optional.of(ValueTimestampHeaders.make("a0", baseTimestamp, headers1)));
-        expectedData.put(2, Optional.of(ValueTimestampHeaders.make("b0", baseTimestamp, headers1)));
+        expectedData.put(1, Optional.of(ValueTimestampHeaders.make("a0", baseTimestamp, HEADERS1)));
+        expectedData.put(2, Optional.of(ValueTimestampHeaders.make("b0", baseTimestamp, HEADERS1)));
         expectedData.put(3, Optional.empty());  // null value
 
-        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 5, headers2,
+        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 5, HEADERS2,
             KeyValue.pair(1, "a5"), KeyValue.pair(2, null), KeyValue.pair(3, "c5"));
-        expectedData.put(1, Optional.of(ValueTimestampHeaders.make("a5", baseTimestamp + 5, headers2)));
+        expectedData.put(1, Optional.of(ValueTimestampHeaders.make("a5", baseTimestamp + 5, HEADERS2)));
         expectedData.put(2, Optional.empty());  // null value
-        expectedData.put(3, Optional.of(ValueTimestampHeaders.make("c5", baseTimestamp + 5, headers2)));
+        expectedData.put(3, Optional.of(ValueTimestampHeaders.make("c5", baseTimestamp + 5, HEADERS2)));
 
-        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 10, emptyHeaders,
+        initialRecordsProduced += produceDataToTopicWithHeaders(inputStream, baseTimestamp + 10, EMPTY_HEADERS,
             KeyValue.pair(1, "a10"), KeyValue.pair(2, "b10"), KeyValue.pair(3, "c10"));
-        expectedData.put(1, Optional.of(ValueTimestampHeaders.make("a10", baseTimestamp + 10, emptyHeaders)));
-        expectedData.put(2, Optional.of(ValueTimestampHeaders.make("b10", baseTimestamp + 10, emptyHeaders)));
-        expectedData.put(3, Optional.of(ValueTimestampHeaders.make("c10", baseTimestamp + 10, emptyHeaders)));
+        expectedData.put(1, Optional.of(ValueTimestampHeaders.make("a10", baseTimestamp + 10, EMPTY_HEADERS)));
+        expectedData.put(2, Optional.of(ValueTimestampHeaders.make("b10", baseTimestamp + 10, EMPTY_HEADERS)));
+        expectedData.put(3, Optional.of(ValueTimestampHeaders.make("c10", baseTimestamp + 10, EMPTY_HEADERS)));
 
         // wait for output
         IntegrationTestUtils.waitUntilMinRecordsReceived(
@@ -279,8 +279,8 @@ public class TimestampedKeyValueStoreWithHeadersTest {
         kafkaStreams.start();
 
         // produce additional records to verify restored store works correctly
-        Headers headers4 = new RecordHeaders().add("final", "true".getBytes());
-        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 12, headers4,
+        final Headers finalHeaders = new RecordHeaders().add("final", "true".getBytes());
+        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 12, finalHeaders,
             KeyValue.pair(1, "a12"), KeyValue.pair(2, "b12"), KeyValue.pair(3, "c12"));
 
         // wait for output and verify
@@ -371,8 +371,8 @@ public class TimestampedKeyValueStoreWithHeadersTest {
         kafkaStreams.start();
 
         // produce additional records with headers to verify upgraded store works
-        Headers headers = new RecordHeaders().add("upgraded", "true".getBytes());
-        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 12, headers,
+        final Headers upgradedHeaders = new RecordHeaders().add("upgraded", "true".getBytes());
+        final int additionalRecordsProduced = produceDataToTopicWithHeaders(inputStream, baseTimestamp + 12, upgradedHeaders,
             KeyValue.pair(1, "a12"), KeyValue.pair(2, "b12"), KeyValue.pair(3, "c12"));
 
         // wait for output and verify
