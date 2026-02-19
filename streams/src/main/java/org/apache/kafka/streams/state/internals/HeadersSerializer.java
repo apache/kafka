@@ -60,7 +60,7 @@ public class HeadersSerializer {
      * @param headers the headers to serialize (can be null)
      * @return the serialized byte array (empty array if headers are null or empty)
      */
-    public static byte[] serialize( final Headers headers) {
+    public static byte[] serialize(final Headers headers) {
         final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
 
         if (headersArray.length == 0) {
