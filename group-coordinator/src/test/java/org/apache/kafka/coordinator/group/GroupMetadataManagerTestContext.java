@@ -560,7 +560,9 @@ public class GroupMetadataManagerTestContext {
                 StreamsGroup group = context.groupMetadataManager.getStreamsGroupOrThrow(builder.groupId());
                 if (group.topology().isPresent()) {
                     group.setConfiguredTopology(InternalTopicManager.configureTopics(
-                        new LogContext(),
+                        logContext.logger(InternalTopicManager.class),
+                        builder.groupId(),
+                        "",
                         0,
                         group.topology().get(),
                         metadataImage,

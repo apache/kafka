@@ -84,7 +84,7 @@ public class ChangeLoggingSessionBytesStoreTest {
         store.put(key1, value1);
 
         verify(inner).put(key1, value1);
-        verify(context).logChange(store.name(), binaryKey, value1, 0L, Position.emptyPosition());
+        verify(context).logChange(store.name(), binaryKey, value1, 0L, new RecordHeaders(), Position.emptyPosition());
     }
 
     @Test
@@ -96,7 +96,7 @@ public class ChangeLoggingSessionBytesStoreTest {
         store.put(key1, value1);
 
         verify(inner).put(key1, value1);
-        verify(context).logChange(store.name(), binaryKey, value1, 0L, POSITION);
+        verify(context).logChange(store.name(), binaryKey, value1, 0L, new RecordHeaders(), POSITION);
     }
 
     @Test
@@ -109,7 +109,7 @@ public class ChangeLoggingSessionBytesStoreTest {
         store.remove(key1);
 
         verify(inner, times(2)).remove(key1);
-        verify(context, times(2)).logChange(store.name(), binaryKey, null, 0L, Position.emptyPosition());
+        verify(context, times(2)).logChange(store.name(), binaryKey, null, 0L, new RecordHeaders(), Position.emptyPosition());
     }
 
     @SuppressWarnings({"resource", "unused"})

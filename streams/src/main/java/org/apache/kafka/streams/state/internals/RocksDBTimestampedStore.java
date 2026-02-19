@@ -37,7 +37,7 @@ import java.util.List;
 public class RocksDBTimestampedStore extends RocksDBStore implements TimestampedBytesStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStore.class);
 
-    private static final byte[] TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME = "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
+    static final byte[] TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME = "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBTimestampedStore(final String name,
                                    final String metricsScope) {
