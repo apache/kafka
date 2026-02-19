@@ -312,6 +312,7 @@ org.apache.kafka.clients.admin.KafkaAdminClientTest:
 - testDescribeLogDirs
 - testDescribeLogDirsOfflineDir
 - testDescribeLogDirsPartialFailure
+- testDescribeLogDirsWithCordonedDir
 - testDescribeLogDirsWithVolumeBytes
 - testDescribeMetadataQuorumFailure
 - testDescribeMetadataQuorumRetriableError

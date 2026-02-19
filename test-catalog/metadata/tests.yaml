@@ -86,6 +86,7 @@ org.apache.kafka.controller.ClusterControlManagerTest:
 - testReplayRegisterBrokerRecord
 - testUnregister
 org.apache.kafka.controller.ConfigurationControlManagerTest:
+- testCordonedLogDirsFeature
 - testElrUpgrade
 - testIncrementalAlterConfig
 - testIncrementalAlterConfigs
@@ -304,6 +305,7 @@ org.apache.kafka.controller.ReplicationControlManagerTest:
 - testFenceMultipleBrokers
 - testHandleAssignReplicasToDirs
 - testHandleAssignReplicasToDirsFailsOnOlderMv
+- testHandleDirectoriesCordoned
 - testHandleDirectoriesOffline
 - testInvalidAlterPartitionRequests
 - testInvalidCreateTopicsWithValidateOnlyFlag
@@ -652,6 +654,7 @@ org.apache.kafka.metadata.BrokerRegistrationTest:
 - testEquals
 - testFromRecordAndToRecord
 - testHasOnlineDir
+- testHasUncordonedDirs
 - testToNode
 - testToString
 - testValues

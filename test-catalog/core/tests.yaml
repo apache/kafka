@@ -1089,10 +1089,12 @@ kafka.log.LogManagerTest:
 - testLoadLogRenameLogThatShouldBeStray
 - testLoadLogsSkipRemoteIndexCache
 - testLock
+- testLogManagerMetrics
 - testLogRecoveryMetrics
 - testLogRecoveryMetricsShouldBeRemovedAfterLogRecovered
 - testMetricsAreRemovedWhenMovingCurrentToFutureLog
 - testMetricsExistWhenLogIsRecreatedBeforeDeletion
+- testNextLogDirs
 - testRecoveryDirectoryMappingWithRelativeDirectory
 - testRecoveryDirectoryMappingWithTrailingSlash
 - testReplaceCurrentWithFutureLogDoesNotCloseSourceLog
@@ -1101,6 +1103,7 @@ kafka.log.LogManagerTest:
 - testTopicConfigChangeStopCleaningIfCompactIsRemoved
 - testTopicConfigChangeUpdatesLogConfig
 - testTwoLogManagersUsingSameDirFails
+- testUpdateCordonedLogDirs
 kafka.log.UnifiedLogTest:
 - testAbortedTransactionSpanningMultipleSegments
 - testActiveProducers
@@ -1563,11 +1566,13 @@ kafka.server.AutoTopicCreationManagerTest:
 - testTopicsInBackoffAreNotRetried
 - testTopicsOutOfBackoffCanBeRetried
 kafka.server.BrokerLifecycleManagerTest:
+- testAlwaysSendsAccumulatedCordonedDirs
 - testAlwaysSendsAccumulatedOfflineDirs
 - testControlledShutdown
 - testCreateAndClose
 - testCreateStartAndClose
 - testKraftJBODMetadataVersionUpdateEvent
+- testRegistrationIncludesCordonedDirs
 - testRegistrationIncludesDirs
 - testRegistrationTimeout
 - testSuccessfulRegistration
@@ -1800,6 +1805,7 @@ kafka.server.DynamicBrokerConfigTest:
 - testConnectionRateQuota
 - testCoordinatorCachedBufferMaxBytesUpdates
 - testDynamicListenerConfig
+- testDynamicLogConfigCordonedLogDirs
 - testDynamicLogConfigHandlesSynonymsCorrectly
 - testDynamicLogLocalRetentionMsConfig
 - testDynamicLogLocalRetentionSizeConfig
@@ -2225,6 +2231,7 @@ kafka.server.KafkaConfigTest:
 - testControllerListenerNamesValidForKRaftControllerOnly
 - testControllerListenersCanBeAdvertisedForKRaftCombined
 - testControllerQuorumVoterStringsToNodes
+- testCordonAllLogDirs
 - testCustomMetadataLogDir
 - testDefaultCompressionType
 - testDefaultMetadataLogDir
@@ -2250,6 +2257,7 @@ kafka.server.KafkaConfigTest:
 - testInvalidAdvertisedListenersProtocol
 - testInvalidAuthorizerClassName
 - testInvalidCompressionType
+- testInvalidCordonedLogDirs
 - testInvalidGzipCompressionLevel
 - testInvalidInterBrokerSecurityProtocol
 - testInvalidLz4CompressionLevel
@@ -2510,6 +2518,7 @@ kafka.server.ReplicaManagerQuotasTest:
 kafka.server.ReplicaManagerTest:
 - checkRemoveMetricsCountMatchRegisterCount
 - testActiveProducerState
+- testAlterReplicaLogDirsToCordonedDir
 - testAppendRecordsToLeader
 - testApplyDeltaShouldHandleReplicaAssignedToLostDirectory
 - testApplyDeltaShouldHandleReplicaAssignedToOnlineDirectory

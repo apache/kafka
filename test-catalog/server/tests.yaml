@@ -117,6 +117,12 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 - testUpdateSubscriptionWithInvalidMetricsProperties
 - testUpdateSubscriptionWithNullProperties
 - testUpdateSubscriptionWithPropertiesDeletion
+org.apache.kafka.server.CordonedLogDirsIntegrationTest:
+- testCordonUncordonLogDirs
+- testFeatureNotEnabled
+- testFeatureNotEnabledStaticConfig
+- testReassignWithCordonedLogDirs
+- testStaticCordonUncordonLogDirs
 org.apache.kafka.server.EligibleLeaderReplicasIntegrationTest:
 - testElrMemberCanBeElected
 - testElrMemberShouldBeKickOutWhenUncleanShutdown
