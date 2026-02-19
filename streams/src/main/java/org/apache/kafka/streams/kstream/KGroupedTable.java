@@ -567,8 +567,11 @@ public interface KGroupedTable<K, V> {
      * Aggregating is a generalization of {@link #reduce(Reducer, Reducer) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
      * <p>
-     * The <b>default value serde</b> from the config will be used for serializing the result.
-     * The <b>key serde</b> is derived from the upstream operator (i.e., the one used for the grouping).
+     * The key serde is inherited from the upstream processing chain (e.g., from the original
+     * {@code Consumed} instance or a previous {@code groupBy} operation).
+     * The default value serde from the config will be used for serializing the result,
+     * as the {@link Aggregator} can change the value type, making the upstream value
+     * serde inapplicable.
      * If a different serde is required then you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
      * <p>
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)

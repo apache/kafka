@@ -95,9 +95,9 @@ public interface KTable<K, V> {
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
      * This is a stateless record-by-record operation.
-     * <p>
-     * The records will be serialized using the <b>current key and value serdes</b>
-     * (from the upstream operator or default configuration).
+     * <p>The key and value serdes are inherited from the upstream processing chain
+     * If the serdes cannot be inherited,
+     * the default key and value serdes from the configuration will be used.
      * <p>
      * Note that {@code filter} for a <i>changelog stream</i> works differently than {@link KStream#filter(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
@@ -226,10 +226,9 @@ public interface KTable<K, V> {
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
      * This is a stateless record-by-record operation.
-     * <p>
-     * The records will be serialized using the <b>current key and value serdes</b>
-     * (from the upstream operator or default configuration).
-     * <p>
+     * <p>The key and value serdes are inherited from the upstream processing chain
+     * (e.g., from a {@code Consumed} instance). If the serdes cannot be inherited,
+     * the default key and value serdes from the configuration will be used.
      * Note that {@code filterNot} for a <i>changelog stream</i> works differently than {@link KStream#filterNot(Predicate)
      * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
      * have delete semantics.
@@ -372,8 +371,9 @@ public interface KTable<K, V> {
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
      * delete the corresponding record in the result {@code KTable}.
      * <p>
-     * The <b>key serde</b> is preserved from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
+     * The key serde is inherited from the upstream processing chain.
+     * The default value serde from the configuration will be used for the result, as the
+     * {@link ValueMapper} may have changed the value type.
      * To explicitly specify serdes, use {@link #mapValues(ValueMapper, Materialized)}.
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
@@ -440,8 +440,9 @@ public interface KTable<K, V> {
      * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
      * delete the corresponding record in the result {@code KTable}.
      * <p>
-     * The <b>key serde</b> is preserved from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
+     * The key serde is inherited from the upstream processing chain.
+     * The default value serde from the configuration will be used for the result, as the
+     * {@link ValueMapper} may have changed the value type.
      * To explicitly specify serdes, use {@link #mapValues(ValueMapperWithKey, Materialized)}.
      *
      * @param mapper a {@link ValueMapperWithKey} that computes a new output value
@@ -824,8 +825,9 @@ public interface KTable<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * Setting a new value preserves data co-location with respect to the key.
      * <p>
-     * The <b>key serde</b> is preserved from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
+     * The key serde is inherited from the upstream processing chain.
+     * The default value serde from the configuration will be used for the result, as the
+     * {@link ValueMapper} may have changed the value type.
      * To explicitly specify serdes, use {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}.
      *
      * @param transformerSupplier an instance of {@link ValueTransformerWithKeySupplier} that generates a
@@ -1098,9 +1100,9 @@ public interface KTable<K, V> {
      * on the new key.
      *
      * <p>
-     * The <b>key serde</b> will be the default key serde from the configuration.
-     * The <b>value serde</b> will be the default value serde from the configuration, unless the value type is unchanged,
-     * in which case the upstream value serde may be reused.
+     * The key serde is inherited from the upstream processing chain.
+     * The default value serde from the configuration will be used for the result, as the
+     * {@link ValueMapper} may have changed the value type.
      * To explicitly specify serdes, use {@link #groupBy(KeyValueMapper, Grouped)}.
      *
      * @param selector a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
@@ -1205,8 +1207,9 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      * <p>
-     * The <b>key serde</b> is derived from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
+     * The key serde is inherited from the upstream processing chain.
+     * The default value serde from the configuration will be used for the result, as the
+     * {@link ValueMapper} may have changed the value type.
      * To explicitly specify serdes, use {@link #join(KTable, ValueJoiner, Materialized)}.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
@@ -1527,8 +1530,9 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      * <p>
-     * The <b>key serde</b> is derived from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
+     * The key serde is inherited from the upstream processing chain .
+     * The default value serde from the configuration will be used for the result, as the
+     * {@link ValueMapper} may have changed the value type.
      * To explicitly specify serdes, use {@link #leftJoin(KTable, ValueJoiner, Materialized)}.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
@@ -1870,8 +1874,9 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      * <p>
-     * The <b>key serde</b> is derived from the upstream operator.
-     * The <b>value serde</b> will be the default value serde from the configuration.
+     * The key serde is inherited from the upstream processing chain.
+     * The default value serde from the configuration will be used for the result, as the
+     * {@link ValueMapper} may have changed the value type.
      * To explicitly specify serdes, use {@link #outerJoin(KTable, ValueJoiner, Materialized)}.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
