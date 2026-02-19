@@ -668,7 +668,7 @@ public class TaskManagerTest {
         assertEquals("Encounter unexpected fatal error for task " + failedActiveTaskToRecycle.id(), exception.getMessage());
         assertEquals(taskException, exception.getCause());
         verify(tasks).addFailedTask(failedActiveTaskToRecycle);
-        verify(tasks, never()).addTask(failedActiveTaskToRecycle);
+        verify(tasks, never()).addActiveTask(failedActiveTaskToRecycle);
         verify(tasks).allNonFailedInitializedTasks();
         verify(standbyTaskCreator, never()).createStandbyTaskFromActive(failedActiveTaskToRecycle, taskId03Partitions);
     }
@@ -698,7 +698,7 @@ public class TaskManagerTest {
         assertEquals("Encounter unexpected fatal error for task " + failedStandbyTaskToRecycle.id(), exception.getMessage());
         assertEquals(taskException, exception.getCause());
         verify(tasks).addFailedTask(failedStandbyTaskToRecycle);
-        verify(tasks, never()).addTask(failedStandbyTaskToRecycle);
+        verify(tasks, never()).addStandbyTask(failedStandbyTaskToRecycle);
         verify(tasks).allNonFailedInitializedTasks();
         verify(activeTaskCreator, never()).createActiveTaskFromStandby(failedStandbyTaskToRecycle, taskId03Partitions, consumer);
     }
@@ -728,7 +728,7 @@ public class TaskManagerTest {
         assertEquals("Encounter unexpected fatal error for task " + failedActiveTaskToReassign.id(), exception.getMessage());
         assertEquals(taskException, exception.getCause());
         verify(tasks).addFailedTask(failedActiveTaskToReassign);
-        verify(tasks, never()).addTask(failedActiveTaskToReassign);
+        verify(tasks, never()).addActiveTask(failedActiveTaskToReassign);
         verify(tasks).allNonFailedInitializedTasks();
         verify(tasks, never()).updateActiveTaskInputPartitions(failedActiveTaskToReassign, taskId00Partitions);
     }
@@ -882,7 +882,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
-        final Set<Task> createdTasks = Set.of(activeTaskToBeCreated);
+        final Set<StreamTask> createdTasks = Set.of(activeTaskToBeCreated);
         final Map<TaskId, Set<TopicPartition>> tasksToBeCreated = mkMap(
             mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions()));
         when(activeTaskCreator.createTasks(consumer, tasksToBeCreated)).thenReturn(createdTasks);
@@ -900,7 +900,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId02Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
-        final Set<Task> createdTasks = Set.of(standbyTaskToBeCreated);
+        final Set<StandbyTask> createdTasks = Set.of(standbyTaskToBeCreated);
         when(standbyTaskCreator.createTasks(mkMap(
             mkEntry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions())))
         ).thenReturn(createdTasks);
@@ -1320,7 +1320,7 @@ public class TaskManagerTest {
         taskManager.handleRevocation(task.inputPartitions());
 
         verify(task).suspend();
-        verify(tasks).addTask(task);
+        verify(tasks).addActiveTask(task);
         verify(stateUpdater).remove(task.id());
     }
 
@@ -1344,9 +1344,9 @@ public class TaskManagerTest {
         taskManager.handleRevocation(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
         verify(task1).suspend();
-        verify(tasks).addTask(task1);
+        verify(tasks).addActiveTask(task1);
         verify(task2).suspend();
-        verify(tasks).addTask(task2);
+        verify(tasks).addActiveTask(task2);
     }
 
     @Test
@@ -1360,7 +1360,7 @@ public class TaskManagerTest {
         taskManager.handleRevocation(taskId01Partitions);
 
         verify(task, never()).suspend();
-        verify(tasks, never()).addTask(task);
+        verify(tasks, never()).addActiveTask(task);
         verify(stateUpdater, never()).remove(task.id());
     }
 
@@ -1375,7 +1375,7 @@ public class TaskManagerTest {
         taskManager.handleRevocation(taskId00Partitions);
 
         verify(task, never()).suspend();
-        verify(tasks, never()).addTask(task);
+        verify(tasks, never()).addStandbyTask(task);
         verify(stateUpdater, never()).remove(task.id());
     }
 
@@ -1405,7 +1405,7 @@ public class TaskManagerTest {
         assertEquals("Encounter unexpected fatal error for task " + task2.id(), thrownException.getMessage());
         assertEquals(thrownException.getCause(), taskException);
         verify(task1).suspend();
-        verify(tasks).addTask(task1);
+        verify(tasks).addActiveTask(task1);
         verify(task2, never()).suspend();
         verify(tasks).addFailedTask(task2);
     }
@@ -1560,7 +1560,7 @@ public class TaskManagerTest {
         for (final StreamTask restoredTask : restoredTasks) {
             verify(restoredTask).completeRestoration(noOpResetter);
             verify(restoredTask, atLeastOnce()).clearTaskTimeout();
-            verify(tasks).addTask(restoredTask);
+            verify(tasks).addActiveTask(restoredTask);
             verify(consumer).resume(restoredTask.inputPartitions());
         }
     }
@@ -1579,7 +1579,7 @@ public class TaskManagerTest {
 
         verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), eq(timeoutException));
         verify(stateUpdater).add(task);
-        verify(tasks, never()).addTask(task);
+        verify(tasks, never()).addActiveTask(task);
         verify(task, never()).clearTaskTimeout();
         verifyNoInteractions(consumer);
     }
@@ -1614,19 +1614,19 @@ public class TaskManagerTest {
         assertThrows(StreamsException.class, () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
 
         // task1 should be successfully transitioned
-        verify(tasks).addTask(task1);
+        verify(tasks).addActiveTask(task1);
         verify(consumer).resume(task1.inputPartitions());
         verify(task1).clearTaskTimeout();
 
         // task2 should be added back to state updater once in the finally block
         // (the add in the catch block doesn't execute because maybeInitTaskTimeoutOrThrow throws)
         verify(stateUpdater).add(task2);
-        verify(tasks, never()).addTask(task2);
+        verify(tasks, never()).addActiveTask(task2);
         verify(task2, never()).clearTaskTimeout();
 
         // task3 should also be added back to state updater in the finally block
         verify(stateUpdater).add(task3);
-        verify(tasks, never()).addTask(task3);
+        verify(tasks, never()).addActiveTask(task3);
         verify(task3, never()).clearTaskTimeout();
     }
 
@@ -2951,7 +2951,7 @@ public class TaskManagerTest {
         assertFalse(restorationComplete);
         verify(task00).completeRestoration(any());
         verify(stateUpdater).add(task00);
-        verify(tasks, never()).addTask(task00);
+        verify(tasks, never()).addActiveTask(task00);
         verifyNoInteractions(consumer);
     }
 

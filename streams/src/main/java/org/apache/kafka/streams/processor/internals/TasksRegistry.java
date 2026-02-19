@@ -37,27 +37,31 @@ public interface TasksRegistry {
 
     Set<Task> drainPendingTasksToInit();
 
-    Set<Task> drainPendingActiveTasksToInit();
+    Set<StreamTask> drainPendingActiveTasksToInit();
 
-    Set<Task> drainPendingStandbyTasksToInit();
+    Set<StandbyTask> drainPendingStandbyTasksToInit();
 
     Set<Task> pendingTasksToInit();
 
-    void addPendingTasksToInit(final Collection<Task> tasks);
+    void addPendingTasksToInit(final Collection<? extends Task> tasks);
 
     boolean hasPendingTasksToInit();
 
     Set<Task> pendingTasksToClose();
 
-    void addPendingTasksToClose(final Collection<Task> tasks);
+    void addPendingTasksToClose(final Collection<? extends Task> tasks);
 
     boolean hasPendingTasksToClose();
 
-    void addActiveTasks(final Collection<Task> tasks);
+    void addActiveTasks(final Collection<StreamTask> tasks);
 
-    void addStandbyTasks(final Collection<Task> tasks);
+    void addStandbyTasks(final Collection<StandbyTask> tasks);
 
     void addTask(final Task task);
+
+    void addActiveTask(final StreamTask task);
+
+    void addStandbyTask(final StandbyTask task);
 
     void addFailedTask(final Task task);
 
@@ -65,11 +69,11 @@ public interface TasksRegistry {
 
     void replaceStandbyWithActive(final StreamTask activeTask);
 
-    boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions);
+    boolean updateActiveTaskInputPartitions(final StreamTask task, final Set<TopicPartition> topicPartitions);
 
     void clear();
 
-    Task activeInitializedTasksForInputPartition(final TopicPartition partition);
+    StreamTask activeInitializedTasksForInputPartition(final TopicPartition partition);
 
     Task initializedTask(final TaskId taskId);
 
@@ -77,9 +81,9 @@ public interface TasksRegistry {
 
     Collection<TaskId> activeInitializedTaskIds();
 
-    Collection<Task> activeInitializedTasks();
+    Collection<StreamTask> activeInitializedTasks();
 
-    Collection<Task> standbyInitializedTasks();
+    Collection<StandbyTask> standbyInitializedTasks();
 
     Set<Task> allInitializedTasks();
 
