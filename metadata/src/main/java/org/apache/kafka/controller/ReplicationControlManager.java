@@ -1548,13 +1548,15 @@ public class ReplicationControlManager {
         BrokerRegistration registration = clusterControl.registration(brokerId);
         List<Uuid> newCordonedDirs = registration.directoryIntersection(cordonedDirs);
         if (!newCordonedDirs.isEmpty()) {
-            List<Uuid> newUncordonedDirs = registration.directoryDifference(newCordonedDirs);
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                     setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
                     setCordonedLogDirs(newCordonedDirs),
-                    (short) 2));
-            log.info("Directories {} in broker {} marked cordoned, uncordoned directories: {}",
-                    newCordonedDirs, brokerId, newUncordonedDirs);
+                    (short) 3));
+            if (log.isDebugEnabled()) {
+                List<Uuid> newUncordonedDirs = registration.directoryDifference(newCordonedDirs);
+                log.debug("Directories {} in broker {} marked cordoned, uncordoned directories: {}",
+                        newCordonedDirs, brokerId, newUncordonedDirs);
+            }
         }
     }
 

@@ -3425,7 +3425,7 @@ public class ReplicationControlManagerTest {
         assertEquals(
                 List.of(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
                         .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
-                        .setCordonedLogDirs(List.of(dir1b1)), (short) 2)),
+                        .setCordonedLogDirs(List.of(dir1b1)), (short) 3)),
                 filter(records, BrokerRegistrationChangeRecord.class)
         );
         ctx.replay(records);
