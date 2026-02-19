@@ -138,14 +138,10 @@ public class OffsetFetcher {
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                  Timer timer,
                                                  boolean requireTimestamps,
-                                                 boolean shouldUpdatePartitionEndOffsets) {
+                                                 boolean updatePartitionEndOffsetsFlag) {
         ListOffsetResult result = new ListOffsetResult();
         if (timestampsToSearch.isEmpty())
             return result;
-
-        if (shouldUpdatePartitionEndOffsets) {
-            offsetFetcherUtils.setPartitionEndOffsetRequests(timestampsToSearch.keySet());
-        }
 
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
@@ -160,14 +156,14 @@ public class OffsetFetcher {
 
                         offsetFetcherUtils.updateSubscriptionState(value.fetchedOffsets, isolationLevel);
 
-                        if (shouldUpdatePartitionEndOffsets)
+                        if (updatePartitionEndOffsetsFlag)
                             offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
                     }
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    if (shouldUpdatePartitionEndOffsets)
+                    if (updatePartitionEndOffsetsFlag)
                         offsetFetcherUtils.clearPartitionEndOffsetRequests(remainingToSearch.keySet());
 
                     if (!(e instanceof RetriableException)) {
@@ -213,7 +209,8 @@ public class OffsetFetcher {
         // we may get the answer; we do not need to wait for the return value
         // since we would not try to poll the network client synchronously
         if (lag == null) {
-            if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
+            if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null &&
+                    offsetFetcherUtils.maybeSetPartitionEndOffsetRequest(topicPartition)) {
                 beginningOrEndOffset(
                     Set.of(topicPartition),
                     ListOffsetsRequest.LATEST_TIMESTAMP,
@@ -231,14 +228,14 @@ public class OffsetFetcher {
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
                                                            Timer timer,
-                                                           boolean shouldUpdatePartitionEndOffsets) {
+                                                           boolean updatePartitionEndOffsetsFlag) {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
             Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
                     .distinct()
                     .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
 
-            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false, shouldUpdatePartitionEndOffsets);
+            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false, updatePartitionEndOffsetsFlag);
 
             return result.fetchedOffsets.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
