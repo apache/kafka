@@ -49,7 +49,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  *
  * This is used by KIP-1271 to serialize values with timestamps and headers for state stores.
  */
-public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<ValueTimestampHeaders<V>, Void, V> {
+class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<ValueTimestampHeaders<V>, Void, V> {
     public final Serializer<V> valueSerializer;
     private final LongSerializer timestampSerializer;
 

@@ -46,7 +46,7 @@ import java.nio.charset.StandardCharsets;
  * <p>
  * This is used by KIP-1271 to serialize headers for storage in state stores.
  */
-public class HeadersSerializer {
+class HeadersSerializer {
 
     /**
      * Serializes headers into a byte array using varint encoding per KIP-1271.

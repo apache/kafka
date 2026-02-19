@@ -40,7 +40,7 @@ import java.nio.charset.StandardCharsets;
  *
  * This is used by KIP-1271 to deserialize headers from state stores.
  */
-public class HeadersDeserializer {
+class HeadersDeserializer {
 
     /**
      * Deserializes headers from a byte array using varint encoding per KIP-1271.
