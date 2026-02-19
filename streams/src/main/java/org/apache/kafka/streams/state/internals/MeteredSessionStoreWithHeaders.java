@@ -106,11 +106,84 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         return false;
     }
 
-    // Override default methods to resolve ambiguity between SessionStore and SessionStoreWithHeaders
+    // Override all iterator-returning methods to properly deserialize keys with headers support
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K key) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetch(keyBytes(key)),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K key) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFetch(keyBytes(key)),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K keyFrom, final K keyTo) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K keyFrom, final K keyTo) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
     @Override
     public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
-                                                                                    final Instant earliestSessionEndTime,
-                                                                                    final Instant latestSessionStartTime) {
+                                                                                   final long earliestSessionEndTime,
+                                                                                   final long latestSessionStartTime) {
+        final Bytes bytesKey = keyBytes(key);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().findSessions(bytesKey, earliestSessionEndTime, latestSessionStartTime),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
+                                                                                   final Instant earliestSessionEndTime,
+                                                                                   final Instant latestSessionStartTime) {
         return findSessions(
             key,
             ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
@@ -121,8 +194,25 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
     @Override
     public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
-                                                                                            final Instant earliestSessionEndTime,
-                                                                                            final Instant latestSessionStartTime) {
+                                                                                           final long earliestSessionEndTime,
+                                                                                           final long latestSessionStartTime) {
+        final Bytes bytesKey = keyBytes(key);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFindSessions(bytesKey, earliestSessionEndTime, latestSessionStartTime),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
+                                                                                           final Instant earliestSessionEndTime,
+                                                                                           final Instant latestSessionStartTime) {
         return backwardFindSessions(
             key,
             ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
@@ -133,9 +223,28 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
     @Override
     public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
-                                                                                    final K keyTo,
-                                                                                    final Instant earliestSessionEndTime,
-                                                                                    final Instant latestSessionStartTime) {
+                                                                                   final K keyTo,
+                                                                                   final long earliestSessionEndTime,
+                                                                                   final long latestSessionStartTime) {
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().findSessions(bytesKeyFrom, bytesKeyTo, earliestSessionEndTime, latestSessionStartTime),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
+                                                                                   final K keyTo,
+                                                                                   final Instant earliestSessionEndTime,
+                                                                                   final Instant latestSessionStartTime) {
         return findSessions(
             keyFrom,
             keyTo,
@@ -147,9 +256,28 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
     @Override
     public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
-                                                                                            final K keyTo,
-                                                                                            final Instant earliestSessionEndTime,
-                                                                                            final Instant latestSessionStartTime) {
+                                                                                           final K keyTo,
+                                                                                           final long earliestSessionEndTime,
+                                                                                           final long latestSessionStartTime) {
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFindSessions(bytesKeyFrom, bytesKeyTo, earliestSessionEndTime, latestSessionStartTime),
+            fetchSensor,
+            iteratorDurationSensor,
+            streamsMetrics,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
+            this::deserializeAggregationWithHeaders,
+            time,
+            numOpenIterators,
+            openIterators);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
+                                                                                           final K keyTo,
+                                                                                           final Instant earliestSessionEndTime,
+                                                                                           final Instant latestSessionStartTime) {
         return backwardFindSessions(
             keyFrom,
             keyTo,
@@ -161,8 +289,8 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
 
     @Override
     public AggregationWithHeaders<AGG> fetchSession(final K key,
-                                                     final Instant sessionStartTime,
-                                                     final Instant sessionEndTime) {
+                                                    final Instant sessionStartTime,
+                                                    final Instant sessionEndTime) {
         return fetchSession(key,
             ApiUtils.validateMillisecondInstant(sessionStartTime,
                 prepareMillisCheckFailMsgPrefix(sessionStartTime, "sessionStartTime")),

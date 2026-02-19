@@ -67,20 +67,20 @@ public class MeteredSessionStore<K, V>
     protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
     protected final Time time;
-    private StateSerdes<K, V> serdes;
-    private StreamsMetricsImpl streamsMetrics;
-    private Sensor putSensor;
-    private Sensor fetchSensor;
-    private Sensor flushSensor;
-    private Sensor removeSensor;
-    private Sensor e2eLatencySensor;
-    private Sensor iteratorDurationSensor;
-    private InternalProcessorContext<?, ?> internalContext;
-    private TaskId taskId;
-    private Sensor restoreSensor;
+    protected StateSerdes<K, V> serdes;
+    protected StreamsMetricsImpl streamsMetrics;
+    protected Sensor putSensor;
+    protected Sensor fetchSensor;
+    protected Sensor flushSensor;
+    protected Sensor removeSensor;
+    protected Sensor e2eLatencySensor;
+    protected Sensor iteratorDurationSensor;
+    protected InternalProcessorContext<?, ?> internalContext;
+    protected TaskId taskId;
+    protected Sensor restoreSensor;
 
-    private final LongAdder numOpenIterators = new LongAdder();
-    private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+    protected final LongAdder numOpenIterators = new LongAdder();
+    protected final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
