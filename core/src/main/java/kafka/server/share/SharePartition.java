@@ -332,7 +332,7 @@ public class SharePartition {
         TopicIdPartition topicIdPartition,
         int leaderEpoch,
         int maxInFlightRecords,
-        int maxDeliveryCount,
+        int defaultMaxDeliveryCount,
         int defaultRecordLockDurationMs,
         Timer timer,
         Time time,
@@ -341,7 +341,7 @@ public class SharePartition {
         GroupConfigManager groupConfigManager,
         SharePartitionListener listener
     ) {
-        this(groupId, topicIdPartition, leaderEpoch, maxInFlightRecords, maxDeliveryCount, defaultRecordLockDurationMs,
+        this(groupId, topicIdPartition, leaderEpoch, maxInFlightRecords, defaultMaxDeliveryCount, defaultRecordLockDurationMs,
             timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
             new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
     }
@@ -1920,6 +1920,8 @@ public class SharePartition {
         int acquiredCount = 0;
         long maxFetchRecordsWhileThrottledRecords = -1;
         boolean hasThrottledRecord = false;
+        int maxDeliveryCount = maxDeliveryCount();
+        int throttleRecordsDeliveryLimit = throttleRecordsDeliveryLimit(maxDeliveryCount);
         List<AcquiredRecords> offsetAcquiredRecords = new ArrayList<>();
         lock.writeLock().lock();
         try {
@@ -1947,7 +1949,7 @@ public class SharePartition {
                 // records in a single response batch. Condition below checks if the current record has reached
                 // the delivery limit and already have some records to return in response then skip processing
                 // the current record, which shall be delivered alone in next fetch.
-                if (maxDeliveryCount() > 2 && recordDeliveryCount == maxDeliveryCount() - 1 && acquiredCount > 0) {
+                if (maxDeliveryCount > 2 && recordDeliveryCount == maxDeliveryCount - 1 && acquiredCount > 0) {
                     log.warn("The offset {} is on last delivery attempt in share partition: {}-{}, should be delivered alone in next fetch",
                         offsetState.getKey(), groupId, topicIdPartition);
                     break;
@@ -1967,13 +1969,13 @@ public class SharePartition {
                 // offset 124 will be at higher delivery count than offset 125. The calculation below
                 // deliver 124 once alone and then proceed with 125 onwards. The code ensures that
                 // the records at higher delivery count are isolated first.
-                if (recordDeliveryCount >= throttleRecordsDeliveryLimit() && maxFetchRecordsWhileThrottledRecords < 0) {
-                    maxFetchRecordsWhileThrottledRecords = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - throttleRecordsDeliveryLimit() + 1));
+                if (recordDeliveryCount >= throttleRecordsDeliveryLimit && maxFetchRecordsWhileThrottledRecords < 0) {
+                    maxFetchRecordsWhileThrottledRecords = Math.max(1, (long) inFlightBatch.offsetState().size() >> (recordDeliveryCount - throttleRecordsDeliveryLimit + 1));
                     hasThrottledRecord = true;
                 }
 
                 InFlightState updateResult = offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
-                    maxDeliveryCount(), memberId);
+                    maxDeliveryCount, memberId);
                 if (updateResult == null || updateResult.state() != RecordState.ACQUIRED) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
                             + " for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
@@ -1992,7 +1994,7 @@ public class SharePartition {
                 acquiredCount++;
 
                 // Delivered alone.
-                if (offsetState.getValue().deliveryCount() == maxDeliveryCount() && maxDeliveryCount() > 2) {
+                if (offsetState.getValue().deliveryCount() == maxDeliveryCount && maxDeliveryCount > 2) {
                     log.warn("The offset {} is on last delivery attempt in share partition: {}-{}, should be delivered alone in this fetch",
                         offsetState.getKey(), groupId, topicIdPartition);
                     break;
@@ -2052,13 +2054,14 @@ public class SharePartition {
      * @return True if the batch should be throttled (delivery count >= threshold), false otherwise.
      */
     private boolean shouldThrottleRecordsDelivery(InFlightBatch inFlightBatch, long requestFirstOffset, long requestLastOffset) {
+        int throttleRecordsDeliveryLimit = throttleRecordsDeliveryLimit(maxDeliveryCount());
         if (inFlightBatch.offsetState() == null) {
             // If offsetState is null, it means the batch is not split and represents a single batch.
             // Check if the batch is in AVAILABLE state and has no ongoing transition.
             // The requested batch shall always be within the request first and last offset as the sub
             // map batches are only fetched to consider.
             if (inFlightBatch.batchState() == RecordState.AVAILABLE && !inFlightBatch.batchHasOngoingStateTransition()) {
-                return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit();
+                return inFlightBatch.batchDeliveryCount() >= throttleRecordsDeliveryLimit;
             }
             return false;
         }
@@ -2071,7 +2074,7 @@ public class SharePartition {
                 return false;
             }
             return entry.getValue().state() == RecordState.AVAILABLE && !entry.getValue().hasOngoingStateTransition();
-        }).mapToInt(entry -> entry.getValue().deliveryCount()).max().orElse(0) >= throttleRecordsDeliveryLimit();
+        }).mapToInt(entry -> entry.getValue().deliveryCount()).max().orElse(0) >= throttleRecordsDeliveryLimit;
     }
 
     // Visibility for test
@@ -3317,8 +3320,8 @@ public class SharePartition {
      * Returns the throttle records delivery limit, computed as half of the effective max delivery
      * count rounded up, with a minimum of {@link #MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT}.
      */
-    private int throttleRecordsDeliveryLimit() {
-        return Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount() / 2));
+    private static int throttleRecordsDeliveryLimit(int maxDeliveryCount) {
+        return Math.max(MINIMUM_THROTTLE_RECORDS_DELIVERY_LIMIT, (int) Math.ceil((double) maxDeliveryCount / 2));
     }
 
 
