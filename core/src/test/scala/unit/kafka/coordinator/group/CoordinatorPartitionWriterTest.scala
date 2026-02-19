@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.{LogAppendResult, ReplicaManager}
+import kafka.server.ReplicaManager
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
@@ -24,6 +24,8 @@ import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPa
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.internal.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
+import org.apache.kafka.server.LogAppendResult
+import org.apache.kafka.server.LogAppendResult.LogAppendSummary
 import org.apache.kafka.server.common.TransactionVersion
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, RecordValidationStats, VerificationGuard}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
@@ -107,8 +109,8 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
-    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
-      new LogAppendInfo(
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(new LogAppendInfo(
         5L,
         10L,
         Optional.empty,
@@ -119,9 +121,9 @@ class CoordinatorPartitionWriterTest {
         CompressionType.NONE,
         100,
         10L
-      ),
-      Option.empty,
-      hasCustomErrorMessage = false
+      )),
+      Optional.empty(),
+      false
     )))
 
     // Test non-transactional records (regular coordinator records) - should use TV_UNKNOWN
@@ -169,8 +171,8 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.eq(TransactionVersion.TV_2.featureLevel())
-    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
-      new LogAppendInfo(
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(new LogAppendInfo(
         5L,
         10L,
         Optional.empty,
@@ -181,9 +183,9 @@ class CoordinatorPartitionWriterTest {
         CompressionType.NONE,
         100,
         10L
-      ),
-      Option.empty,
-      hasCustomErrorMessage = false
+      )),
+      Optional.empty(),
+      false
     )))
 
     // Test transactional records (transaction marker) - should use explicit transaction version
@@ -329,10 +331,10 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
-    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
-      LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-      Some(Errors.NOT_LEADER_OR_FOLLOWER.exception),
-      hasCustomErrorMessage = false
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
+      Optional.of(Errors.NOT_LEADER_OR_FOLLOWER.exception),
+      false
     )))
 
     val batch = MemoryRecords.withRecords(
@@ -374,10 +376,10 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.eq(TransactionVersion.TV_UNKNOWN)
-    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
-      LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-      Some(Errors.NOT_LEADER_OR_FOLLOWER.exception(customMessage)),
-      hasCustomErrorMessage = true
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> new LogAppendResult(
+      LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO),
+      Optional.of(Errors.NOT_LEADER_OR_FOLLOWER.exception(customMessage)),
+      true
     )))
 
     val batch = MemoryRecords.withRecords(

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTask;
 import org.apache.kafka.streams.processor.internals.Task.State;
@@ -448,7 +449,7 @@ class DefaultStateUpdaterTest {
             .thenReturn(false);
         stateUpdater.start();
         stateUpdater.add(task);
-        stateUpdater.remove(task.id()).get();
+        stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED).get();
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
@@ -715,8 +716,8 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask);
         verifyUpdatingTasks(activeTask1, activeTask2, standbyTask);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = stateUpdater.remove(activeTask1.id());
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = stateUpdater.remove(activeTask2.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = stateUpdater.remove(activeTask1.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = stateUpdater.remove(activeTask2.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
         CompletableFuture.allOf(future1, future2).get();
 
         final InOrder orderVerifier = inOrder(changelogReader);
@@ -735,7 +736,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask2);
         verifyUpdatingTasks(standbyTask1, standbyTask2);
 
-        stateUpdater.remove(standbyTask2.id()).get();
+        stateUpdater.remove(standbyTask2.id(), StandbyUpdateListener.SuspendReason.MIGRATED).get();
 
         verify(changelogReader).transitToUpdateStandby();
     }
@@ -752,6 +753,22 @@ class DefaultStateUpdaterTest {
         shouldRemoveUpdatingStatefulTask(task);
     }
 
+    @Test
+    public void shouldPassSuspendReasonToChangelogReaderOnRemove() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.PROMOTED);
+
+        assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
+        verify(changelogReader).unregister(task.changelogPartitions(), StandbyUpdateListener.SuspendReason.PROMOTED);
+    }
+
     private void shouldRemoveUpdatingStatefulTask(final Task task) throws Exception {
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
@@ -759,7 +776,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyUpdatingTasks(task);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
         verifyCheckpointTasks(true, task);
@@ -767,7 +784,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(task.changelogPartitions());
+        verify(changelogReader).unregister(task.changelogPartitions(), StandbyUpdateListener.SuspendReason.MIGRATED);
     }
 
     @Test
@@ -776,7 +793,7 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, streamsException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, streamsException, true);
 
@@ -788,7 +805,7 @@ class DefaultStateUpdaterTest {
         final RuntimeException runtimeException = new RuntimeException("Something happened");
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, runtimeException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, runtimeException, false);
     }
@@ -799,7 +816,7 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, streamsException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, streamsException, true);
     }
@@ -810,7 +827,7 @@ class DefaultStateUpdaterTest {
         final RuntimeException runtimeException = new RuntimeException("Something happened");
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, runtimeException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, runtimeException, false);
     }
@@ -820,7 +837,7 @@ class DefaultStateUpdaterTest {
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-        doThrow(exception).when(changelogReader).unregister(changelogPartitions);
+        doThrow(exception).when(changelogReader).unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
         stateUpdater.start();
         stateUpdater.add(task);
         verifyUpdatingTasks(task);
@@ -851,8 +868,8 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(statefulTask, standbyTask);
         verifyUpdatingTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStatefulTask = stateUpdater.remove(statefulTask.id());
-        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStandbyTask = stateUpdater.remove(standbyTask.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStatefulTask = stateUpdater.remove(statefulTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStandbyTask = stateUpdater.remove(standbyTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(new StateUpdater.RemovedTaskResult(statefulTask), futureOfStatefulTask.get());
         assertEquals(new StateUpdater.RemovedTaskResult(standbyTask), futureOfStandbyTask.get());
@@ -860,8 +877,8 @@ class DefaultStateUpdaterTest {
         verifyCheckpointTasks(true, statefulTask, standbyTask);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(statefulTask.changelogPartitions());
-        verify(changelogReader).unregister(standbyTask.changelogPartitions());
+        verify(changelogReader).unregister(statefulTask.changelogPartitions(), StandbyUpdateListener.SuspendReason.MIGRATED);
+        verify(changelogReader).unregister(standbyTask.changelogPartitions(), StandbyUpdateListener.SuspendReason.MIGRATED);
     }
 
     @Test
@@ -869,7 +886,7 @@ class DefaultStateUpdaterTest {
         final StreamTask statefulTask = statefulTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamsException streamsException = new StreamsException("Something happened", statefulTask.id());
         final Collection<TopicPartition> changelogPartitions = statefulTask.changelogPartitions();
-        doThrow(streamsException).when(changelogReader).unregister(changelogPartitions);
+        doThrow(streamsException).when(changelogReader).unregister(changelogPartitions, StandbyUpdateListener.SuspendReason.MIGRATED);
         stateUpdater.start();
         stateUpdater.add(statefulTask);
         verifyUpdatingTasks(statefulTask);
@@ -877,7 +894,7 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(statefulTask);
         verifyUpdatingTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(statefulTask.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(statefulTask.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         final ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(StreamsException.class, executionException.getCause());
@@ -907,7 +924,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyRestoredActiveTasks(task);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
         future.get();
 
         assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
@@ -943,7 +960,7 @@ class DefaultStateUpdaterTest {
         final ExceptionAndTask expectedExceptionAndTasks = new ExceptionAndTask(streamsException, task);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertEquals(new StateUpdater.RemovedTaskResult(task, streamsException), future.get());
         verifyPausedTasks();
@@ -973,7 +990,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(updatingTask);
         verifyPausedTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_1_0);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_1_0, StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertNull(future.get());
         verifyRestoredActiveTasks(restoredTask);
@@ -986,7 +1003,7 @@ class DefaultStateUpdaterTest {
     public void shouldCompleteWithNullIfNoTasks() throws Exception {
         stateUpdater.start();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_0_1);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_0_1, StandbyUpdateListener.SuspendReason.MIGRATED);
 
         assertNull(future.get());
         assertTrue(stateUpdater.isRunning());
@@ -1487,7 +1504,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask1);
         stateUpdater.add(standbyTask1);
         stateUpdater.add(standbyTask2);
-        stateUpdater.remove(TASK_0_0);
+        stateUpdater.remove(TASK_0_0, StandbyUpdateListener.SuspendReason.MIGRATED);
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
 
@@ -1782,7 +1799,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(failedStatefulTask, activeTask1);
 
         throwException.set(true);
-        final ExecutionException exception = assertThrows(ExecutionException.class, () -> stateUpdater.remove(TASK_0_2).get());
+        final ExecutionException exception = assertThrows(ExecutionException.class, () -> stateUpdater.remove(TASK_0_2, StandbyUpdateListener.SuspendReason.MIGRATED).get());
         assertEquals(processorStateException, exception.getCause());
 
         stateUpdater.add(activeTask2);

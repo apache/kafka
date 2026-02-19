@@ -59,6 +59,7 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.KRaftConfigs
+import org.apache.kafka.server.LogAppendResult.LogAppendSummary
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition, TransactionVersion}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
@@ -88,7 +89,7 @@ import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
@@ -4021,6 +4022,30 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testAlterReplicaLogDirsToCordonedDir(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val logMgr = Mockito.spy(TestUtils.createLogManager(config.logDirs.asScala.map(new File(_))))
+    when(logMgr.cordonedLogDirs()).thenReturn(config.logDirs.asScala.toSet)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logMgr,
+      quotaManagers = quotaManager,
+      metadataCache = new KRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val errors = replicaManager.alterReplicaLogDirs(Map(tp -> config.logDirs.get(0)))
+      assertEquals(Errors.INVALID_REPLICA_ASSIGNMENT, errors(tp))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
   def testPartitionMetadataFile(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
@@ -5630,6 +5655,7 @@ class ReplicaManagerTest {
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
         assertFalse(response.topics().isEmpty)
+        assertFalse(response.isCordoned)
         response.topics().forEach(t => assertFalse(t.partitions().isEmpty))
       }
     } finally {
@@ -5662,6 +5688,7 @@ class ReplicaManagerTest {
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
         assertTrue(response.topics().isEmpty)
+        assertFalse(response.isCordoned)
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -6036,13 +6063,13 @@ class ReplicaManagerTest {
 
       val fooResult = result(foo)
       assertEquals(Errors.NONE, fooResult.error)
-      assertEquals(0, fooResult.info.logStartOffset)
-      assertEquals(0, fooResult.info.firstOffset)
-      assertEquals(0, fooResult.info.lastOffset)
+      assertEquals(0, fooResult.logAppendSummary.logStartOffset)
+      assertEquals(0, fooResult.logAppendSummary.firstOffset)
+      assertEquals(0, fooResult.logAppendSummary.lastOffset)
 
       val barResult = result(bar)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, barResult.error)
-      assertEquals(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, barResult.info)
+      assertEquals(LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO), barResult.logAppendSummary)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
