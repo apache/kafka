@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
@@ -93,7 +94,7 @@ public class MockChangelogReader implements ChangelogReader {
 
     @Override
     public void unregister(final Collection<TopicPartition> partitions,
-                           final org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason reason) {
+                           final SuspendReason reason) {
         unregister(partitions);
     }
 
