@@ -47,7 +47,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  * <p>
  * This is used by KIP-1271 to serialize aggregations with headers for session state stores.
  */
-public class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerializer<AggregationWithHeaders<AGG>, Void, AGG> {
+class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerializer<AggregationWithHeaders<AGG>, Void, AGG> {
     public final Serializer<AGG> aggregationSerializer;
     private final HeadersSerializer headersSerializer;
 
@@ -93,7 +93,7 @@ public class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSe
 
             return baos.toByteArray();
         } catch (final IOException e) {
-            throw new SerializationException("Failed to serialize AggregationWithHeaders", e);
+            throw new SerializationException("Failed to serialize AggregationWithHeaders on topic: " + topic, e);
         }
     }
 
