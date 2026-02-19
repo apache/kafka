@@ -1769,6 +1769,7 @@ org.apache.kafka.streams.processor.internals.DefaultStateUpdaterTest:
 - shouldNotResumeStandbyTaskInFailedTasks
 - shouldNotSwitchTwiceToUpdatingStandbyTaskIfStandbyTaskIsRemoved
 - shouldNotTransitToStandbyAgainAfterStandbyTaskFailed
+- shouldPassSuspendReasonToChangelogReaderOnRemove
 - shouldPauseActiveStatefulTask
 - shouldPauseActiveTaskAndTransitToUpdateStandby
 - shouldPauseStandbyTask
@@ -2605,6 +2606,7 @@ org.apache.kafka.streams.processor.internals.StoreChangelogReaderTest:
 - shouldNotThrowOnUnknownRevokedPartition
 - shouldNotUpdateLimitForNonSourceStandbyChangelog
 - shouldOnlyRestoreStandbyChangelogInUpdateStandbyState
+- shouldPassSuspendReasonToStandbyListener
 - shouldPollWithRightTimeout
 - shouldRequestCommittedOffsetsAndHandleTimeoutException
 - shouldRequestEndOffsetsAndHandleTimeoutException
