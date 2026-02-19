@@ -144,7 +144,7 @@ public class OffsetFetcher {
             return result;
 
         if (shouldUpdatePartitionEndOffsets) {
-            timestampsToSearch.keySet().forEach(subscriptions::requestPartitionEndOffset);
+            offsetFetcherUtils.setPartitionEndOffsetRequests(timestampsToSearch.keySet());
         }
 
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
@@ -214,20 +214,12 @@ public class OffsetFetcher {
         // since we would not try to poll the network client synchronously
         if (lag == null) {
             if (subscriptions.partitionEndOffset(topicPartition, isolationLevel) == null) {
-                // The LIST_OFFSETS lag lookup is serialized, so if there's an inflight request it must
-                // finish before another request can be issued. This serialization mechanism is controlled
-                // by the 'end offset requested' flag in SubscriptionState.
-                if (subscriptions.partitionEndOffsetRequested(topicPartition)) {
-                    log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", topicPartition);
-                } else {
-                    log.info("Requesting the log end offset for {} in order to compute lag", topicPartition);
-                    beginningOrEndOffset(
-                        Set.of(topicPartition),
-                        ListOffsetsRequest.LATEST_TIMESTAMP,
-                        time.timer(0L),
-                        true
-                    );
-                }
+                beginningOrEndOffset(
+                    Set.of(topicPartition),
+                    ListOffsetsRequest.LATEST_TIMESTAMP,
+                    time.timer(0L),
+                    true
+                );
             }
 
             return OptionalLong.empty();

@@ -288,6 +288,22 @@ class OffsetFetcherUtils {
     }
 
     /**
+     * The {@code LIST_OFFSETS} lag lookup is serialized, so if there's an inflight request it must finish before
+     * another request can be issued. This serialization mechanism is controlled by the 'end offset requested'
+     * flag in {@link SubscriptionState}.
+     */
+    void setPartitionEndOffsetRequests(Collection<TopicPartition> partitions) {
+        for (final TopicPartition partition : partitions) {
+            if (subscriptionState.partitionEndOffsetRequested(partition)) {
+                log.info("Not requesting the log end offset for {} to compute lag as an outstanding request already exists", partition);
+            } else {
+                log.info("Requesting the log end offset for {} in order to compute lag", partition);
+                subscriptionState.requestPartitionEndOffset(partition);
+            }
+        }
+    }
+
+    /**
      * If any of the given partitions are assigned, this will clear the partition's 'end offset requested' flag so
      * that the next attempt to look up the lag will properly issue another <code>LIST_OFFSETS</code> request. This
      * is only intended to be called when <code>LIST_OFFSETS</code> fails. Successful <code>LIST_OFFSETS</code> calls
