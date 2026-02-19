@@ -43,6 +43,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
+import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
@@ -368,7 +369,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(activeTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(activeTaskToClose.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(activeTaskToClose.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToClose));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -388,7 +389,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(activeTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(activeTaskToClose.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(activeTaskToClose.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToClose, new RuntimeException("KABOOM!")));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -409,7 +410,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(standbyTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(standbyTaskToClose.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(standbyTaskToClose.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToClose));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -429,7 +430,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(standbyTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(standbyTaskToClose.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(standbyTaskToClose.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToClose, new RuntimeException("KABOOM!")));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -450,7 +451,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(failedStandbyTask));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(failedStandbyTask.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(failedStandbyTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         final RuntimeException kaboom = new RuntimeException("KABOOM!");
         future.completeExceptionally(kaboom);
         when(stateUpdater.drainExceptionsAndFailedTasks())
@@ -477,7 +478,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(activeTaskToUpdateInputPartitions));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(activeTaskToUpdateInputPartitions.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(activeTaskToUpdateInputPartitions.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToUpdateInputPartitions));
 
         taskManager.handleAssignment(
@@ -507,7 +508,7 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId03Partitions))
             .thenReturn(recycledStandbyTask);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId03), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(taskId03), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToRecycle));
 
         taskManager.handleAssignment(
@@ -531,7 +532,7 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, activeTaskToRecycle.inputPartitions()))
             .thenThrow(new RuntimeException());
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(activeTaskToRecycle.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(activeTaskToRecycle.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToRecycle));
 
         assertThrows(
@@ -561,7 +562,7 @@ public class TaskManagerTest {
         when(activeTaskCreator.createActiveTaskFromStandby(standbyTaskToRecycle, taskId03Partitions, consumer))
             .thenReturn(recycledActiveTask);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), eq(SuspendReason.PROMOTED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         taskManager.handleAssignment(
@@ -588,7 +589,7 @@ public class TaskManagerTest {
             consumer))
             .thenThrow(new RuntimeException());
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), eq(SuspendReason.PROMOTED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         assertThrows(
@@ -652,7 +653,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(failedActiveTaskToRecycle));
         final RuntimeException taskException = new RuntimeException("Nobody expects the Spanish inquisition!");
-        when(stateUpdater.remove(eq(failedActiveTaskToRecycle.id()), any()))
+        when(stateUpdater.remove(eq(failedActiveTaskToRecycle.id()), eq(SuspendReason.MIGRATED)))
             .thenReturn(CompletableFuture.completedFuture(
                 new StateUpdater.RemovedTaskResult(failedActiveTaskToRecycle, taskException)
             ));
@@ -682,7 +683,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(failedStandbyTaskToRecycle));
         final RuntimeException taskException = new RuntimeException("Nobody expects the Spanish inquisition!");
-        when(stateUpdater.remove(eq(failedStandbyTaskToRecycle.id()), any()))
+        when(stateUpdater.remove(eq(failedStandbyTaskToRecycle.id()), eq(SuspendReason.PROMOTED)))
             .thenReturn(CompletableFuture.completedFuture(
                 new StateUpdater.RemovedTaskResult(failedStandbyTaskToRecycle, taskException)
             ));
@@ -712,7 +713,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(failedActiveTaskToReassign));
         final RuntimeException taskException = new RuntimeException("Nobody expects the Spanish inquisition!");
-        when(stateUpdater.remove(eq(failedActiveTaskToReassign.id()), any()))
+        when(stateUpdater.remove(eq(failedActiveTaskToReassign.id()), eq(SuspendReason.MIGRATED)))
             .thenReturn(CompletableFuture.completedFuture(
                 new StateUpdater.RemovedTaskResult(failedActiveTaskToReassign, taskException)
             ));
@@ -745,7 +746,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(tasks.allNonFailedInitializedTasks()).thenReturn(Set.of(reassignedActiveTask1));
         when(stateUpdater.tasks()).thenReturn(Set.of(reassignedActiveTask2));
-        when(stateUpdater.remove(eq(reassignedActiveTask2.id()), any()))
+        when(stateUpdater.remove(eq(reassignedActiveTask2.id()), eq(SuspendReason.MIGRATED)))
             .thenReturn(CompletableFuture.completedFuture(new StateUpdater.RemovedTaskResult(reassignedActiveTask2)));
 
         taskManager.handleAssignment(
@@ -757,7 +758,7 @@ public class TaskManagerTest {
         );
 
         final InOrder inOrder = inOrder(stateUpdater, tasks);
-        inOrder.verify(stateUpdater).remove(eq(reassignedActiveTask2.id()), any());
+        inOrder.verify(stateUpdater).remove(eq(reassignedActiveTask2.id()), eq(SuspendReason.MIGRATED));
         inOrder.verify(tasks).removeTask(reassignedActiveTask1);
         inOrder.verify(stateUpdater).add(reassignedActiveTask1);
     }
@@ -813,12 +814,12 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(activeTaskToClose, standbyTaskToRecycle));
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForActiveTaskToClose = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(activeTaskToClose.id()), any())).thenReturn(futureForActiveTaskToClose);
+        when(stateUpdater.remove(eq(activeTaskToClose.id()), eq(SuspendReason.MIGRATED))).thenReturn(futureForActiveTaskToClose);
         futureForActiveTaskToClose.complete(new StateUpdater.RemovedTaskResult(activeTaskToClose));
         when(activeTaskCreator.createActiveTaskFromStandby(standbyTaskToRecycle, taskId02Partitions, consumer))
             .thenReturn(recycledActiveTask);
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForStandbyTaskToRecycle = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), any())).thenReturn(futureForStandbyTaskToRecycle);
+        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), eq(SuspendReason.PROMOTED))).thenReturn(futureForStandbyTaskToRecycle);
         futureForStandbyTaskToRecycle.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         taskManager.handleAssignment(
@@ -1314,14 +1315,14 @@ public class TaskManagerTest {
         final TaskManager taskManager = setupForRevocationAndLost(Set.of(task), tasks);
         when(stateUpdater.tasks()).thenReturn(Set.of(task));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(task.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(task));
 
         taskManager.handleRevocation(task.inputPartitions());
 
         verify(task).suspend();
         verify(tasks).addActiveTask(task);
-        verify(stateUpdater).remove(eq(task.id()), any());
+        verify(stateUpdater).remove(eq(task.id()), eq(SuspendReason.MIGRATED));
     }
 
     @Test
@@ -1335,10 +1336,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(Set.of(task1, task2), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task1.id()), any())).thenReturn(future1);
+        when(stateUpdater.remove(eq(task1.id()), eq(SuspendReason.MIGRATED))).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task2.id()), any())).thenReturn(future2);
+        when(stateUpdater.remove(eq(task2.id()), eq(SuspendReason.MIGRATED))).thenReturn(future2);
         future2.complete(new StateUpdater.RemovedTaskResult(task2));
 
         taskManager.handleRevocation(union(HashSet::new, taskId00Partitions, taskId01Partitions));
@@ -1390,10 +1391,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(Set.of(task1, task2), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task1.id()), any())).thenReturn(future1);
+        when(stateUpdater.remove(eq(task1.id()), eq(SuspendReason.MIGRATED))).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task2.id()), any())).thenReturn(future2);
+        when(stateUpdater.remove(eq(task2.id()), eq(SuspendReason.MIGRATED))).thenReturn(future2);
         final RuntimeException taskException = new RuntimeException("Nobody expects the Spanish inquisition!");
         future2.complete(new StateUpdater.RemovedTaskResult(task2, taskException));
 
@@ -1424,10 +1425,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(Set.of(task1, task2, task3), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task1.id()), any())).thenReturn(future1);
+        when(stateUpdater.remove(eq(task1.id()), eq(SuspendReason.MIGRATED))).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task3.id()), any())).thenReturn(future3);
+        when(stateUpdater.remove(eq(task3.id()), eq(SuspendReason.MIGRATED))).thenReturn(future3);
         future3.complete(new StateUpdater.RemovedTaskResult(task3));
 
         taskManager.handleLostAll();
@@ -1436,7 +1437,7 @@ public class TaskManagerTest {
         verify(task1).closeClean();
         verify(task3).suspend();
         verify(task3).closeClean();
-        verify(stateUpdater, never()).remove(eq(task2.id()), any());
+        verify(stateUpdater, never()).remove(eq(task2.id()), eq(SuspendReason.MIGRATED));
     }
 
     @Test
@@ -1470,10 +1471,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(Set.of(task1, task2), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task1.id()), any())).thenReturn(future1);
+        when(stateUpdater.remove(eq(task1.id()), eq(SuspendReason.MIGRATED))).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1, new StreamsException("Something happened")));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task2.id()), any())).thenReturn(future3);
+        when(stateUpdater.remove(eq(task2.id()), eq(SuspendReason.MIGRATED))).thenReturn(future3);
         future3.complete(new StateUpdater.RemovedTaskResult(task2, new StreamsException("Something else happened")));
 
         taskManager.handleLostAll();
@@ -1501,10 +1502,10 @@ public class TaskManagerTest {
         when(tasks.drainPendingActiveTasksToInit()).thenReturn(Set.of(task1));
         final TaskManager taskManager = setupForRevocationAndLost(Set.of(task2, task3), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task2.id()), any())).thenReturn(future2);
+        when(stateUpdater.remove(eq(task2.id()), eq(SuspendReason.MIGRATED))).thenReturn(future2);
         future2.complete(new StateUpdater.RemovedTaskResult(task2, new StreamsException("Something happened")));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task3.id()), any())).thenReturn(future3);
+        when(stateUpdater.remove(eq(task3.id()), eq(SuspendReason.MIGRATED))).thenReturn(future3);
         future3.complete(new StateUpdater.RemovedTaskResult(task3));
 
         taskManager.handleLostAll();
@@ -2765,12 +2766,12 @@ public class TaskManagerTest {
 
         // mock future for removing task from StateUpdater
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task00.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(task00.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(task00));
 
         taskManager.handleAssignment(emptyMap(), emptyMap());
 
-        verify(stateUpdater).remove(eq(task00.id()), any());
+        verify(stateUpdater).remove(eq(task00.id()), eq(SuspendReason.MIGRATED));
         verify(task00).suspend();
         verify(task00).closeClean();
 
@@ -3220,7 +3221,7 @@ public class TaskManagerTest {
 
         // mock to remove standby task from state updater
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task01.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(task01.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(task01));
 
         final Map<TaskId, Set<TopicPartition>> assignmentActive = singletonMap(taskId00, taskId00Partitions);
@@ -3230,7 +3231,7 @@ public class TaskManagerTest {
         verify(task00, never()).prepareCommit(anyBoolean());
         verify(task00, never()).postCommit(anyBoolean());
 
-        verify(stateUpdater).remove(eq(task01.id()), any());
+        verify(stateUpdater).remove(eq(task01.id()), eq(SuspendReason.MIGRATED));
         verify(task01).suspend();
         verify(task01).closeClean();
 
@@ -3392,7 +3393,7 @@ public class TaskManagerTest {
 
         when(stateUpdater.tasks()).thenReturn(singleton(task00));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = mock(CompletableFuture.class);
-        when(stateUpdater.remove(eq(taskId00), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(future);
         when(future.get(anyLong(), any())).thenThrow(new java.util.concurrent.TimeoutException());
 
         taskManager.shutdown(true);
@@ -3420,7 +3421,7 @@ public class TaskManagerTest {
 
         // task01 is revoked, task00 stays
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureTask01 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(task01.id()), any())).thenReturn(futureTask01);
+        when(stateUpdater.remove(eq(task01.id()), eq(SuspendReason.MIGRATED))).thenReturn(futureTask01);
         futureTask01.complete(new StateUpdater.RemovedTaskResult(task01));
 
         final RuntimeException thrown = assertThrows(RuntimeException.class,
@@ -3432,7 +3433,7 @@ public class TaskManagerTest {
 
         verify(task01, times(2)).suspend();
         verify(task01).closeDirty();
-        verify(stateUpdater, never()).remove(eq(task00.id()), any());
+        verify(stateUpdater, never()).remove(eq(task00.id()), eq(SuspendReason.MIGRATED));
         verify(task00, never()).suspend();
         verify(task00, never()).prepareCommit(anyBoolean());
         verify(task00, never()).closeClean();
@@ -3533,7 +3534,7 @@ public class TaskManagerTest {
         when(tasks.standbyInitializedTasks()).thenReturn(Set.of(standbyTask00));
 
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForStandbyTask = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId00), any())).thenReturn(futureForStandbyTask);
+        when(stateUpdater.remove(eq(taskId00), eq(SuspendReason.MIGRATED))).thenReturn(futureForStandbyTask);
 
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
 
@@ -3619,13 +3620,13 @@ public class TaskManagerTest {
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStandbyTask = new CompletableFuture<>();
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStatefulTaskDuringRemoval = new CompletableFuture<>();
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStandbyTaskDuringRemoval = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(removedStatefulTask.id()), any())).thenReturn(futureForRemovedStatefulTask);
-        when(stateUpdater.remove(eq(removedStandbyTask.id()), any())).thenReturn(futureForRemovedStandbyTask);
-        when(stateUpdater.remove(eq(removedFailedStatefulTask.id()), any())).thenReturn(futureForRemovedFailedStatefulTask);
-        when(stateUpdater.remove(eq(removedFailedStandbyTask.id()), any())).thenReturn(futureForRemovedFailedStandbyTask);
-        when(stateUpdater.remove(eq(removedFailedStatefulTaskDuringRemoval.id()), any()))
+        when(stateUpdater.remove(eq(removedStatefulTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(futureForRemovedStatefulTask);
+        when(stateUpdater.remove(eq(removedStandbyTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(futureForRemovedStandbyTask);
+        when(stateUpdater.remove(eq(removedFailedStatefulTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(futureForRemovedFailedStatefulTask);
+        when(stateUpdater.remove(eq(removedFailedStandbyTask.id()), eq(SuspendReason.MIGRATED))).thenReturn(futureForRemovedFailedStandbyTask);
+        when(stateUpdater.remove(eq(removedFailedStatefulTaskDuringRemoval.id()), eq(SuspendReason.MIGRATED)))
             .thenReturn(futureForRemovedFailedStatefulTaskDuringRemoval);
-        when(stateUpdater.remove(eq(removedFailedStandbyTaskDuringRemoval.id()), any()))
+        when(stateUpdater.remove(eq(removedFailedStandbyTaskDuringRemoval.id()), eq(SuspendReason.MIGRATED)))
             .thenReturn(futureForRemovedFailedStandbyTaskDuringRemoval);
         when(stateUpdater.drainExceptionsAndFailedTasks())
                 .thenReturn(Arrays.asList(
@@ -4429,11 +4430,11 @@ public class TaskManagerTest {
 
         // mock futures for removing tasks from StateUpdater
         final CompletableFuture<StateUpdater.RemovedTaskResult> future01 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId01), any())).thenReturn(future01);
+        when(stateUpdater.remove(eq(taskId01), eq(SuspendReason.MIGRATED))).thenReturn(future01);
         future01.complete(new StateUpdater.RemovedTaskResult(migratedTask01));
 
         final CompletableFuture<StateUpdater.RemovedTaskResult> future02 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId02), any())).thenReturn(future02);
+        when(stateUpdater.remove(eq(taskId02), eq(SuspendReason.MIGRATED))).thenReturn(future02);
         future02.complete(new StateUpdater.RemovedTaskResult(migratedTask02));
 
         final TaskMigratedException thrown = assertThrows(
@@ -4448,8 +4449,8 @@ public class TaskManagerTest {
         );
         verify(migratedTask01, times(2)).suspend();
         verify(migratedTask02, times(2)).suspend();
-        verify(stateUpdater).remove(eq(taskId01), any());
-        verify(stateUpdater).remove(eq(taskId02), any());
+        verify(stateUpdater).remove(eq(taskId01), eq(SuspendReason.MIGRATED));
+        verify(stateUpdater).remove(eq(taskId02), eq(SuspendReason.MIGRATED));
     }
 
     @Test
@@ -4475,11 +4476,11 @@ public class TaskManagerTest {
 
         // mock futures for removing tasks from StateUpdater
         final CompletableFuture<StateUpdater.RemovedTaskResult> future01 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId01), any())).thenReturn(future01);
+        when(stateUpdater.remove(eq(taskId01), eq(SuspendReason.MIGRATED))).thenReturn(future01);
         future01.complete(new StateUpdater.RemovedTaskResult(migratedTask01));
 
         final CompletableFuture<StateUpdater.RemovedTaskResult> future02 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId02), any())).thenReturn(future02);
+        when(stateUpdater.remove(eq(taskId02), eq(SuspendReason.MIGRATED))).thenReturn(future02);
         future02.complete(new StateUpdater.RemovedTaskResult(migratedTask02));
 
         final RuntimeException thrown = assertThrows(
@@ -4493,8 +4494,8 @@ public class TaskManagerTest {
 
         verify(migratedTask01, times(2)).suspend();
         verify(migratedTask02, times(2)).suspend();
-        verify(stateUpdater).remove(eq(taskId01), any());
-        verify(stateUpdater).remove(eq(taskId02), any());
+        verify(stateUpdater).remove(eq(taskId01), eq(SuspendReason.MIGRATED));
+        verify(stateUpdater).remove(eq(taskId02), eq(SuspendReason.MIGRATED));
     }
 
     @Test
@@ -4520,11 +4521,11 @@ public class TaskManagerTest {
 
         // mock futures for removing tasks from StateUpdater
         final CompletableFuture<StateUpdater.RemovedTaskResult> future01 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId01), any())).thenReturn(future01);
+        when(stateUpdater.remove(eq(taskId01), eq(SuspendReason.MIGRATED))).thenReturn(future01);
         future01.complete(new StateUpdater.RemovedTaskResult(migratedTask01));
 
         final CompletableFuture<StateUpdater.RemovedTaskResult> future02 = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(taskId02), any())).thenReturn(future02);
+        when(stateUpdater.remove(eq(taskId02), eq(SuspendReason.MIGRATED))).thenReturn(future02);
         future02.complete(new StateUpdater.RemovedTaskResult(migratedTask02));
 
         final StreamsException thrown = assertThrows(
@@ -4540,8 +4541,8 @@ public class TaskManagerTest {
 
         verify(migratedTask01, times(2)).suspend();
         verify(migratedTask02, times(2)).suspend();
-        verify(stateUpdater).remove(eq(taskId01), any());
-        verify(stateUpdater).remove(eq(taskId02), any());
+        verify(stateUpdater).remove(eq(taskId01), eq(SuspendReason.MIGRATED));
+        verify(stateUpdater).remove(eq(taskId02), eq(SuspendReason.MIGRATED));
     }
 
     @Test
@@ -4807,7 +4808,7 @@ public class TaskManagerTest {
         // convert active to standby
         when(stateUpdater.tasks()).thenReturn(Set.of(activeTaskToRecycle));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(activeTaskToRecycle.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(activeTaskToRecycle.id()), eq(SuspendReason.MIGRATED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToRecycle));
 
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
@@ -4839,7 +4840,7 @@ public class TaskManagerTest {
         // convert standby to active
         when(stateUpdater.tasks()).thenReturn(Set.of(standbyTaskToRecycle));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), any())).thenReturn(future);
+        when(stateUpdater.remove(eq(standbyTaskToRecycle.id()), eq(SuspendReason.PROMOTED))).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());

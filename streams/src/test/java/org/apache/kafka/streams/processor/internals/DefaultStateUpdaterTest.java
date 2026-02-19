@@ -753,6 +753,22 @@ class DefaultStateUpdaterTest {
         shouldRemoveUpdatingStatefulTask(task);
     }
 
+    @Test
+    public void shouldPassSuspendReasonToChangelogReaderOnRemove() throws Exception {
+        final StandbyTask task = standbyTask(TASK_0_0, Set.of(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(task);
+        verifyUpdatingTasks(task);
+
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future =
+            stateUpdater.remove(task.id(), StandbyUpdateListener.SuspendReason.PROMOTED);
+
+        assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
+        verify(changelogReader).unregister(task.changelogPartitions(), StandbyUpdateListener.SuspendReason.PROMOTED);
+    }
+
     private void shouldRemoveUpdatingStatefulTask(final Task task) throws Exception {
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
