@@ -47,7 +47,7 @@ import java.nio.charset.StandardCharsets;
  * <p>
  * This is used by KIP-1271 to serialize headers for storage in state stores.
  */
-public class HeadersSerializer implements Serializer<Headers> {
+public class HeadersSerializer {
 
     /**
      * Serializes headers into a byte array using varint encoding per KIP-1271.
@@ -58,12 +58,10 @@ public class HeadersSerializer implements Serializer<Headers> {
      * For null or empty headers, returns an empty byte array (0 bytes)
      * instead of encoding headerCount=0 (1 byte).
      *
-     * @param topic topic associated with data
      * @param headers the headers to serialize (can be null)
      * @return the serialized byte array (empty array if headers are null or empty)
      */
-    @Override
-    public byte[] serialize(final String topic, final Headers headers) {
+    public static byte[] serialize( final Headers headers) {
         final Header[] headersArray = (headers == null) ? new Header[0] : headers.toArray();
 
         if (headersArray.length == 0) {
