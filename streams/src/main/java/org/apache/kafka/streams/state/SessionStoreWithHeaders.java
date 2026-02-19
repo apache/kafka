@@ -38,7 +38,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @param <K>   type of the record keys
  * @param <AGG> type of the aggregated values
  */
-public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySessionStoreWithHeaders<K, AGG> {
+public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
 
     /**
      * Return all the session window entries that ends between the specified range (both ends are inclusive).
@@ -54,7 +54,7 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
     }
 
     @Override
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
+    default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                                                      final Instant earliestSessionEndTime,
                                                                                      final Instant latestSessionStartTime) {
         return findSessions(
@@ -66,7 +66,7 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
     }
 
     @Override
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
+    default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
                                                                                              final Instant earliestSessionEndTime,
                                                                                              final Instant latestSessionStartTime) {
         return backwardFindSessions(
@@ -77,7 +77,7 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
                 prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
     }
 
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
+    default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
                                                                                      final K keyTo,
                                                                                      final Instant earliestSessionEndTime,
                                                                                      final Instant latestSessionStartTime) {
@@ -90,7 +90,7 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
                 prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
     }
 
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
+    default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
                                                                                              final K keyTo,
                                                                                              final Instant earliestSessionEndTime,
                                                                                              final Instant latestSessionStartTime) {
@@ -103,7 +103,7 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
                 prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
     }
 
-    default AggregationWithHeaders<AGG> fetchSession(final K key,
+    default AGG fetchSession(final K key,
                                                      final Instant sessionStartTime,
                                                      final Instant sessionEndTime) {
         return fetchSession(key,
