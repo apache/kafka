@@ -4743,6 +4743,26 @@ org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreTest:
 - shouldTrackOpenIteratorsMetric
 - shouldWriteBytesToInnerStoreAndRecordPutMetric
 - testMetrics
+org.apache.kafka.streams.state.internals.MeteredTimestampedKeyValueStoreWithHeadersTest:
+- shouldCommitInnerWhenCommitTimeRecords
+- shouldDelegateInit
+- shouldDeleteFromInnerStoreAndRecordDeleteMetric
+- shouldGetAllFromInnerStoreAndRecordAllMetric
+- shouldGetBytesFromInnerStoreAndReturnGetMetric
+- shouldGetRangeFromInnerStoreAndRecordRangeMetric
+- shouldNotSetFlushListenerOnWrappedNoneCachingStore
+- shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters
+- shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext
+- shouldPassChangelogTopicNameToStateStoreSerde
+- shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled
+- shouldPutAllToInnerStoreAndRecordPutAllMetric
+- shouldPutIfAbsentAndRecordPutIfAbsentMetric
+- shouldSetFlushListenerOnWrappedCachingStore
+- shouldTimeIteratorDuration
+- shouldTrackOldestOpenIteratorTimestamp
+- shouldTrackOpenIteratorsMetric
+- shouldWriteBytesToInnerStoreAndRecordPutMetric
+- testMetrics
 org.apache.kafka.streams.state.internals.MeteredTimestampedWindowStoreTest:
 - shouldCloseUnderlyingStore
 - shouldDelegateInit
