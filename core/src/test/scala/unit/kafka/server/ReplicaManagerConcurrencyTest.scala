@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import kafka.cluster.Partition
+
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
@@ -38,6 +40,7 @@ import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderAndIsr, LeaderRecove
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.{KRaftConfigs, QuorumConfig}
+import org.apache.kafka.server.HostedPartition
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
@@ -107,7 +110,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
 
     waitUntilTrue(() => {
       replicaManager.getPartition(topicPartition) match {
-        case HostedPartition.Online(partition) => partition.isLeader
+        case online: HostedPartition.Online[Partition] => online.partition.isLeader
         case _ => false
       }
     }, "Timed out waiting for partition to initialize")
