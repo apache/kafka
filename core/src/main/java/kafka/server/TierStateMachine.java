@@ -21,7 +21,7 @@ import kafka.cluster.Partition;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.FetchResponseData.PartitionData;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -85,21 +85,19 @@ public class TierStateMachine {
     /**
      * Start the tier state machine for the provided topic partition.
      *
-     * @param topicPartition the topic partition
-     * @param currentFetchState the current PartitionFetchState which will
-     *                          be used to derive the return value
-     * @param fetchPartitionData the data from the fetch response that returned the offset moved to tiered storage error
-     *
-     * @return the new PartitionFetchState after the successful start of the
-     *         tier state machine
+     * @param topicPartition            the topic partition for which the tier state machine is to be started
+     * @param topicId                   the optional unique identifier of the topic
+     * @param currentLeaderEpoch        the current leader epoch of the partition
+     * @param fetchStartOffsetAndEpoch  the offset on the leader's local log from which to start replicating logs
+     * @param leaderLogStartOffset      the starting offset in the leader's log
+     * @return the new PartitionFetchState after the successful start of the tier state machine
+     * @throws Exception if an error occurs during the process, such as issues with remote storage
      */
     PartitionFetchState start(TopicPartition topicPartition,
-                              PartitionFetchState currentFetchState,
-                              PartitionData fetchPartitionData) throws Exception {
-        OffsetAndEpoch epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch());
-        int epoch = epochAndLeaderLocalStartOffset.epoch();
-        long leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset();
-
+                              Optional<Uuid> topicId,
+                              int currentLeaderEpoch,
+                              OffsetAndEpoch fetchStartOffsetAndEpoch,
+                              long leaderLogStartOffset) throws Exception {
         long offsetToFetch;
         replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).buildRemoteLogAuxStateRequestRate().mark();
         replicaMgr.brokerTopicStats().allTopicsStats().buildRemoteLogAuxStateRequestRate().mark();
@@ -112,19 +110,19 @@ public class TierStateMachine {
         }
 
         try {
-            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset(), unifiedLog);
+            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentLeaderEpoch, fetchStartOffsetAndEpoch.offset(), fetchStartOffsetAndEpoch.epoch(), leaderLogStartOffset, unifiedLog);
         } catch (RemoteStorageException e) {
             replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
             replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
             throw e;
         }
 
-        OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
+        OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch);
         long leaderEndOffset = fetchLatestOffsetResult.offset();
 
         long initialLag = leaderEndOffset - offsetToFetch;
 
-        return new PartitionFetchState(currentFetchState.topicId(), offsetToFetch, Optional.of(initialLag), currentFetchState.currentLeaderEpoch(),
+        return new PartitionFetchState(topicId, offsetToFetch, Optional.of(initialLag), currentLeaderEpoch,
                 ReplicaState.FETCHING, unifiedLog.latestEpoch());
 
     }

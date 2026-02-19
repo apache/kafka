@@ -1997,8 +1997,7 @@ public class GroupMetadataManager {
 
             if (reconfigureTopology || group.configuredTopology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Configuring the topology {}", groupId, memberId, updatedTopology.topologyEpoch());
-                LogContext topicManagerLogContext = new LogContext(String.format("%s[GroupId %s][MemberId %s] ", logContext.logPrefix(), groupId, memberId));
-                updatedConfiguredTopology = InternalTopicManager.configureTopics(topicManagerLogContext, metadataHash, updatedTopology, metadataImage, time);
+                updatedConfiguredTopology = InternalTopicManager.configureTopics(log, groupId, memberId, metadataHash, updatedTopology, metadataImage, time);
                 group.setConfiguredTopology(updatedConfiguredTopology);
             } else {
                 updatedConfiguredTopology = group.configuredTopology().get();
