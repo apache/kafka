@@ -61,8 +61,7 @@ import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Tag("integration")
 public class TimestampedKeyValueStoreWithHeadersTest {
@@ -164,7 +163,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(receivedRecord.value, 0);
         }
     }
 
@@ -202,7 +201,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
         // verify changelog topic properties
         final String changelogTopic = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-" + STORE_NAME + "-changelog";
         final Properties changelogTopicConfig = CLUSTER.getLogConfig(changelogTopic);
-        assertThat(changelogTopicConfig.getProperty("cleanup.policy"), equalTo("compact"));
+        assertEquals(changelogTopicConfig.getProperty("cleanup.policy"), "compact");
     }
 
     @Test
@@ -294,7 +293,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(receivedRecord.value, 0);
         }
     }
 
@@ -343,7 +342,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(receivedRecord.value, 0);
         }
 
         // wipe out state store to trigger restore process on restart
@@ -386,7 +385,7 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         for (final KeyValue<Integer, Integer> receivedRecord : receivedRecords) {
             // verify zero failed checks for each record
-            assertThat(receivedRecord.value, equalTo(0));
+            assertEquals(receivedRecord.value, 0);
         }
     }
 

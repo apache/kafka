@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.KeyQuery;
@@ -36,6 +37,8 @@ import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -45,11 +48,11 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
 
 /**
  * This class is used to ensure backward compatibility at DSL level between
- * {@link org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders} and
- * {@link org.apache.kafka.streams.state.TimestampedKeyValueStore}.
+ * {@link TimestampedKeyValueStoreWithHeaders} and
+ * {@link TimestampedKeyValueStore}.
  * <p>
  * If a user provides a supplier for {@code TimestampedKeyValueStore} (without headers) via
- * {@link org.apache.kafka.streams.kstream.Materialized#as(KeyValueBytesStoreSupplier)} when building
+ * {@link Materialized#as(KeyValueBytesStoreSupplier)} when building
  * a {@code TimestampedKeyValueStoreWithHeaders}, this adapter is used to translate between
  * the timestamped {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
  *

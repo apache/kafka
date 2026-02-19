@@ -41,11 +41,13 @@ public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
-        return returnHeadersStore ?
-            new RocksDBTimestampedStoreWithHeaders(name, metricsScope()) :
-            returnTimestampedStore ?
-            new RocksDBTimestampedStore(name, metricsScope()) :
-            new RocksDBStore(name, metricsScope());
+        if (returnHeadersStore) {
+            return new RocksDBTimestampedStoreWithHeaders(name, metricsScope());
+        } else if (returnTimestampedStore) {
+            return new RocksDBTimestampedStore(name, metricsScope());
+        } else {
+            return new RocksDBStore(name, metricsScope());
+        }
     }
 
     @Override
