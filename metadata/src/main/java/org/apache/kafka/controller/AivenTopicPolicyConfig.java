@@ -18,6 +18,7 @@ final class AivenTopicPolicyConfig extends AbstractConfig {
     private static final String MAX_USER_TOPICS = PREFIX + "max.user.topics";
     private static final String MAX_USER_PARTITIONS = PREFIX + "max.user.partitions";
     private static final String MAX_PARTITIONS_PER_USER_TOPIC = PREFIX + "max.partitions.per.user.topic";
+    private static final String MAX_REPLICATION_FACTOR = PREFIX + "max.replication.factor";
     private static final String EXCLUDED_TOPICS = PREFIX + "excluded.topics";
 
     private static ConfigDef configDef() {
@@ -47,6 +48,14 @@ final class AivenTopicPolicyConfig extends AbstractConfig {
                 "Maximum number of partitions per user topic (optional, must be >= 1 if provided)"
             )
             .define(
+                MAX_REPLICATION_FACTOR,
+                ConfigDef.Type.INT,
+                null,
+                new OptionalRange(ConfigDef.Range.atLeast(1)),
+                ConfigDef.Importance.MEDIUM,
+                "Maximum replication factor for user topics (optional, must be >= 1 if provided)"
+            )
+            .define(
                 EXCLUDED_TOPICS,
                 ConfigDef.Type.LIST,
                 null,
@@ -69,6 +78,10 @@ final class AivenTopicPolicyConfig extends AbstractConfig {
 
     Optional<Integer> maxPartitionsPerUserTopic() {
         return Optional.ofNullable(getInt(MAX_PARTITIONS_PER_USER_TOPIC));
+    }
+
+    Optional<Integer> maxReplicationFactor() {
+        return Optional.ofNullable(getInt(MAX_REPLICATION_FACTOR));
     }
 
     Set<String> excludedTopics() {

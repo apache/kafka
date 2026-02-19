@@ -771,7 +771,7 @@ public class ReplicationControlManager {
                 }
             }
             if (aivenTopicPolicy != null) {
-                ApiError aivenPolicyError = aivenTopicPolicy.validateTopicCreation(topic.name(), newParts.size(), topics);
+                ApiError aivenPolicyError = aivenTopicPolicy.validateTopicCreation(topic, newParts.size(), topics);
                 if (aivenPolicyError.isFailure()) return aivenPolicyError;
             }
             ApiError error = maybeCheckCreateTopicPolicy(() -> {
@@ -793,7 +793,7 @@ public class ReplicationControlManager {
             short replicationFactor = topic.replicationFactor() == -1 ?
                 defaultReplicationFactor : topic.replicationFactor();
             if (aivenTopicPolicy != null) {
-                ApiError aivenPolicyError = aivenTopicPolicy.validateTopicCreation(topic.name(), numPartitions, topics);
+                ApiError aivenPolicyError = aivenTopicPolicy.validateTopicCreation(topic, numPartitions, topics);
                 if (aivenPolicyError.isFailure()) return aivenPolicyError;
             }
             try {

@@ -4,6 +4,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
@@ -29,12 +30,12 @@ final class AivenTopicPolicy implements Configurable {
     }
 
     ApiError validateTopicCreation(
-        final String topic,
+        final CreatableTopic topic,
         final int partitions,
         final TimelineHashMap<Uuid, ReplicationControlManager.TopicControlInfo> topics
     ) {
         // Always allow for excluded topics.
-        if (excludedTopics.contains(topic)) {
+        if (excludedTopics.contains(topic.name())) {
             return ApiError.NONE;
         }
 
@@ -70,6 +71,15 @@ final class AivenTopicPolicy implements Configurable {
                     return new ApiError(Errors.POLICY_VIOLATION,
                         String.format("Partition limit exceeded: maximum %d user partitions allowed", maxUserPartitions));
                 }
+            }
+        }
+        
+        if (config.maxReplicationFactor().isPresent()) {
+            final int maxReplicationFactor = config.maxReplicationFactor().get();
+
+            if (topic.replicationFactor() > maxReplicationFactor) {
+                return new ApiError(Errors.POLICY_VIOLATION,
+                    String.format("Replication factor limit exceeded: maximum %d replication factor allowed", maxReplicationFactor));
             }
         }
 
