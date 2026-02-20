@@ -79,8 +79,8 @@ public class DynamicBrokerConfig {
             DynamicReplicationConfig.RECONFIGURABLE_CONFIGS,
             List.of(AbstractConfig.CONFIG_PROVIDERS_CONFIG),
             GroupCoordinatorConfig.RECONFIGURABLE_CONFIGS,
-            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS, 
-            QuotaConfig.BROKER_QUOTA_CONFIGS)
+            DynamicQuotaConfig.RECONFIGURABLE_CONFIGS,
+            ShareCoordinatorConfig.RECONFIGURABLE_CONFIGS)
         .flatMap(Collection::stream)
         .collect(Collectors.toUnmodifiableSet());
 
@@ -219,8 +219,11 @@ public class DynamicBrokerConfig {
          * the names you would use when setting a static or dynamic broker configuration (not topic
          * configuration).
          */
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.copyOf(
-                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values());
+        public static final Set<String> RECONFIGURABLE_CONFIGS = Stream.of(
+                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
+                Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
+            .flatMap(Collection::stream)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     public static class DynamicListenerConfig {
@@ -292,5 +295,9 @@ public class DynamicBrokerConfig {
     public static class DynamicReplicationConfig {
         public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
                 ReplicationConfigs.FOLLOWER_FETCH_LAST_TIERED_OFFSET_ENABLE_CONFIG);
+    }
+
+    public static class DynamicQuotaConfig {
+        public static final Set<String> RECONFIGURABLE_CONFIGS = QuotaConfig.BROKER_QUOTA_CONFIGS;
     }
 }

@@ -2503,6 +2503,7 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':storage')
+    implementation project(':storage:storage-api')
     implementation project(':server')
     implementation project(':server-common')
     implementation project(':connect:runtime')

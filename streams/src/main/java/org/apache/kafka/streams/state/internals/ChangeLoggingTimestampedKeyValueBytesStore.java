@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -35,7 +36,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKey
     public void put(final Bytes key,
                     final byte[] valueAndTimestamp) {
         wrapped().put(key, valueAndTimestamp);
-        log(key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? internalContext.recordContext().timestamp() : timestamp(valueAndTimestamp));
+        log(key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? internalContext.recordContext().timestamp() : timestamp(valueAndTimestamp), new RecordHeaders());
     }
 
     @Override
@@ -44,7 +45,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKey
         final byte[] previous = wrapped().putIfAbsent(key, valueAndTimestamp);
         if (previous == null) {
             // then it was absent
-            log(key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? internalContext.recordContext().timestamp() : timestamp(valueAndTimestamp));
+            log(key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? internalContext.recordContext().timestamp() : timestamp(valueAndTimestamp), new RecordHeaders());
         }
         return previous;
     }
@@ -54,7 +55,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKey
         wrapped().putAll(entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             final byte[] valueAndTimestamp = entry.value;
-            log(entry.key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? internalContext.recordContext().timestamp() : timestamp(valueAndTimestamp));
+            log(entry.key, rawValue(valueAndTimestamp), valueAndTimestamp == null ? internalContext.recordContext().timestamp() : timestamp(valueAndTimestamp), new RecordHeaders());
         }
     }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -85,6 +86,11 @@ public class CoordinatorExecutorImpl<U> implements CoordinatorExecutor<U> {
                     return operation.onComplete(result.result(), result.exception());
                 }
             ).exceptionally(exception -> {
+                // Exceptions may be wrapped in CompletionException when propagated
+                // through CompletableFuture chains, so we unwrap them before
+                // checking types with instanceof.
+                exception = Errors.maybeUnwrapException(exception);
+
                 // Remove the task after a failure.
                 tasks.remove(key, task);
 
