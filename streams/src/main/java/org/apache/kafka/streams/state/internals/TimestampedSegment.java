@@ -57,7 +57,6 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Segment {
     @Override
     public void openDB(final Map<String, Object> configs, final File stateDir) {
         super.openDB(configs, stateDir);
-        // skip the registering step
     }
 
     @Override
