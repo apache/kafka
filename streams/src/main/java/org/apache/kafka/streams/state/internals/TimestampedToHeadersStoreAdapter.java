@@ -194,36 +194,4 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     public long approximateNumEntries() {
         return store.approximateNumEntries();
     }
-
-    /**
-     * Generic iterator adapter for range/all operations
-     */
-    private static class TimestampedToHeadersIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
-        private final KeyValueIterator<K, byte[]> innerIterator;
-
-        public TimestampedToHeadersIteratorAdapter(final KeyValueIterator<K, byte[]> innerIterator) {
-            this.innerIterator = innerIterator;
-        }
-
-        @Override
-        public void close() {
-            innerIterator.close();
-        }
-
-        @Override
-        public K peekNextKey() {
-            return innerIterator.peekNextKey();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return innerIterator.hasNext();
-        }
-
-        @Override
-        public KeyValue<K, byte[]> next() {
-            final KeyValue<K, byte[]> timestampedKeyValue = innerIterator.next();
-            return KeyValue.pair(timestampedKeyValue.key, convertToHeaderFormat(timestampedKeyValue.value));
-        }
-    }
 }
