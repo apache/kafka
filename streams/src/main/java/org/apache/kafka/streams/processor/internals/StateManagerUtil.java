@@ -35,7 +35,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToHeadersValue;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
+import static org.apache.kafka.streams.state.internals.WrappedStateStore.isHeadersAware;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isVersioned;
 
@@ -50,9 +52,14 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
-        // should not prepend timestamp when restoring records for versioned store, as
-        // timestamp is used separately during put() process for restore of versioned stores
-        return (isTimestamped(store) && !isVersioned(store)) ? rawValueToTimestampedValue() : identity();
+        if (isHeadersAware(store)) {
+            return rawValueToHeadersValue();
+        } else if (isTimestamped(store) && !isVersioned(store)) {
+            // should not prepend timestamp when restoring records for versioned store, as
+            // timestamp is used separately during put() process for restore of versioned stores
+            return rawValueToTimestampedValue();
+        }
+        return identity();
     }
 
     static boolean checkpointNeeded(final boolean enforceCheckpoint,
