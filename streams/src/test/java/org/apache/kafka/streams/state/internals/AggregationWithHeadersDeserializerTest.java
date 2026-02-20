@@ -95,20 +95,6 @@ public class AggregationWithHeadersDeserializerTest {
     }
 
     @Test
-    public void shouldExtractAggregation() {
-        final Long aggregation = 100L;
-        final Headers headers = new RecordHeaders();
-        headers.add("key1", "value1".getBytes());
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, headers);
-
-        final AggregationWithHeadersSerializer<Long> serializer = new AggregationWithHeadersSerializer<>(Serdes.Long().serializer());
-        final byte[] serialized = serializer.serialize("topic", aggregationWithHeaders);
-
-        final Long extractedAggregation = AggregationWithHeadersDeserializer.aggregation(serialized, longDeserializer);
-        assertEquals(aggregation, extractedAggregation);
-    }
-
-    @Test
     public void shouldExtractHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();
@@ -128,7 +114,6 @@ public class AggregationWithHeadersDeserializerTest {
 
     @Test
     public void shouldReturnNullForNullInput() {
-        assertNull(AggregationWithHeadersDeserializer.aggregation(null, longDeserializer));
         assertNull(AggregationWithHeadersDeserializer.headers(null));
     }
 }

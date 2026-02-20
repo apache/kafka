@@ -45,21 +45,17 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  * This is used by KIP-1271 to deserialize aggregations with headers from session state stores.
  */
 class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeserializer<AggregationWithHeaders<AGG>, Void, AGG> {
-    private static final HeadersDeserializer HEADERS_DESERIALIZER = new HeadersDeserializer();
 
     public final Deserializer<AGG> aggregationDeserializer;
-    private final HeadersDeserializer headersDeserializer;
 
     AggregationWithHeadersDeserializer(final Deserializer<AGG> aggregationDeserializer) {
         Objects.requireNonNull(aggregationDeserializer);
         this.aggregationDeserializer = aggregationDeserializer;
-        this.headersDeserializer = new HeadersDeserializer();
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         aggregationDeserializer.configure(configs, isKey);
-        headersDeserializer.configure(configs, isKey);
     }
 
     @Override
@@ -72,17 +68,16 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
         final int headersSize = ByteUtils.readVarint(buffer);
 
         final byte[] rawHeaders = readBytes(buffer, headersSize);
-        final Headers headers = headersDeserializer.deserialize(topic, rawHeaders);
+        final Headers headers = HeadersDeserializer.deserialize(rawHeaders);
         final byte[] rawAggregation = readBytes(buffer, buffer.remaining());
         final AGG aggregation = aggregationDeserializer.deserialize(topic, headers, rawAggregation);
 
-        return AggregationWithHeaders.make(aggregation, headers);
+        return AggregationWithHeaders.makeAllowNullable(aggregation, headers);
     }
 
     @Override
     public void close() {
         aggregationDeserializer.close();
-        headersDeserializer.close();
     }
 
     @Override
@@ -117,23 +112,6 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
     }
 
     /**
-     * Extract aggregation from serialized AggregationWithHeaders.
-     */
-    static <T> T aggregation(final byte[] rawAggregationWithHeaders, final Deserializer<T> deserializer) {
-        if (rawAggregationWithHeaders == null) {
-            return null;
-        }
-
-        final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-        // skip headers
-        buffer.position(buffer.position() + headersSize);
-        final byte[] bytes = readBytes(buffer, buffer.remaining());
-
-        return deserializer.deserialize("", bytes);
-    }
-
-    /**
      * Extract headers from serialized AggregationWithHeaders.
      */
     static Headers headers(final byte[] rawAggregationWithHeaders) {
@@ -144,6 +122,6 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
         final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
         final byte[] rawHeaders = readBytes(buffer, headersSize);
-        return HEADERS_DESERIALIZER.deserialize("", rawHeaders);
+        return HeadersDeserializer.deserialize(rawHeaders);
     }
 }
