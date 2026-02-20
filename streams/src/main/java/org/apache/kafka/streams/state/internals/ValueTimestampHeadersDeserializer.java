@@ -132,11 +132,12 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
-        // skip headers plus timestamp
-        buffer.position(buffer.position() + headersSize + Long.BYTES);
+        final byte[] rawHeaders = readBytes(buffer, headersSize);
+        final Headers headers = HeadersDeserializer.deserialize(rawHeaders);
+        buffer.position(buffer.position() + Long.BYTES); // skip timestamp
         final byte[] bytes = readBytes(buffer, buffer.remaining());
 
-        return deserializer.deserialize("", bytes);
+        return deserializer.deserialize("", headers, bytes);
     }
 
     /**
