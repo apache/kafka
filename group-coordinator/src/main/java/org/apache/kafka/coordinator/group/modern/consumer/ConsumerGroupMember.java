@@ -358,7 +358,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             clientHost,
             subscribedTopicNames,
             state,
-            // Derive assignedPartitions from epochs for parent class
             Collections.unmodifiableMap(assignedPartitionsWithEpochs.entrySet().stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
@@ -401,7 +400,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
     }
 
     /**
-     * @return The set of partitions pending revocation from the member.
+     * @return The set of partitions awaiting revocation from the member.
      */
     public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
         return partitionsPendingRevocation;
