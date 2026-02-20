@@ -48,6 +48,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -129,9 +130,11 @@ public class KafkaShareConsumerTest {
 
         try (KafkaShareConsumer<String, String> consumer = newShareConsumer(clientId1, metadata, client)) {
             consumer.subscribe(Set.of(topic1));
-            consumer.poll(Duration.ZERO);
 
-            Thread.sleep(heartbeatIntervalMs);
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ZERO);
+                return heartbeatsReceived.get() >= 2;
+            }, "Expected 2 heartbeats to be received");
 
             assertEquals(2, heartbeatsReceived.get());
             assertTrue(client.futureResponses().isEmpty());
