@@ -33,10 +33,8 @@ import java.util.Objects;
  * header-aware storage with dual-column-family migration support from
  * timestamp-only format to timestamp+headers format.
  */
-class TimestampedSegmentWithHeaders extends RocksDBTimestampedStoreWithHeaders
-    implements Segment {
-
-    public final long id;
+class TimestampedSegmentWithHeaders extends RocksDBTimestampedStoreWithHeaders implements Segment {
+    private final long id;
 
     TimestampedSegmentWithHeaders(final String segmentName,
                                   final String windowName,

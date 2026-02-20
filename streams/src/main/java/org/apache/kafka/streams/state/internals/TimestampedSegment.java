@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 
 class TimestampedSegment extends RocksDBTimestampedStore implements Segment {
-    public final long id;
+    private final long id;
 
     TimestampedSegment(final String segmentName,
                        final String windowName,

@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 
 class KeyValueSegment extends RocksDBStore implements Segment {
-    public final long id;
+    private final long id;
 
     KeyValueSegment(final String segmentName,
                     final String windowName,
