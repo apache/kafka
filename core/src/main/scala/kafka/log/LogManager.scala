@@ -100,6 +100,7 @@ class LogManager(logDirs: Seq[File],
   private val strayLogs = new ConcurrentHashMap[TopicPartition, UnifiedLog]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
+  @volatile private var _cordonedLogDirs: Set[String] = Set()
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
 
@@ -128,6 +129,14 @@ class LogManager(logDirs: Seq[File],
   private val directoryIds: mutable.Map[String, Uuid] = loadDirectoryIds(liveLogDirs)
   def directoryIdsSet: Predef.Set[Uuid] = directoryIds.values.toSet
 
+  def updateCordonedLogDirs(newCordonedLogDirs: Set[String]): Unit = {
+    _cordonedLogDirs = newCordonedLogDirs
+  }
+
+  def cordonedLogDirs(): Set[String] = {
+    _cordonedLogDirs
+  }
+
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, JLogManager.RECOVERY_POINT_CHECKPOINT_FILE), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
@@ -154,10 +163,14 @@ class LogManager(logDirs: Seq[File],
   private[kafka] def cleaner: LogCleaner = _cleaner
 
   metricsGroup.newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
+  metricsGroup.newGauge("CordonedLogDirectoryCount", () => cordonedLogDirs().size)
 
   for (dir <- logDirs) {
     metricsGroup.newGauge("LogDirectoryOffline",
       () => if (_liveLogDirs.contains(dir)) 0 else 1,
+      Map("logDirectory" -> dir.getAbsolutePath).asJava)
+    metricsGroup.newGauge("LogDirectoryCordoned",
+      () => if (cordonedLogDirs().contains(dir.getAbsolutePath)) 1 else 0,
       Map("logDirectory" -> dir.getAbsolutePath).asJava)
   }
 
@@ -1365,20 +1378,28 @@ class LogManager(logDirs: Seq[File],
    * Provides the full ordered list of suggested directories for the next partition.
    * Currently this is done by calculating the number of partitions in each directory and then sorting the
    * data directories by fewest partitions.
+   *
+   * It's possible replicas are assigned to this broker right before all its log directories are cordoned.
+   * In that case, pick the first available directory
    */
-  private def nextLogDirs(): List[File] = {
+  def nextLogDirs(): List[File] = {
     if (_liveLogDirs.size == 1) {
       List(_liveLogDirs.peek())
     } else {
       // count the number of logs in each parent directory (including 0 for empty directories
       val logCounts = allLogs.groupBy(_.parentDir).map { case (parent, logs) => parent -> logs.size }
       val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
-      val dirCounts = (zeros ++ logCounts).toBuffer
+      val dirCounts = (zeros ++ logCounts).filter(d => !cordonedLogDirs().contains(d._1)).toBuffer
 
-      // choose the directory with the least logs in it
-      dirCounts.sortBy(_._2).map {
-        case (path: String, _: Int) => new File(path)
-      }.toList
+      if (dirCounts.isEmpty) {
+        // all log directories are cordoned, choose the first live directory
+        List(_liveLogDirs.peek())
+      } else {
+        // choose the directory with the least logs in it
+        dirCounts.sortBy(_._2).map {
+          case (path: String, _: Int) => new File(path)
+        }.toList
+      }
     }
   }
 

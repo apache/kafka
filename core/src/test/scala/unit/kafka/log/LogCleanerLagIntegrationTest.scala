@@ -20,7 +20,7 @@ package kafka.log
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.record.internal.CompressionType
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Assertions._

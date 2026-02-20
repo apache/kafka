@@ -25,8 +25,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.Records;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -140,7 +140,7 @@ public class FetchResponse extends AbstractResponse {
     /**
      * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given byte buffer.
      * Unlike {@link org.apache.kafka.common.requests.FetchResponse#of(FetchResponseData)}, this method doesn't convert
-     * null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
+     * null records to {@link org.apache.kafka.common.record.internal.MemoryRecords#EMPTY}.
      *
      * <p><strong>This method should only be used in client-side.</strong></p>
      */
@@ -228,7 +228,7 @@ public class FetchResponse extends AbstractResponse {
 
     /**
      * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given data.
-     * This method converts null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}
+     * This method converts null records to {@link org.apache.kafka.common.record.internal.MemoryRecords#EMPTY}
      * to ensure consistent record representation in the response.
      *
      * <p><strong>This method should only be used in server-side.</strong></p>

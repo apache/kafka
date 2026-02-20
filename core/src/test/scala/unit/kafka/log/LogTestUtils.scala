@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.internal.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.common.TransactionVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}

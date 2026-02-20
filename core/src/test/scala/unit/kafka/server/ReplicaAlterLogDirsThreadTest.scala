@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.record.internal.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.KRaftMetadataCache

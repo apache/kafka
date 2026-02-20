@@ -17,11 +17,11 @@
 
 package kafka.server
 
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.PartitionFetchState
 import org.apache.kafka.server.ReplicaState
+import org.apache.kafka.server.common.OffsetAndEpoch
 
 import java.util.Optional
 
@@ -30,15 +30,17 @@ class MockTierStateMachine(leader: LeaderEndPoint) extends TierStateMachine(lead
   var fetcher: MockFetcherThread = _
 
   override def start(topicPartition: TopicPartition,
-                     currentFetchState: PartitionFetchState,
-                     fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
-    val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch).offset
-    val offsetToFetch = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch).offset
+                     topicId: Optional[Uuid],
+                     currentLeaderEpoch: Int,
+                     fetchStartOffsetAndEpoch: OffsetAndEpoch,
+                     leaderLogStartOffset: Long): PartitionFetchState = {
+    val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentLeaderEpoch).offset
+    val offsetToFetch = fetchStartOffsetAndEpoch.offset
     val initialLag = leaderEndOffset - offsetToFetch
     fetcher.truncateFullyAndStartAt(topicPartition, offsetToFetch)
-    new PartitionFetchState(currentFetchState.topicId, offsetToFetch, Optional.of(initialLag),
-      currentFetchState.currentLeaderEpoch, Optional.empty(), ReplicaState.FETCHING,
-      Optional.of(currentFetchState.currentLeaderEpoch)
+    new PartitionFetchState(topicId, offsetToFetch, Optional.of(initialLag),
+      currentLeaderEpoch, Optional.empty(), ReplicaState.FETCHING,
+      Optional.of(currentLeaderEpoch)
     )
   }
 

@@ -2252,7 +2252,12 @@ public class KafkaAdminClientTest {
 
     private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag, long totalBytes, long usableBytes) {
         return prepareDescribeLogDirsResponse(error, logDir,
-                prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false), totalBytes, usableBytes);
+                prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false), totalBytes, usableBytes, false);
+    }
+
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag, long totalBytes, long usableBytes, boolean isCordoned) {
+        return prepareDescribeLogDirsResponse(error, logDir,
+                prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false), totalBytes, usableBytes, isCordoned);
     }
 
     private static List<DescribeLogDirsTopic> prepareDescribeLogDirsTopics(
@@ -2278,7 +2283,8 @@ public class KafkaAdminClientTest {
 
     private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir,
                                                                           List<DescribeLogDirsTopic> topics,
-                                                                          long totalBytes, long usableBytes) {
+                                                                          long totalBytes, long usableBytes,
+                                                                          boolean isCordoned) {
         return new DescribeLogDirsResponse(
                 new DescribeLogDirsResponseData().setResults(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
                         .setErrorCode(error.code())
@@ -2286,6 +2292,7 @@ public class KafkaAdminClientTest {
                         .setTopics(topics)
                         .setTotalBytes(totalBytes)
                         .setUsableBytes(usableBytes)
+                        .setIsCordoned(isCordoned)
                 )));
     }
 
@@ -2355,6 +2362,7 @@ public class KafkaAdminClientTest {
         assertFalse(descriptionsReplicaInfos.get(tp).isFuture());
         assertEquals(totalBytes, descriptionsMap.get(logDir).totalBytes());
         assertEquals(usableBytes, descriptionsMap.get(logDir).usableBytes());
+        assertFalse(descriptionsMap.get(logDir).isCordoned());
     }
 
     @Test
@@ -2431,6 +2439,38 @@ public class KafkaAdminClientTest {
             assertEquals(singleton(logDir), allMap.keySet());
             assertEquals(error.exception().getClass(), allMap.get(logDir).error().getClass());
             assertEquals(emptySet(), allMap.get(logDir).replicaInfos().keySet());
+        }
+    }
+
+    @Test
+    public void testDescribeLogDirsWithCordonedDir() throws ExecutionException, InterruptedException {
+        Set<Integer> brokers = singleton(0);
+        String logDir = "/var/data/kafka";
+        TopicPartition tp = new TopicPartition("topic", 12);
+
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponseFrom(
+                    prepareDescribeLogDirsResponse(Errors.NONE, logDir, tp, 123, -1, -1, -1, true),
+                    env.cluster().nodeById(0));
+
+            DescribeLogDirsResult result = env.adminClient().describeLogDirs(brokers);
+
+            Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> descriptions = result.descriptions();
+            assertEquals(brokers, descriptions.keySet());
+            assertNotNull(descriptions.get(0));
+            Map<String, LogDirDescription> descriptionsMap = descriptions.get(0).get();
+            assertEquals(singleton(logDir), descriptionsMap.keySet());
+            assertTrue(descriptionsMap.get(logDir).isCordoned());
+            assertEquals(Set.of(tp), descriptionsMap.get(logDir).replicaInfos().keySet());
+
+            Map<Integer, Map<String, LogDirDescription>> allDescriptions = result.allDescriptions().get();
+            assertEquals(brokers, allDescriptions.keySet());
+            Map<String, LogDirDescription> allMap = allDescriptions.get(0);
+            assertNotNull(allMap);
+            assertEquals(singleton(logDir), allMap.keySet());
+            assertTrue(allMap.get(logDir).isCordoned());
+            assertEquals(Set.of(tp), allMap.get(logDir).replicaInfos().keySet());
         }
     }
 

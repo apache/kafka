@@ -27,8 +27,8 @@ import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
