@@ -42,10 +42,11 @@ public class RocksDBKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
         if (returnHeadersStore && returnTimestampedStore) {
-            throw new IllegalStateException("RocksDBKeyValueBytesStoreSupplier can return either TimestampedStore or HeadersStore, but not both!");
+            return new RocksDBTimestampedStoreWithHeaders(name, metricsScope());
         }
         if (returnHeadersStore) {
-            return new RocksDBTimestampedStoreWithHeaders(name, metricsScope());
+            throw new IllegalStateException(
+                "RocksDBKeyValueBytesStoreSupplier cannot return a headers store without also returning a timestamped store!");
         }
         if (returnTimestampedStore) {
             return new RocksDBTimestampedStore(name, metricsScope());
