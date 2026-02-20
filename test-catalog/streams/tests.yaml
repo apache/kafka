@@ -11,7 +11,6 @@ org.apache.kafka.streams.KafkaStreamsTest:
 - shouldAllowCleanupBeforeStartAndAfterClose
 - shouldCleanupOldStateDirs
 - shouldCleanupResourcesOnCloseWithoutPreviousStart
-- shouldCloseStartupTasksAfterFirstRebalance
 - shouldCountDownTimeoutAcrossClient
 - shouldGetClientSupplierFromConfigForConstructor
 - shouldGetClientSupplierFromConfigForConstructorWithTime
@@ -2522,7 +2521,6 @@ org.apache.kafka.streams.processor.internals.StateConsumerTest:
 - shouldUpdateStateWithReceivedRecordsForPartition
 - shouldWipeStoreOnClose
 org.apache.kafka.streams.processor.internals.StateDirectoryTest:
-- shouldAssignStartupTaskToStreamThread
 - shouldBeAbleToUnlockEvenWithoutLocking
 - shouldBeTrueIfAlreadyHoldsLock
 - shouldCleanUpTaskStateDirectoriesThatAreNotCurrentlyLocked
@@ -2530,7 +2528,7 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldCleanupObsoleteTaskDirectoriesAndDeleteTheDirectoryItself
 - shouldCleanupObsoleteTaskDirectoriesInNamedTopologiesAndDeleteTheParentDirectories
 - shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay
-- shouldCloseStartupTasksOnDirectoryClose
+- shouldCloseStartupStateOnAutoCleanUp
 - shouldCreateBaseDirectory
 - shouldCreateDirectoriesIfParentDoesntExist
 - shouldCreateTaskDirectoriesUnderNamedTopologyDirs
@@ -2540,20 +2538,19 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldGetFreshProcessIdIfProcessFileDeleted
 - shouldHaveSecurePermissions
 - shouldHaveSecurePermissionsIfGroupWriteAccessAllowed
-- shouldInitializeStandbyTasksForLocalState
+- shouldInitializeStartupStateForLocalState
 - shouldLockMultipleTaskDirectories
 - shouldLockTaskStateDirectoryWhenDirectoryCreationDisabled
 - shouldLogManualUserCallMessage
 - shouldLogStateDirCleanerMessage
 - shouldLogTempDirMessage
-- shouldNotAssignStartupTasksWeDontHave
-- shouldNotCloseStartupTasksOnAutoCleanUp
+- shouldNotAssignStartupStateWeDontHave
 - shouldNotCreateBaseDirectory
 - shouldNotCreateGlobalStateDirectory
 - shouldNotCreateTaskStateDirectory
 - shouldNotDeleteAppDirWhenCleanUpIfNotEmpty
 - shouldNotFailWhenCreatingTaskDirectoryInParallel
-- shouldNotInitializeStandbyTasksWhenNoLocalState
+- shouldNotInitializeStartupStateWhenNoLocalState
 - shouldNotLockStateDirLockedByAnotherThread
 - shouldNotRemoveDirsThatDoNotMatchNamedTopologyDirsWhenCallingClean
 - shouldNotRemoveNonTaskDirectoriesAndFiles
@@ -2576,7 +2573,7 @@ org.apache.kafka.streams.processor.internals.StateDirectoryTest:
 - shouldThrowProcessorStateException
 - shouldThrowProcessorStateExceptionIfStateDirOccupied
 - shouldThrowProcessorStateExceptionIfTestDirOccupied
-- shouldUnlockStartupTasksOnClose
+- shouldUnlockStartupStateOnClose
 - shouldUpdateSecurePermissions
 org.apache.kafka.streams.processor.internals.StateManagerUtilTest:
 - shouldNotCloseStateManagerIfUnableToLockTaskDirectory
@@ -3066,7 +3063,9 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldConvertActiveTaskToStandbyTask
 - shouldConvertStandbyTaskToActiveTask
 - shouldCreateActiveTaskDuringAssignment
+- shouldCreateActiveTaskFromStartupStateStore
 - shouldCreateStandbyTaskDuringAssignment
+- shouldCreateStandbyTaskFromStartupStateStore
 - shouldFailOnCommitFatal
 - shouldFirstHandleTasksInStateUpdaterThenSuspendedActiveTasksInTaskRegistry
 - shouldHandleExceptionThrownDuringRecyclingActiveTask
@@ -3122,7 +3121,6 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldReInitializeStreamsProducerOnHandleLostAllIfEosV2Enabled
 - shouldRecycleActiveTaskInStateUpdater
 - shouldRecycleStandbyTaskInStateUpdater
-- shouldRecycleStartupTasksFromStateDirectoryAsActive
 - shouldReleaseLockForUnassignedTasksAfterRebalance
 - shouldRemoveUnusedActiveTaskFromStateUpdaterAndCloseCleanly
 - shouldRemoveUnusedFailedActiveTaskFromStateUpdaterAndCloseDirty
@@ -3175,7 +3173,6 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldUpdateInputPartitionOfActiveTaskInStateUpdater
 - shouldUpdateInputPartitionsAfterRebalance
 - shouldUpdateLagForAllActiveTasks
-- shouldUseStartupTasksFromStateDirectoryAsStandby
 - shouldWrapRuntimeExceptionsInProcessActiveTasksAndSetTaskId
 org.apache.kafka.streams.processor.internals.TaskMetadataImplTest:
 - shouldBeEqualsIfOnlyDifferInCommittedOffsets
