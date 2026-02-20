@@ -645,6 +645,17 @@ public class SubscriptionState {
         return topicPartitionState.endOffsetRequested();
     }
 
+    public synchronized boolean maybeClearPartitionEndOffsetRequested(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedStateOrNull(tp);
+
+        if (topicPartitionState != null && topicPartitionState.endOffsetRequested()) {
+            topicPartitionState.clearEndOffset();
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     synchronized Long partitionLead(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
@@ -980,6 +991,10 @@ public class SubscriptionState {
 
         public void requestEndOffset() {
             endOffsetRequested = true;
+        }
+
+        public void clearEndOffset() {
+            endOffsetRequested = false;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
