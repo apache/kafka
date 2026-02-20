@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 /**
  * The CurrentAssignmentBuilder class encapsulates the reconciliation engine of the
@@ -215,7 +216,7 @@ public class CurrentAssignmentBuilder {
 
                 // If the member provides its owned partitions. We verify if it still
                 // owns any of the revoked partitions. If it does, we cannot progress.
-                if (ownsRevokedPartitions(member.partitionsPendingRevocationWithEpochs())) {
+                if (ownsRevokedPartitions(member.partitionsPendingRevocation())) {
                     if (hasSubscriptionChanged) {
                         return updateCurrentAssignment(
                             member.memberEpoch(),
@@ -264,20 +265,20 @@ public class CurrentAssignmentBuilder {
     /**
      * Decides whether the current ownedTopicPartitions contains any partition that is pending revocation.
      *
-     * @param assignmentWithEpochs The assignment (with epochs) that has the partitions pending revocation.
+     * @param assignment The assignment that has the partitions pending revocation.
      * @return A boolean based on the condition mentioned above.
      */
     private boolean ownsRevokedPartitions(
-        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+        Map<Uuid, Set<Integer>> assignment
     ) {
         if (ownedTopicPartitions == null) return true;
 
         for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
-            Map<Integer, Integer> partitionsPendingRevocation =
-                assignmentWithEpochs.getOrDefault(topicPartitions.topicId(), Map.of());
+            Set<Integer> partitionsPendingRevocation =
+                assignment.getOrDefault(topicPartitions.topicId(), Set.of());
 
             for (Integer partitionId : topicPartitions.partitions()) {
-                if (partitionsPendingRevocation.containsKey(partitionId)) {
+                if (partitionsPendingRevocation.contains(partitionId)) {
                     return true;
                 }
             }
@@ -309,7 +310,7 @@ public class CurrentAssignmentBuilder {
         Map<Uuid, Map<Integer, Integer>> newPartitionsPendingRevocationWithEpochs;
         boolean changed = false;
 
-        if (subscribedTopicIds.isEmpty() && member.partitionsPendingRevocationWithEpochs().isEmpty()) {
+        if (subscribedTopicIds.isEmpty() && member.partitionsPendingRevocation().isEmpty()) {
             newAssignedPartitionsWithEpochs = Map.of();
             // Move all assigned to pending revocation with their epochs
             newPartitionsPendingRevocationWithEpochs = new HashMap<>(existingAssignedEpochs);
@@ -342,7 +343,13 @@ public class CurrentAssignmentBuilder {
             return member;
         }
 
-        if (!newPartitionsPendingRevocationWithEpochs.isEmpty() && ownsRevokedPartitions(newPartitionsPendingRevocationWithEpochs)) {
+        Map<Uuid, Set<Integer>> newPartitionsPendingRevocation = newPartitionsPendingRevocationWithEpochs.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                e -> e.getValue().keySet()
+            ));
+
+        if (!newPartitionsPendingRevocation.isEmpty() && ownsRevokedPartitions(newPartitionsPendingRevocation)) {
             return new ConsumerGroupMember.Builder(member)
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .updateMemberEpoch(memberEpoch)
@@ -417,7 +424,7 @@ public class CurrentAssignmentBuilder {
                 // Don't consider a partition unreleased if it is owned by the current member
                 // because it is pending revocation. This is safe to do since only a single member
                 // can own a partition at a time.
-                !member.partitionsPendingRevocationWithEpochs().getOrDefault(topicId, Map.of()).containsKey(partitionId)
+                !member.partitionsPendingRevocation().getOrDefault(topicId, Set.of()).contains(partitionId)
             ) || hasUnreleasedPartitions;
 
             // Build epochs map for assigned partitions (preserve existing epochs)
@@ -443,7 +450,13 @@ public class CurrentAssignmentBuilder {
             }
         }
 
-        if (!newPartitionsPendingRevocationWithEpochs.isEmpty() && ownsRevokedPartitions(newPartitionsPendingRevocationWithEpochs)) {
+        Map<Uuid, Set<Integer>> newPartitionsPendingRevocation = newPartitionsPendingRevocationWithEpochs.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                e -> e.getValue().keySet()
+            ));
+
+        if (!newPartitionsPendingRevocation.isEmpty() && ownsRevokedPartitions(newPartitionsPendingRevocation)) {
             // If there are partitions to be revoked, the member remains in its current
             // epoch and requests the revocation of those partitions. It transitions to
             // the UNREVOKED_PARTITIONS state to wait until the client acknowledges the

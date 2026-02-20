@@ -287,9 +287,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
                 subscribedTopicRegex,
                 serverAssignorName,
                 state,
-                classicMemberMetadata,
                 assignedPartitionsWithEpochs,
-                partitionsPendingRevocationWithEpochs
+                partitionsPendingRevocationWithEpochs,
+                classicMemberMetadata
             );
         }
     }
@@ -326,6 +326,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
      */
     private final Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocationWithEpochs;
 
+    /**
+     * The set of partitions awaiting revocation from the member.
+     */
+    private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
+
     private ConsumerGroupMember(
         String memberId,
         int memberEpoch,
@@ -339,9 +344,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
         String subscribedTopicRegex,
         String serverAssignorName,
         MemberState state,
-        ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata,
         Map<Uuid, Map<Integer, Integer>> assignedPartitionsWithEpochs,
-        Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocationWithEpochs
+        Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocationWithEpochs,
+        ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata
     ) {
         super(
             memberId,
@@ -363,9 +368,14 @@ public class ConsumerGroupMember extends ModernGroupMember {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.subscribedTopicRegex = subscribedTopicRegex;
         this.serverAssignorName = serverAssignorName;
-        this.classicMemberMetadata = classicMemberMetadata;
         this.assignedPartitionsWithEpochs = assignedPartitionsWithEpochs;
         this.partitionsPendingRevocationWithEpochs = partitionsPendingRevocationWithEpochs;
+        this.partitionsPendingRevocation = partitionsPendingRevocationWithEpochs.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                e -> Set.copyOf(e.getValue().keySet())
+            ));
+        this.classicMemberMetadata = classicMemberMetadata;
     }
 
     /**
@@ -390,14 +400,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
     }
 
     /**
-     * @return The set of partitions awaiting revocation from the member.
+     * @return The set of partitions pending revocation from the member.
      */
     public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
-        return partitionsPendingRevocationWithEpochs.entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> Set.copyOf(e.getValue().keySet())
-            ));
+        return partitionsPendingRevocation;
     }
 
     /**

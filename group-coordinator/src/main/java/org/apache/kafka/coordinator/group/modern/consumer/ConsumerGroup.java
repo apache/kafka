@@ -673,7 +673,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
                 "by members using the modern group protocol");
         }
-        // For member using the classic protocol, use strict epoch validation.
+        // For members using the classic protocol, use strict epoch validation.
         if (member.useClassicProtocol()) {
             validateMemberEpoch(memberEpoch, member.memberEpoch(), true);
             return CommitPartitionValidator.NO_OP;
@@ -684,7 +684,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (memberEpoch == member.memberEpoch()) {
             return CommitPartitionValidator.NO_OP;
         }
-        // Case 2:Client epoch > broker epoch, which is an invalid request
+        // Case 2: Client epoch > broker epoch, which is an invalid request
         if (memberEpoch > member.memberEpoch()) {
             throw new StaleMemberEpochException(String.format("The received member epoch %d is larger than "
                 + "the expected member epoch %d.", memberEpoch, member.memberEpoch()));
