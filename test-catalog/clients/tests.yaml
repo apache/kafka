@@ -827,6 +827,9 @@ org.apache.kafka.clients.consumer.KafkaConsumerTest:
 - testConstructorInvalidMetricReporters
 - testConsumerJmxPrefix
 - testCurrentLag
+- testCurrentLagClearsFlagOnFatalPartitionError
+- testCurrentLagClearsFlagOnRetriablePartitionError
+- testCurrentLagPreventsMultipleInFlightRequests
 - testDisableJmxAndClientTelemetryReporter
 - testEmptyGroupId
 - testEndOffsetsAuthenticationFailure
