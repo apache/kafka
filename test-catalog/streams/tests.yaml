@@ -5328,6 +5328,26 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreTe
 - shouldRestoreToByteStoreForActiveTask
 - shouldRestoreToByteStoreForStandbyTask
 - shouldRollSegments
+org.apache.kafka.streams.state.internals.RocksDBTimestampedSegmentedBytesStoreWithHeadersTest:
+- shouldBeAbleToWriteToReInitializedStore
+- shouldCreateWriteBatches
+- shouldFetchAllSegments
+- shouldFindValuesWithinRange
+- shouldGetAllSegments
+- shouldHandleTombstoneRecords
+- shouldLoadSegmentsWithOldStyleColonFormattedName
+- shouldLoadSegmentsWithOldStyleDateFormattedName
+- shouldMatchPositionAfterPut
+- shouldMeasureExpiredRecords
+- shouldNotThrowWhenRestoringOnMissingHeaders
+- shouldPutAndBackwardFetch
+- shouldPutAndFetch
+- shouldRemove
+- shouldRestoreRecordsAndConsistencyVectorMultipleTopics
+- shouldRestoreRecordsAndConsistencyVectorSingleTopic
+- shouldRestoreToByteStoreForActiveTask
+- shouldRestoreToByteStoreForStandbyTask
+- shouldRollSegments
 org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - prefixScanShouldNotThrowConcurrentModificationException
 - shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug
@@ -5842,6 +5862,11 @@ org.apache.kafka.streams.state.internals.TimestampedSegmentTest:
 - shouldCompareSegmentIdOnly
 - shouldDeleteStateDirectoryOnDestroy
 - shouldHashOnSegmentIdOnly
+org.apache.kafka.streams.state.internals.TimestampedSegmentWithHeadersTest:
+- shouldBeEqualIfIdIsEqual
+- shouldCompareSegmentIdOnly
+- shouldDeleteStateDirectoryOnDestroy
+- shouldHashOnSegmentIdOnly
 org.apache.kafka.streams.state.internals.TimestampedSegmentsTest:
 - futureEventsShouldNotCauseSegmentRoll
 - shouldBaseSegmentIntervalOnRetentionAndNumSegments
@@ -5862,6 +5887,18 @@ org.apache.kafka.streams.state.internals.TimestampedSegmentsTest:
 - shouldRollSegments
 - shouldUpdateSegmentFileNameFromOldColonFormatToNewFormat
 - shouldUpdateSegmentFileNameFromOldDateFormatToNewFormat
+org.apache.kafka.streams.state.internals.TimestampedSegmentsWithHeadersTest:
+- shouldCleanupSegmentsThatHaveExpired
+- shouldClearSegmentsOnClose
+- shouldCloseAllOpenSegments
+- shouldCreateSegments
+- shouldGetCorrectSegmentString
+- shouldGetSegmentForTimestamp
+- shouldGetSegmentIdsFromTimestamp
+- shouldGetSegmentNameFromId
+- shouldGetSegmentsWithinTimeRange
+- shouldNotCreateSegmentThatIsAlreadyExpired
+- shouldOpenExistingSegments
 org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilderTest:
 - shouldDisableCachingWithRetainDuplicates
 - shouldHaveCachingAndChangeLoggingWhenBothEnabled
