@@ -327,7 +327,7 @@ public class TaskManager {
                     assignedTasks.put(taskId, entry.getValue());
                 }
             }
-            return activeTaskCreator.createTasks(mainConsumer, assignedTasks);
+            return new ArrayList<>(activeTaskCreator.createTasks(mainConsumer, assignedTasks));
         } else {
             return Collections.emptySet();
         }
@@ -343,7 +343,7 @@ public class TaskManager {
                     assignedTasks.put(taskId, inputPartitions);
                 }
             }
-            return standbyTaskCreator.createTasks(assignedTasks);
+            return new ArrayList<>(standbyTaskCreator.createTasks(assignedTasks));
         } else {
             return Collections.emptySet();
         }

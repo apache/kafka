@@ -892,7 +892,7 @@ public class StateDirectoryTest {
         // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
         // which can't be mocked
         time.setCurrentTimeMs(System.currentTimeMillis());
-        TaskId taskId = new TaskId(0, 0);
+        final TaskId taskId = new TaskId(0, 0);
 
         final StateStore store = initializeStartupStores(taskId, true);
 

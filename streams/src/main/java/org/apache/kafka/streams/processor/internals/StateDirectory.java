@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -805,7 +806,7 @@ public class StateDirectory implements AutoCloseable {
         private final StateManager stateManager;
         final StreamsMetricsImpl metricsImpl;
 
-        public StartupContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager, final StreamsMetricsImpl metricsImpl, ThreadCache cache) {
+        public StartupContext(final TaskId taskId, final StreamsConfig config, final StateManager stateManager, final StreamsMetricsImpl metricsImpl, final ThreadCache cache) {
             super(taskId, config, metricsImpl, cache);
             this.stateManager = stateManager;
             this.metricsImpl = metricsImpl;
@@ -831,7 +832,7 @@ public class StateDirectory implements AutoCloseable {
         }
 
         @Override
-        public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Position position) {
+        public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Headers headers, final Position position) {
             throw new IllegalStateException("Should not be called");
         }
 

@@ -4902,7 +4902,7 @@ public class TaskManagerTest {
         when(stateUpdater.tasks()).thenReturn(Collections.singleton(activeTask));
         when(stateUpdater.standbyTasks()).thenReturn(Collections.emptySet());
 
-        InOrder inOrder = inOrder(activeTaskCreator);
+        final InOrder inOrder = inOrder(activeTaskCreator);
         inOrder.verify(activeTaskCreator).createTasks(same(consumer), eq(Map.of(taskId00, taskId00Partitions)));
         inOrder.verify(activeTaskCreator).createTasks(consumer, emptyMap());
 
@@ -4941,7 +4941,7 @@ public class TaskManagerTest {
 
         // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
         verify(activeTaskCreator, times(2)).createTasks(any(), eq(Collections.emptyMap()));
-        InOrder inOrder = inOrder(standbyTaskCreator);
+        final InOrder inOrder = inOrder(standbyTaskCreator);
         inOrder.verify(standbyTaskCreator).createTasks(Map.of(taskId00, taskId00Partitions));
         inOrder.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
         verifyNoMoreInteractions(activeTaskCreator);
