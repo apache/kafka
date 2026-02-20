@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -244,7 +245,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -259,7 +260,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -275,7 +276,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -290,7 +291,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -312,7 +313,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -334,7 +335,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -358,7 +359,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -373,7 +374,7 @@ public class MeteredSessionStore<K, V>
                 fetchSensor,
                 iteratorDurationSensor,
                 streamsMetrics,
-                serdes::keyFrom,
+                bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                 serdes::valueFrom,
                 time,
                 numOpenIterators,
@@ -397,7 +398,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -470,7 +471,7 @@ public class MeteredSessionStore<K, V>
                         fetchSensor,
                         iteratorDurationSensor,
                         streamsMetrics,
-                        serdes::keyFrom,
+                        bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                         StoreQueryUtils.deserializeValue(serdes, wrapped()),
                         time,
                         numOpenIterators,
@@ -498,7 +499,7 @@ public class MeteredSessionStore<K, V>
     }
 
     private Bytes keyBytes(final K key) {
-        return key == null ? null : Bytes.wrap(serdes.rawKey(key));
+        return key == null ? null : Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
     }
 
     private void maybeRecordE2ELatency() {

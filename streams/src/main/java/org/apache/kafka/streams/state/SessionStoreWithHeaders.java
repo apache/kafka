@@ -17,14 +17,9 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
-
-import java.time.Instant;
-
-import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
  * Interface for storing the aggregated values of sessions along with their record headers.
@@ -51,66 +46,6 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
                                                                                     final long latestSessionEndTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of SessionStoreWithHeaders.");
-    }
-
-    @Override
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
-                                                                                    final Instant earliestSessionEndTime,
-                                                                                    final Instant latestSessionStartTime) {
-        return findSessions(
-            key,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    @Override
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
-                                                                                            final Instant earliestSessionEndTime,
-                                                                                            final Instant latestSessionStartTime) {
-        return backwardFindSessions(
-            key,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
-                                                                                    final K keyTo,
-                                                                                    final Instant earliestSessionEndTime,
-                                                                                    final Instant latestSessionStartTime) {
-        return findSessions(
-            keyFrom,
-            keyTo,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
-                                                                                            final K keyTo,
-                                                                                            final Instant earliestSessionEndTime,
-                                                                                            final Instant latestSessionStartTime) {
-        return backwardFindSessions(
-            keyFrom,
-            keyTo,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    default AggregationWithHeaders<AGG> fetchSession(final K key,
-                                                     final Instant sessionStartTime,
-                                                     final Instant sessionEndTime) {
-        return fetchSession(key,
-            ApiUtils.validateMillisecondInstant(sessionStartTime,
-                prepareMillisCheckFailMsgPrefix(sessionStartTime, "sessionStartTime")),
-            ApiUtils.validateMillisecondInstant(sessionEndTime,
-                prepareMillisCheckFailMsgPrefix(sessionEndTime, "sessionEndTime")));
     }
 
     /**

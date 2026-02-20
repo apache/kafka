@@ -22,43 +22,27 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.state.AggregationWithHeaders;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.SessionStoreWithHeaders;
-import org.apache.kafka.streams.state.StateSerdes;
-
-import java.time.Instant;
-
-import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 public class MeteredSessionStoreWithHeaders<K, AGG>
     extends MeteredSessionStore<K, AggregationWithHeaders<AGG>>
     implements SessionStoreWithHeaders<K, AGG> {
 
-    private final Serde<AGG> rawAggSerde;
-    private StateSerdes<K, AGG> serdes;
-    private AggregationWithHeadersSerializer<AGG> aggregationWithHeadersSerializer;
-    private AggregationWithHeadersDeserializer<AGG> aggregationWithHeadersDeserializer;
-
     MeteredSessionStoreWithHeaders(final SessionStore<Bytes, byte[]> inner,
                                    final String metricsScope,
                                    final Serde<K> keySerde,
-                                   final Serde<AGG> aggSerde,
+                                   final Serde<AggregationWithHeaders<AGG>> aggSerde,
                                    final Time time) {
-        super(inner, metricsScope, keySerde, createAggregationWithHeadersSerde(aggSerde), time);
-        this.rawAggSerde = aggSerde;
+        super(inner, metricsScope, keySerde, aggSerde, time);
     }
 
-    private static <AGG> Serde<AggregationWithHeaders<AGG>> createAggregationWithHeadersSerde(final Serde<AGG> aggSerde) {
-        return new Serde<AggregationWithHeaders<AGG>>() {
+    // Factory method to create the wrapped serde
+    static <AGG> Serde<AggregationWithHeaders<AGG>> createAggregationWithHeadersSerde(final Serde<AGG> aggSerde) {
+        return new Serde<>() {
             @Override
             public Serializer<AggregationWithHeaders<AGG>> serializer() {
                 return new AggregationWithHeadersSerializer<>(aggSerde.serializer());
@@ -71,21 +55,6 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         };
     }
 
-    @Override
-    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
-        initStoreSerde(stateStoreContext);
-        super.init(stateStoreContext, root);
-    }
-
-    private void initStoreSerde(final StateStoreContext context) {
-        final String storeName = name();
-        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, rawAggSerde, WrappingNullableUtils::prepareValueSerde);
-        aggregationWithHeadersSerializer = new AggregationWithHeadersSerializer<>(serdes.valueSerde().serializer());
-        aggregationWithHeadersDeserializer = new AggregationWithHeadersDeserializer<>(serdes.valueSerde().deserializer());
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public boolean setFlushListener(final CacheFlushListener<Windowed<K>, AggregationWithHeaders<AGG>> listener,
@@ -96,223 +65,13 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
                 record -> listener.apply(
                     record.withKey(SessionKeySchema.from(record.key(), serdes.keyDeserializer(), new RecordHeaders(), serdes.topic()))
                         .withValue(new Change<>(
-                            record.value().newValue != null ? deserializeAggregationWithHeaders(record.value().newValue) : null,
-                            record.value().oldValue != null ? deserializeAggregationWithHeaders(record.value().oldValue) : null,
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue, new RecordHeaders()) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue, new RecordHeaders()) : null,
                             record.value().isLatest
                         ))
                 ),
                 sendOldValues);
         }
         return false;
-    }
-
-    // Override all iterator-returning methods to properly deserialize keys with headers support
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K key) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(keyBytes(key)),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K key) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFetch(keyBytes(key)),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> fetch(final K keyFrom, final K keyTo) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFetch(final K keyFrom, final K keyTo) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
-                                                                                   final long earliestSessionEndTime,
-                                                                                   final long latestSessionStartTime) {
-        final Bytes bytesKey = keyBytes(key);
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().findSessions(bytesKey, earliestSessionEndTime, latestSessionStartTime),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
-                                                                                   final Instant earliestSessionEndTime,
-                                                                                   final Instant latestSessionStartTime) {
-        return findSessions(
-            key,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
-                                                                                           final long earliestSessionEndTime,
-                                                                                           final long latestSessionStartTime) {
-        final Bytes bytesKey = keyBytes(key);
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFindSessions(bytesKey, earliestSessionEndTime, latestSessionStartTime),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
-                                                                                           final Instant earliestSessionEndTime,
-                                                                                           final Instant latestSessionStartTime) {
-        return backwardFindSessions(
-            key,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
-                                                                                   final K keyTo,
-                                                                                   final long earliestSessionEndTime,
-                                                                                   final long latestSessionStartTime) {
-        final Bytes bytesKeyFrom = keyBytes(keyFrom);
-        final Bytes bytesKeyTo = keyBytes(keyTo);
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().findSessions(bytesKeyFrom, bytesKeyTo, earliestSessionEndTime, latestSessionStartTime),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
-                                                                                   final K keyTo,
-                                                                                   final Instant earliestSessionEndTime,
-                                                                                   final Instant latestSessionStartTime) {
-        return findSessions(
-            keyFrom,
-            keyTo,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
-                                                                                           final K keyTo,
-                                                                                           final long earliestSessionEndTime,
-                                                                                           final long latestSessionStartTime) {
-        final Bytes bytesKeyFrom = keyBytes(keyFrom);
-        final Bytes bytesKeyTo = keyBytes(keyTo);
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFindSessions(bytesKeyFrom, bytesKeyTo, earliestSessionEndTime, latestSessionStartTime),
-            fetchSensor,
-            iteratorDurationSensor,
-            streamsMetrics,
-            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
-            this::deserializeAggregationWithHeaders,
-            time,
-            numOpenIterators,
-            openIterators);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
-                                                                                           final K keyTo,
-                                                                                           final Instant earliestSessionEndTime,
-                                                                                           final Instant latestSessionStartTime) {
-        return backwardFindSessions(
-            keyFrom,
-            keyTo,
-            ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-                prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime")),
-            ApiUtils.validateMillisecondInstant(latestSessionStartTime,
-                prepareMillisCheckFailMsgPrefix(latestSessionStartTime, "latestSessionStartTime")));
-    }
-
-    @Override
-    public AggregationWithHeaders<AGG> fetchSession(final K key,
-                                                    final Instant sessionStartTime,
-                                                    final Instant sessionEndTime) {
-        return fetchSession(key,
-            ApiUtils.validateMillisecondInstant(sessionStartTime,
-                prepareMillisCheckFailMsgPrefix(sessionStartTime, "sessionStartTime")),
-            ApiUtils.validateMillisecondInstant(sessionEndTime,
-                prepareMillisCheckFailMsgPrefix(sessionEndTime, "sessionEndTime")));
-    }
-
-    private Bytes keyBytes(final K key) {
-        return key == null ? null : Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
-    }
-
-    private byte[] serializeAggregationWithHeaders(final AggregationWithHeaders<AGG> aggregationWithHeaders) {
-        if (aggregationWithHeaders == null) {
-            return null;
-        }
-        return aggregationWithHeadersSerializer.serialize(serdes.topic(), aggregationWithHeaders);
-    }
-
-    private AggregationWithHeaders<AGG> deserializeAggregationWithHeaders(final byte[] rawAggregation) {
-        if (rawAggregation == null) {
-            return null;
-        }
-        return aggregationWithHeadersDeserializer.deserialize(serdes.topic(), rawAggregation);
     }
 }

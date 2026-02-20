@@ -108,7 +108,7 @@ public class MeteredSessionStoreWithHeadersTest {
             innerStore,
             STORE_TYPE,
             Serdes.String(),
-            Serdes.String(),
+            MeteredSessionStoreWithHeaders.createAggregationWithHeadersSerde(Serdes.String()),
             mockTime
         );
         tags = mkMap(
@@ -149,7 +149,7 @@ public class MeteredSessionStoreWithHeadersTest {
             innerStore,
             STORE_TYPE,
             Serdes.String(),
-            Serdes.String(),
+            MeteredSessionStoreWithHeaders.createAggregationWithHeadersSerde(Serdes.String()),
             new MockTime()
         );
         doNothing().when(innerStore).init(context, outer);
@@ -478,7 +478,7 @@ public class MeteredSessionStoreWithHeadersTest {
             cachedSessionStore,
             STORE_TYPE,
             Serdes.String(),
-            Serdes.String(),
+            MeteredSessionStoreWithHeaders.createAggregationWithHeadersSerde(Serdes.String()),
             new MockTime()
         );
 
