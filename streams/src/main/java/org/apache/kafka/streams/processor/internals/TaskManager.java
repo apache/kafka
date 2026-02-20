@@ -333,7 +333,7 @@ public class TaskManager {
         }
     }
 
-    private Collection<Task> assignStartupTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign) {
+    private Collection<? extends Task> assignStartupTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign) {
         if (stateDirectory.hasStartupTasks()) {
             final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
@@ -343,7 +343,7 @@ public class TaskManager {
                     assignedTasks.put(taskId, inputPartitions);
                 }
             }
-            return new ArrayList<>(standbyTaskCreator.createTasks(assignedTasks));
+            return standbyTaskCreator.createTasks(assignedTasks);
         } else {
             return Collections.emptySet();
         }
@@ -516,7 +516,7 @@ public class TaskManager {
         for (final Task activeTask : activeTasks) {
             activeTasksToCreate.remove(activeTask.id());
         }
-        final Collection<Task> standbyTasks = assignStartupTasks(standbyTasksToCreate);
+        final Collection<? extends Task> standbyTasks = assignStartupTasks(standbyTasksToCreate);
         for (final Task standbyTask : standbyTasks) {
             standbyTasksToCreate.remove(standbyTask.id());
         }
