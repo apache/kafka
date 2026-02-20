@@ -310,6 +310,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
     private final String serverAssignorName;
 
     /**
+     * The partitions being revoked by this member.
+     */
+    private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
+
+    /**
      * The classic member metadata if the consumer uses the classic protocol.
      */
     private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
@@ -325,11 +330,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
      * Map: topicId -> partitionId -> assignmentEpoch
      */
     private final Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocationWithEpochs;
-
-    /**
-     * The set of partitions awaiting revocation from the member.
-     */
-    private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
     private ConsumerGroupMember(
         String memberId,
@@ -529,8 +529,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicMetadata(topicId).ifPresent(topicMetadata -> {
-                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> {topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
                     .setTopicId(topicId)
                     .setTopicName(topicMetadata.name())
                     .setPartitions(new ArrayList<>(partitionSet)));
@@ -583,9 +582,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
             && Objects.equals(subscribedTopicNames, that.subscribedTopicNames)
             && Objects.equals(subscribedTopicRegex, that.subscribedTopicRegex)
             && Objects.equals(serverAssignorName, that.serverAssignorName)
-            && Objects.equals(classicMemberMetadata, that.classicMemberMetadata)
             && Objects.equals(assignedPartitionsWithEpochs, that.assignedPartitionsWithEpochs)
-            && Objects.equals(partitionsPendingRevocationWithEpochs, that.partitionsPendingRevocationWithEpochs);
+            && Objects.equals(partitionsPendingRevocationWithEpochs, that.partitionsPendingRevocationWithEpochs)
+            && Objects.equals(classicMemberMetadata, that.classicMemberMetadata);
     }
 
     @Override
@@ -602,9 +601,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
         result = 31 * result + Objects.hashCode(subscribedTopicNames);
         result = 31 * result + Objects.hashCode(subscribedTopicRegex);
         result = 31 * result + Objects.hashCode(serverAssignorName);
-        result = 31 * result + Objects.hashCode(classicMemberMetadata);
         result = 31 * result + Objects.hashCode(assignedPartitionsWithEpochs);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocationWithEpochs);
+        result = 31 * result + Objects.hashCode(classicMemberMetadata);
         return result;
     }
 
@@ -623,9 +622,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
             ", subscribedTopicNames=" + subscribedTopicNames +
             ", subscribedTopicRegex='" + subscribedTopicRegex + '\'' +
             ", serverAssignorName='" + serverAssignorName + '\'' +
-            ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ", assignedPartitionsWithEpochs=" + assignedPartitionsWithEpochs +
             ", partitionsPendingRevocationWithEpochs=" + partitionsPendingRevocationWithEpochs +
+            ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ')';
     }
 

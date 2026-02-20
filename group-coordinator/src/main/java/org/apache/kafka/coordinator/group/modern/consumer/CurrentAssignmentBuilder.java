@@ -300,11 +300,6 @@ public class CurrentAssignmentBuilder {
         Map<Uuid, Set<Integer>> memberAssignedPartitions
     ) {
         Set<Uuid> subscribedTopicIds = subscribedTopicIds();
-
-        // Get existing epochs from member
-        Map<Uuid, Map<Integer, Integer>> existingAssignedEpochs = member.assignedPartitionsWithEpochs();
-        Map<Uuid, Map<Integer, Integer>> existingPendingRevocationEpochs = member.partitionsPendingRevocationWithEpochs();
-
         // Reuse the original map if no topics need to be removed.
         Map<Uuid, Map<Integer, Integer>> newAssignedPartitionsWithEpochs;
         Map<Uuid, Map<Integer, Integer>> newPartitionsPendingRevocationWithEpochs;
@@ -313,11 +308,11 @@ public class CurrentAssignmentBuilder {
         if (subscribedTopicIds.isEmpty() && member.partitionsPendingRevocation().isEmpty()) {
             newAssignedPartitionsWithEpochs = Map.of();
             // Move all assigned to pending revocation with their epochs
-            newPartitionsPendingRevocationWithEpochs = new HashMap<>(existingAssignedEpochs);
+            newPartitionsPendingRevocationWithEpochs = new HashMap<>(member.assignedPartitionsWithEpochs());
             changed = true;
         } else {
-            newAssignedPartitionsWithEpochs = new HashMap<>(existingAssignedEpochs);
-            newPartitionsPendingRevocationWithEpochs = new HashMap<>(existingPendingRevocationEpochs);
+            newAssignedPartitionsWithEpochs = new HashMap<>(member.assignedPartitionsWithEpochs());
+            newPartitionsPendingRevocationWithEpochs = new HashMap<>(member.partitionsPendingRevocationWithEpochs());
             for (Map.Entry<Uuid, Set<Integer>> entry : memberAssignedPartitions.entrySet()) {
                 if (!subscribedTopicIds.contains(entry.getKey())) {
                     changed = true;
