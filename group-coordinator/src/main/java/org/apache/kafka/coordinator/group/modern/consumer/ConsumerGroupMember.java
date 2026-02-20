@@ -359,22 +359,23 @@ public class ConsumerGroupMember extends ModernGroupMember {
             subscribedTopicNames,
             state,
             // Derive assignedPartitions from epochs for parent class
-            assignedPartitionsWithEpochs.entrySet().stream()
+            Collections.unmodifiableMap(assignedPartitionsWithEpochs.entrySet().stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
                     e -> Set.copyOf(e.getValue().keySet())
-                ))
+                )))
         );
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.subscribedTopicRegex = subscribedTopicRegex;
         this.serverAssignorName = serverAssignorName;
         this.assignedPartitionsWithEpochs = assignedPartitionsWithEpochs;
         this.partitionsPendingRevocationWithEpochs = partitionsPendingRevocationWithEpochs;
-        this.partitionsPendingRevocation = partitionsPendingRevocationWithEpochs.entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> Set.copyOf(e.getValue().keySet())
-            ));
+        this.partitionsPendingRevocation = Collections.unmodifiableMap(
+            partitionsPendingRevocationWithEpochs.entrySet().stream()
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    e -> Set.copyOf(e.getValue().keySet())
+                )));
         this.classicMemberMetadata = classicMemberMetadata;
     }
 
@@ -529,11 +530,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicMetadata(topicId).ifPresent(topicMetadata -> {topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setTopicName(topicMetadata.name())
-                    .setPartitions(new ArrayList<>(partitionSet)));
-            });
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(topicId)
+                .setTopicName(topicMetadata.name())
+                .setPartitions(new ArrayList<>(partitionSet))));
         });
         return topicPartitions;
     }
