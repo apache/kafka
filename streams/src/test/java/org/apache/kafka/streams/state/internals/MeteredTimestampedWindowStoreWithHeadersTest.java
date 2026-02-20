@@ -184,6 +184,30 @@ public class MeteredTimestampedWindowStoreWithHeadersTest {
     }
 
     @Test
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
+        setUp();
+        when(innerStoreMock.name()).thenReturn("mocked-store");
+        final MeteredTimestampedWindowStoreWithHeaders<String, Long> store = new MeteredTimestampedWindowStoreWithHeaders<>(
+            innerStoreMock,
+            10L, // any size
+            "scope",
+            new MockTime(),
+            null,
+            null
+        );
+        store.init(context, innerStoreMock);
+
+        try {
+            store.put("key", ValueTimestampHeaders.make(42L, 60000, new RecordHeaders()), 60000L);
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from processor context.");
+            }
+            throw exception;
+        }
+    }
+
+    @Test
     public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
         setUp();
         when(innerStoreMock.name()).thenReturn("mocked-store");
