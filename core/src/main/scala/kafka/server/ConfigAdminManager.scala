@@ -507,7 +507,7 @@ object ConfigAdminManager {
     }.toSeq
     prepareIncrementalConfigs(alterConfigOps, properties, KafkaConfig.configKeys)
     try {
-      DynamicBrokerConfig.validateControllerConfigTypes(properties)
+      DynamicBrokerConfig.validateConfigTypes(properties)
     } catch {
       case t: Exception =>
         log.error(s"validation of configProps $properties for $configResource failed with exception", t)

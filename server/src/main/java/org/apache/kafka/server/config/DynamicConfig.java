@@ -67,28 +67,4 @@ public class DynamicConfig {
             return BROKER_CONFIGS.parse(propResolved);
         }
     }
-
-    public static class Controller {
-        
-        private static final ConfigDef CONTROLLER_CONFIGS;
-        
-        static {
-            ConfigDef configs = QuotaConfig.brokerQuotaConfigs();
-            // Filter and define all dynamic configurations
-            AbstractKafkaConfig.CONFIG_DEF.configKeys().forEach((name, value) -> {
-                if (DynamicBrokerConfig.ALL_DYNAMIC_CONFIGS.contains(name)) {
-                    configs.define(value);
-                }
-            });
-            CONTROLLER_CONFIGS = configs;
-        }
-
-        public static Map<String, Object> validate(Properties props) {
-            // Validate Names
-            Properties propResolved = DynamicBrokerConfig.resolveVariableConfigs(props);
-            // ValidateValues
-            return CONTROLLER_CONFIGS.parse(propResolved);
-        }
-    }
-
 }
