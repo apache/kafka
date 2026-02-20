@@ -123,7 +123,7 @@ public final class Stores {
      * This store supplier can be passed into a
      * {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
      * If you want to create a {@link KeyValueStore} or a {@link VersionedKeyValueStore}
-     * you should use {@link #KeyValueStore(String)} or
+     * you should use {@link KeyValueStore(String)} or
      * {@link #persistentVersionedKeyValueStore(String, Duration)}, respectively,
      * to create a store supplier instead.
      *

@@ -24,16 +24,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.RangeQuery;
-import org.apache.kafka.streams.query.TimestampedKeyQuery;
-import org.apache.kafka.streams.query.TimestampedRangeQuery;
-import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -150,37 +145,11 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     }
 
     @Override
-    public <R> QueryResult<R> query(
-        final Query<R> query,
-        final PositionBound positionBound,
-        final QueryConfig config) {
-
-        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-        QueryResult<R> result = store.query(query, positionBound, config);
-
-        // this adapter always needs to return a `value-with-timestamp-and-headers` result to hold up its contract
-        // thus, we need to add the empty headers wrapper even for timestamped queries
-        if (result.isSuccess()) {
-            if (query instanceof KeyQuery || query instanceof TimestampedKeyQuery) {
-                final byte[] timestampedValue = (byte[]) result.getResult();
-                final byte[] valueWithHeaders = convertToHeaderFormat(timestampedValue);
-                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, valueWithHeaders);
-            } else if (query instanceof RangeQuery || query instanceof TimestampedRangeQuery) {
-                final TimestampedToHeadersRocksIteratorAdapter wrappedRocksDBRangeIterator =
-                    new TimestampedToHeadersRocksIteratorAdapter((RocksDbIterator) result.getResult());
-                result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, wrappedRocksDBRangeIterator);
-            } else {
-                throw new IllegalArgumentException("Unsupported query type: " + query.getClass());
-            }
-        }
-
-        if (config.isCollectExecutionInfo()) {
-            final long end = System.nanoTime();
-            result.addExecutionInfo(
-                "Handled in " + getClass() + " in " + (end - start) + "ns"
-            );
-        }
-        return result;
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        throw new UnsupportedOperationException("Querying (IQv2) is not supported on TimestampedToHeadersStoreAdapter. " +
+            "This adapter is only meant for backward compatibility at DSL level, and does not support the new querying features.");
     }
 
     @Override
@@ -255,47 +224,6 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
         public KeyValue<K, byte[]> next() {
             final KeyValue<K, byte[]> timestampedKeyValue = innerIterator.next();
             return KeyValue.pair(timestampedKeyValue.key, convertToHeaderFormat(timestampedKeyValue.value));
-        }
-    }
-
-    /**
-     * RocksDB-specific iterator adapter for query operations
-     */
-    private static class TimestampedToHeadersRocksIteratorAdapter implements ManagedKeyValueIterator<Bytes, byte[]> {
-
-        private final RocksDbIterator rocksDbIterator;
-
-        public TimestampedToHeadersRocksIteratorAdapter(final RocksDbIterator rocksDbIterator) {
-            this.rocksDbIterator = rocksDbIterator;
-        }
-
-        @Override
-        public void close() {
-            rocksDbIterator.close();
-        }
-
-        @Override
-        public Bytes peekNextKey() {
-            return rocksDbIterator.peekNextKey();
-        }
-
-        @Override
-        public void onClose(final Runnable closeCallback) {
-            rocksDbIterator.onClose(closeCallback);
-        }
-
-        @Override
-        public boolean hasNext() {
-            return rocksDbIterator.hasNext();
-        }
-
-        @Override
-        public KeyValue<Bytes, byte[]> next() {
-            final KeyValue<Bytes, byte[]> next = rocksDbIterator.next();
-            if (next == null) {
-                return null;
-            }
-            return KeyValue.pair(next.key, convertToHeaderFormat(next.value));
         }
     }
 }

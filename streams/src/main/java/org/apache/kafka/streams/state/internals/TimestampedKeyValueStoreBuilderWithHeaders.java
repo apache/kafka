@@ -87,7 +87,7 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
         if (!enableCaching) {
             return inner;
         }
-        return new CachingKeyValueStore(inner, true);
+        return new CachingKeyValueStore(inner, CachingKeyValueStore.CacheType.TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
@@ -138,29 +138,29 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
         @Override
         public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                      final Bytes to) {
-            throw new UnsupportedOperationException("Range queries are not supported by in-memory timestamped key-value stores with headers");
+            return wrapped().range(from, to);
         }
 
         @Override
         public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                             final Bytes to) {
-            throw new UnsupportedOperationException("Range queries are not supported by in-memory timestamped key-value stores with headers");
+            return wrapped().reverseRange(from, to);
         }
 
         @Override
         public KeyValueIterator<Bytes, byte[]> all() {
-            throw new UnsupportedOperationException("Range queries are not supported by in-memory timestamped key-value stores with headers");
+            return wrapped().all();
         }
 
         @Override
         public KeyValueIterator<Bytes, byte[]> reverseAll() {
-            throw new UnsupportedOperationException("Range queries are not supported by in-memory timestamped key-value stores with headers");
+            return wrapped().reverseAll();
         }
 
         @Override
         public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                                         final PS prefixKeySerializer) {
-            throw new UnsupportedOperationException("Range queries are not supported by in-memory timestamped key-value stores with headers");
+            return wrapped().prefixScan(prefix, prefixKeySerializer);
         }
 
         @Override

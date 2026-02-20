@@ -20,10 +20,13 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -33,10 +36,10 @@ import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -70,16 +73,16 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldHaveMeteredStoreAsOuterStore() {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
+        assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
+        assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class, next);
     }
 
     @Test
@@ -87,7 +90,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, CoreMatchers.equalTo(inner));
+        assertEquals(next, inner);
     }
 
     @Test
@@ -95,8 +98,8 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
-        assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
+        assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
+        assertInstanceOf(CachingKeyValueStore.class, wrapped);
     }
 
     @Test
@@ -106,9 +109,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
-        assertThat(wrapped, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
-        assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
+        assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class, wrapped);
+        assertEquals(((WrappedStateStore) wrapped).wrapped(), inner);
     }
 
     @Test
@@ -120,10 +123,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class));
-        assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class));
-        assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
+        assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
+        assertInstanceOf(CachingKeyValueStore.class, caching);
+        assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class, changeLogging);
+        assertEquals(changeLogging.wrapped(), inner);
     }
 
     @Test
@@ -135,7 +138,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 .withLoggingDisabled()
                 .withCachingDisabled()
                 .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedStoreWithHeaders.class));
+        assertInstanceOf(RocksDBTimestampedStoreWithHeaders.class, ((WrappedStateStore) store).wrapped());
     }
 
     @Test
@@ -147,7 +150,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 .withLoggingDisabled()
                 .withCachingDisabled()
                 .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(TimestampedToHeadersStoreAdapter.class));
+        assertInstanceOf(TimestampedToHeadersStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
     @SuppressWarnings("all")
@@ -186,7 +189,73 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
 
         final Exception e = assertThrows(NullPointerException.class,
                 () -> new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
+        assertTrue(e.getMessage().contains("storeSupplier's metricsScope can't be null"));
+    }
+
+    @Test
+    public void shouldThrowUsingIQv2ForInMemoryStores() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+                .withLoggingDisabled()
+                .withCachingDisabled()
+                .build();
+
+        final KeyQuery<String, ValueTimestampHeaders<String>> query =
+                KeyQuery.withKey("test-key");
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+
+        final UnsupportedOperationException exception = assertThrows(
+                UnsupportedOperationException.class,
+                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
+        );
+
+        assertTrue(exception.getMessage().contains(
+            "Queries are not supported by in-memory timestamped key-value stores with headers"));
+    }
+
+    @Test
+    public void shouldThrowWhenUsingIQv2InHeadersStore() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+                .withLoggingDisabled()
+                .withCachingDisabled()
+                .build();
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped);
+
+        final KeyQuery<String, ValueTimestampHeaders<String>> query =
+                KeyQuery.withKey("test-key");
+
+        final UnsupportedOperationException exception = assertThrows(
+                UnsupportedOperationException.class,
+                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
+        );
+
+        assertTrue(exception.getMessage().contains(
+            "Querying (IQv2) is not supported on TimestampedToHeadersStoreAdapter. " +
+                "This adapter is only meant for backward compatibility at DSL level, and does not support the new querying features."));
     }
 
 }
