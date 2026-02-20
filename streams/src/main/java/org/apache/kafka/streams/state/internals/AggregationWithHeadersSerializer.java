@@ -49,18 +49,15 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  */
 class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerializer<AggregationWithHeaders<AGG>, Void, AGG> {
     public final Serializer<AGG> aggregationSerializer;
-    private final HeadersSerializer headersSerializer;
 
     AggregationWithHeadersSerializer(final Serializer<AGG> aggregationSerializer) {
         Objects.requireNonNull(aggregationSerializer);
         this.aggregationSerializer = aggregationSerializer;
-        this.headersSerializer = new HeadersSerializer();
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         aggregationSerializer.configure(configs, isKey);
-        headersSerializer.configure(configs, isKey);
     }
 
     @Override
@@ -82,7 +79,7 @@ class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerialize
             return null;
         }
 
-        final byte[] rawHeaders = headersSerializer.serialize(topic, headers);
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
@@ -100,7 +97,6 @@ class AggregationWithHeadersSerializer<AGG> implements WrappingNullableSerialize
     @Override
     public void close() {
         aggregationSerializer.close();
-        headersSerializer.close();
     }
 
     @Override
