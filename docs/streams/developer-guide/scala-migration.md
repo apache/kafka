@@ -85,8 +85,8 @@ object WordCountJava extends App {
   props.put(StreamsConfig.APPLICATION_ID_CONFIG, "wordcount")
   props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
   // Configure default serdes
-  props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
-  props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class)
+  props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, classOf[Serdes.StringSerde])
+  props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, classOf[Serdes.StringSerde])
 
   val builder = new StreamsBuilder  // Java StreamsBuilder
   val textLines = builder.stream[String, String]("input-topic")
