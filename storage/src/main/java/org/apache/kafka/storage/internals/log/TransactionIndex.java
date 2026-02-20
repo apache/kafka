@@ -17,6 +17,9 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.message.AbortedTxn;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Utils;
 
@@ -32,7 +35,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.function.Supplier;
 
 /**
  * The transaction index maintains metadata about the aborted transactions for each segment. This includes
@@ -46,6 +48,9 @@ import java.util.function.Supplier;
  * order to find the start of the transactions.
  */
 public class TransactionIndex implements Closeable {
+
+    private static final int ABORTED_TXN_RECORD_SIZE =
+        MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, new AbortedTxn()).remaining();
 
     private record AbortedTxnWithPosition(AbortedTxn txn, int position) {
     }
@@ -82,7 +87,8 @@ public class TransactionIndex implements Closeable {
                     + file.getAbsolutePath());
         });
         lastOffset = OptionalLong.of(abortedTxn.lastOffset());
-        Utils.writeFully(channel(), abortedTxn.buffer.duplicate());
+        ByteBuffer buffer = MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, abortedTxn);
+        Utils.writeFully(channel(), buffer);
     }
 
     public void flush() throws IOException {
@@ -130,13 +136,11 @@ public class TransactionIndex implements Closeable {
     }
 
     public void truncateTo(long offset) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(AbortedTxn.TOTAL_SIZE);
         OptionalLong newLastOffset = OptionalLong.empty();
-        for (AbortedTxnWithPosition txnWithPosition : iterable(() -> buffer)) {
+        for (AbortedTxnWithPosition txnWithPosition : iterable()) {
             AbortedTxn abortedTxn = txnWithPosition.txn;
-            long position = txnWithPosition.position;
             if (abortedTxn.lastOffset() >= offset) {
-                channel().truncate(position);
+                channel().truncate(txnWithPosition.position);
                 lastOffset = newLastOffset;
                 return;
             }
@@ -178,8 +182,7 @@ public class TransactionIndex implements Closeable {
      * @throws CorruptIndexException if any problems are found.
      */
     public void sanityCheck() {
-        ByteBuffer buffer = ByteBuffer.allocate(AbortedTxn.TOTAL_SIZE);
-        for (AbortedTxnWithPosition txnWithPosition : iterable(() -> buffer)) {
+        for (AbortedTxnWithPosition txnWithPosition : iterable()) {
             AbortedTxn abortedTxn = txnWithPosition.txn;
             if (abortedTxn.lastOffset() < startOffset)
                 throw new CorruptIndexException("Last offset of aborted transaction " + abortedTxn + " in index "
@@ -216,14 +219,11 @@ public class TransactionIndex implements Closeable {
     }
 
     private Iterable<AbortedTxnWithPosition> iterable() {
-        return iterable(() -> ByteBuffer.allocate(AbortedTxn.TOTAL_SIZE));
-    }
-
-    private Iterable<AbortedTxnWithPosition> iterable(Supplier<ByteBuffer> allocate) {
         FileChannel channel = channelOrNull();
         if (channel == null)
             return List.of();
 
+        ByteBuffer buffer = ByteBuffer.allocate(ABORTED_TXN_RECORD_SIZE);
         PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
 
         return () -> new Iterator<>() {
@@ -231,7 +231,7 @@ public class TransactionIndex implements Closeable {
             @Override
             public boolean hasNext() {
                 try {
-                    return channel.position() - position.value >= AbortedTxn.TOTAL_SIZE;
+                    return channel.position() - position.value >= ABORTED_TXN_RECORD_SIZE;
                 } catch (IOException e) {
                     throw new KafkaException("Failed read position from the transaction index " + file.getAbsolutePath(), e);
                 }
@@ -240,17 +240,18 @@ public class TransactionIndex implements Closeable {
             @Override
             public AbortedTxnWithPosition next() {
                 try {
-                    ByteBuffer buffer = allocate.get();
+                    buffer.clear();
                     Utils.readFully(channel, buffer, position.value);
                     buffer.flip();
 
-                    AbortedTxn abortedTxn = new AbortedTxn(buffer);
-                    if (abortedTxn.version() > AbortedTxn.CURRENT_VERSION)
-                        throw new KafkaException("Unexpected aborted transaction version " + abortedTxn.version()
+                    short version = buffer.getShort();
+                    if (version > AbortedTxn.HIGHEST_SUPPORTED_VERSION)
+                        throw new KafkaException("Unexpected aborted transaction version " + version
                             + " in transaction index " + file.getAbsolutePath() + ", current version is "
-                            + AbortedTxn.CURRENT_VERSION);
+                            + AbortedTxn.HIGHEST_SUPPORTED_VERSION);
+                    AbortedTxn abortedTxn = new AbortedTxn(new ByteBufferAccessor(buffer), version);
                     AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position.value);
-                    position.value += AbortedTxn.TOTAL_SIZE;
+                    position.value += ABORTED_TXN_RECORD_SIZE;
                     return nextEntry;
                 } catch (IOException e) {
                     // We received an unexpected error reading from the index file. We propagate this as an

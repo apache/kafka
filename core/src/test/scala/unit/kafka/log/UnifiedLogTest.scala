@@ -42,7 +42,8 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffs
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, AsyncOffsetReader, Cleaner, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog, VerificationGuard}
+import org.apache.kafka.common.message.AbortedTxn
+import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, Cleaner, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, _}
@@ -3112,8 +3113,8 @@ class UnifiedLogTest {
 
     val abortedTransactions = LogTestUtils.allAbortedTransactions(log)
     val expectedTransactions = List(
-      new AbortedTxn(pid1, 0L, 29L, 8L),
-      new AbortedTxn(pid2, 8L, 74L, 36L)
+      new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+      new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
     )
     assertEquals(expectedTransactions, abortedTransactions)
 
@@ -3171,8 +3172,8 @@ class UnifiedLogTest {
 
     val abortedTransactions = LogTestUtils.allAbortedTransactions(log)
     val expectedTransactions = List(
-      new AbortedTxn(pid1, 0L, 29L, 8L),
-      new AbortedTxn(pid2, 8L, 74L, 36L)
+      new AbortedTxn().setProducerId(pid1).setFirstOffset(0L).setLastOffset(29L).setLastStableOffset(8L),
+      new AbortedTxn().setProducerId(pid2).setFirstOffset(8L).setLastOffset(74L).setLastStableOffset(36L)
     )
 
     assertEquals(expectedTransactions, abortedTransactions)

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -45,15 +46,15 @@ public class TransactionIndexTest {
     @Test
     public void testPositionSetCorrectlyWhenOpened() throws IOException {
         List<AbortedTxn> abortedTxns = new ArrayList<>(List.of(
-                new AbortedTxn(0L, 0, 10, 11),
-                new AbortedTxn(1L, 5, 15, 13),
-                new AbortedTxn(2L, 18, 35, 25),
-                new AbortedTxn(3L, 32, 50, 40)));
+                new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(11),
+                new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(13),
+                new AbortedTxn().setProducerId(2L).setFirstOffset(18).setLastOffset(35).setLastStableOffset(25),
+                new AbortedTxn().setProducerId(3L).setFirstOffset(32).setLastOffset(50).setLastStableOffset(40)));
         abortedTxns.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
         index.close();
 
         TransactionIndex reopenedIndex = new TransactionIndex(0L, file);
-        AbortedTxn anotherAbortedTxn = new AbortedTxn(3L, 50, 60, 55);
+        AbortedTxn anotherAbortedTxn = new AbortedTxn().setProducerId(3L).setFirstOffset(50).setLastOffset(60).setLastStableOffset(55);
         reopenedIndex.append(anotherAbortedTxn);
         abortedTxns.add(anotherAbortedTxn);
         assertEquals(abortedTxns, reopenedIndex.allAbortedTxns());
@@ -62,10 +63,10 @@ public class TransactionIndexTest {
     @Test
     public void testSanityCheck() throws IOException {
         List<AbortedTxn> abortedTxns = List.of(
-                new AbortedTxn(0L, 0, 10, 11),
-                new AbortedTxn(1L, 5, 15, 13),
-                new AbortedTxn(2L, 18, 35, 25),
-                new AbortedTxn(3L, 32, 50, 40));
+                new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(11),
+                new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(13),
+                new AbortedTxn().setProducerId(2L).setFirstOffset(18).setLastOffset(35).setLastStableOffset(25),
+                new AbortedTxn().setProducerId(3L).setFirstOffset(32).setLastOffset(50).setLastStableOffset(40));
         abortedTxns.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
         index.close();
 
@@ -77,25 +78,25 @@ public class TransactionIndexTest {
 
     @Test
     public void testLastOffsetMustIncrease() throws IOException {
-        index.append(new AbortedTxn(1L, 5, 15, 13));
-        assertThrows(IllegalArgumentException.class, () -> index.append(new AbortedTxn(0L, 0,
-                15, 11)));
+        index.append(new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(13));
+        assertThrows(IllegalArgumentException.class, () -> index.append(new AbortedTxn().setProducerId(0L).setFirstOffset(0)
+                .setLastOffset(15).setLastStableOffset(11)));
     }
 
     @Test
     public void testLastOffsetCannotDecrease() throws IOException {
-        index.append(new AbortedTxn(1L, 5, 15, 13));
-        assertThrows(IllegalArgumentException.class, () -> index.append(new AbortedTxn(0L, 0,
-                10, 11)));
+        index.append(new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(13));
+        assertThrows(IllegalArgumentException.class, () -> index.append(new AbortedTxn().setProducerId(0L).setFirstOffset(0)
+                .setLastOffset(10).setLastStableOffset(11)));
     }
 
     @Test
     public void testCollectAbortedTransactions() {
         List<AbortedTxn> abortedTransactions = List.of(
-                new AbortedTxn(0L, 0, 10, 11),
-                new AbortedTxn(1L, 5, 15, 13),
-                new AbortedTxn(2L, 18, 35, 25),
-                new AbortedTxn(3L, 32, 50, 40));
+                new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(11),
+                new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(13),
+                new AbortedTxn().setProducerId(2L).setFirstOffset(18).setLastOffset(35).setLastStableOffset(25),
+                new AbortedTxn().setProducerId(3L).setFirstOffset(32).setLastOffset(50).setLastStableOffset(40));
 
         abortedTransactions.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
 
@@ -127,10 +128,10 @@ public class TransactionIndexTest {
     @Test
     public void testTruncate() throws IOException {
         List<AbortedTxn> abortedTransactions = List.of(
-                new AbortedTxn(0L, 0, 10, 2),
-                new AbortedTxn(1L, 5, 15, 16),
-                new AbortedTxn(2L, 18, 35, 25),
-                new AbortedTxn(3L, 32, 50, 40));
+                new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(2),
+                new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(16),
+                new AbortedTxn().setProducerId(2L).setFirstOffset(18).setLastOffset(35).setLastStableOffset(25),
+                new AbortedTxn().setProducerId(3L).setFirstOffset(32).setLastOffset(50).setLastStableOffset(40));
 
         abortedTransactions.forEach(txn -> assertDoesNotThrow(() -> index.append(txn)));
 
@@ -151,8 +152,7 @@ public class TransactionIndexTest {
         long lastOffset = 299L;
         long lastStableOffset = 200L;
 
-        AbortedTxn abortedTxn = new AbortedTxn(pid, firstOffset, lastOffset, lastStableOffset);
-        assertEquals(AbortedTxn.CURRENT_VERSION, abortedTxn.version());
+        AbortedTxn abortedTxn = new AbortedTxn().setProducerId(pid).setFirstOffset(firstOffset).setLastOffset(lastOffset).setLastStableOffset(lastStableOffset);
         assertEquals(pid, abortedTxn.producerId());
         assertEquals(firstOffset, abortedTxn.firstOffset());
         assertEquals(lastOffset, abortedTxn.lastOffset());
@@ -162,10 +162,10 @@ public class TransactionIndexTest {
     @Test
     public void testRenameIndex() throws IOException {
         File renamed = TestUtils.tempFile();
-        index.append(new AbortedTxn(0L, 0, 10, 2));
+        index.append(new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(2));
 
         index.renameTo(renamed);
-        index.append(new AbortedTxn(1L, 5, 15, 16));
+        index.append(new AbortedTxn().setProducerId(1L).setFirstOffset(5).setLastOffset(15).setLastStableOffset(16));
 
         List<AbortedTxn> abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions();
         assertEquals(2, abortedTxns.size());
@@ -188,7 +188,7 @@ public class TransactionIndexTest {
         assertTrue(nonExistentFile.delete());
         try (TransactionIndex testIndex = new TransactionIndex(0, nonExistentFile)) {
             testIndex.flush();
-            testIndex.append(new AbortedTxn(0L, 0, 10, 2));
+            testIndex.append(new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(2));
             testIndex.flush();
             assertNotEquals(0, testIndex.file().length());
         }
@@ -217,7 +217,7 @@ public class TransactionIndexTest {
 
     @Test
     public void testIsEmptyWhenFileIsNotEmpty() throws IOException {
-        index.append(new AbortedTxn(0L, 0, 10, 2));
+        index.append(new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(2));
         assertFalse(index.isEmpty());
     }
 }

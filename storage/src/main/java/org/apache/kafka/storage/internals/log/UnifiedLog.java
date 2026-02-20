@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AbortedTxn;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.record.internal.CompressionType;
