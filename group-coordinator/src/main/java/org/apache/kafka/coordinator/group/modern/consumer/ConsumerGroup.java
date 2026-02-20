@@ -63,6 +63,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
@@ -872,12 +873,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 assignmentEpoch = member.getPendingRevocationEpoch(topicId, partitionId);
             }
 
-            // If the partition is not assigned to this member, reject.
+            // If client-side epoch != broker-side epoch, and the partition is not assigned to this member, reject.
             if (assignmentEpoch == null) {
-                throw new StaleMemberEpochException(
-                    String.format("Partition %s-%d is not assigned to member %s.",
-                        topicName, partitionId, member.memberId())
-                );
+                throw new StaleMemberEpochException(String.format(
+                    "Partition %s-%d is not assigned or pending revocation for member %s. " +
+                        "Committing unassigned partitions is only allowed when member epoch matches exactly " +
+                        "(received: %d, current: %d).",
+                    topicName, partitionId, member.memberId(), receivedMemberEpoch, member.memberEpoch()));
             }
 
             // If the received epoch is older than when this partition was assigned,
@@ -1238,17 +1240,24 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // assignment of the classic group. All the members are put in the Stable state. If the classic
             // group was in Preparing Rebalance or Completing Rebalance states, the classic members are
             // asked to rejoin the group to re-trigger a rebalance or collect their assignments.
+            int memberEpoch = classicGroup.generationId();
+            // Convert assigned partitions to epochs map
+            Map<Uuid, Map<Integer, Integer>> assignedPartitionsWithEpochs = assignedPartitions.entrySet().stream()
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    e -> e.getValue().stream().collect(Collectors.toMap(p -> p, p -> memberEpoch))
+                ));
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
-                .setMemberEpoch(classicGroup.generationId())
+                .setMemberEpoch(memberEpoch)
                 .setState(MemberState.STABLE)
-                .setPreviousMemberEpoch(classicGroup.generationId())
+                .setPreviousMemberEpoch(memberEpoch)
                 .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
                 .setRackId(toOptional(subscription.rackId()).orElse(null))
                 .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(assignedPartitions)
+                .setAssignedPartitionsWithEpochs(assignedPartitionsWithEpochs)
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())

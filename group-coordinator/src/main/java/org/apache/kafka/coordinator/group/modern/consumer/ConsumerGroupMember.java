@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
-import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -66,8 +65,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
         private Set<String> subscribedTopicNames = Set.of();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
-        private Map<Uuid, Set<Integer>> assignedPartitions = Map.of();
-        private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Map.of();
         private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
         private Map<Uuid, Map<Integer, Integer>> assignedPartitionsWithEpochs = Map.of();
         private Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocationWithEpochs = Map.of();
@@ -98,8 +95,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             this.subscribedTopicRegex = member.subscribedTopicRegex;
             this.serverAssignorName = member.serverAssignorName;
             this.state = member.state;
-            this.assignedPartitions = member.assignedPartitions;
-            this.partitionsPendingRevocation = member.partitionsPendingRevocation;
             this.classicMemberMetadata = member.classicMemberMetadata;
             this.assignedPartitionsWithEpochs = member.assignedPartitionsWithEpochs;
             this.partitionsPendingRevocationWithEpochs = member.partitionsPendingRevocationWithEpochs;
@@ -197,16 +192,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
-        public Builder setAssignedPartitions(Map<Uuid, Set<Integer>> assignedPartitions) {
-            this.assignedPartitions = assignedPartitions;
-            return this;
-        }
-
-        public Builder setPartitionsPendingRevocation(Map<Uuid, Set<Integer>> partitionsPendingRevocation) {
-            this.partitionsPendingRevocation = partitionsPendingRevocation;
-            return this;
-        }
-
         public Builder setClassicMemberMetadata(ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata) {
             this.classicMemberMetadata = classicMemberMetadata;
             return this;
@@ -214,21 +199,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
 
         public Builder setAssignedPartitionsWithEpochs(Map<Uuid, Map<Integer, Integer>> assignedPartitionsWithEpochs) {
             this.assignedPartitionsWithEpochs = assignedPartitionsWithEpochs;
-            this.assignedPartitions = assignedPartitionsWithEpochs.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> new HashSet<>(e.getValue().keySet())
-                ));
             return this;
         }
 
         public Builder setPartitionsPendingRevocationWithEpochs(Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocationWithEpochs) {
             this.partitionsPendingRevocationWithEpochs = partitionsPendingRevocationWithEpochs;
-            this.partitionsPendingRevocation = partitionsPendingRevocationWithEpochs.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> new HashSet<>(e.getValue().keySet())
-                ));
             return this;
         }
 
@@ -289,8 +264,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
-            setAssignedPartitions(Utils.assignmentFromTopicPartitions(record.assignedPartitions()));
-            setPartitionsPendingRevocation(Utils.assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
             setAssignedPartitionsWithEpochs(
                 assignmentWithEpochsFromTopicPartitions(record.assignedPartitions(), record.memberEpoch())
             );
@@ -314,8 +287,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
                 subscribedTopicRegex,
                 serverAssignorName,
                 state,
-                assignedPartitions,
-                partitionsPendingRevocation,
                 classicMemberMetadata,
                 assignedPartitionsWithEpochs,
                 partitionsPendingRevocationWithEpochs
@@ -337,11 +308,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
      * The server side assignor selected by the member.
      */
     private final String serverAssignorName;
-
-    /**
-     * The partitions being revoked by this member.
-     */
-    private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
     /**
      * The classic member metadata if the consumer uses the classic protocol.
@@ -373,8 +339,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
         String subscribedTopicRegex,
         String serverAssignorName,
         MemberState state,
-        Map<Uuid, Set<Integer>> assignedPartitions,
-        Map<Uuid, Set<Integer>> partitionsPendingRevocation,
         ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata,
         Map<Uuid, Map<Integer, Integer>> assignedPartitionsWithEpochs,
         Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocationWithEpochs
@@ -389,12 +353,16 @@ public class ConsumerGroupMember extends ModernGroupMember {
             clientHost,
             subscribedTopicNames,
             state,
-            assignedPartitions
+            // Derive assignedPartitions from epochs for parent class
+            assignedPartitionsWithEpochs.entrySet().stream()
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    e -> Set.copyOf(e.getValue().keySet())
+                ))
         );
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.subscribedTopicRegex = subscribedTopicRegex;
         this.serverAssignorName = serverAssignorName;
-        this.partitionsPendingRevocation = partitionsPendingRevocation;
         this.classicMemberMetadata = classicMemberMetadata;
         this.assignedPartitionsWithEpochs = assignedPartitionsWithEpochs;
         this.partitionsPendingRevocationWithEpochs = partitionsPendingRevocationWithEpochs;
@@ -425,7 +393,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
      * @return The set of partitions awaiting revocation from the member.
      */
     public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
-        return partitionsPendingRevocation;
+        return partitionsPendingRevocationWithEpochs.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                e -> Set.copyOf(e.getValue().keySet())
+            ));
     }
 
     /**
@@ -551,10 +523,12 @@ public class ConsumerGroupMember extends ModernGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                .setTopicId(topicId)
-                .setTopicName(topicMetadata.name())
-                .setPartitions(new ArrayList<>(partitionSet))));
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> {
+                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName(topicMetadata.name())
+                    .setPartitions(new ArrayList<>(partitionSet)));
+            });
         });
         return topicPartitions;
     }
@@ -603,8 +577,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             && Objects.equals(subscribedTopicNames, that.subscribedTopicNames)
             && Objects.equals(subscribedTopicRegex, that.subscribedTopicRegex)
             && Objects.equals(serverAssignorName, that.serverAssignorName)
-            && Objects.equals(assignedPartitions, that.assignedPartitions)
-            && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
             && Objects.equals(classicMemberMetadata, that.classicMemberMetadata)
             && Objects.equals(assignedPartitionsWithEpochs, that.assignedPartitionsWithEpochs)
             && Objects.equals(partitionsPendingRevocationWithEpochs, that.partitionsPendingRevocationWithEpochs);
@@ -624,8 +596,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
         result = 31 * result + Objects.hashCode(subscribedTopicNames);
         result = 31 * result + Objects.hashCode(subscribedTopicRegex);
         result = 31 * result + Objects.hashCode(serverAssignorName);
-        result = 31 * result + Objects.hashCode(assignedPartitions);
-        result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
         result = 31 * result + Objects.hashCode(classicMemberMetadata);
         result = 31 * result + Objects.hashCode(assignedPartitionsWithEpochs);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocationWithEpochs);
@@ -647,8 +617,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             ", subscribedTopicNames=" + subscribedTopicNames +
             ", subscribedTopicRegex='" + subscribedTopicRegex + '\'' +
             ", serverAssignorName='" + serverAssignorName + '\'' +
-            ", assignedPartitions=" + assignedPartitions +
-            ", partitionsPendingRevocation=" + partitionsPendingRevocation +
             ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ", assignedPartitionsWithEpochs=" + assignedPartitionsWithEpochs +
             ", partitionsPendingRevocationWithEpochs=" + partitionsPendingRevocationWithEpochs +

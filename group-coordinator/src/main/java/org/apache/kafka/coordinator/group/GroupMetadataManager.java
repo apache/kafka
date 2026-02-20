@@ -5410,8 +5410,8 @@ public class GroupMetadataManager {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setAssignedPartitions(Map.of())
-                .setPartitionsPendingRevocation(Map.of())
+                .setAssignedPartitionsWithEpochs(Map.of())
+                .setPartitionsPendingRevocationWithEpochs(Map.of())
                 .build();
             group.updateMember(newMember);
         }
