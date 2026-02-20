@@ -49,23 +49,20 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  *
  * This is used by KIP-1271 to serialize values with timestamps and headers for state stores.
  */
-public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<ValueTimestampHeaders<V>, Void, V> {
+class ValueTimestampHeadersSerializer<V> implements WrappingNullableSerializer<ValueTimestampHeaders<V>, Void, V> {
     public final Serializer<V> valueSerializer;
     private final LongSerializer timestampSerializer;
-    private final HeadersSerializer headersSerializer;
 
     ValueTimestampHeadersSerializer(final Serializer<V> valueSerializer) {
         Objects.requireNonNull(valueSerializer);
         this.valueSerializer = valueSerializer;
         this.timestampSerializer = new LongSerializer();
-        this.headersSerializer = new HeadersSerializer();
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         valueSerializer.configure(configs, isKey);
         timestampSerializer.configure(configs, isKey);
-        headersSerializer.configure(configs, isKey);
     }
 
     @Override
@@ -95,7 +92,7 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
         final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
 
         // empty (byte[0]) for null/empty headers, or [count][header1][header2]... for non-empty
-        final byte[] rawHeaders = headersSerializer.serialize(topic, headers);
+        final byte[] rawHeaders = HeadersSerializer.serialize(headers);
 
         // Format: [headersSize(varint)][headersBytes][timestamp(8)][value]
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -116,7 +113,6 @@ public class ValueTimestampHeadersSerializer<V> implements WrappingNullableSeria
     public void close() {
         valueSerializer.close();
         timestampSerializer.close();
-        headersSerializer.close();
     }
 
     @Override

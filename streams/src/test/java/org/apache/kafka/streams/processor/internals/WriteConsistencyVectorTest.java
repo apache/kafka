@@ -128,7 +128,7 @@ public class WriteConsistencyVectorTest {
 
         context.transitionToActive(task, recordCollector, null);
 
-        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, position);
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP, headers, position);
 
         verify(recordCollector).send(
                 CHANGELOG_PARTITION.topic(),

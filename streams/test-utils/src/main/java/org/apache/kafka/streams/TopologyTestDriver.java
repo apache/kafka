@@ -48,6 +48,7 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
+import org.apache.kafka.streams.processor.StandbyUpdateListener.SuspendReason;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -1159,6 +1160,10 @@ public class TopologyTestDriver implements Closeable {
 
         @Override
         public void unregister(final Collection<TopicPartition> partitions) { }
+
+        @Override
+        public void unregister(final Collection<TopicPartition> partitions,
+                               final SuspendReason reason) { }
     }
 
     static class MockTime implements Time {
