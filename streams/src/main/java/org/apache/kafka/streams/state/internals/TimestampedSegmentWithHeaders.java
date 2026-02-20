@@ -34,7 +34,7 @@ import java.util.Objects;
  * timestamp-only format to timestamp+headers format.
  */
 class TimestampedSegmentWithHeaders extends RocksDBTimestampedStoreWithHeaders
-    implements Comparable<TimestampedSegmentWithHeaders>, Segment {
+    implements Segment {
 
     public final long id;
 
@@ -49,6 +49,11 @@ class TimestampedSegmentWithHeaders extends RocksDBTimestampedStoreWithHeaders
     }
 
     @Override
+    public long id() {
+        return id;
+    }
+
+    @Override
     public void destroy() throws IOException {
         Utils.delete(dbDir);
     }
@@ -56,11 +61,6 @@ class TimestampedSegmentWithHeaders extends RocksDBTimestampedStoreWithHeaders
     @Override
     public void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int compareTo(final TimestampedSegmentWithHeaders segment) {
-        return Long.compare(id, segment.id);
     }
 
     @Override

@@ -21,9 +21,21 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.io.IOException;
 
-public interface Segment extends KeyValueStore<Bytes, byte[]>, BatchWritingStore {
+public interface Segment extends KeyValueStore<Bytes, byte[]>, BatchWritingStore, Comparable<Segment> {
+
+    /**
+     * Returns the unique identifier for this segment.
+     *
+     * @return the segment ID
+     */
+    long id();
 
     void destroy() throws IOException;
 
     void deleteRange(Bytes keyFrom, Bytes keyTo);
+
+    @Override
+    default int compareTo(final Segment segment) {
+        return Long.compare(id(), segment.id());
+    }
 }

@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
-class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<TimestampedSegment>, Segment {
+class TimestampedSegment extends RocksDBTimestampedStore implements Segment {
     public final long id;
 
     TimestampedSegment(final String segmentName,
@@ -40,6 +40,11 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<T
     }
 
     @Override
+    public long id() {
+        return id;
+    }
+
+    @Override
     public void destroy() throws IOException {
         Utils.delete(dbDir);
     }
@@ -47,11 +52,6 @@ class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<T
     @Override
     public void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
         throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int compareTo(final TimestampedSegment segment) {
-        return Long.compare(id, segment.id);
     }
 
     @Override
