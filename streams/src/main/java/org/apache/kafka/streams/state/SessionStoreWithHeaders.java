@@ -48,15 +48,15 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
      * @param latestSessionEndTime   latest session end time to search to, inclusive
      */
     default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final long earliestSessionEndTime,
-                                                                                     final long latestSessionEndTime) {
+                                                                                    final long latestSessionEndTime) {
         throw new UnsupportedOperationException(
             "This API is not supported by this implementation of SessionStoreWithHeaders.");
     }
 
     @Override
     default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K key,
-                                                                                     final Instant earliestSessionEndTime,
-                                                                                     final Instant latestSessionStartTime) {
+                                                                                    final Instant earliestSessionEndTime,
+                                                                                    final Instant latestSessionStartTime) {
         return findSessions(
             key,
             ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
@@ -67,8 +67,8 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
 
     @Override
     default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K key,
-                                                                                             final Instant earliestSessionEndTime,
-                                                                                             final Instant latestSessionStartTime) {
+                                                                                            final Instant earliestSessionEndTime,
+                                                                                            final Instant latestSessionStartTime) {
         return backwardFindSessions(
             key,
             ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
@@ -78,9 +78,9 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
     }
 
     default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final K keyFrom,
-                                                                                     final K keyTo,
-                                                                                     final Instant earliestSessionEndTime,
-                                                                                     final Instant latestSessionStartTime) {
+                                                                                    final K keyTo,
+                                                                                    final Instant earliestSessionEndTime,
+                                                                                    final Instant latestSessionStartTime) {
         return findSessions(
             keyFrom,
             keyTo,
@@ -91,9 +91,9 @@ public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySes
     }
 
     default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> backwardFindSessions(final K keyFrom,
-                                                                                             final K keyTo,
-                                                                                             final Instant earliestSessionEndTime,
-                                                                                             final Instant latestSessionStartTime) {
+                                                                                            final K keyTo,
+                                                                                            final Instant earliestSessionEndTime,
+                                                                                            final Instant latestSessionStartTime) {
         return backwardFindSessions(
             keyFrom,
             keyTo,
