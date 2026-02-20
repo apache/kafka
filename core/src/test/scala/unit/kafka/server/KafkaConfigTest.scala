@@ -1827,6 +1827,46 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testGroupCoordinatorRebalanceProtocolsDeprecationWarning(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    val configName = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG
+    def deprecationWarning(disabled: String): String =
+      s"The config `$configName` is deprecated and will be removed in Kafka 5.0. " +
+      s"The following protocol(s) are currently disabled: $disabled. " +
+      "In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
+      "(group.version, streams.version, share.version) via kafka-features.sh. " +
+      "Please restore the default value or remove the configuration to prepare for the upgrade."
+    val shareDeprecationWarning = s"'share' in $configName is deprecated. " +
+      "Share groups are controlled by the 'share.version' feature."
+
+    Using.resource(LogCaptureAppender.createAndRegister) { appender =>
+      appender.setClassLogger(classOf[KafkaConfig], Level.WARN)
+
+      // Default value: no warning.
+      props.put(configName, "classic,consumer,streams")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.isEmpty)
+
+      // Missing streams.
+      props.put(configName, "classic,consumer")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains(deprecationWarning("streams")))
+
+      // Missing consumer.
+      props.put(configName, "classic,streams")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains(deprecationWarning("consumer")))
+
+      // Including "share": no-op warning.
+      props.put(configName, "classic,consumer,streams,share")
+      KafkaConfig.fromProps(props)
+      assertTrue(appender.getMessages.contains(shareDeprecationWarning))
+    }
+  }
+
+  @Test
   def testConsumerGroupMigrationPolicy(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())

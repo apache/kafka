@@ -358,9 +358,21 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.SHARE)) {
+    if (doLog && protocols.contains(GroupType.SHARE)) {
       warn(s"'${GroupType.SHARE}' in ${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG} is deprecated. " +
-        s"Share groups are controlled by the 'share.version' feature; this broker config will be ignored in a future release.")
+        s"Share groups are controlled by the 'share.version' feature.")
+    }
+    if (doLog) {
+      val defaultProtocols = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT
+        .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
+      val missingProtocols = defaultProtocols -- protocols
+      if (missingProtocols.nonEmpty) {
+        warn(s"The config `${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG}` is deprecated and will be removed in Kafka 5.0. " +
+          s"The following protocol(s) are currently disabled: ${missingProtocols.mkString(", ")}. " +
+          s"In Kafka 5.0, all protocols will always be enabled and controlled solely by feature versions " +
+          s"(group.version, streams.version, share.version) via kafka-features.sh. " +
+          s"Please restore the default value or remove the configuration to prepare for the upgrade.")
+      }
     }
     protocols
   }
