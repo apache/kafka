@@ -205,8 +205,11 @@ public class DynamicBrokerConfig {
          * the names you would use when setting a static or dynamic broker configuration (not topic
          * configuration).
          */
-        public static final Set<String> RECONFIGURABLE_CONFIGS = Set.copyOf(
-                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values());
+        public static final Set<String> RECONFIGURABLE_CONFIGS = Stream.of(
+                ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values(),
+                Set.of(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG))
+            .flatMap(Collection::stream)
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     public static class DynamicListenerConfig {

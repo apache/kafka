@@ -25,7 +25,6 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
@@ -612,10 +611,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * @param value The control record value
      */
     public void appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
-        Struct keyStruct = type.recordKey();
-        ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
-        keyStruct.writeTo(key);
-        key.flip();
+        ByteBuffer key = type.recordKey();
         appendWithOffset(nextSequentialOffset(), true, timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
