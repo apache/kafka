@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -32,7 +33,6 @@ import java.util.List;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
-// TODO: replace with new method in follow-up PR of KIP-1271
 @SuppressWarnings("deprecation")
 public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
@@ -125,11 +125,11 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     // for pipe serdes
-
     public static <K> byte[] toBinary(final Windowed<K> timeKey,
                                       final Serializer<K> serializer,
+                                      final Headers headers,
                                       final String topic) {
-        final byte[] bytes = serializer.serialize(topic, timeKey.key());
+        final byte[] bytes = serializer.serialize(topic, headers, timeKey.key());
         final ByteBuffer buf = ByteBuffer.allocate(bytes.length + TIMESTAMP_SIZE);
         buf.put(bytes);
         buf.putLong(timeKey.window().start());
@@ -140,10 +140,11 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     public static <K> Windowed<K> from(final byte[] binaryKey,
                                        final long windowSize,
                                        final Deserializer<K> deserializer,
+                                       final Headers headers,
                                        final String topic) {
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
-        final K key = deserializer.deserialize(topic, bytes);
+        final K key = deserializer.deserialize(topic, headers, bytes);
         final Window window = extractWindow(binaryKey, windowSize);
         return new Windowed<>(key, window);
     }
@@ -156,7 +157,6 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     // for store serdes
-
     public static Bytes toStoreKeyBinary(final Bytes key,
                                          final long timestamp,
                                          final int seqnum) {
@@ -218,6 +218,8 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
     }
 
+    // TODO: Remove this method when MeteredWindowStore will use headers version
+    @Deprecated
     public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
                                                final long windowSize,
                                                final Deserializer<K> deserializer,
@@ -227,10 +229,21 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return new Windowed<>(key, window);
     }
 
+    public static <K> Windowed<K> fromStoreKey(final byte[] binaryKey,
+                                               final long windowSize,
+                                               final Deserializer<K> deserializer,
+                                               final Headers headers,
+                                               final String topic) {
+        final K key = deserializer.deserialize(topic, headers, extractStoreKeyBytes(binaryKey));
+        final Window window = extractStoreWindow(binaryKey, windowSize);
+        return new Windowed<>(key, window);
+    }
+
     public static <K> Windowed<K> fromStoreKey(final Windowed<Bytes> windowedKey,
                                                final Deserializer<K> deserializer,
+                                               final Headers headers,
                                                final String topic) {
-        final K key = deserializer.deserialize(topic, windowedKey.key().get());
+        final K key = deserializer.deserialize(topic, headers, windowedKey.key().get());
         return new Windowed<>(key, windowedKey.window());
     }
 

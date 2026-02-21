@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -483,10 +484,10 @@ public class WindowKeySchemaTest {
                 endTime - startTime, stateSerdes.keyDeserializer(), stateSerdes.topic());
         } else if (schemaType == SchemaType.PrefixedTimeFirstSchema) {
             result = TimeFirstWindowKeySchema.fromStoreKey(serialized.get(),
-                endTime - startTime, stateSerdes.keyDeserializer(), stateSerdes.topic());
+                endTime - startTime, stateSerdes.keyDeserializer(), new RecordHeaders(), stateSerdes.topic());
         } else {
             result = KeyFirstWindowKeySchema.fromStoreKey(serialized.get(),
-                endTime - startTime, stateSerdes.keyDeserializer(), stateSerdes.topic());
+                endTime - startTime, stateSerdes.keyDeserializer(), new RecordHeaders(), stateSerdes.topic());
         }
         assertEquals(windowedKey, result);
     }
