@@ -254,15 +254,21 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
             final List<ProducerRecord<byte[], byte[]>> deadLetterQueueRecords = response.deadLetterQueueRecords();
             if (!deadLetterQueueRecords.isEmpty()) {
-                final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
-                for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
-                    collector.send(
-                            deadLetterQueueRecord.key(),
-                            deadLetterQueueRecord.value(),
-                            name(),
-                            internalProcessorContext,
-                            deadLetterQueueRecord
-                    );
+                if( !(internalProcessorContext instanceof RecordCollector.Supplier) ) {
+                    log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
+                            "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " +
+                            "Record details logged: topic={}, headers={}", internalProcessorContext.topic(),internalProcessorContext.headers());
+                } else {
+                    final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
+                    for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
+                        collector.send(
+                                deadLetterQueueRecord.key(),
+                                deadLetterQueueRecord.value(),
+                                name(),
+                                internalProcessorContext,
+                                deadLetterQueueRecord
+                        );
+                    }
                 }
             }
 
