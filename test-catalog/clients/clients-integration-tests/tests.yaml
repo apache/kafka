@@ -340,6 +340,8 @@ org.apache.kafka.clients.consumer.ShareConsumerTest:
 - testControlRecordsSkipped
 - testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement
 - testDescribeShareGroupOffsetsForEmptySharePartition
+- testDynamicDeliveryCountLimitDecreaseArchivesRecords
+- testDynamicDeliveryCountLimitIncreaseAllowsMoreDeliveries
 - testExplicitAcknowledgeCommitSuccess
 - testExplicitAcknowledgeOffsetThrowsNotException
 - testExplicitAcknowledgeOffsetThrowsParametersError
