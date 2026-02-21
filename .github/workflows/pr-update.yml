@@ -1,4 +1,4 @@
-# Licensed to the Apache Software Foundation (ASF) under one or more
+#s Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
 # The ASF licenses this file to You under the Apache License, Version 2.0
@@ -15,15 +15,7 @@
 
 name: Pull Request
 on:
-  # CAUTION! The pull_request_target is generally consider UNSAFE. This is because it will
-  # run untrusted code on the GHA infra with access to secrets and elevated permissions. We must
-  # not run any code from the pull request here. Instead, this workflow is for things like adding
-  # comments or labels to the pull request.
-  #
-  # Read:
-  # * https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull_request_target
-  # * https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, synchronize]
     branches:
       - trunk
