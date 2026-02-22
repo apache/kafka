@@ -102,7 +102,7 @@ In addition to command line tooling for management and administration tasks, Kaf
 
 ## Where to go from here
 
-  * To get hands-on experience with Kafka, follow the [Quickstart](/quickstart). 
+  * To get hands-on experience with Kafka, follow the [Quickstart](https://github.com/apache/kafka/blob/trunk/docs/getting-started/quickstart.md). 
   * To understand Kafka in more detail, read the [Documentation](/documentation/). You also have your choice of [Kafka books and academic papers](/books-and-papers). 
   * Browse through the [Use Cases](/powered-by) to learn how other users in our world-wide community are getting value out of Kafka. 
   * Join a [local Kafka meetup group](/events) and [watch talks from Kafka Summit](https://kafka-summit.org/past-events/), the main conference of the Kafka community. 
