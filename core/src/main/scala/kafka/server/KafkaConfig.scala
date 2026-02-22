@@ -589,7 +589,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       // listeners should only contain listeners also enumerated in the controller listener
       require(
-        effectiveAdvertisedControllerListeners.size == listeners.size,
+        effectiveAdvertisedControllerListeners.sizeCompare(listeners) == 0,
         s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
       )
       // controller.listener.names must not contain inter.broker.listener.name when inter.broker.listener.name is explicitly set

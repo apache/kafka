@@ -836,8 +836,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): Seq[MetadataResponseTopic] = {
     val topicResponses = metadataCache.getTopicMetadata(topics.asJava, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
-
-    if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
+    if (topics.isEmpty || topics.sizeCompare(topicResponses.asScala) == 0 || fetchAllTopics) {
       topicResponses.asScala
     } else {
       val nonExistingTopics = topics.diff(topicResponses.asScala.map(_.name).toSet)
@@ -1877,7 +1876,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def addResultAndMaybeSendResponse(result: AddPartitionsToTxnResult): Unit = {
       val canSend = responses.synchronized {
         responses.add(result)
-        responses.size == txns.size
+        responses.asScala.sizeCompare(txns.asScala) == 0
       }
       if (canSend) {
         requestHelper.sendResponseMaybeThrottle(request, createResponse)
