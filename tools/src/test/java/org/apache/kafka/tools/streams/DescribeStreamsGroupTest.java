@@ -73,6 +73,7 @@ public class DescribeStreamsGroupTest {
     private static final String INPUT_TOPIC_2 = "customInputTopic2";
     private static final String OUTPUT_TOPIC_2 = "customOutputTopic2";
     private static String bootstrapServers;
+
     @SuppressWarnings("removal")
     @BeforeAll
     public static void setup() throws Exception {
