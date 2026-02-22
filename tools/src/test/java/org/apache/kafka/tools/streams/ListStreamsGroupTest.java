@@ -68,6 +68,7 @@ public class ListStreamsGroupTest {
     private static final String INPUT_TOPIC = "customInputTopic";
     private static final String OUTPUT_TOPIC = "customOutputTopic";
 
+    @SuppressWarnings("removal")
     @BeforeAll
     public static void setup() throws Exception {
         // start the cluster and create the input topic

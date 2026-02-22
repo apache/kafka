@@ -463,7 +463,7 @@ public class GroupsCommandTest {
         )));
     }
 
-    @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
+    @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity", "removal"})
     @ClusterTest(
         serverProperties = {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer,streams"),

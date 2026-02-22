@@ -42,6 +42,7 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class ShareConsumerRackAwareTest {
+    @SuppressWarnings("removal")
     @ClusterTest(
         types = {Type.KRAFT},
         brokers = 3,
