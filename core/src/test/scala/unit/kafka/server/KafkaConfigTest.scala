@@ -1839,7 +1839,8 @@ class KafkaConfigTest {
       "(group.version, streams.version, share.version) via kafka-features.sh. " +
       "Please restore the default value or remove the configuration to prepare for the upgrade."
     val shareDeprecationWarning = s"'share' in $configName is deprecated. " +
-      "Share groups are controlled by the 'share.version' feature."
+      "Share groups are controlled by the 'share.version' feature. " +
+      "This config will be removed in Kafka 5.0."
 
     Using.resource(LogCaptureAppender.createAndRegister) { appender =>
       appender.setClassLogger(classOf[KafkaConfig], Level.WARN)

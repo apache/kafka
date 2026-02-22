@@ -360,7 +360,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
     if (doLog && protocols.contains(GroupType.SHARE)) {
       warn(s"'${GroupType.SHARE}' in ${GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG} is deprecated. " +
-        s"Share groups are controlled by the 'share.version' feature.")
+        s"Share groups are controlled by the 'share.version' feature. " +
+        s"This config will be removed in Kafka 5.0.")
     }
     if (doLog) {
       val defaultProtocols = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT
