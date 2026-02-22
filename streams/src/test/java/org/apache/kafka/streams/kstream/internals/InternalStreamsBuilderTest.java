@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ForeignJoinSubscriptionS
 import org.apache.kafka.streams.kstream.internals.graph.ForeignTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableFilterNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableRepartitionMapNode;
@@ -53,6 +55,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,6 +65,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
@@ -1235,6 +1239,84 @@ public class InternalStreamsBuilderTest {
         verifyVersionedSemantics((ForeignTableJoinNode<?, ?>) joinOther, true);
     }
 
+    @Test
+    public void shouldFindMatchingAncestorWhenLaterParentHasNoMatch() throws Exception {
+        // Given:
+        final GraphNode matchingNode = newTestGraphNode("matchingNode");
+        matchingNode.setKeyChangingOperation(true);
+
+        final GraphNode p1 = newTestGraphNode("p1");
+        final GraphNode p2 = newTestGraphNode("p2");
+        final GraphNode startSeekNode = newTestGraphNode("startSeekNode");
+        matchingNode.addChild(p1);
+        p1.addChild(startSeekNode);
+        p2.addChild(startSeekNode);
+
+        final Method method = InternalStreamsBuilder.class
+                .getDeclaredMethod("findParentNodeMatching", GraphNode.class, Predicate.class);
+        method.setAccessible(true);
+
+        // When:
+        final GraphNode result = (GraphNode) method.invoke(
+                builder, startSeekNode, (Predicate<GraphNode>) GraphNode::isKeyChangingOperation);
+
+        // Then:
+        assertNotNull(result);
+        assertEquals(matchingNode, result);
+    }
+
+    @Test
+    public void shouldShareRepartitionTopicForMergedStreamWithKeyChangingOpOnLeftBranch() {
+        // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final KStream<String, String> left = builder.stream(Collections.singleton("topic-1"), consumed)
+                .selectKey((k, v) -> v)
+                .filter((k, v) -> v != null);
+        final KStream<String, String> right = builder.stream(Collections.singleton("topic-2"), consumed);
+
+        final KStream<String, String> merged = left.merge(right);
+
+        final KGroupedStream<String, String> grouped = merged.groupByKey();
+        grouped.count(Materialized.as("count-store"));
+        grouped.aggregate(
+                () -> null,
+                (k, v, agg) -> k, Materialized.as("latest-store"));
+
+        // When:
+        builder.buildAndOptimizeTopology(props);
+
+        // Then:
+        final List<GraphNode> repartitionNodes = new ArrayList<>();
+        getNodesByType(builder.root, OptimizableRepartitionNode.class, new HashSet<>(), repartitionNodes);
+        assertEquals(1, repartitionNodes.size());
+    }
+
+    @Test
+    public void shouldShareRepartitionTopicForMergedStreamWithKeyChangingOpOnRightBranch() {
+        // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final KStream<String, String> left = builder.stream(Collections.singleton("topic-1"), consumed);
+        final KStream<String, String> right = builder.stream(Collections.singleton("topic-2"), consumed)
+                .selectKey((k, v) -> v)
+                .filter((k, v) -> v != null);
+
+        final KStream<String, String> merged = left.merge(right);
+
+        final KGroupedStream<String, String> grouped = merged.groupByKey();
+        grouped.count(Materialized.as("count-store"));
+        grouped.aggregate(
+                () -> null,
+                (k, v, agg) -> k, Materialized.as("latest-store"));
+
+        // When:
+        builder.buildAndOptimizeTopology(props);
+
+        // Then:
+        final List<GraphNode> repartitionNodes = new ArrayList<>();
+        getNodesByType(builder.root, OptimizableRepartitionNode.class, new HashSet<>(), repartitionNodes);
+        assertEquals(1, repartitionNodes.size());
+    }
+
     private void verifyVersionedSemantics(final TableFilterNode<?, ?> filterNode, final boolean expectedValue) {
         final ProcessorSupplier<?, ?, ?, ?> processorSupplier = filterNode.processorParameters().processorSupplier();
         assertInstanceOf(KTableFilter.class, processorSupplier);
@@ -1325,5 +1407,12 @@ public class InternalStreamsBuilderTest {
                 countJoinWindowNodes(count, child, visited);
             }
         }
+    }
+
+    private static GraphNode newTestGraphNode(final String name) {
+        return new GraphNode(name) {
+            @Override
+            public void writeToTopology(final InternalTopologyBuilder topologyBuilder) { }
+        };
     }
 }
