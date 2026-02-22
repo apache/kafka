@@ -95,7 +95,11 @@ public abstract class GraphNode {
     }
 
     public boolean repartitioningRequired() {
-        final GraphNode find = findParentNodeMatching(GraphNode::isRepartitionDetermining);
+        if (isMergeNode()) {
+            return parentNodes().stream().anyMatch(GraphNode::repartitioningRequired);
+        }
+
+        GraphNode find = findParentNodeMatching(GraphNode::isRepartitionDetermining);
         if (find == null) {
             return false;
         }
@@ -170,14 +174,13 @@ public abstract class GraphNode {
             return this;
         }
 
-        GraphNode foundParentNode = null;
         for (final GraphNode parentNode : parentNodes()) {
-            if (parentNodePredicate.test(parentNode)) {
-                return parentNode;
+            final GraphNode foundParentNode = parentNode.findParentNodeMatching(parentNodePredicate);
+            if (foundParentNode != null) {
+                return foundParentNode;
             }
-            foundParentNode = parentNode.findParentNodeMatching(parentNodePredicate);
         }
-        return foundParentNode;
+        return null;
     }
 
     @Override
