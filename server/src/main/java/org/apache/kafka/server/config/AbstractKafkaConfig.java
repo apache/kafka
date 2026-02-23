@@ -22,10 +22,13 @@ import org.apache.kafka.common.Reconfigurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
@@ -51,6 +54,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 
 /**
  * During moving {@link kafka.server.KafkaConfig} out of core AbstractKafkaConfig will be the future KafkaConfig
@@ -350,4 +355,178 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
      * @param reconfigurable the component to unregister
      */
     public abstract void removeReconfigurable(Reconfigurable reconfigurable);
+
+    /**
+     * Determines whether a config entry might be sensitive based on its type.
+     * If the type cannot be determined, the config is treated as sensitive
+     * to be safe.
+     *
+     * @param configType the config entry type, or empty if unknown
+     * @return true if the config might be sensitive
+     */
+    public static boolean maybeSensitive(Optional<ConfigDef.Type> configType) {
+        return configType.isEmpty()
+                || configType.get() == ConfigDef.Type.PASSWORD;
+    }
+
+    /**
+     * Looks up the type for a config key by name directly from
+     * {@link #CONFIG_DEF}.
+     *
+     * @param name the config key name
+     * @return the type if found, or empty
+     */
+    public static Optional<ConfigDef.Type> configDefTypeOf(String name) {
+        ConfigDef.ConfigKey key = CONFIG_DEF.configKeys().get(name);
+        return key != null
+                ? Optional.of(key.type)
+                : Optional.empty();
+    }
+
+    /**
+     * Looks up the type for a config key by exact name, checking both
+     * the static config definition and the dynamic broker config keys.
+     *
+     * @param exactName the exact config key name
+     * @return the type if found, or empty
+     */
+    public static Optional<ConfigDef.Type> configTypeExact(String exactName) {
+        Optional<ConfigDef.Type> t = configDefTypeOf(exactName);
+        if (t.isPresent()) {
+            return t;
+        }
+        ConfigDef.ConfigKey configKey =
+                DynamicConfig.Broker.configKeys().get(exactName);
+        if (configKey != null) {
+            return Optional.of(configKey.type);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Resolves the {@link ConfigDef.Type} for a given config name.
+     * First tries an exact match, then falls back to checking broker
+     * config synonyms.
+     *
+     * @param configName the config name to look up
+     * @return the type if found, or empty
+     */
+    public static Optional<ConfigDef.Type> configType(String configName) {
+        Optional<ConfigDef.Type> exact = configTypeExact(configName);
+        if (exact.isPresent()) {
+            return exact;
+        }
+        Optional<ConfigDef.Type> t = configDefTypeOf(configName);
+        if (t.isPresent()) {
+            return t;
+        }
+        return DynamicBrokerConfig
+                .brokerConfigSynonyms(configName, true)
+                .stream()
+                .map(AbstractKafkaConfig::configDefTypeOf)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .findFirst();
+    }
+
+    /**
+     * Returns the loggable form of a config value. Sensitive values
+     * are replaced with {@link Password#HIDDEN}.
+     *
+     * @param resourceType the config resource type
+     * @param name         the config name
+     * @param value        the config value
+     * @return the value suitable for logging
+     */
+    public static String loggableValue(ConfigResource.Type resourceType,
+                                       String name,
+                                       String value) {
+        boolean sensitive;
+        switch (resourceType) {
+            case BROKER:
+                sensitive = maybeSensitive(configType(name));
+                break;
+            case TOPIC:
+                sensitive = maybeSensitive(LogConfig.configType(name));
+                break;
+            case GROUP:
+                sensitive = maybeSensitive(GroupConfig.configType(name));
+                break;
+            case BROKER_LOGGER:
+            case CLIENT_METRICS:
+                sensitive = false;
+                break;
+            default:
+                sensitive = true;
+                break;
+        }
+        return sensitive ? Password.HIDDEN : value;
+    }
+
+    // ********* Socket Server Configuration **********
+
+    public int socketSendBufferBytes() {
+        return getInt(SocketServerConfigs.SOCKET_SEND_BUFFER_BYTES_CONFIG);
+    }
+
+    public int socketReceiveBufferBytes() {
+        return getInt(SocketServerConfigs.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG);
+    }
+
+    public int socketRequestMaxBytes() {
+        return getInt(SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG);
+    }
+
+    public int socketListenBacklogSize() {
+        return getInt(SocketServerConfigs.SOCKET_LISTEN_BACKLOG_SIZE_CONFIG);
+    }
+
+    public int maxConnectionsPerIp() {
+        return getInt(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG);
+    }
+
+    public Map<String, Integer> maxConnectionsPerIpOverrides() {
+        Map<String, String> raw = getMap(
+                SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG,
+                getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG));
+        Map<String, Integer> result = new HashMap<>();
+        raw.forEach((k, v) -> result.put(k, Integer.parseInt(v)));
+        return result;
+    }
+
+    public int maxConnections() {
+        return getInt(SocketServerConfigs.MAX_CONNECTIONS_CONFIG);
+    }
+
+    public int maxConnectionCreationRate() {
+        return getInt(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG);
+    }
+
+    public long connectionsMaxIdleMs() {
+        return getLong(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG);
+    }
+
+    public int failedAuthenticationDelayMs() {
+        return getInt(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG);
+    }
+
+    public int queuedMaxRequests() {
+        return getInt(SocketServerConfigs.QUEUED_MAX_REQUESTS_CONFIG);
+    }
+
+    public long queuedMaxBytes() {
+        return getLong(SocketServerConfigs.QUEUED_MAX_BYTES_CONFIG);
+    }
+
+    public int numNetworkThreads() {
+        return getInt(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG);
+    }
+
+    public long connectionSetupTimeoutMs() {
+        return getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG);
+    }
+
+    public long connectionSetupTimeoutMaxMs() {
+        return getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
+    }
 }
