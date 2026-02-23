@@ -39,7 +39,7 @@
         "about": "The partition Ids." },
       { "name": "AssignmentEpochs", "versions": "0+", "nullableVersions": "0+",
         "taggedVersions": "0+", "tag": 0, "type": "[]int32", "default": null,
-        "about": "The epoch at which each partition was assigned to this member. Aligned with Partitions array. Used to validate offset commits (KIP-1251)." }
+        "about": "The epoch at which the partition was assigned to the member. Used to fence zombie commits requests. Of the same length as Partitions." }
     ]}
   ]
 }

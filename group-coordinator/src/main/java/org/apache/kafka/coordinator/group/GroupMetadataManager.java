@@ -225,6 +225,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.Utils.assignmentEpochToString;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
@@ -3583,9 +3584,9 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
-                        + "assignedPartitions={} and revokedPartitions={}.",
+                        + "assignedPartitionsWithEpochs={} and revokedPartitionsWithEpochs={}.",
                     groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                    assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+                    assignmentEpochToString(updatedMember.assignedPartitionsWithEpochs()), assignmentEpochToString(updatedMember.partitionsPendingRevocationWithEpochs()));
             }
 
             // Schedule/cancel the rebalance timeout if the member uses the consumer protocol.

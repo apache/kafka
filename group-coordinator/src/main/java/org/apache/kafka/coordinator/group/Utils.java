@@ -94,6 +94,53 @@ public class Utils {
     }
 
     /**
+     * @return The provided assignment with epochs as a String.
+     *
+     * Example:
+     * [topicid1-0@5, topicid1-1@5, topicid2-0@3, topicid2-1@3]
+     */
+    public static String assignmentEpochToString(
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+    ) {
+        StringBuilder builder = new StringBuilder("[");
+        Iterator<Map.Entry<Uuid, Map<Integer, Integer>>> topicsIterator = assignmentWithEpochs.entrySet().iterator();
+        while (topicsIterator.hasNext()) {
+            Map.Entry<Uuid, Map<Integer, Integer>> entry = topicsIterator.next();
+            Iterator<Map.Entry<Integer, Integer>> partitionsIterator = entry.getValue().entrySet().iterator();
+            while (partitionsIterator.hasNext()) {
+                Map.Entry<Integer, Integer> partitionEpoch = partitionsIterator.next();
+                builder.append(entry.getKey());
+                builder.append("-");
+                builder.append(partitionEpoch.getKey());
+                builder.append("@");
+                builder.append(partitionEpoch.getValue());
+                if (partitionsIterator.hasNext() || topicsIterator.hasNext()) {
+                    builder.append(", ");
+                }
+            }
+        }
+        builder.append("]");
+        return builder.toString();
+    }
+
+
+    /**
+     * Converts an topic-assignment with epochs to a regular topic-assignment map by removing the epoch information.
+     *
+     * @param partitionEpochMap The map with partition epochs (topicId -> partitionId -> epoch).
+     * @return The map with partition sets (topicId -> set of partitionId).
+     */
+    public static Map<Uuid, Set<Integer>> toPartitionMap(
+        Map<Uuid, Map<Integer, Integer>> partitionEpochMap
+    ) {
+        return partitionEpochMap.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                e -> e.getValue().keySet()
+            ));
+    }
+
+    /**
      * Decrements value by 1; returns null when reaching zero. This helper is
      * meant to be used with Map#compute.
      */
@@ -201,17 +248,28 @@ public class Utils {
     }
 
     /**
-     * Creates a map of topic id and partition set from a list of consumer group TopicPartitions.
+     * Creates a map of topic id and partition-epoch map from a list of consumer group TopicPartitions.
      *
-     * @param topicPartitionsList   The list of TopicPartitions.
-     * @return a map of topic id and partition set.
+     * @param topicPartitions The list of TopicPartitions.
+     * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
+     * @return a map of topic id and partition-epoch map.
      */
-    public static Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+    public static Map<Uuid, Map<Integer, Integer>> assignmentWithEpochsFromTopicPartitions(
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
+        int defaultEpoch
     ) {
-        return topicPartitionsList.stream().collect(Collectors.toMap(
-            ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs = new HashMap<>();
+        for (ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions tp : topicPartitions) {
+            Map<Integer, Integer> partitionEpochs = new HashMap<>();
+            List<Integer> partitions = tp.partitions();
+            List<Integer> epochs = tp.assignmentEpochs();
+            for (int i = 0; i < partitions.size(); i++) {
+                int epoch = (epochs != null && epochs.size() > i) ? epochs.get(i) : defaultEpoch;
+                partitionEpochs.put(partitions.get(i), epoch);
+            }
+            assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));
+        }
+        return Collections.unmodifiableMap(assignmentWithEpochs);
     }
 
     /**

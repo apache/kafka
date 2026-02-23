@@ -38,6 +38,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsFromTopicPartitions;
+
 /**
  * ConsumerGroupMember contains all the information related to a member
  * within a consumer group. This class is immutable and is fully backed
@@ -197,6 +199,15 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
+        public Builder setAssignedPartitionsWithEpochs(Map<Uuid, Set<Integer>> assignedPartitions, int assignmentEpoch) {
+            this.assignedPartitionsWithEpochs = assignedPartitions.entrySet().stream()
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    e -> e.getValue().stream().collect(Collectors.toMap(p -> p, p -> assignmentEpoch))
+                ));
+            return this;
+        }
+
         public Builder setAssignedPartitionsWithEpochs(Map<Uuid, Map<Integer, Integer>> assignedPartitionsWithEpochs) {
             this.assignedPartitionsWithEpochs = assignedPartitionsWithEpochs;
             return this;
@@ -209,7 +220,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
 
         /**
          * Resets the assignment epochs to 0 for all assigned partitions.
-         * Used when a static member leaves, so that the rejoining member
+         * Used when a static member leaves, so that the rejoining member's
          * partitions will be assigned from epoch 0 to the new member ID.
          * All commits using the old member ID will be fenced.
          */
@@ -227,24 +238,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             }
             this.assignedPartitionsWithEpochs = Collections.unmodifiableMap(resetEpochs);
             return this;
-        }
-
-        private static Map<Uuid, Map<Integer, Integer>> assignmentWithEpochsFromTopicPartitions(
-            List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
-            int defaultEpoch
-        ) {
-            Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs = new HashMap<>();
-            for (ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions tp : topicPartitions) {
-                Map<Integer, Integer> partitionEpochs = new HashMap<>();
-                List<Integer> partitions = tp.partitions();
-                List<Integer> epochs = tp.assignmentEpochs();
-                for (int i = 0; i < partitions.size(); i++) {
-                    int epoch = (epochs != null && epochs.size() > i) ? epochs.get(i) : defaultEpoch;
-                    partitionEpochs.put(partitions.get(i), epoch);
-                }
-                assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));
-            }
-            return Collections.unmodifiableMap(assignmentWithEpochs);
         }
 
         public Builder updateWith(ConsumerGroupMemberMetadataValue record) {
@@ -310,11 +303,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
     private final String serverAssignorName;
 
     /**
-     * The partitions being revoked by this member.
-     */
-    private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
-
-    /**
      * The classic member metadata if the consumer uses the classic protocol.
      */
     private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
@@ -369,12 +357,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
         this.serverAssignorName = serverAssignorName;
         this.assignedPartitionsWithEpochs = assignedPartitionsWithEpochs;
         this.partitionsPendingRevocationWithEpochs = partitionsPendingRevocationWithEpochs;
-        this.partitionsPendingRevocation = Collections.unmodifiableMap(
-            partitionsPendingRevocationWithEpochs.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> Set.copyOf(e.getValue().keySet())
-                )));
         this.classicMemberMetadata = classicMemberMetadata;
     }
 
@@ -399,12 +381,12 @@ public class ConsumerGroupMember extends ModernGroupMember {
         return Optional.ofNullable(serverAssignorName);
     }
 
-    /**
-     * @return The set of partitions awaiting revocation from the member.
-     */
-    public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
-        return partitionsPendingRevocation;
-    }
+//    /**
+//     * @return The set of partitions awaiting revocation from the member.
+//     */
+//    public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
+//        return partitionsPendingRevocation;
+//    }
 
     /**
      * @return The epoch-annotated assigned partitions map.
@@ -427,7 +409,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
      * @param partitionId The partition index.
      * @return The epoch at which the partition was assigned, or null if not assigned.
      */
-    public Integer getAssignmentEpoch(Uuid topicId, int partitionId) {
+    public Integer assignmentEpoch(Uuid topicId, int partitionId) {
         Map<Integer, Integer> partitionEpochs = assignedPartitionsWithEpochs.get(topicId);
         if (partitionEpochs != null) {
             return partitionEpochs.get(partitionId);
@@ -442,7 +424,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
      * @param partitionId The partition index.
      * @return The epoch at which the partition was assigned, or null if not pending revocation.
      */
-    public Integer getPendingRevocationEpoch(Uuid topicId, int partitionId) {
+    public Integer pendingRevocationEpoch(Uuid topicId, int partitionId) {
         Map<Integer, Integer> partitionEpochs = partitionsPendingRevocationWithEpochs.get(topicId);
         if (partitionEpochs != null) {
             return partitionEpochs.get(partitionId);
