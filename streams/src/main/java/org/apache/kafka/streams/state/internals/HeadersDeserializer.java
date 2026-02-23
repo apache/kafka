@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.nio.ByteBuffer;
@@ -41,18 +40,17 @@ import java.nio.charset.StandardCharsets;
  *
  * This is used by KIP-1271 to deserialize headers from state stores.
  */
-public class HeadersDeserializer implements Deserializer<Headers> {
+class HeadersDeserializer {
 
     /**
      * Deserializes headers from a byte array using varint encoding per KIP-1271.
      * <p>
      * The input format is [count][header1][header2]... without a size prefix.
      *
-     * @param topic topic associated with the data
      * @param data the serialized byte array (can be null)
      * @return the deserialized headers
      */
-    public Headers deserialize(final String topic, final byte[] data) {
+    public static Headers deserialize(final byte[] data) {
         if (data == null || data.length == 0) {
             return new RecordHeaders();
         }
@@ -85,11 +83,5 @@ public class HeadersDeserializer implements Deserializer<Headers> {
         }
 
         return headers;
-    }
-
-    public static Headers deserialize(final byte[] data) {
-        try (HeadersDeserializer deserializer = new HeadersDeserializer()) {
-            return deserializer.deserialize("", data);
-        }
     }
 }
