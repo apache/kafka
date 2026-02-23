@@ -162,21 +162,4 @@ public abstract class ModernGroupMember {
     public boolean isReconciledTo(int targetAssignmentEpoch) {
         return state == MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
     }
-
-//    /**
-//     * @return The set of assigned partitions.
-//     */
-//    public Map<Uuid, Set<Integer>> assignedPartitions() {
-//        return assignedPartitions;
-//    }
-//
-//    /**
-//     * @return True of the two provided members have different assigned partitions.
-//     */
-//    public static boolean hasAssignedPartitionsChanged(
-//        ModernGroupMember member1,
-//        ModernGroupMember member2
-//    ) {
-//        return !member1.assignedPartitions().equals(member2.assignedPartitions());
-//    }
 }
