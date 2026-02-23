@@ -82,6 +82,19 @@ public class AssignmentTestUtil {
         return Collections.unmodifiableMap(result);
     }
 
+    /**
+     * Converts an epochs-based assignment to a regular assignment (without epochs).
+     */
+    public static Map<Uuid, Set<Integer>> toPartitionMap(
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+    ) {
+        Map<Uuid, Set<Integer>> result = new LinkedHashMap<>();
+        for (Map.Entry<Uuid, Map<Integer, Integer>> entry : assignmentWithEpochs.entrySet()) {
+            result.put(entry.getKey(), Collections.unmodifiableSet(new HashSet<>(entry.getValue().keySet())));
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
     @SafeVarargs
     public static Map<Uuid, Set<Integer>> mkOrderedAssignment(Map.Entry<Uuid, Set<Integer>>... entries) {
         Map<Uuid, Set<Integer>> assignment = new LinkedHashMap<>();

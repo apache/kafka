@@ -289,8 +289,8 @@ public class GroupCoordinatorRecordHelpers {
                     .setMemberEpoch(member.memberEpoch())
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
                     .setState(member.state().value())
-                    .setAssignedPartitions(toTopicPartitions(member.assignedPartitionsWithEpochs()))
-                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocationWithEpochs())),
+                    .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
+                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation())),
                 (short) 0
             )
         );

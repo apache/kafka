@@ -1075,8 +1075,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroupMember newMember
     ) {
         maybeRemovePartitionEpoch(oldMember);
-        addPartitionEpochs(newMember.assignedPartitionsWithEpochs(), newMember.memberEpoch());
-        addPartitionEpochs(newMember.partitionsPendingRevocationWithEpochs(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
     }
 
     /**
@@ -1088,8 +1088,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroupMember oldMember
     ) {
         if (oldMember != null) {
-            removePartitionEpochs(oldMember.assignedPartitionsWithEpochs(), oldMember.memberEpoch());
-            removePartitionEpochs(oldMember.partitionsPendingRevocationWithEpochs(), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.partitionsPendingRevocation(), oldMember.memberEpoch());
         }
     }
 
@@ -1357,10 +1357,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
             for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
                 Uuid topicId = entry.getKey();
-                Map<Integer, Integer> assignedPartitionsWithEpochs = member.assignedPartitionsWithEpochs().getOrDefault(topicId, Map.of());
+                Map<Integer, Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Map.of());
 
                 for (int partition : entry.getValue()) {
-                    if (!assignedPartitionsWithEpochs.containsKey(partition) && currentPartitionEpoch(topicId, partition) != -1) {
+                    if (!assignedPartitions.containsKey(partition) && currentPartitionEpoch(topicId, partition) != -1) {
                         return true;
                     }
                 }

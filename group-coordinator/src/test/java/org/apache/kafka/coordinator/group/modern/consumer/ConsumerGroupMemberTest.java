@@ -82,8 +82,8 @@ public class ConsumerGroupMemberTest {
         assertEquals(Set.of("bar", "foo"), member.subscribedTopicNames());
         assertEquals("regex", member.subscribedTopicRegex());
         assertEquals("range", member.serverAssignorName().get());
-        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), 10), member.assignedPartitionsWithEpochs());
-        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), 9), member.partitionsPendingRevocationWithEpochs());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), 10), member.assignedPartitions());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), 9), member.partitionsPendingRevocation());
         assertEquals(
             new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")),
@@ -244,8 +244,8 @@ public class ConsumerGroupMemberTest {
 
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 10), member.assignedPartitionsWithEpochs());
-        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 10), member.partitionsPendingRevocationWithEpochs());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 10), member.assignedPartitions());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 10), member.partitionsPendingRevocation());
     }
 
     @ParameterizedTest(name = "{displayName}.withClassicMemberMetadata={0}")
