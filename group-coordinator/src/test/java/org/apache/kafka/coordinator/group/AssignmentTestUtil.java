@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -60,6 +61,25 @@ public class AssignmentTestUtil {
             assignment.put(entry.getKey(), Collections.unmodifiableSet(entry.getValue()));
         }
         return Collections.unmodifiableMap(assignment);
+    }
+
+    /**
+     * Converts a regular assignment to an epochs-based assignment using the given epoch.
+     * Uses TreeMap for deterministic ordering.
+     */
+    public static Map<Uuid, Map<Integer, Integer>> toEpochsAssignment(
+        Map<Uuid, Set<Integer>> assignment,
+        int epoch
+    ) {
+        Map<Uuid, Map<Integer, Integer>> result = new LinkedHashMap<>();
+        for (Map.Entry<Uuid, Set<Integer>> entry : assignment.entrySet()) {
+            Map<Integer, Integer> partitionEpochs = new TreeMap<>();
+            for (Integer partition : entry.getValue()) {
+                partitionEpochs.put(partition, epoch);
+            }
+            result.put(entry.getKey(), Collections.unmodifiableMap(partitionEpochs));
+        }
+        return Collections.unmodifiableMap(result);
     }
 
     @SafeVarargs

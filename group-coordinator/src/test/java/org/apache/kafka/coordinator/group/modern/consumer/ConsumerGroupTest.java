@@ -70,6 +70,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.toEpochsAssignment;
 import static org.apache.kafka.coordinator.group.Utils.computeGroupHash;
 import static org.apache.kafka.coordinator.group.Utils.computeTopicHash;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -199,10 +200,10 @@ public class ConsumerGroupTest {
 
         member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(barTopicId, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
             .build();
 
         consumerGroup.updateMember(member);
@@ -219,10 +220,10 @@ public class ConsumerGroupTest {
 
         member = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(11)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(barTopicId, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(zarTopicId, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(barTopicId, 1, 2, 3)), 11))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(zarTopicId, 4, 5, 6)), 11))
             .build();
 
         consumerGroup.updateMember(member);
@@ -247,9 +248,9 @@ public class ConsumerGroupTest {
 
         member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setAssignedPartitions(Map.of())
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
+            .setAssignedPartitionsWithEpochs(Map.of())
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)), 10))
             .build();
 
         consumerGroup.updateMember(member);
@@ -258,9 +259,9 @@ public class ConsumerGroupTest {
 
         member = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(11)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
-            .setPartitionsPendingRevocation(Map.of())
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)), 11))
+            .setPartitionsPendingRevocationWithEpochs(Map.of())
             .build();
 
         consumerGroup.updateMember(member);
@@ -275,16 +276,16 @@ public class ConsumerGroupTest {
 
         ConsumerGroupMember m1 = new ConsumerGroupMember.Builder("m1")
             .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)), 10))
             .build();
 
         consumerGroup.updateMember(m1);
 
         ConsumerGroupMember m2 = new ConsumerGroupMember.Builder("m2")
             .setMemberEpoch(11)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)), 11))
             .build();
 
         // m2 can acquire foo-1 because the epoch is larger than m1's epoch.
@@ -293,8 +294,8 @@ public class ConsumerGroupTest {
 
         ConsumerGroupMember m3 = new ConsumerGroupMember.Builder("m3")
             .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)), 10))
             .build();
 
         // m3 should not be able to acquire foo-1 because the epoch is smaller 
@@ -311,26 +312,26 @@ public class ConsumerGroupTest {
 
         // Removing should be a no-op when there is no epoch set.
         consumerGroup.removePartitionEpochs(
-            mkAssignment(
+            toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)
-            ),
+            ), 10),
             10
         );
 
         ConsumerGroupMember m1 = new ConsumerGroupMember.Builder("m1")
             .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)), 10))
             .build();
 
         consumerGroup.updateMember(m1);
 
-        // Removing with incorrect epoch should do nothing. 
+        // Removing with incorrect epoch should do nothing.
         // A debug message is logged, no exception is thrown.
         consumerGroup.removePartitionEpochs(
-            mkAssignment(
+            toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)
-            ),
+            ), 11),
             11
         );
         assertEquals(10, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
@@ -342,17 +343,17 @@ public class ConsumerGroupTest {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
         consumerGroup.addPartitionEpochs(
-            mkAssignment(
+            toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)
-            ),
+            ), 10),
             10
         );
 
         // Updating to a larger epoch should succeed.
         consumerGroup.addPartitionEpochs(
-            mkAssignment(
+            toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)
-            ),
+            ), 11),
             11
         );
         assertEquals(11, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
@@ -360,9 +361,9 @@ public class ConsumerGroupTest {
         // Updating to a smaller epoch should fail.
         assertThrows(IllegalStateException.class, () -> {
             consumerGroup.addPartitionEpochs(
-                mkAssignment(
+                toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 1)
-                ),
+                ), 10),
                 10
             );
         });
@@ -379,10 +380,10 @@ public class ConsumerGroupTest {
 
         member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(barTopicId, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
             .build();
 
         consumerGroup.updateMember(member);
@@ -427,10 +428,10 @@ public class ConsumerGroupTest {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
             .setMemberEpoch(10)
             .setState(MemberState.UNRELEASED_PARTITIONS)
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(barTopicId, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
             .build();
         consumerGroup.updateMember(member1);
 
@@ -438,8 +439,8 @@ public class ConsumerGroupTest {
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
             .setMemberEpoch(10)
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(zarTopicId, 7)))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(zarTopicId, 7)), 10))
             .build();
         consumerGroup.updateMember(member2);
 
@@ -1347,9 +1348,9 @@ public class ConsumerGroupTest {
             .setClientId(member.clientId())
             .setClientHost(member.clientHost())
             .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
-            .setAssignedPartitions(mkAssignment(
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0),
-                mkTopicAssignment(barTopicId, 0)))
+                mkTopicAssignment(barTopicId, 0)), classicGroup.generationId()))
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(member.sessionTimeoutMs())
@@ -1745,24 +1746,28 @@ public class ConsumerGroupTest {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         consumerGroup.setGroupEpoch(10);
 
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Uuid topicId3 = Uuid.randomUuid();
+
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setMemberEpoch(10)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 10))
             .build();
         consumerGroup.updateMember(member1);
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
             .setMemberEpoch(10)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 0, 1, 2)), 10))
             .build();
         consumerGroup.updateMember(member2);
 
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
             .setMemberEpoch(10)
             .setSubscribedTopicRegex("foo*")
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId3, 0, 1, 2)), 10))
             .build();
         consumerGroup.updateMember(member3);
 
@@ -1829,24 +1834,28 @@ public class ConsumerGroupTest {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         consumerGroup.setGroupEpoch(10);
 
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Uuid topicId3 = Uuid.randomUuid();
+
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setMemberEpoch(10)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 10))
             .build();
         consumerGroup.updateMember(member1);
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
             .setMemberEpoch(10)
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 0, 1, 2)), 10))
             .build();
         consumerGroup.updateMember(member2);
 
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
             .setMemberEpoch(10)
             .setSubscribedTopicRegex("foo*")
-            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId3, 0, 1, 2)), 10))
             .build();
         consumerGroup.updateMember(member3);
 

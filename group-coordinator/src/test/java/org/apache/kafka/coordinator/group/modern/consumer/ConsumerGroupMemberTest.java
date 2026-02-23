@@ -42,6 +42,7 @@ import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.toEpochsAssignment;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -63,10 +64,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -81,8 +82,8 @@ public class ConsumerGroupMemberTest {
         assertEquals(Set.of("bar", "foo"), member.subscribedTopicNames());
         assertEquals("regex", member.subscribedTopicRegex());
         assertEquals("range", member.serverAssignorName().get());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.partitionsPendingRevocation());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), 10), member.assignedPartitionsWithEpochs());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), 9), member.partitionsPendingRevocationWithEpochs());
         assertEquals(
             new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")),
@@ -107,10 +108,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -126,10 +127,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -153,10 +154,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitions(mkAssignment(
-                mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setPartitionsPendingRevocation(mkAssignment(
-                mkTopicAssignment(topicId2, 4, 5, 6)))
+            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId1, 1, 2, 3)), 10))
+            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
             .build();
@@ -243,8 +244,8 @@ public class ConsumerGroupMemberTest {
 
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 10), member.assignedPartitionsWithEpochs());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 10), member.partitionsPendingRevocationWithEpochs());
     }
 
     @ParameterizedTest(name = "{displayName}.withClassicMemberMetadata={0}")
@@ -294,35 +295,31 @@ public class ConsumerGroupMemberTest {
             .build();
 
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, new KRaftCoordinatorMetadataImage(metadataImage));
-        ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
-            .setMemberId(memberId)
-            .setMemberEpoch(epoch)
-            .setClientId(clientId)
-            .setInstanceId(instanceId)
-            .setRackId(rackId)
-            .setClientHost(clientHost)
-            .setSubscribedTopicNames(new ArrayList<>(subscribedTopicNames))
-            .setSubscribedTopicRegex(subscribedTopicRegex)
-            .setAssignment(
-                new ConsumerGroupDescribeResponseData.Assignment()
-                    .setTopicPartitions(List.of(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                        .setTopicId(topicId1)
-                        .setTopicName("topic1")
-                        .setPartitions(assignedPartitions)
-                    ))
-            )
-            .setTargetAssignment(
-                new ConsumerGroupDescribeResponseData.Assignment()
-                    .setTopicPartitions(targetAssignment.partitions().entrySet().stream().map(
-                        item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
-                            .setTopicId(item.getKey())
-                            .setTopicName("topic4")
-                            .setPartitions(new ArrayList<>(item.getValue()))
-                    ).toList())
-            )
-            .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 
-        assertEquals(expected, actual);
+        // Verify simple fields
+        assertEquals(memberId, actual.memberId());
+        assertEquals(epoch, actual.memberEpoch());
+        assertEquals(clientId, actual.clientId());
+        assertEquals(instanceId, actual.instanceId());
+        assertEquals(rackId, actual.rackId());
+        assertEquals(clientHost, actual.clientHost());
+        assertEquals(new ArrayList<>(subscribedTopicNames), actual.subscribedTopicNames());
+        assertEquals(subscribedTopicRegex, actual.subscribedTopicRegex());
+        assertEquals(withClassicMemberMetadata ? (byte) 0 : (byte) 1, actual.memberType());
+
+        // Verify assignments using set comparison (order doesn't matter)
+        assertEquals(1, actual.assignment().topicPartitions().size());
+        ConsumerGroupDescribeResponseData.TopicPartitions actualAssignment = actual.assignment().topicPartitions().get(0);
+        assertEquals(topicId1, actualAssignment.topicId());
+        assertEquals("topic1", actualAssignment.topicName());
+        assertEquals(new HashSet<>(assignedPartitions), new HashSet<>(actualAssignment.partitions()));
+
+        // Verify target assignment using set comparison
+        assertEquals(1, actual.targetAssignment().topicPartitions().size());
+        ConsumerGroupDescribeResponseData.TopicPartitions actualTargetAssignment = actual.targetAssignment().topicPartitions().get(0);
+        assertEquals(topicId4, actualTargetAssignment.topicId());
+        assertEquals("topic4", actualTargetAssignment.topicName());
+        assertEquals(new HashSet<>(assignedPartitions), new HashSet<>(actualTargetAssignment.partitions()));
     }
 
     @Test

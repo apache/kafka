@@ -362,17 +362,21 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setAssignedPartitions(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(11, 12, 13)),
+                            .setPartitions(Arrays.asList(11, 12, 13))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(21, 22, 23))))
+                            .setPartitions(Arrays.asList(21, 22, 23))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22))))
                     .setPartitionsPendingRevocation(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(14, 15, 16)),
+                            .setPartitions(Arrays.asList(14, 15, 16))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(24, 25, 26)))),
+                            .setPartitions(Arrays.asList(24, 25, 26))
+                            .setAssignmentEpochs(Arrays.asList(22, 22, 22)))),
                 (short) 0
             )
         );
@@ -383,8 +387,8 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setAssignedPartitions(assigned)
-                .setPartitionsPendingRevocation(revoking)
+                .setAssignedPartitionsWithEpochs(AssignmentTestUtil.toEpochsAssignment(assigned, 22))
+                .setPartitionsPendingRevocationWithEpochs(AssignmentTestUtil.toEpochsAssignment(revoking, 22))
                 .build()
         ));
     }
