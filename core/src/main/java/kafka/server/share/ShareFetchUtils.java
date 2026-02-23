@@ -276,6 +276,22 @@ public class ShareFetchUtils {
     }
 
     /**
+     * The method is used to get the delivery count limit for the group. If the group config is present,
+     * then the delivery count limit is returned. Otherwise, the default value is returned.
+     *
+     * @param groupConfigManager The group config manager.
+     * @param groupId The group id for which the delivery count limit is to be fetched.
+     * @param defaultValue The default value to be returned if the group config is not present.
+     * @return The delivery count limit for the group.
+     */
+    public static int deliveryCountLimitOrDefault(GroupConfigManager groupConfigManager, String groupId, int defaultValue) {
+        if (groupConfigManager.groupConfig(groupId).isPresent()) {
+            return groupConfigManager.groupConfig(groupId).get().shareDeliveryCountLimit();
+        }
+        return defaultValue;
+    }
+
+    /**
      * Merges contiguous AcquiredRecords with the same delivery count into single records.
      * <p>
      * This method takes a list of AcquiredRecords where firstOffset and lastOffset typically are the
