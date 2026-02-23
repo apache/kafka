@@ -72,7 +72,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      Collections.emptyMap(), OptionalLong.empty(), util.Set.of())
     TestUtils.retry(60000) {
       assertEquals(BrokerState.STARTING, manager.state)
     }
@@ -88,7 +88,7 @@ class BrokerLifecycleManagerTest {
     context.controllerNodeProvider.node.set(controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.of(10L))
+      Collections.emptyMap(), OptionalLong.of(10L), util.Set.of())
     TestUtils.retry(60000) {
       assertEquals(1, context.mockChannelManager.unsentQueue.size)
       assertEquals(10L, context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data().previousBrokerEpoch())
@@ -117,7 +117,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(1, context.mockClient.futureResponses().size)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      Collections.emptyMap(), OptionalLong.empty(), util.Set.of())
     // We should send the first registration request and get a failure immediately
     TestUtils.retry(60000) {
       context.poll()
@@ -154,7 +154,7 @@ class BrokerLifecycleManagerTest {
       new BrokerHeartbeatResponseData().setIsCaughtUp(true)), controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      Collections.emptyMap(), OptionalLong.empty(), util.Set.of())
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
@@ -233,7 +233,7 @@ class BrokerLifecycleManagerTest {
     val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      Collections.emptyMap(), OptionalLong.empty(), util.Set.of())
     poll(ctx, manager, registration)
 
     def nextHeartbeatDirs(): Set[String] =
@@ -260,7 +260,7 @@ class BrokerLifecycleManagerTest {
 
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      Collections.emptyMap(), OptionalLong.empty(), util.Set.of())
     val request = poll(ctx, manager, registration).asInstanceOf[BrokerRegistrationRequest]
 
     assertEquals(logDirs, new util.HashSet(request.data.logDirs()))
@@ -276,7 +276,7 @@ class BrokerLifecycleManagerTest {
 
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.of(10L))
+      Collections.emptyMap(), OptionalLong.of(10L), util.Set.of())
 
     def doPoll[T<:AbstractRequest](response: AbstractResponse) = poll(ctx, manager, prepareResponse[T](ctx, response))
     def nextHeartbeatRequest() = doPoll[AbstractRequest](new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))
@@ -297,5 +297,64 @@ class BrokerLifecycleManagerTest {
 
     nextHeartbeatRequest()
     assertEquals(1200L, manager.brokerEpoch)
+  }
+
+  @Test
+  def testRegistrationIncludesCordonedDirs(): Unit = {
+    val logDirs = util.Set.of(Uuid.fromString("ad5FLIeCTnaQdai5vOjeng"), Uuid.fromString("ybdzUKmYSLK6oiIpI6CPlw"))
+    val ctx = new RegistrationTestContext(configProperties)
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "registration-includes-cordoned-dirs-", logDirs)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    ctx.controllerNodeProvider.node.set(controllerNode)
+
+    val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
+
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.empty(),
+      logDirs
+    )
+    val request = poll(ctx, manager, registration).asInstanceOf[BrokerRegistrationRequest]
+
+    assertEquals(logDirs, new util.HashSet(request.data.cordonedLogDirs()))
+  }
+
+  @Test
+  def testAlwaysSendsAccumulatedCordonedDirs(): Unit = {
+    val ctx = new RegistrationTestContext(configProperties)
+    var enabled = false
+    def cordonedLogDirsEnabled(): Boolean  = {
+      enabled
+    }
+    manager = new BrokerLifecycleManager(ctx.config, ctx.time, "cordoned-dirs-sent-in-heartbeat-", util.Set.of(Uuid.fromString("0IbF1sjhSGG6FNvnrPbqQg")),
+      () => {}, () => cordonedLogDirsEnabled())
+    val controllerNode = new Node(3000, "localhost", 8021)
+    ctx.controllerNodeProvider.node.set(controllerNode)
+
+    val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.empty(), util.Set.of())
+    poll(ctx, manager, registration)
+
+    def nextHeartbeatDirs(): Set[Uuid] =
+      poll(ctx, manager, prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData())))
+        .data().cordonedLogDirs().asScala.toSet
+    assertEquals(Set(), nextHeartbeatDirs())
+
+    val dir1 = Uuid.randomUuid()
+    val dir2 = Uuid.randomUuid()
+    manager.propagateDirectoryCordoned(util.Set.of(dir1))
+    assertEquals(Set(), nextHeartbeatDirs())
+
+    enabled = true
+    manager.propagateDirectoryCordoned(util.Set.of(dir1))
+    assertEquals(Set(dir1), nextHeartbeatDirs())
+    manager.propagateDirectoryCordoned(util.Set.of(dir2))
+    assertEquals(Set(dir1, dir2), nextHeartbeatDirs())
+    manager.propagateDirectoryUncordoned(util.Set.of(dir1))
+    assertEquals(Set(dir2), nextHeartbeatDirs())
+    manager.propagateDirectoryUncordoned(util.Set.of(dir2))
+    assertEquals(Set(), nextHeartbeatDirs())
   }
 }

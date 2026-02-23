@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -148,9 +150,33 @@ public final class StateSerdes<K, V> {
      *
      * @param rawKey  the key as raw bytes
      * @return        the key as typed object
+     * @deprecated Since 4.3. Use {@link #keyFrom(byte[], Headers)} instead.
      */
+    @Deprecated
     public K keyFrom(final byte[] rawKey) {
-        return keySerde.deserializer().deserialize(topic, rawKey);
+        return keyFrom(rawKey, new RecordHeaders());
+    }
+
+    /**
+     * Deserialize the key from raw bytes.
+     *
+     * @param rawKey  the key as raw bytes
+     * @return        the key as typed object
+     */
+    public K keyFrom(final byte[] rawKey, final Headers headers) {
+        return keySerde.deserializer().deserialize(topic, headers, rawKey);
+    }
+
+    /**
+     * Deserialize the value from raw bytes.
+     *
+     * @param rawValue  the value as raw bytes
+     * @return          the value as typed object
+     * @deprecated Since 4.3. Use {@link #valueFrom(byte[], Headers)} instead.
+     */
+    @Deprecated
+    public V valueFrom(final byte[] rawValue) {
+        return valueFrom(rawValue, new RecordHeaders());
     }
 
     /**
@@ -159,8 +185,20 @@ public final class StateSerdes<K, V> {
      * @param rawValue  the value as raw bytes
      * @return          the value as typed object
      */
-    public V valueFrom(final byte[] rawValue) {
-        return valueSerde.deserializer().deserialize(topic, rawValue);
+    public V valueFrom(final byte[] rawValue, final Headers headers) {
+        return valueSerde.deserializer().deserialize(topic, headers, rawValue);
+    }
+
+    /**
+     * Serialize the given key.
+     *
+     * @param key  the key to be serialized
+     * @return     the serialized key
+     * @deprecated Since 4.3. Use {@link #rawKey(Object, Headers)} instead.
+     */
+    @Deprecated
+    public byte[] rawKey(final K key) {
+        return rawKey(key, new RecordHeaders());
     }
 
     /**
@@ -169,19 +207,32 @@ public final class StateSerdes<K, V> {
      * @param key  the key to be serialized
      * @return     the serialized key
      */
-    public byte[] rawKey(final K key) {
+    public byte[] rawKey(final K key, final Headers headers) {
         try {
-            return keySerde.serializer().serialize(topic, key);
+            return keySerde.serializer().serialize(topic, headers, key);
         } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             throw new StreamsException(
-                    String.format("A serializer (%s) is not compatible to the actual key type " +
-                                    "(key type: %s). Change the default Serdes in StreamConfig or " +
-                                    "provide correct Serdes via method parameters.",
-                            keySerializer().getClass().getName(),
-                            keyClass),
-                    e);
+                String.format("A serializer (%s) is not compatible to the actual key type " +
+                        "(key type: %s). Change the default Serdes in StreamConfig or " +
+                        "provide correct Serdes via method parameters.",
+                    keySerializer().getClass().getName(),
+                    keyClass),
+                e);
         }
+    }
+
+    /**
+     * Serialize the given value.
+     *
+     * @param value  the value to be serialized
+     * @return       the serialized value
+     * @deprecated Since 4.3. Use {@link #rawValue(Object, Headers)} instead.
+     */
+    @Deprecated
+    @SuppressWarnings("rawtypes")
+    public byte[] rawValue(final V value) {
+        return rawValue(value, new RecordHeaders());
     }
 
     /**
@@ -191,9 +242,9 @@ public final class StateSerdes<K, V> {
      * @return       the serialized value
      */
     @SuppressWarnings("rawtypes")
-    public byte[] rawValue(final V value) {
+    public byte[] rawValue(final V value, final Headers headers) {
         try {
-            return valueSerde.serializer().serialize(topic, value);
+            return valueSerde.serializer().serialize(topic, headers, value);
         } catch (final ClassCastException e) {
             final String valueClass;
             final Class<? extends Serializer> serializerClass;
@@ -205,12 +256,12 @@ public final class StateSerdes<K, V> {
                 valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
             }
             throw new StreamsException(
-                    String.format("A serializer (%s) is not compatible to the actual value type " +
-                                    "(value type: %s). Change the default Serdes in StreamConfig or " +
-                                    "provide correct Serdes via method parameters.",
-                            serializerClass.getName(),
-                            valueClass),
-                    e);
+                String.format("A serializer (%s) is not compatible to the actual value type " +
+                        "(value type: %s). Change the default Serdes in StreamConfig or " +
+                        "provide correct Serdes via method parameters.",
+                    serializerClass.getName(),
+                    valueClass),
+                e);
         }
     }
 }

@@ -1011,7 +1011,7 @@ public class QuorumControllerTest {
                 createTopicsRequestData, Set.of("foo")).get().
                     topics().find("foo").errorCode());
             assertEquals("Unable to replicate the partition 1 time(s): All brokers " +
-                "are currently fenced.", active.createTopics(ANONYMOUS_CONTEXT,
+                "are currently fenced, or have all their log directories cordoned.", active.createTopics(ANONYMOUS_CONTEXT,
                     createTopicsRequestData, Set.of("foo")).
                         get().topics().find("foo").errorMessage());
             assertEquals(new BrokerHeartbeatReply(true, false, false, false),

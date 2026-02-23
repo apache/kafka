@@ -72,7 +72,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @return The iterator for this range, from key with the smallest bytes to the key with the largest bytes of keys.
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    default KeyValueIterator<K, V> reverseRange(K from, K to) {
+    default KeyValueIterator<K, V> reverseRange(final K from, final K to) {
         throw new UnsupportedOperationException();
     }
 
@@ -119,7 +119,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @return The iterator for keys having the specified prefix.
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    default <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(P prefix, PS prefixKeySerializer) {
+    default <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
         throw new UnsupportedOperationException();
     }
 

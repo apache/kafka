@@ -33,16 +33,18 @@ public class LogDirDescription {
     private final ApiException error;
     private final OptionalLong totalBytes;
     private final OptionalLong usableBytes;
+    private final boolean isCordoned;
 
     public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos) {
-        this(error, replicaInfos, UNKNOWN_VOLUME_BYTES, UNKNOWN_VOLUME_BYTES);
+        this(error, replicaInfos, UNKNOWN_VOLUME_BYTES, UNKNOWN_VOLUME_BYTES, false);
     }
 
-    public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos, long totalBytes, long usableBytes) {
+    public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos, long totalBytes, long usableBytes, boolean isCordoned) {
         this.error = error;
         this.replicaInfos = replicaInfos;
         this.totalBytes = (totalBytes == UNKNOWN_VOLUME_BYTES) ? OptionalLong.empty() : OptionalLong.of(totalBytes);
         this.usableBytes = (usableBytes == UNKNOWN_VOLUME_BYTES) ? OptionalLong.empty() : OptionalLong.of(usableBytes);
+        this.isCordoned = isCordoned;
     }
 
     /**
@@ -82,6 +84,13 @@ public class LogDirDescription {
         return usableBytes;
     }
 
+    /**
+     * Whether this log directory is cordoned or not.
+     */
+    public boolean isCordoned() {
+        return isCordoned;
+    }
+
     @Override
     public String toString() {
         return "LogDirDescription(" +
@@ -89,6 +98,7 @@ public class LogDirDescription {
                 ", error=" + error +
                 ", totalBytes=" + totalBytes +
                 ", usableBytes=" + usableBytes +
+                ", isCordoned=" + isCordoned +
                 ')';
     }
 }

@@ -37,27 +37,31 @@ public interface TasksRegistry {
 
     Set<Task> drainPendingTasksToInit();
 
-    Set<Task> drainPendingActiveTasksToInit();
+    Set<StreamTask> drainPendingActiveTasksToInit();
 
-    Set<Task> drainPendingStandbyTasksToInit();
+    Set<StandbyTask> drainPendingStandbyTasksToInit();
 
     Set<Task> pendingTasksToInit();
 
-    void addPendingTasksToInit(final Collection<Task> tasks);
+    void addPendingTasksToInit(final Collection<? extends Task> tasks);
 
     boolean hasPendingTasksToInit();
 
     Set<Task> pendingTasksToClose();
 
-    void addPendingTasksToClose(final Collection<Task> tasks);
+    void addPendingTasksToClose(final Collection<? extends Task> tasks);
 
     boolean hasPendingTasksToClose();
 
-    void addActiveTasks(final Collection<Task> tasks);
+    void addActiveTasks(final Collection<StreamTask> tasks);
 
-    void addStandbyTasks(final Collection<Task> tasks);
+    void addStandbyTasks(final Collection<StandbyTask> tasks);
 
     void addTask(final Task task);
+
+    void addActiveTask(final StreamTask task);
+
+    void addStandbyTask(final StandbyTask task);
 
     void addFailedTask(final Task task);
 
@@ -65,29 +69,29 @@ public interface TasksRegistry {
 
     void replaceStandbyWithActive(final StreamTask activeTask);
 
-    boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions);
+    boolean updateActiveTaskInputPartitions(final StreamTask task, final Set<TopicPartition> topicPartitions);
 
     void clear();
 
-    Task activeTasksForInputPartition(final TopicPartition partition);
+    StreamTask activeInitializedTasksForInputPartition(final TopicPartition partition);
 
-    Task task(final TaskId taskId);
+    Task initializedTask(final TaskId taskId);
 
-    Collection<Task> tasks(final Collection<TaskId> taskIds);
+    Collection<Task> initializedTasks(final Collection<TaskId> taskIds);
 
-    Collection<TaskId> activeTaskIds();
+    Collection<TaskId> activeInitializedTaskIds();
 
-    Collection<Task> activeTasks();
+    Collection<StreamTask> activeInitializedTasks();
 
-    Collection<Task> standbyTasks();
+    Collection<StandbyTask> standbyInitializedTasks();
 
-    Set<Task> allTasks();
+    Set<Task> allInitializedTasks();
 
-    Set<Task> allNonFailedTasks();
+    Set<Task> allNonFailedInitializedTasks();
 
-    Map<TaskId, Task> allTasksPerId();
+    Map<TaskId, Task> allInitializedTasksPerId();
 
-    Set<TaskId> allTaskIds();
+    Set<TaskId> allInitializedTaskIds();
 
-    boolean contains(final TaskId taskId);
+    boolean containsInitialized(final TaskId taskId);
 }

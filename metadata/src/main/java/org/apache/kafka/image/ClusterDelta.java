@@ -115,6 +115,7 @@ public final class ClusterDelta {
         changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
             BrokerRegistrationFencingChange.FENCE.asBoolean(),
             Optional.empty(),
+            Optional.empty(),
             Optional.empty()
         )));
     }
@@ -123,6 +124,7 @@ public final class ClusterDelta {
         BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
         changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
             BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            Optional.empty(),
             Optional.empty(),
             Optional.empty()
         )));
@@ -140,10 +142,12 @@ public final class ClusterDelta {
                 () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
                     "value for inControlledShutdown field: %d", record, record.inControlledShutdown())));
         Optional<List<Uuid>> directoriesChange = Optional.ofNullable(record.logDirs()).filter(list -> !list.isEmpty());
+        Optional<List<Uuid>> cordonedDirectoriesChange = Optional.ofNullable(record.cordonedLogDirs()).filter(list -> !list.isEmpty());
         BrokerRegistration nextRegistration = curRegistration.cloneWith(
             fencingChange.asBoolean(),
             inControlledShutdownChange.asBoolean(),
-            directoriesChange
+            directoriesChange,
+            cordonedDirectoriesChange
         );
         if (!curRegistration.equals(nextRegistration)) {
             changedBrokers.put(record.brokerId(), Optional.of(nextRegistration));
