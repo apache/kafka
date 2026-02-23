@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern;
 
-import org.apache.kafka.common.Uuid;
-
-import java.util.Map;
 import java.util.Set;
 
 /**

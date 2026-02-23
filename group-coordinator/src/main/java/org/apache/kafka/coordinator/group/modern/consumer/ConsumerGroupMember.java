@@ -350,6 +350,16 @@ public class ConsumerGroupMember extends ModernGroupMember {
     }
 
     /**
+     * @return True if the two provided members have different assigned partitions.
+     */
+    public static boolean hasAssignedPartitionsChanged(
+        ConsumerGroupMember member1,
+        ConsumerGroupMember member2
+    ) {
+        return !member1.assignedPartitions().equals(member2.assignedPartitions());
+    }
+
+    /**
      * @return The supported classic protocols converted to JoinGroupRequestProtocolCollection.
      */
     public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {

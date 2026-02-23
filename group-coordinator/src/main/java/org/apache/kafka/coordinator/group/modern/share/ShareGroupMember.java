@@ -208,6 +208,16 @@ public class ShareGroupMember extends ModernGroupMember {
     }
 
     /**
+     * @return True if the two provided members have different assigned partitions.
+     */
+    public static boolean hasAssignedPartitionsChanged(
+        ShareGroupMember member1,
+        ShareGroupMember member2
+    ) {
+        return !member1.assignedPartitions().equals(member2.assignedPartitions());
+    }
+
+    /**
      * Converts this ShareGroupMember to a ShareGroupDescribeResponseData.Member.
      *
      * @param image : Topics image object to search for a specific topic id
