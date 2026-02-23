@@ -461,6 +461,7 @@ public class PlaintextConsumerSubscriptionTest {
         }
     }
 
+
     @ClusterTest
     public void testRe2JPatternSubscriptionInvalidRegex() throws InterruptedException {
         Map<String, Object> config = Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
