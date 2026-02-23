@@ -318,7 +318,7 @@ public class TaskManager {
         }
     }
 
-    private Collection<Task> assignActiveTaskFromStartupState(final Map<TaskId, Set<TopicPartition>> tasksToAssign) {
+    private Collection<? extends Task> assignActiveTaskFromStartupState(final Map<TaskId, Set<TopicPartition>> tasksToAssign) {
         if (stateDirectory.hasStartupTasks()) {
             final Map<TaskId, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
             for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
@@ -327,7 +327,7 @@ public class TaskManager {
                     assignedTasks.put(taskId, entry.getValue());
                 }
             }
-            return new ArrayList<>(activeTaskCreator.createTasks(mainConsumer, assignedTasks));
+            return activeTaskCreator.createTasks(mainConsumer, assignedTasks);
         } else {
             return Collections.emptySet();
         }
@@ -512,7 +512,7 @@ public class TaskManager {
 
     private void handleExistingStateForTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                              final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        final Collection<Task> activeTasks = assignActiveTaskFromStartupState(activeTasksToCreate);
+        final Collection<? extends Task> activeTasks = assignActiveTaskFromStartupState(activeTasksToCreate);
         for (final Task activeTask : activeTasks) {
             activeTasksToCreate.remove(activeTask.id());
         }
