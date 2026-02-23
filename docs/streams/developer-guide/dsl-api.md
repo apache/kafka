@@ -4657,7 +4657,19 @@ The key parts of this program are:
 `unbounded()`
      This configures the buffer used for storing events until their windows close. Production code is able to put a cap on the amount of memory to use for the buffer, but this simple example creates a buffer with no upper bound. 
 
-One thing to note is that suppression is just like any other Kafka Streams operator, so you can build a topology with two branches emerging from the `count`, one suppressed, and one not, or even multiple differently configured suppressions. This allows you to apply suppressions where they are needed and otherwise rely on the default continuous update behavior. 
+One thing to note is that suppression is just like any other Kafka Streams operator, so you can build a topology with two branches emerging from the `count`, one suppressed, and one not, or even multiple differently configured suppressions. This allows you to apply suppressions where they are needed and otherwise rely on the default continuous update behavior.
+
+**Important:** When using `suppress(Suppressed.untilWindowCloses(...))`, you must explicitly set a grace period on the window. If you use a window definition without an explicit grace period (for example, the deprecated `TimeWindows.of(Duration)`), the grace period defaults to an internal value derived from the retention time (approximately 24 hours). This means the window will not be considered closed — and therefore `suppress()` will not emit any results — until that default grace period has elapsed. To avoid this, always use an explicit grace period:
+
+  * Use `TimeWindows.ofSizeAndGrace(windowSize, graceDuration)` to define both the window size and a finite grace period.
+  * Use `TimeWindows.ofSizeWithNoGrace(windowSize)` if you do not need to handle out-of-order events and want the window to close immediately.
+
+For example, the following correctly bounds the grace period so that `suppress()` emits results promptly:
+
+    grouped
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofHours(1), Duration.ZERO))
+        .count()
+        .suppress(Suppressed.untilWindowCloses(unbounded()))
 
 For more detailed information, see the JavaDoc on the `Suppressed` config object and [KIP-328](https://cwiki.apache.org/confluence/x/sQU0BQ "KIP-328"). 
 
