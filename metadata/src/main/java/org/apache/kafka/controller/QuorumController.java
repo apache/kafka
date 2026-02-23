@@ -63,6 +63,7 @@ import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
@@ -1290,6 +1291,8 @@ public final class QuorumController implements Controller {
             case CLEAR_ELR_RECORD:
                 replicationControl.replay((ClearElrRecord) message);
                 break;
+            case CLUSTER_ID_RECORD:
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1526,6 +1529,7 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
             setKRaftVersionAccessor(new RaftClientKRaftVersionAccessor(raftClient)).
+            setClusterId(clusterId).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).

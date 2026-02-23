@@ -27,14 +27,9 @@ import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
-import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
-import org.apache.kafka.common.metadata.FenceBrokerRecord;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.*;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
-import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerFeatureCollection;
-import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
-import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -723,6 +718,15 @@ public class ClusterControlManager {
         log.info("Replayed RegisterControllerRecord containing {}.{}", newRegistration,
             prevRegistration == null ? "" :
                 " Previous incarnation was " + prevRegistration.incarnationId());
+    }
+
+    public void replay(ClusterIdRecord record) {
+        if (clusterId == null) {
+
+        } else if (!clusterId.equals(record.clusterId())) {
+            throw new RuntimeException(String.format("Unable to replay %s: cluster ID " +
+                "in record does not match cluster ID in memory", record));
+        }
     }
 
     Iterator<UsableBroker> usableBrokers() {

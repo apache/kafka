@@ -20,6 +20,7 @@ import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
@@ -310,7 +311,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 }
 
                 TestKitNodes nodes = new TestKitNodes.Builder()
-                        .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, "testkit"))
+                        .setBootstrapMetadata(BootstrapMetadata.fromVersions(clusterConfig.metadataVersion(), newFeatureLevels, Uuid.randomUuid().toString(), "testkit"))
                         .setCombined(isCombined)
                         .setNumBrokerNodes(clusterConfig.numBrokers())
                         .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())

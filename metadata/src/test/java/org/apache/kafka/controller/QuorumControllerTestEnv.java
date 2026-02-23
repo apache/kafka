@@ -50,7 +50,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         private OptionalLong sessionTimeoutMillis = OptionalLong.empty();
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-                fromVersion(MetadataVersion.latestTesting(), "test-provided version");
+                fromVersion(MetadataVersion.latestTesting(), "test-cluster-id", "test-provided version");
 
         public Builder(MockRaftClientTestEnv clientEnv) {
             this.clientEnv = clientEnv;

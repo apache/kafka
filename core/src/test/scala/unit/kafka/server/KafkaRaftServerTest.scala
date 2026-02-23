@@ -108,9 +108,9 @@ class KafkaRaftServerTest {
     PropertiesUtils.writePropertiesFile(metaProperties.toProperties, metaPropertiesFile.getAbsolutePath, false)
   }
 
-  private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
+  private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion, clusterId: String = clusterIdBase64): Unit = {
     val bootstrapDirectory = new BootstrapDirectory(logDir.toString)
-    bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
+    bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, clusterId, "test"))
   }
 
   @Test

@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
@@ -44,6 +45,8 @@ public final class ClusterDelta {
     private final ClusterImage image;
     private final HashMap<Integer, Optional<BrokerRegistration>> changedBrokers = new HashMap<>();
     private final HashMap<Integer, Optional<ControllerRegistration>> changedControllers = new HashMap<>();
+    private Optional<String> changedClusterId = Optional.empty();
+    private boolean clusterIdChanged = false;
 
     public ClusterDelta(ClusterImage image) {
         this.image = image;
@@ -55,6 +58,14 @@ public final class ClusterDelta {
 
     public HashMap<Integer, Optional<ControllerRegistration>> changedControllers() {
         return changedControllers;
+    }
+
+    public Optional<String> changedClusterId() {
+        return changedClusterId;
+    }
+
+    public boolean clusterIdChanged() {
+        return clusterIdChanged;
     }
 
     public BrokerRegistration broker(int nodeId) {
@@ -80,6 +91,20 @@ public final class ClusterDelta {
 
     public void handleMetadataVersionChange(MetadataVersion newVersion) {
         // no-op
+    }
+
+    public void replay(ClusterIdRecord record) {
+        // Enforce the invariant that there is at most one ClusterIdRecord per cluster lifetime
+        if (image.clusterId().isPresent()) {
+            throw new IllegalStateException("ClusterIdRecord already exists in the image. " +
+                "A cluster can only have one ClusterIdRecord.");
+        }
+        if (clusterIdChanged) {
+            throw new IllegalStateException("Multiple ClusterIdRecords in the same delta. " +
+                "A cluster can only have one ClusterIdRecord.");
+        }
+        changedClusterId = Optional.of(record.clusterId());
+        clusterIdChanged = true;
     }
 
     public void replay(RegisterBrokerRecord record) {
@@ -155,6 +180,9 @@ public final class ClusterDelta {
     }
 
     public ClusterImage apply() {
+        // Determine the new clusterId
+        Optional<String> newClusterId = clusterIdChanged ? changedClusterId : image.clusterId();
+
         Map<Integer, BrokerRegistration> newBrokers = new HashMap<>(image.brokers().size());
         for (Entry<Integer, BrokerRegistration> entry : image.brokers().entrySet()) {
             int nodeId = entry.getKey();
@@ -189,7 +217,7 @@ public final class ClusterDelta {
                 controllerRegistration.ifPresent(registration -> newControllers.put(nodeId, registration));
             }
         }
-        return new ClusterImage(newBrokers, newControllers);
+        return new ClusterImage(newClusterId, newBrokers, newControllers);
     }
 
     @Override

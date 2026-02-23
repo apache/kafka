@@ -21,7 +21,6 @@ import org.apache.kafka.metadata.util.BatchFileReader;
 import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -74,7 +73,7 @@ public class BootstrapDirectory {
     }
 
     BootstrapMetadata readFromConfiguration() {
-        return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
+        return BootstrapMetadata.defaultBootstrap();
     }
 
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {

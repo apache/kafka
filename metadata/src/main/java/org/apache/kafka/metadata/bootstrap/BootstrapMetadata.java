@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.bootstrap;
 
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -42,6 +43,7 @@ public class BootstrapMetadata {
     public static BootstrapMetadata fromVersions(
         MetadataVersion metadataVersion,
         Map<String, Short> featureVersions,
+        String clusterId,
         String source
     ) {
         List<ApiMessageAndVersion> records = new ArrayList<>();
@@ -66,15 +68,43 @@ public class BootstrapMetadata {
                     setFeatureLevel(level), (short) 0));
             }
         }
+        // Add ClusterIdRecord if the metadata version supports it
+        if (metadataVersion.isClusterIdSupported()) {
+            records.add(new ApiMessageAndVersion(new ClusterIdRecord().
+                setClusterId(clusterId), (short) 0));
+        }
         return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
     }
 
-    public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
-        List<ApiMessageAndVersion> records = List.of(
-            new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
+    public static BootstrapMetadata fromVersion(
+        MetadataVersion metadataVersion,
+        String clusterId,
+        String source
+    ) {
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
+        // Add ClusterIdRecord if the metadata version supports it
+        if (metadataVersion.isClusterIdSupported()) {
+            records.add(new ApiMessageAndVersion(new ClusterIdRecord().
+                setClusterId(clusterId), (short) 0));
+        }
         return new BootstrapMetadata(records, metadataVersion.featureLevel(), source);
+    }
+
+    /**
+     * Create a default BootstrapMetadata without a ClusterIdRecord.
+     * This is used as a fallback when reading bootstrap metadata from a directory
+     * that has no bootstrap file (e.g., legacy clusters created before bootstrap files existed).
+     */
+    public static BootstrapMetadata defaultBootstrap() {
+        return new BootstrapMetadata(
+            List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)),
+            MetadataVersion.latestProduction().featureLevel(),
+            "the default bootstrap");
     }
 
     public static BootstrapMetadata fromRecords(List<ApiMessageAndVersion> records, String source) {
@@ -134,6 +164,30 @@ public class BootstrapMetadata {
             }
         }
         return result;
+    }
+
+    /**
+     * Returns true if this bootstrap metadata contains a ClusterIdRecord.
+     */
+    public boolean containsClusterIdRecord() {
+        for (ApiMessageAndVersion record : records) {
+            if (record.message() instanceof ClusterIdRecord) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns the cluster ID from the ClusterIdRecord if present.
+     */
+    public Optional<String> clusterId() {
+        for (ApiMessageAndVersion record : records) {
+            if (record.message() instanceof ClusterIdRecord clusterIdRecord) {
+                return Optional.of(clusterIdRecord.clusterId());
+            }
+        }
+        return Optional.empty();
     }
 
     public BootstrapMetadata copyWithFeatureRecord(String featureName, short level) {

@@ -114,7 +114,7 @@ public class ClusterImageTest {
             setListeners(Map.of("PLAINTEXT",
                     new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
             setSupportedFeatures(Map.of()).build());
-        IMAGE1 = new ClusterImage(map1, cmap1);
+        IMAGE1 = new ClusterImage(Optional.empty(), map1, cmap1);
 
         DELTA1_RECORDS = new ArrayList<>();
         // unfence b0
@@ -176,7 +176,7 @@ public class ClusterImageTest {
             setListeners(Map.of("PLAINTEXT",
                 new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19093))).
             setSupportedFeatures(Map.of()).build());
-        IMAGE2 = new ClusterImage(map2, cmap2);
+        IMAGE2 = new ClusterImage(Optional.empty(), map2, cmap2);
 
         DELTA2_RECORDS = new ArrayList<>(DELTA1_RECORDS);
         // fence b0
@@ -237,7 +237,7 @@ public class ClusterImageTest {
             setFenced(true).
             setIsMigratingZkBroker(true).build());
 
-        IMAGE3 = new ClusterImage(map3, cmap2);
+        IMAGE3 = new ClusterImage(Optional.empty(), map3, cmap2);
     }
 
     @Test
@@ -302,7 +302,7 @@ public class ClusterImageTest {
 
     @Test
     public void testHandleLossOfControllerRegistrations() {
-        ClusterImage testImage = new ClusterImage(Map.of(),
+        ClusterImage testImage = new ClusterImage(Optional.empty(), Map.of(),
             Map.of(1000, new ControllerRegistration.Builder().
                 setId(1000).
                 setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).

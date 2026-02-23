@@ -52,7 +52,7 @@ public class BootstrapMetadataTest {
                 setName(FEATURE_NAME).
                 setFeatureLevel((short) 7), (short) 0)),
                     IBP_3_3_IV3.featureLevel(), "foo"),
-            BootstrapMetadata.fromVersion(IBP_3_3_IV3, "foo"));
+            BootstrapMetadata.fromVersion(IBP_3_3_IV3, "test-cluster-id", "foo"));
     }
 
     @Test

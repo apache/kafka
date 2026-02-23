@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.metadata.ClusterIdRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.protocol.Errors;
@@ -58,6 +59,7 @@ public class FeatureControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private KRaftVersionAccessor kraftVersionAccessor = null;
+        private String clusterId = null;
 
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
@@ -96,6 +98,11 @@ public class FeatureControlManager {
             return this;
         }
 
+        Builder setClusterId(String clusterId) {
+            this.clusterId = clusterId;
+            return this;
+        }
+
         public FeatureControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -129,7 +136,8 @@ public class FeatureControlManager {
                 quorumFeatures,
                 snapshotRegistry,
                 clusterSupportDescriber,
-                kraftVersionAccessor
+                kraftVersionAccessor,
+                clusterId
             );
         }
     }
@@ -161,12 +169,19 @@ public class FeatureControlManager {
      */
     private final KRaftVersionAccessor kraftVersionAccessor;
 
+    /**
+     * The cluster ID, used when generating ClusterIdRecord during upgrade.
+     * This comes from the leader's meta.properties file.
+     */
+    private final String clusterId;
+
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         ClusterFeatureSupportDescriber clusterSupportDescriber,
-        KRaftVersionAccessor kraftVersionAccessor
+        KRaftVersionAccessor kraftVersionAccessor,
+        String clusterId
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
@@ -174,6 +189,7 @@ public class FeatureControlManager {
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
         this.kraftVersionAccessor = kraftVersionAccessor;
+        this.clusterId = clusterId;
     }
 
     ControllerResult<ApiError> updateFeatures(
@@ -419,7 +435,42 @@ public class FeatureControlManager {
                 .setName(MetadataVersion.FEATURE_NAME)
                 .setFeatureLevel(newVersionLevel), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
 
+        // Generate upgrade records if needed (e.g., ClusterIdRecord when upgrading to a version that supports it)
+        generateUpgradeRecords(currentVersion, newVersion, recordConsumer);
+
         return ApiError.NONE;
+    }
+
+    /**
+     * Generate additional records required when upgrading from one metadata version to another.
+     * This provides a generic mechanism for adding records that must accompany certain MV upgrades.
+     * <p>
+     * For example, when upgrading to IBP_4_4_IV0 or later, a ClusterIdRecord must be written
+     * if one doesn't already exist in the metadata log. This ensures that any MV that supports
+     * ClusterIdRecord will have one in the log.
+     * <p>
+     * Note: Clusters whose MV does not support ClusterIdRecord will not have a ClusterIdRecord
+     * in their metadata. The cluster ID is obtained from the leader's meta.properties file,
+     * which was set during the original cluster formatting.
+     */
+    private void generateUpgradeRecords(
+        MetadataVersion currentVersion,
+        MetadataVersion newVersion,
+        Consumer<ApiMessageAndVersion> recordConsumer
+    ) {
+        // ClusterIdRecord: Required when upgrading to/past IBP_4_4_IV0
+        // Since clusters with MV < IBP_4_4_IV0 don't have a ClusterIdRecord in metadata,
+        // we need to generate one when crossing this threshold.
+        if (!currentVersion.isClusterIdSupported() && newVersion.isClusterIdSupported()) {
+            if (clusterId == null) {
+                throw new IllegalStateException("Cannot generate ClusterIdRecord during upgrade: " +
+                    "clusterId is not configured.");
+            }
+            log.info("Generating ClusterIdRecord with clusterId {} as part of metadata version upgrade " +
+                "from {} to {}.", clusterId, currentVersion, newVersion);
+            recordConsumer.accept(new ApiMessageAndVersion(
+                new ClusterIdRecord().setClusterId(clusterId), (short) 0));
+        }
     }
 
     private ApiError invalidMetadataVersion(short version, String message) {

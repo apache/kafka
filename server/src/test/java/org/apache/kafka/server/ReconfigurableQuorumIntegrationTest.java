@@ -259,7 +259,6 @@ public class ReconfigurableQuorumIntegrationTest {
     @Test
     public void testRemoveAndAddVoterWithValidClusterId() throws Exception {
         final var nodes = new TestKitNodes.Builder()
-            .setClusterId("test-cluster")
             .setNumBrokerNodes(1)
             .setNumControllerNodes(3)
             .build();
@@ -288,7 +287,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 admin.removeRaftVoter(
                     3000,
                     dirId,
-                    new RemoveRaftVoterOptions().setClusterId(Optional.of("test-cluster"))
+                    new RemoveRaftVoterOptions().setClusterId(Optional.of(nodes.clusterId()))
                 ).all().get();
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
@@ -302,7 +301,7 @@ public class ReconfigurableQuorumIntegrationTest {
                     3000,
                     dirId,
                     Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080)),
-                    new AddRaftVoterOptions().setClusterId(Optional.of("test-cluster"))
+                    new AddRaftVoterOptions().setClusterId(Optional.of(nodes.clusterId()))
                 ).all().get();
             }
         }
@@ -311,7 +310,6 @@ public class ReconfigurableQuorumIntegrationTest {
     @Test
     public void testRemoveAndAddVoterWithInconsistentClusterId() throws Exception {
         final var nodes = new TestKitNodes.Builder()
-            .setClusterId("test-cluster")
             .setNumBrokerNodes(1)
             .setNumControllerNodes(3)
             .build();

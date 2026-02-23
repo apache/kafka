@@ -71,8 +71,7 @@ public class BootstrapDirectoryTest {
     @Test
     public void testReadFromEmptyConfiguration() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
-                    "the default bootstrap"),
+            assertEquals(BootstrapMetadata.defaultBootstrap(),
                 new BootstrapDirectory(testDirectory.path()).read());
         }
     }
