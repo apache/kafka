@@ -955,20 +955,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
                         cumulativeSize += previousSeg.size();
-                        if (copyLagMs > 0){
-                            if (!hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs)) {
-                                if (copyLagBytes == 0) {
-                                    break;
-                                }
-                                if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)) {
-                                    break;
-                                }
-                            }
-                        } else {
-                            if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)) {
-                                break;
-                            }
-                        }
+                        if (delayCopy(previousSeg, copyLagMs, currentTimeMs, copyLagBytes, totalLogSize, cumulativeSize))
+                            break;
 
                         candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
                     }
@@ -976,6 +964,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 // Discard the last active segment
             }
             return candidateLogSegments;
+        }
+
+        private boolean delayCopy(LogSegment segment, long copyLagMs, long currentTimeMs, long copyLagBytes, long totalLogSize, long cumulativeSize) {
+            if (copyLagMs > 0) {
+                if (hasExceededCopyLagTime(segment, currentTimeMs, copyLagMs)) {
+                    return false;
+                }
+
+                if (copyLagBytes == 0) {
+                    return true;
+                }
+            }
+
+            return copyLagBytes > 0 && !hasExceededCopyLagSize(segment, totalLogSize, cumulativeSize, copyLagBytes);
         }
 
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
