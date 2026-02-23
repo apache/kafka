@@ -933,7 +933,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          *  1) Segment is not the active segment and
          *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
          *     committed/acked messages
-         *  3) Segment has exceeded copy lag by time and size when configured (remote.copy.lag.ms, remote.copy.lag.bytes)
+         *  3) Segment has exceeded copy lag by time or size when configured (remote.copy.lag.ms, remote.copy.lag.bytes)
          * @param log The log from which the segments are to be copied
          * @param fromOffset The offset from which the segments are to be copied
          * @param lastStableOffset The last stable offset of the log
@@ -954,13 +954,20 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     LogSegment previousSeg = segments.get(idx - 1);
                     LogSegment currentSeg = segments.get(idx);
                     if (currentSeg.baseOffset() <= lastStableOffset) {
-                        if (copyLagMs > 0 && !hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs))
-                            break;
-                        
                         cumulativeSize += previousSeg.size();
-                        if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes))
-                            break;
-                        
+                        if (copyLagMs > 0){
+                            if (!hasExceededCopyLagTime(previousSeg, currentTimeMs, copyLagMs)) {
+                                if (copyLagBytes == 0) {
+                                    break;
+                                }
+                                if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes))
+                                    break;
+                            }
+                        } else {
+                            if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes))
+                                break;
+                        }
+
                         candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
                     }
                 }
