@@ -19,7 +19,6 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
@@ -32,7 +31,6 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -52,8 +50,6 @@ import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Properties;
 
 import static java.util.Collections.singletonList;
@@ -126,7 +122,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                 persistentStore ? Stores.persistentTimestampedKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
                 Serdes.String(),
                 Serdes.String()))
-            .<String, String>stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueProcessor::new, STORE_NAME);
 
         final Properties props = props();
@@ -147,13 +143,13 @@ public class HeadersStoreUpgradeIntegrationTest {
                 persistentStore ? Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
                 Serdes.String(),
                 Serdes.String()))
-            .<String, String>stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
 
         kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
-//         Verify legacy data can be read with empty headers
+        // Verify legacy data can be read with empty headers
         verifyLegacyValuesWithEmptyHeaders("key1", "value1", 11L);
         verifyLegacyValuesWithEmptyHeaders("key2", "value2", 22L);
         verifyLegacyValuesWithEmptyHeaders("key3", "value3", 33L);
@@ -177,7 +173,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                 Stores.persistentTimestampedKeyValueStore(STORE_NAME),
                 Serdes.String(),
                 Serdes.String()))
-            .<String, String>stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueProcessor::new, STORE_NAME);
 
         final Properties props = props();
@@ -200,7 +196,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                 Stores.persistentTimestampedKeyValueStore(STORE_NAME),
                 Serdes.String(),
                 Serdes.String()))
-            .<String, String>stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
             .process(TimestampedKeyValueWithHeadersProcessor::new, STORE_NAME);
 
         kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
@@ -299,35 +295,6 @@ public class HeadersStoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
-    private <K> void verifyCountWithTimestampAndHeaders(final K key,
-                                                        final long value,
-                                                        final long timestamp,
-                                                        final Headers headers) throws Exception {
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<Long>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    final ValueTimestampHeaders<Long> result = store.get(key);
-                    return result != null
-                        && result.value() == value
-                        && result.timestamp() == timestamp
-                        && result.headers().equals(headers);
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            5_000L,
-            () -> "Could not get expected result in time.");
-    }
-
     private <K, V> void verifyLegacyValuesWithEmptyHeaders(final K key,
                                                            final V value,
                                                            final long timestamp) throws Exception {
@@ -355,229 +322,6 @@ public class HeadersStoreUpgradeIntegrationTest {
             "Could not get expected result in time.");
     }
 
-    private <K> void verifyKeyDoesNotExist(final K key) throws Exception {
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<Long>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    return store.get(key) == null;
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            "Key should not exist in store.");
-    }
-
-    private <K> void verifyCountValue(final K key, final long expectedCount) throws Exception {
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    final ValueAndTimestamp<Long> result = store.get(key);
-                    return result != null && result.value() == expectedCount;
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            "Could not get expected result in time.");
-    }
-
-    private <K> void processKeyValueNullAndVerifyDeleted(final K key) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            inputStream,
-            singletonList(KeyValue.pair(key, null)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                IntegerSerializer.class),
-            CLUSTER.time);
-
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedKeyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    return store.get(key) == null;
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            "Key should be deleted from store.");
-    }
-
-    private <K> void processKeyValueWithHeadersNullAndVerifyDeleted(final K key) throws Exception {
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            inputStream,
-            singletonList(KeyValue.pair(key, null)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                IntegerSerializer.class),
-            CLUSTER.time);
-
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<Long>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    return store.get(key) == null;
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            "Key should be deleted from store.");
-    }
-
-    private <K, V> void processKeyValueWithHeadersAndVerifyCount(final K key,
-                                                                 final long timestamp,
-                                                                 final Headers headers,
-                                                                 final List<KeyValue<Integer, Object>> expectedStoreContent)
-        throws Exception {
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, 0)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                IntegerSerializer.class),
-            headers,
-            timestamp,
-            false);
-
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    try (final KeyValueIterator<K, ValueTimestampHeaders<V>> all = store.all()) {
-                        final List<KeyValue<K, ValueTimestampHeaders<V>>> storeContent = new LinkedList<>();
-                        while (all.hasNext()) {
-                            storeContent.add(all.next());
-                        }
-                        return storeContent.equals(expectedStoreContent);
-                    }
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            "Could not get expected result in time.");
-    }
-
-    private <K, V> void processKeyValueWithHeadersAndVerifyCountWithTimestampAndHeaders(final K key,
-                                                                                        final long timestamp,
-                                                                                        final Headers headers,
-                                                                                        final List<KeyValue<Integer, Object>> expectedStoreContent)
-        throws Exception {
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, 0)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                IntegerSerializer.class),
-            headers,
-            timestamp,
-            false);
-
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    try (final KeyValueIterator<K, ValueTimestampHeaders<V>> all = store.all()) {
-                        final List<KeyValue<K, ValueTimestampHeaders<V>>> storeContent = new LinkedList<>();
-                        while (all.hasNext()) {
-                            storeContent.add(all.next());
-                        }
-                        return storeContent.equals(expectedStoreContent);
-                    }
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            "Could not get expected result in time.");
-    }
-
-    private <K, V> void processKeyValueWithHeadersAndVerifyCountWithNull(final K key,
-                                                                         final List<KeyValue<Integer, Object>> expectedStoreContent)
-        throws Exception {
-
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            inputStream,
-            singletonList(KeyValue.pair(key, null)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                IntegerSerializer.class,
-                IntegerSerializer.class),
-            CLUSTER.time);
-
-        TestUtils.waitForCondition(
-            () -> {
-                try {
-                    final ReadOnlyKeyValueStore<K, ValueTimestampHeaders<V>> store = IntegrationTestUtils
-                        .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.keyValueStore());
-
-                    if (store == null)
-                        return false;
-
-                    try (final KeyValueIterator<K, ValueTimestampHeaders<V>> all = store.all()) {
-                        final List<KeyValue<K, ValueTimestampHeaders<V>>> storeContent = new LinkedList<>();
-                        while (all.hasNext()) {
-                            storeContent.add(all.next());
-                        }
-                        return storeContent.equals(expectedStoreContent);
-                    }
-                } catch (final Exception swallow) {
-                    swallow.printStackTrace();
-                    System.err.println(swallow.getMessage());
-                    return false;
-                }
-            },
-            60_000L,
-            "Could not get expected result in time.");
-    }
-
     private static class TimestampedKeyValueProcessor implements Processor<String, String, Void, Void> {
         private TimestampedKeyValueStore<String, String> store;
 
@@ -592,37 +336,6 @@ public class HeadersStoreUpgradeIntegrationTest {
         }
     }
 
-    private static class TimestampedKeyValueNullableProcessor implements Processor<Integer, Integer, Void, Void> {
-        private TimestampedKeyValueStore<Integer, Long> store;
-
-        @Override
-        public void init(final ProcessorContext<Void, Void> context) {
-            store = context.getStateStore(STORE_NAME);
-        }
-
-        @Override
-        public void process(final Record<Integer, Integer> record) {
-            if (record.value() == null) {
-                store.put(record.key(), null);
-                return;
-            }
-
-            final long newCount;
-            final ValueAndTimestamp<Long> oldCountWithTimestamp = store.get(record.key());
-            final long newTimestamp;
-
-            if (oldCountWithTimestamp == null) {
-                newCount = 1L;
-                newTimestamp = record.timestamp();
-            } else {
-                newCount = oldCountWithTimestamp.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestamp.timestamp(), record.timestamp());
-            }
-
-            store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp));
-        }
-    }
-
     private static class TimestampedKeyValueWithHeadersProcessor implements Processor<String, String, Void, Void> {
         private TimestampedKeyValueStoreWithHeaders<String, String> store;
 
@@ -634,40 +347,6 @@ public class HeadersStoreUpgradeIntegrationTest {
         @Override
         public void process(final Record<String, String> record) {
             store.put(record.key(), ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()));
-        }
-    }
-
-    private static class TimestampedKeyValueWithHeadersNullableProcessor implements Processor<Integer, Integer, Void, Void> {
-        private TimestampedKeyValueStoreWithHeaders<Integer, Long> store;
-
-        @Override
-        public void init(final ProcessorContext<Void, Void> context) {
-            store = context.getStateStore(STORE_NAME);
-        }
-
-        @Override
-        public void process(final Record<Integer, Integer> record) {
-            if (record.value() == null) {
-                store.put(record.key(), null);
-                return;
-            }
-
-            final long newCount;
-            final ValueTimestampHeaders<Long> oldCountWithTimestampHeaders = store.get(record.key());
-            final long newTimestamp;
-            final Headers newHeaders;
-
-            if (oldCountWithTimestampHeaders == null) {
-                newCount = 1L;
-                newTimestamp = record.timestamp();
-                newHeaders = record.headers();
-            } else {
-                newCount = oldCountWithTimestampHeaders.value() + 1L;
-                newTimestamp = Math.max(oldCountWithTimestampHeaders.timestamp(), record.timestamp());
-                newHeaders = record.headers();
-            }
-
-            store.put(record.key(), ValueTimestampHeaders.make(newCount, newTimestamp, newHeaders));
         }
     }
 }
