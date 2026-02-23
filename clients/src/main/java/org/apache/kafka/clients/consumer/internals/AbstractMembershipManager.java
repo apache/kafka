@@ -853,8 +853,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
-        // Only proceed with reconciliation when invoked by poll()
-        // This ensures that assignment changes happen during poll()
+        // Beyond this point is where commit, callbacks, and assignment updates will happen.
+        // In the case of the kafka consumer, this can only happen when the reconciliation is triggered from consumer.poll.
         if (allowAssignmentUpdatesOnPollOnly() && !invokedByPoll) return;
 
         // Start reconciliation process to commit, release removed partitions and accept new ones.
