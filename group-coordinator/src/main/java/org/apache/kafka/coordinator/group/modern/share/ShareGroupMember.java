@@ -190,9 +190,21 @@ public class ShareGroupMember extends ModernGroupMember {
             clientId,
             clientHost,
             subscribedTopicNames,
-            state,
-            assignedPartitions
+            state
         );
+        this.assignedPartitions = assignedPartitions;
+    }
+
+    /**
+     * The partitions assigned to this member.
+     */
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
+
+    /**
+     * @return The partitions assigned to this member.
+     */
+    public Map<Uuid, Set<Integer>> assignedPartitions() {
+        return assignedPartitions;
     }
 
     /**

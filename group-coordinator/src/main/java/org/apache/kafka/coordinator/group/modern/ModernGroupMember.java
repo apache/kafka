@@ -71,11 +71,6 @@ public abstract class ModernGroupMember {
      */
     protected Set<String> subscribedTopicNames;
 
-    /**
-     * The partitions assigned to this member.
-     */
-    protected Map<Uuid, Set<Integer>> assignedPartitions;
-
     protected ModernGroupMember(
         String memberId,
         int memberEpoch,
@@ -85,8 +80,7 @@ public abstract class ModernGroupMember {
         String clientId,
         String clientHost,
         Set<String> subscribedTopicNames,
-        MemberState state,
-        Map<Uuid, Set<Integer>> assignedPartitions
+        MemberState state
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -97,7 +91,6 @@ public abstract class ModernGroupMember {
         this.clientId = clientId;
         this.clientHost = clientHost;
         this.subscribedTopicNames = subscribedTopicNames;
-        this.assignedPartitions = assignedPartitions;
     }
 
     /**
@@ -170,20 +163,20 @@ public abstract class ModernGroupMember {
         return state == MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
     }
 
-    /**
-     * @return The set of assigned partitions.
-     */
-    public Map<Uuid, Set<Integer>> assignedPartitions() {
-        return assignedPartitions;
-    }
-
-    /**
-     * @return True of the two provided members have different assigned partitions.
-     */
-    public static boolean hasAssignedPartitionsChanged(
-        ModernGroupMember member1,
-        ModernGroupMember member2
-    ) {
-        return !member1.assignedPartitions().equals(member2.assignedPartitions());
-    }
+//    /**
+//     * @return The set of assigned partitions.
+//     */
+//    public Map<Uuid, Set<Integer>> assignedPartitions() {
+//        return assignedPartitions;
+//    }
+//
+//    /**
+//     * @return True of the two provided members have different assigned partitions.
+//     */
+//    public static boolean hasAssignedPartitionsChanged(
+//        ModernGroupMember member1,
+//        ModernGroupMember member2
+//    ) {
+//        return !member1.assignedPartitions().equals(member2.assignedPartitions());
+//    }
 }

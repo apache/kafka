@@ -264,6 +264,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
     private final String serverAssignorName;
 
     /**
+     * The partitions assigned to this member.
+     */
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
+
+    /**
      * The partitions being revoked by this member.
      */
     private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
@@ -299,12 +304,12 @@ public class ConsumerGroupMember extends ModernGroupMember {
             clientId,
             clientHost,
             subscribedTopicNames,
-            state,
-            assignedPartitions
+            state
         );
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.subscribedTopicRegex = subscribedTopicRegex;
         this.serverAssignorName = serverAssignorName;
+        this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
         this.classicMemberMetadata = classicMemberMetadata;
     }
@@ -328,6 +333,13 @@ public class ConsumerGroupMember extends ModernGroupMember {
      */
     public Optional<String> serverAssignorName() {
         return Optional.ofNullable(serverAssignorName);
+    }
+
+    /**
+     * @return The set of assigned partitions.
+     */
+    public Map<Uuid, Set<Integer>> assignedPartitions() {
+        return assignedPartitions;
     }
 
     /**
