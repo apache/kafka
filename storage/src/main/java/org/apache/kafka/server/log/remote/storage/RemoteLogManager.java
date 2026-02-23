@@ -960,11 +960,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                 if (copyLagBytes == 0) {
                                     break;
                                 }
-                                if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes))
+                                if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)) {
                                     break;
+                                }
                             }
                         } else {
-                            if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)){
+                            if (copyLagBytes > 0 && !hasExceededCopyLagSize(previousSeg, totalLogSize, cumulativeSize, copyLagBytes)) {
                                 break;
                             }
                         }
