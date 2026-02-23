@@ -170,6 +170,11 @@ public class ShareGroupMember extends ModernGroupMember {
         }
     }
 
+    /**
+     * The partitions assigned to this member.
+     */
+    private final Map<Uuid, Set<Integer>> assignedPartitions;
+
     private ShareGroupMember(
           String memberId,
           int memberEpoch,
@@ -194,11 +199,6 @@ public class ShareGroupMember extends ModernGroupMember {
         );
         this.assignedPartitions = assignedPartitions;
     }
-
-    /**
-     * The partitions assigned to this member.
-     */
-    private final Map<Uuid, Set<Integer>> assignedPartitions;
 
     /**
      * @return The partitions assigned to this member.
