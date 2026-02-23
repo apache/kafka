@@ -25,7 +25,10 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -41,6 +44,7 @@ import org.apache.kafka.test.KeyValueIteratorStub;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -108,7 +112,7 @@ public class MeteredSessionStoreWithHeadersTest {
             innerStore,
             STORE_TYPE,
             Serdes.String(),
-            MeteredSessionStoreWithHeaders.createAggregationWithHeadersSerde(Serdes.String()),
+            createAggregationWithHeadersSerde(Serdes.String()),
             mockTime
         );
         tags = mkMap(
@@ -142,6 +146,20 @@ public class MeteredSessionStoreWithHeadersTest {
             .collect(Collectors.toList());
     }
 
+    private <AGG> Serde<AggregationWithHeaders<AGG>> createAggregationWithHeadersSerde(final Serde<AGG> aggSerde) {
+        return new Serde<>() {
+            @Override
+            public Serializer<AggregationWithHeaders<AGG>> serializer() {
+                return new AggregationWithHeadersSerializer<>(aggSerde.serializer());
+            }
+
+            @Override
+            public Deserializer<AggregationWithHeaders<AGG>> deserializer() {
+                return new AggregationWithHeadersDeserializer<>(aggSerde.deserializer());
+            }
+        };
+    }
+
     @Test
     public void shouldDelegateInit() {
         setUp();
@@ -149,7 +167,7 @@ public class MeteredSessionStoreWithHeadersTest {
             innerStore,
             STORE_TYPE,
             Serdes.String(),
-            MeteredSessionStoreWithHeaders.createAggregationWithHeadersSerde(Serdes.String()),
+            createAggregationWithHeadersSerde(Serdes.String()),
             new MockTime()
         );
         doNothing().when(innerStore).init(context, outer);
@@ -189,25 +207,15 @@ public class MeteredSessionStoreWithHeadersTest {
 
         store.put(WINDOWED_KEY, valueAndHeaders);
 
-        verify(innerStore).put(any(Windowed.class), any(byte[].class));
+        final ArgumentCaptor<byte[]> byteCaptor = ArgumentCaptor.forClass(byte[].class);
+        verify(innerStore).put(any(Windowed.class), byteCaptor.capture());
 
-        final KafkaMetric metric = metric("put-rate");
-        assertTrue((Double) metric.metricValue() > 0);
-    }
-
-    @Test
-    public void shouldPutWithHeadersUsingConvenienceMethod() {
-        setUp();
-        init();
-
-        final Headers headers = new RecordHeaders();
-        headers.add("key1", "value1".getBytes());
-
-        doNothing().when(innerStore).put(any(Windowed.class), any(byte[].class));
-
-        store.put(WINDOWED_KEY, VALUE, headers);
-
-        verify(innerStore).put(any(Windowed.class), any(byte[].class));
+        final AggregationWithHeadersDeserializer<String> deserializer =
+            new AggregationWithHeadersDeserializer<>(Serdes.String().deserializer());
+        final AggregationWithHeaders<String> deserialized = deserializer.deserialize(CHANGELOG_TOPIC, byteCaptor.getValue());
+        assertEquals(VALUE, deserialized.aggregation());
+        assertNotNull(deserialized.headers());
+        assertEquals("value1", new String(deserialized.headers().lastHeader("key1").value()));
 
         final KafkaMetric metric = metric("put-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -233,6 +241,7 @@ public class MeteredSessionStoreWithHeadersTest {
         assertNotNull(result);
         assertEquals(VALUE, result.aggregation());
         assertNotNull(result.headers());
+        assertEquals("value1", new String(result.headers().lastHeader("key1").value()));
 
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -260,6 +269,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -289,6 +299,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -318,6 +329,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -362,6 +374,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -391,6 +404,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -420,6 +434,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -478,7 +493,7 @@ public class MeteredSessionStoreWithHeadersTest {
             cachedSessionStore,
             STORE_TYPE,
             Serdes.String(),
-            MeteredSessionStoreWithHeaders.createAggregationWithHeadersSerde(Serdes.String()),
+            createAggregationWithHeadersSerde(Serdes.String()),
             new MockTime()
         );
 
@@ -507,6 +522,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -536,6 +552,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final KeyValue<Windowed<String>, AggregationWithHeaders<String>> next = iterator.next();
         assertEquals(VALUE, next.value.aggregation());
         assertNotNull(next.value.headers());
+        assertEquals("value1", new String(next.value.headers().lastHeader("key1").value()));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -668,7 +685,7 @@ public class MeteredSessionStoreWithHeadersTest {
         final AggregationWithHeaders<String> valueAndHeaders = AggregationWithHeaders.make(VALUE, headers);
 
         try {
-            store.put(new Windowed<>(null, new SessionWindow(0, 0)), valueAndHeaders);
+            store.put(null, valueAndHeaders);
             throw new AssertionError("Should have thrown NullPointerException");
         } catch (final NullPointerException expected) {
             // Expected

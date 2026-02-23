@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -33,49 +32,6 @@ import org.apache.kafka.streams.processor.StateStore;
  * @param <K>   type of the record keys
  * @param <AGG> type of the aggregated values
  */
-public interface SessionStoreWithHeaders<K, AGG> extends StateStore, ReadOnlySessionStore<K, AggregationWithHeaders<AGG>>  {
+public interface SessionStoreWithHeaders<K, AGG> extends StateStore, SessionStore<K, AggregationWithHeaders<AGG>>  {
 
-    /**
-     * Return all the session window entries that ends between the specified range (both ends are inclusive).
-     * This function would be used to retrieve all closed and immutable windows.
-     *
-     * @param earliestSessionEndTime earliest session end time to search from, inclusive
-     * @param latestSessionEndTime   latest session end time to search to, inclusive
-     */
-    default KeyValueIterator<Windowed<K>, AggregationWithHeaders<AGG>> findSessions(final long earliestSessionEndTime,
-                                                                                    final long latestSessionEndTime) {
-        throw new UnsupportedOperationException(
-            "This API is not supported by this implementation of SessionStoreWithHeaders.");
-    }
-
-    /**
-     * Remove the session aggregated with provided {@link Windowed} key from the store
-     *
-     * @param sessionKey key of the session to remove
-     * @throws NullPointerException If null is used for sessionKey.
-     */
-    void remove(final Windowed<K> sessionKey);
-
-    /**
-     * Write the aggregated value with headers for the provided key to the store
-     *
-     * @param sessionKey key of the session to write
-     * @param aggregate  the aggregated value with headers for the session, it can be null;
-     *                   if the serialized bytes are also null it is interpreted as deletes
-     * @throws NullPointerException If null is used for sessionKey.
-     */
-    void put(final Windowed<K> sessionKey, final AggregationWithHeaders<AGG> aggregate);
-
-    /**
-     * Write the aggregated value with headers for the provided key to the store
-     *
-     * @param sessionKey key of the session to write
-     * @param aggregate  the aggregated value for the session, it can be null;
-     *                   if the serialized bytes are also null it is interpreted as deletes
-     * @param headers    the headers associated with the record
-     * @throws NullPointerException If null is used for sessionKey.
-     */
-    default void put(final Windowed<K> sessionKey, final AGG aggregate, final Headers headers) {
-        put(sessionKey, AggregationWithHeaders.make(aggregate, headers));
-    }
 }

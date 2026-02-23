@@ -162,8 +162,8 @@ public class MeteredSessionStore<K, V>
                 record -> listener.apply(
                     record.withKey(SessionKeySchema.from(record.key(), serdes.keyDeserializer(), record.headers(), serdes.topic()))
                         .withValue(new Change<>(
-                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue, record.headers()) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue, record.headers()) : null,
                             record.value().isLatest
                         ))
                 ),
@@ -502,7 +502,7 @@ public class MeteredSessionStore<K, V>
         return key == null ? null : Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
     }
 
-    private void maybeRecordE2ELatency() {
+    void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && internalContext != null) {
