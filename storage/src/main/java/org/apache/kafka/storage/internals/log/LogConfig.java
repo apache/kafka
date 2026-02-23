@@ -416,7 +416,7 @@ public class LogConfig extends AbstractConfig {
         if (remoteLogConfig.remoteCopyLagMs != MAX_REMOTE_COPY_LAG_MS) {
             return remoteLogConfig.remoteCopyLagMs;
         }
-        // MAX_REMOTE_COPY_LAG_MS (-1): use local retention; if local is to save forever (-1), return 0 (no delay).
+        // MAX_REMOTE_COPY_LAG_MS (-1): use local retention; if local is to save forever (-1), return 0 (no delay check).
         long localRetentionMs = localRetentionMs();
         return localRetentionMs == -1 ? 0 : localRetentionMs;
     }
