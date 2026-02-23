@@ -173,7 +173,7 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
                                         final PositionBound positionBound,
                                         final QueryConfig config) {
 
-            throw new UnsupportedOperationException("Queries are not supported by in-memory timestamped key-value stores with headers");
+            throw new UnsupportedOperationException("Queries are not supported by timestamped key-value stores with headers");
         }
 
         @Override

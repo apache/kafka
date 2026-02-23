@@ -130,6 +130,10 @@ public class CachingKeyValueStore
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
+        if (cacheType == CacheType.TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS) {
+            throw new UnsupportedOperationException("Queries (IQv2) are not supported for cached timestamped key-value stores with headers yet.");
+        }
+
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         final QueryResult<R> result;
 
@@ -173,9 +177,6 @@ public class CachingKeyValueStore
                                            final Position mergedPosition,
                                            final PositionBound positionBound,
                                            final QueryConfig config) {
-        if (cacheType == CacheType.TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS) {
-            throw new UnsupportedOperationException("Key queries are not supported by in-memory key-value stores with headers yet.");
-        }
         QueryResult<R> result = null;
         final KeyQuery<Bytes, byte[]> keyQuery = (KeyQuery<Bytes, byte[]>) query;
 

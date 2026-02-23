@@ -22,6 +22,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
@@ -577,6 +580,20 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         } finally {
             timestampedStore.close();
         }
+    }
+
+    @Test
+    public void shouldThrowUnsupportedOperationExceptionOnQuery() {
+        rocksDBStore.init(context, rocksDBStore);
+
+        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test".getBytes()));
+
+        final UnsupportedOperationException exception = assertThrows(
+                UnsupportedOperationException.class,
+                () -> rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false))
+        );
+
+        assertTrue(exception.getMessage().contains("Querying (IQv2) is not supported for timestamped key-value stores with headers yet."));
     }
 
     private byte[] wrapTimestampedValue(final byte[] value) {
