@@ -65,7 +65,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
-import static org.apache.kafka.coordinator.group.Utils.toPartitionMap;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
@@ -1076,8 +1075,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroupMember newMember
     ) {
         maybeRemovePartitionEpoch(oldMember);
-        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-        addPartitionEpochs(toPartitionMap(newMember.partitionsPendingRevocationWithEpochs()), newMember.memberEpoch());
+        addPartitionEpochs(newMember.assignedPartitionsWithEpochs(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.partitionsPendingRevocationWithEpochs(), newMember.memberEpoch());
     }
 
     /**
@@ -1089,26 +1088,26 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroupMember oldMember
     ) {
         if (oldMember != null) {
-            removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
-            removePartitionEpochs(toPartitionMap(oldMember.partitionsPendingRevocationWithEpochs()), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.assignedPartitionsWithEpochs(), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.partitionsPendingRevocationWithEpochs(), oldMember.memberEpoch());
         }
     }
 
     /**
      * Removes the partition epochs based on the provided assignment.
      *
-     * @param assignment    The assignment.
+     * @param assignmentWithEpochs    The assignment with epochs.
      * @param expectedEpoch The expected epoch.
      * package-private for testing.
      */
     void removePartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs,
         int expectedEpoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignmentWithEpochs.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionId -> {
+                    partitionEpochs.keySet().forEach(partitionId -> {
                         Integer prevValue = partitionsOrNull.get(partitionId);
                         if (prevValue != null && prevValue == expectedEpoch) {
                             partitionsOrNull.remove(partitionId);
@@ -1134,21 +1133,21 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Adds the partitions epoch based on the provided assignment.
      *
-     * @param assignment    The assignment.
+     * @param assignmentWithEpochs    The assignment with epochs.
      * @param epoch         The new epoch.
      * @throws IllegalStateException if updating a partition with a smaller or equal epoch.
      * package-private for testing.
      */
     void addPartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment,
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs,
         int epoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignmentWithEpochs.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
-                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, partitionEpochs.size());
                 }
-                for (Integer partitionId : assignedPartitions) {
+                for (Integer partitionId : partitionEpochs.keySet()) {
                     Integer prevValue = partitionsOrNull.get(partitionId);
                     if (prevValue == null || prevValue < epoch) {
                         partitionsOrNull.put(partitionId, epoch);
@@ -1358,10 +1357,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
             for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
                 Uuid topicId = entry.getKey();
-                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Set.of());
+                Map<Integer, Integer> assignedPartitionsWithEpochs = member.assignedPartitionsWithEpochs().getOrDefault(topicId, Map.of());
 
                 for (int partition : entry.getValue()) {
-                    if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {
+                    if (!assignedPartitionsWithEpochs.containsKey(partition) && currentPartitionEpoch(topicId, partition) != -1) {
                         return true;
                     }
                 }

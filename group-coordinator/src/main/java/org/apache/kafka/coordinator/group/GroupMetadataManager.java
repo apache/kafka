@@ -1416,21 +1416,21 @@ public class GroupMetadataManager {
      * it owns any other partitions.
      *
      * @param ownedTopicPartitions  The partitions provided by the consumer in the request.
-     * @param target                The partitions that the member should have.
+     * @param target                The partitions with epochs that the member should have.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
     private static boolean isSubset(
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
-        Map<Uuid, Set<Integer>> target
+        Map<Uuid, Map<Integer, Integer>> target
     ) {
         if (ownedTopicPartitions == null) return false;
 
         for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
-            Set<Integer> partitions = target.get(topicPartitions.topicId());
+            Map<Integer, Integer> partitions = target.get(topicPartitions.topicId());
             if (partitions == null) return false;
             for (Integer partitionId : topicPartitions.partitions()) {
-                if (!partitions.contains(partitionId)) return false;
+                if (!partitions.containsKey(partitionId)) return false;
             }
         }
 
@@ -1576,7 +1576,7 @@ public class GroupMetadataManager {
         } else if (receivedMemberEpoch < member.memberEpoch()) {
             // If the member comes with the previous epoch and has a subset of the current assignment partitions,
             // we accept it because the response with the bumped epoch may have been lost.
-            if (receivedMemberEpoch != member.previousMemberEpoch() || !isSubset(ownedTopicPartitions, member.assignedPartitions())) {
+            if (receivedMemberEpoch != member.previousMemberEpoch() || !isSubset(ownedTopicPartitions, member.assignedPartitionsWithEpochs())) {
                 throw new FencedMemberEpochException("The consumer group member has a smaller member "
                     + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
                     + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
@@ -2458,7 +2458,7 @@ public class GroupMetadataManager {
         // 2. The member's assignment has been updated.
         boolean isFullRequest = rebalanceTimeoutMs != -1 && (subscribedTopicNames != null || subscribedTopicRegex != null) && ownedTopicPartitions != null;
         if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
-            response.setAssignment(ConsumerGroupHeartbeatResponse.createAssignment(updatedMember.assignedPartitions()));
+            response.setAssignment(ConsumerGroupHeartbeatResponse.createAssignment(updatedMember.assignedPartitionsWithEpochs()));
         }
 
         return new CoordinatorResult<>(records, response);

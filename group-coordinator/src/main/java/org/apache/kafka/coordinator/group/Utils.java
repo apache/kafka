@@ -123,23 +123,6 @@ public class Utils {
         return builder.toString();
     }
 
-
-    /**
-     * Converts an topic-assignment with epochs to a regular topic-assignment map by removing the epoch information.
-     *
-     * @param partitionEpochMap The map with partition epochs (topicId -> partitionId -> epoch).
-     * @return The map with partition sets (topicId -> set of partitionId).
-     */
-    public static Map<Uuid, Set<Integer>> toPartitionMap(
-        Map<Uuid, Map<Integer, Integer>> partitionEpochMap
-    ) {
-        return partitionEpochMap.entrySet().stream()
-            .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                e -> e.getValue().keySet()
-            ));
-    }
-
     /**
      * Decrements value by 1; returns null when reaching zero. This helper is
      * meant to be used with Map#compute.

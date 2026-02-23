@@ -79,12 +79,12 @@ public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
     }
 
     public static ConsumerGroupHeartbeatResponseData.Assignment createAssignment(
-        Map<Uuid, Set<Integer>> assignment
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
     ) {
-        List<ConsumerGroupHeartbeatResponseData.TopicPartitions> topicPartitions = assignment.entrySet().stream()
+        List<ConsumerGroupHeartbeatResponseData.TopicPartitions> topicPartitions = assignmentWithEpochs.entrySet().stream()
             .map(keyValue -> new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                 .setTopicId(keyValue.getKey())
-                .setPartitions(new ArrayList<>(keyValue.getValue())))
+                .setPartitions(new ArrayList<>(keyValue.getValue().keySet())))
             .collect(Collectors.toList());
 
         return new ConsumerGroupHeartbeatResponseData.Assignment()
