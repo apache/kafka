@@ -597,7 +597,8 @@ class DynamicLogConfig(logManager: LogManager, directoryEventHandler: DirectoryE
         throw new ConfigException(RemoteLogManagerConfig.LOG_REMOTE_COPY_LAG_BYTES_PROP, logRemoteCopyLagBytes,
           s"Value must not exceed ${RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP} (effective value: $effectiveLocalRetentionBytes)")
       }
-      
+    }
+
     def validateCordonedLogDirs(): Unit = {
       val logDirs = newConfig.logDirs()
       val cordonedLogDirs = newConfig.cordonedLogDirs()
