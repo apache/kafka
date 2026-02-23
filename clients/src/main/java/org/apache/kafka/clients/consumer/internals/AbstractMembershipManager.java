@@ -855,7 +855,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         // Only proceed with reconciliation when invoked by poll()
         // This ensures that assignment changes happen during poll()
-        if (!invokedByPoll) return;
+        if (allowAssignmentUpdatesOnPollOnly() && !invokedByPoll) return;
 
         // Start reconciliation process to commit, release removed partitions and accept new ones.
         markReconciliationInProgress();
@@ -932,6 +932,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         }
         return expiration;
     }
+
+    abstract boolean allowAssignmentUpdatesOnPollOnly();
 
     /**
      * Trigger onPartitionsRevoked callbacks if any partitions where revoked. If it succeeds,
