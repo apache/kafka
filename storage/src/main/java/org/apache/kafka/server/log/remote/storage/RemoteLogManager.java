@@ -971,10 +971,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 if (hasExceededCopyLagTime(segment, currentTimeMs, copyLagMs)) {
                     return false;
                 }
-
-                if (copyLagBytes == 0) {
-                    return true;
-                }
             }
 
             return copyLagBytes > 0 && !hasExceededCopyLagSize(segment, totalLogSize, cumulativeSize, copyLagBytes);
