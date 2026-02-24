@@ -51,7 +51,6 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.common.ShareVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.server.util.timer.Timer;
@@ -1178,7 +1177,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(new WriteShareGroupStateResponseData()
                 .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
@@ -1230,7 +1229,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateResponseData()
                 .setResults(List.of(new ReadShareGroupStateResponseData.ReadStateResult()
@@ -1274,7 +1273,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateSummaryResponseData()
                 .setResults(List.of(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
@@ -1318,7 +1317,7 @@ class ShareCoordinatorServiceTest {
         int partition = 0;
 
         when(runtime.scheduleWriteOperation(any(), any(), any()))
-            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+            .thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(new DeleteShareGroupStateResponseData()
                 .setResults(List.of(new DeleteShareGroupStateResponseData.DeleteStateResult()
@@ -1360,7 +1359,7 @@ class ShareCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         int partition = 0;
 
-        when(runtime.scheduleWriteOperation(any(), any(), any())).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+        when(runtime.scheduleWriteOperation(any(), any(), any())).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(
             new InitializeShareGroupStateResponseData().setResults(List.of(new InitializeShareGroupStateResponseData.InitializeStateResult()
@@ -2287,7 +2286,7 @@ class ShareCoordinatorServiceTest {
             List.of(
                 CompletableFuture.completedFuture(null),
                 CompletableFuture.completedFuture(null),
-                FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+                CompletableFuture.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
             )
         );
 

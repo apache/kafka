@@ -32,7 +32,6 @@ import org.apache.kafka.common.record.internal.MemoryRecordsBuilder.RecordsInfo;
 import org.apache.kafka.common.record.internal.MutableRecordBatch;
 import org.apache.kafka.common.record.internal.Record;
 import org.apache.kafka.common.record.internal.RecordBatch;
-import org.apache.kafka.common.record.internal.RecordValidationStats;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;

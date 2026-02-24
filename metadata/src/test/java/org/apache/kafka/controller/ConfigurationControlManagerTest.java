@@ -34,6 +34,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ConfigSynonym;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 
@@ -61,6 +62,7 @@ import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SUBTRACT;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
+import static org.apache.kafka.controller.ConfigurationControlManager.DISALLOWED_CORDONED_LOG_DIRS_ERROR;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -552,6 +554,29 @@ public class ConfigurationControlManagerTest {
         } else {
             assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().error());
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testCordonedLogDirsFeature(boolean enabled) {
+        FeatureControlManager featureManager = new FeatureControlManager.Builder().
+                setQuorumFeatures(new QuorumFeatures(0,
+                        QuorumFeatures.defaultSupportedFeatureMap(true),
+                        List.of())).
+                build();
+        featureManager.replay(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(enabled ? MetadataVersion.LATEST_PRODUCTION.featureLevel() : MetadataVersion.IBP_4_2_IV1.featureLevel()));
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+                setFeatureControl(featureManager).
+                setKafkaConfigSchema(SCHEMA).
+                build();
+
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
+                toMap(entry(ServerLogConfigs.CORDONED_LOG_DIRS_CONFIG, entry(SET, "*"))),
+                true);
+
+        assertEquals(enabled ? ApiError.NONE : DISALLOWED_CORDONED_LOG_DIRS_ERROR, result.response());
     }
 
     private FeatureControlManager createFeatureControlManager() {

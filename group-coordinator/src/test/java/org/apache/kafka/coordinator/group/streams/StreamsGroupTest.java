@@ -1237,6 +1237,7 @@ public class StreamsGroupTest {
         assertEquals(List.of("fallback-topic"), describedGroup.topology().subtopologies().get(0).sourceTopics());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testCancelTimers() {
         StreamsGroup streamsGroup = createStreamsGroup("test-group");

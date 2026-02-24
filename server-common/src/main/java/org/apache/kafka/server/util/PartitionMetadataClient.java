@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.server.util;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;

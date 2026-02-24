@@ -87,14 +87,14 @@ Start the Kafka Docker container:
 
 Kafka is a distributed _event streaming platform_ that lets you read, write, store, and process [_events_](/documentation/#messages) (also called _records_ or _messages_ in the documentation) across many machines. 
 
-Example events are payment transactions, geolocation updates from mobile phones, shipping orders, sensor measurements from IoT devices or medical equipment, and much more. These events are organized and stored in [_topics_](/documentation/#intro_concepts_and_terms). Very simplified, a topic is similar to a folder in a filesystem, and the events are the files in that folder. 
+Example events are payment transactions, geolocation updates from mobile phones, shipping orders, sensor measurements from IoT devices or medical equipment, and much more. These events are organized and stored in [_topics_](/{version}/getting-started/introduction/#main-concepts-and-terminology). Very simplified, a topic is similar to a folder in a filesystem, and the events are the files in that folder. 
 
 So before you can write your first events, you must create a topic. Open another terminal session and run: 
     
     
     $ bin/kafka-topics.sh --create --topic quickstart-events --bootstrap-server localhost:9092
 
-All of Kafka's command line tools have additional options: run the `kafka-topics.sh` command without any arguments to display usage information. For example, it can also show you [details such as the partition count](/documentation/#intro_concepts_and_terms) of the new topic: 
+All of Kafka's command line tools have additional options: run the `kafka-topics.sh` command without any arguments to display usage information. For example, it can also show you [details such as the partition count](/{version}/getting-started/introduction/#main-concepts-and-terminology) of the new topic: 
     
     
     $ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092

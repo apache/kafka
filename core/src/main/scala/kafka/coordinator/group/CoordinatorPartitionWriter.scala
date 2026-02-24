@@ -159,11 +159,11 @@ class CoordinatorPartitionWriter(
       throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
 
     if (partitionResult.error != Errors.NONE) {
-      throw partitionResult.error.exception()
+      throw partitionResult.error.exception(partitionResult.errorMessage)
     }
 
     // Required offset.
-    partitionResult.info.lastOffset + 1
+    partitionResult.logAppendSummary.lastOffset + 1
   }
 
   override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {

@@ -21,6 +21,8 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.server.record.BrokerCompressionType;
 
+import java.util.List;
+
 import static org.apache.kafka.server.config.ServerTopicConfigSynonyms.LOG_PREFIX;
 
 /**
@@ -39,6 +41,11 @@ public class ServerLogConfigs {
     public static final String LOG_DIR_DEFAULT = "/tmp/kafka-logs";
     public static final String LOG_DIR_DOC = "A comma-separated list of the directories where the log data is stored. (supplemental to " + LOG_DIRS_CONFIG + " property)";
     public static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIR_CONFIG + " is used.";
+
+    public static final String CORDONED_LOG_DIRS_CONFIG = "cordoned.log.dirs";
+    public static final List<String> CORDONED_LOG_DIRS_DEFAULT = List.of();
+    public static final String CORDONED_LOG_DIRS_DOC = "A comma-separated list of the directories that are cordoned. Entries in this list must be entries in log.dirs or log.dir configuration. This can also be set to * to cordon all log directories.";
+    public static final String CORDONED_LOG_DIRS_ALL = "*";
 
     public static final String LOG_SEGMENT_BYTES_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG);
     public static final String LOG_SEGMENT_BYTES_DOC = "The maximum size of a single log file";

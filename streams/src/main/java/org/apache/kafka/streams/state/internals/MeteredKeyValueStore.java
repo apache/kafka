@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -73,6 +74,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K>
  * @param <V>
  */
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class MeteredKeyValueStore<K, V>
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
     implements KeyValueStore<K, V>, MeteredStateStore {
@@ -84,7 +87,7 @@ public class MeteredKeyValueStore<K, V>
     private final String metricsScope;
     protected final Time time;
     protected Sensor putSensor;
-    private Sensor putIfAbsentSensor;
+    protected Sensor putIfAbsentSensor;
     protected Sensor getSensor;
     protected Sensor deleteSensor;
     private Sensor putAllSensor;
@@ -321,7 +324,7 @@ public class MeteredKeyValueStore<K, V>
                     final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
+            maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value, new RecordHeaders())), time, putSensor);
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -418,11 +421,11 @@ public class MeteredKeyValueStore<K, V>
     }
 
     protected V outerValue(final byte[] value) {
-        return value != null ? serdes.valueFrom(value) : null;
+        return value != null ? serdes.valueFrom(value, new RecordHeaders()) : null;
     }
 
     protected Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key));
+        return Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
     }
 
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {

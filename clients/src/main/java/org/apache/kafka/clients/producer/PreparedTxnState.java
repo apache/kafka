@@ -77,10 +77,20 @@ public class PreparedTxnState {
         this.epoch = epoch;
     }
 
+    /**
+     * Gets the producer ID associated with this prepared transaction state.
+     *
+     * @return The producer ID
+     */
     public long producerId() {
         return producerId;
     }
 
+    /**
+     * Gets the producer epoch associated with this prepared transaction state.
+     *
+     * @return The producer epoch
+     */
     public short epoch() {
         return epoch;
     }

@@ -16,6 +16,12 @@
  */
 package org.apache.kafka.common.record.internal;
 
+import org.apache.kafka.common.message.ControlRecordTypeSchema;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.types.Type;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -26,10 +32,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ControlRecordTypeTest {
 
+    // Old hard-coded schema, used to validate old hard-coded schema format is exactly the same as new auto generated protocol format
+    private final Schema v0Schema = new Schema(
+            new Field("version", Type.INT16),
+            new Field("type", Type.INT16));
+
     @Test
     public void testParseUnknownType() {
         ByteBuffer buffer = ByteBuffer.allocate(32);
-        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
+        buffer.putShort(ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION);
         buffer.putShort((short) 337);
         buffer.flip();
         ControlRecordType type = ControlRecordType.parse(buffer);
@@ -50,11 +61,58 @@ public class ControlRecordTypeTest {
     @ParameterizedTest
     @EnumSource(value = ControlRecordType.class)
     public void testRoundTrip(ControlRecordType expected) {
-        ByteBuffer buffer = ByteBuffer.allocate(32);
-        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
-        buffer.putShort(expected.type());
-        buffer.flip();
+        if (expected == ControlRecordType.UNKNOWN) {
+            return;
+        }
+        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
+             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = expected.recordKey();
+            ControlRecordType deserializedKey = ControlRecordType.parse(buffer);
+            assertEquals(expected, deserializedKey);
+        }
+    }
 
-        assertEquals(expected, ControlRecordType.parse(buffer));
+    @ParameterizedTest
+    @EnumSource(value = ControlRecordType.class)
+    public void testValueControlRecordKeySize(ControlRecordType type) {
+        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
+             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+            assertEquals(4, type.controlRecordKeySize());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ControlRecordType.class)
+    public void testBackwardDeserializeCompatibility(ControlRecordType type) {
+        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
+             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+            Struct struct = new Struct(v0Schema);
+            struct.set("version", version);
+            struct.set("type", type.type());
+
+            ByteBuffer oldVersionBuffer = ByteBuffer.allocate(struct.sizeOf());
+            struct.writeTo(oldVersionBuffer);
+            oldVersionBuffer.flip();
+
+            ControlRecordType deserializedType = ControlRecordType.parse(oldVersionBuffer);
+            assertEquals(type, deserializedType);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ControlRecordType.class)
+    public void testForwardDeserializeCompatibility(ControlRecordType type) {
+        if (type == ControlRecordType.UNKNOWN) {
+            return;
+        }
+        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
+             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer newVersionBuffer = type.recordKey();
+
+            Struct struct = v0Schema.read(newVersionBuffer);
+
+            ControlRecordType deserializedType = ControlRecordType.fromTypeId(struct.getShort("type"));
+            assertEquals(type, deserializedType);
+        }
     }
 }
