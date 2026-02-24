@@ -346,8 +346,8 @@ public class ShareCompletedFetchTest {
 
         // Acquire all records including the control record (offset 10 is the commit marker)
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(rawRecords)
-                .setAcquiredRecords(acquiredRecords(0L, numRecords + 1));
+            .setRecords(rawRecords)
+            .setAcquiredRecords(acquiredRecords(0L, numRecords + 1));
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
@@ -374,8 +374,8 @@ public class ShareCompletedFetchTest {
         acquiredRecords.add(acquiredRecords(10L, 5).get(0));
 
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset,  10))
-                .setAcquiredRecords(acquiredRecords); // Acquire only records 0-4 and 10-14
+            .setRecords(newRecords(startingOffset,  10))
+            .setAcquiredRecords(acquiredRecords); // Acquire only records 0-4 and 10-14
 
         Deserializers<String, String> deserializers = newStringDeserializers();
 
@@ -407,8 +407,8 @@ public class ShareCompletedFetchTest {
 
         // Acquire only non-existent records 15-19 (all should be gaps)
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(newRecords(startingOffset, numRecords))  // Records 0-9
-                .setAcquiredRecords(acquiredRecords(15L, 5));       // Acquire 15-19 (don't exist)
+            .setRecords(newRecords(startingOffset, numRecords))  // Records 0-9
+            .setAcquiredRecords(acquiredRecords(15L, 5));       // Acquire 15-19 (don't exist)
 
         Deserializers<String, String> deserializers = newStringDeserializers();
 
@@ -464,8 +464,8 @@ public class ShareCompletedFetchTest {
 
         // Acquire all offsets 0-6 (includes both control records and data records)
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                .setRecords(records)
-                .setAcquiredRecords(acquiredRecords(0L, 7));
+            .setRecords(records)
+            .setAcquiredRecords(acquiredRecords(0L, 7));
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
@@ -835,16 +835,16 @@ public class ShareCompletedFetchTest {
 
         for (long b = 0; b < batchCount; b++) {
             try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-                RecordBatch.CURRENT_MAGIC_VALUE,
-                Compression.NONE,
-                TimestampType.CREATE_TIME,
-                baseOffset + b * numRecordsPerBatch,
-                time.milliseconds(),
-                PRODUCER_ID,
-                PRODUCER_EPOCH,
-                0,
-                true,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+                    RecordBatch.CURRENT_MAGIC_VALUE,
+                    Compression.NONE,
+                    TimestampType.CREATE_TIME,
+                    baseOffset + b * numRecordsPerBatch,
+                    time.milliseconds(),
+                    PRODUCER_ID,
+                    PRODUCER_EPOCH,
+                    0,
+                    true,
+                    RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
                 for (int i = 0; i < numRecordsPerBatch; i++)
                     builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
@@ -906,16 +906,16 @@ public class ShareCompletedFetchTest {
 
     private void createBatch(ByteBuffer buffer, long baseOffset, int numRecords, Time time) {
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
-            RecordBatch.CURRENT_MAGIC_VALUE,
-            Compression.NONE,
-            TimestampType.CREATE_TIME,
-            baseOffset,
-            time.milliseconds(),
-            PRODUCER_ID,
-            PRODUCER_EPOCH,
-            0,
-            false,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                Compression.NONE,
+                TimestampType.CREATE_TIME,
+                baseOffset,
+                time.milliseconds(),
+                PRODUCER_ID,
+                PRODUCER_EPOCH,
+                0,
+                false,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
             for (int i = 0; i < numRecords; i++) {
                 builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), ("value-" + (baseOffset + i)).getBytes()));
             }
@@ -926,7 +926,7 @@ public class ShareCompletedFetchTest {
     private void corruptBatchCrc(ByteBuffer buffer, int batchStartPosition) {
         int currentPosition = buffer.position();
 
-        // CRC is at offset 17 in the record batch (after base offset, batch length, partition leader epoch, magic, and attributes)
+        // CRC is at offset 17 in the record batch (after base offset, batch length, partition leader epoch, and magic)
         // For v2 records: [baseOffset(8) | batchLength(4) | partitionLeaderEpoch(4) | magic(1) | crc(4) | ...]
         int crcPosition = batchStartPosition + 17;
 
