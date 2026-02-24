@@ -23,11 +23,19 @@ import org.apache.kafka.streams.state.SessionStore;
 public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
+    private final boolean withHeaders;
 
     public RocksDbSessionBytesStoreSupplier(final String name,
                                             final long retentionPeriod) {
+        this(name, retentionPeriod, false);
+    }
+
+    public RocksDbSessionBytesStoreSupplier(final String name,
+                                            final long retentionPeriod,
+                                            final boolean withHeaders) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
+        this.withHeaders = withHeaders;
     }
 
     @Override
@@ -43,6 +51,9 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
             retentionPeriod,
             segmentIntervalMs(),
             new SessionKeySchema());
+        if (withHeaders) {
+            return new RocksDBSessionStoreWithHeaders(segmented);
+        }
         return new RocksDBSessionStore(segmented);
     }
 
