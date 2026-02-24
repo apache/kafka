@@ -133,12 +133,20 @@ public class AssignorBenchmarkUtils {
         for (Map.Entry<String, ? extends ModernGroupMember> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
             ModernGroupMember member = memberEntry.getValue();
+            Map<Uuid, Set<Integer>> partitions;
+            if (member instanceof ConsumerGroupMember) {
+                partitions = ((ConsumerGroupMember) member).assignedPartitions();
+            } else if (member instanceof ShareGroupMember) {
+                partitions = ((ShareGroupMember) member).assignedPartitions();
+            } else {
+                partitions = Map.of();
+            }
 
             memberSpecs.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.ofNullable(member.rackId()),
                 Optional.ofNullable(member.instanceId()),
                 new TopicIds(member.subscribedTopicNames(), topicResolver),
-                new Assignment(member.assignedPartitions())
+                new Assignment(partitions)
             ));
         }
 
