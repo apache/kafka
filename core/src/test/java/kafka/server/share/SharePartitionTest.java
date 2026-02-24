@@ -10079,7 +10079,6 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewEnabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
@@ -10120,7 +10119,6 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewEnabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
@@ -10166,7 +10164,6 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewEnabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 2), 2);
@@ -10220,7 +10217,6 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewEnabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 10), 10);
@@ -10255,7 +10251,6 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewEnabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 5), 5);
@@ -10333,7 +10328,6 @@ public class SharePartitionTest {
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
-            .withGroupConfigManager(groupConfigManagerWithRenewEnabled())
             .build();
 
         // Batch
@@ -10390,12 +10384,12 @@ public class SharePartitionTest {
     @Test
     public void testRenewAcknowledgeDisabledWithCompleteBatchAck() {
         Persister persister = Mockito.mock(Persister.class);
-        // Default groupConfigManager mock returns Optional.empty(), so renew is disabled by default.
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
+            .withGroupConfigManager(groupConfigManagerWithRenewDisabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 1), 1);
@@ -10424,12 +10418,12 @@ public class SharePartitionTest {
     @Test
     public void testRenewAcknowledgeDisabledWithPerOffsetAck() {
         Persister persister = Mockito.mock(Persister.class);
-        // Default groupConfigManager mock returns Optional.empty(), so renew is disabled by default.
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withMaxDeliveryCount(2)
             .withPersister(persister)
+            .withGroupConfigManager(groupConfigManagerWithRenewDisabled())
             .build();
 
         List<AcquiredRecords> records = fetchAcquiredRecords(sharePartition, memoryRecords(0, 2), 2);
@@ -12433,11 +12427,11 @@ public class SharePartitionTest {
         assertFalse(sharePartition.cachedState().isEmpty());
     }
 
-    private static GroupConfigManager groupConfigManagerWithRenewEnabled() {
+    private static GroupConfigManager groupConfigManagerWithRenewDisabled() {
         GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         GroupConfig groupConfig = Mockito.mock(GroupConfig.class);
         Mockito.when(groupConfigManager.groupConfig(GROUP_ID)).thenReturn(Optional.of(groupConfig));
-        Mockito.when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(true);
+        Mockito.when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);
         Mockito.when(groupConfig.shareRecordLockDurationMs()).thenReturn(ACQUISITION_LOCK_TIMEOUT_MS);
         return groupConfigManager;
     }

@@ -73,7 +73,7 @@ public final class GroupConfig extends AbstractConfig {
         "Non-transactional records will be returned unconditionally in either mode.";
 
     public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_CONFIG = "share.renew.acknowledge.enable";
-    public static final boolean SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT = false;
+    public static final boolean SHARE_RENEW_ACKNOWLEDGE_ENABLE_DEFAULT = true;
     public static final String SHARE_RENEW_ACKNOWLEDGE_ENABLE_DOC = "Whether the renew acknowledge type is enabled for the share group.";
 
     public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "streams.session.timeout.ms";
