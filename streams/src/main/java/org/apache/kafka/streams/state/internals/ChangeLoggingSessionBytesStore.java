@@ -35,7 +35,7 @@ public class ChangeLoggingSessionBytesStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
     implements SessionStore<Bytes, byte[]> {
 
-    private InternalProcessorContext<?, ?> internalContext;
+    InternalProcessorContext<?, ?> internalContext;
 
     ChangeLoggingSessionBytesStore(final SessionStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
