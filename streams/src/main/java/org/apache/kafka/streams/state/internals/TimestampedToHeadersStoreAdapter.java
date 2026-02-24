@@ -152,7 +152,7 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
-        throw new UnsupportedOperationException("Querying (IQv2) is not supported for this store.");
+        throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped key-value stores with headers yet.");
     }
 
     @Override

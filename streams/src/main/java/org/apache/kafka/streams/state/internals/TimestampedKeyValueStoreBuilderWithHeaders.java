@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -173,7 +174,12 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
                                         final PositionBound positionBound,
                                         final QueryConfig config) {
 
-            throw new UnsupportedOperationException("Queries are not supported by timestamped key-value stores with headers");
+            throw new UnsupportedOperationException("Queries (IQv2) are not supported by timestamped key-value stores with headers yet.");
+        }
+
+        @Override
+        public Position getPosition() {
+            throw new UnsupportedOperationException("Position is not supported by timestamped key-value stores with headers yet.");
         }
 
         @Override

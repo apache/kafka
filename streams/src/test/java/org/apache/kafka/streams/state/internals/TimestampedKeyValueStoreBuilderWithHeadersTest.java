@@ -23,7 +23,9 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -153,7 +155,6 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         assertInstanceOf(TimestampedToHeadersStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
-    @SuppressWarnings("all")
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
         setUpWithoutInner();
@@ -221,7 +222,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         );
 
         assertTrue(exception.getMessage().contains(
-            "Queries are not supported by timestamped key-value stores with headers"));
+            "Queries (IQv2) are not supported by timestamped key-value stores with headers yet."));
     }
 
     @Test
@@ -253,7 +254,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
         );
 
-        assertTrue(exception.getMessage().contains("Querying (IQv2) is not supported for this store."));
+        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
     }
 
     @Test
@@ -306,7 +307,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
         );
 
-        assertTrue(exception.getMessage().contains("Querying (IQv2) is not supported for timestamped key-value stores with headers yet."));
+        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
     }
 
     @Test
@@ -332,7 +333,38 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 store::getPosition
         );
 
-        assertTrue(exception.getMessage().contains("Position is not supported for this store"));
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
+    }
+
+    @Test
+    public void shouldThrowOnGetPositionForInMemoryStoreMarker() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+                .withLoggingDisabled()
+                .withCachingDisabled()
+                .build();
+
+        // Unwrap to get directly to the InMemoryTimestampedKeyValueStoreWithHeadersMarker
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(KeyValueStore.class, wrapped);
+        assertInstanceOf(HeadersBytesStore.class, wrapped);
+
+        final UnsupportedOperationException exception = assertThrows(
+                UnsupportedOperationException.class,
+            wrapped::getPosition
+        );
+
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
     }
 
     @Test
@@ -358,7 +390,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 store::getPosition
         );
 
-        assertTrue(exception.getMessage().contains("Position is not supported for this store"));
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
     }
 
     @Test
@@ -384,7 +416,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
                 store::getPosition
         );
 
-        assertTrue(exception.getMessage().contains("Position is not supported for this"));
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
     }
 
 }
