@@ -30,7 +30,7 @@ import static org.apache.kafka.streams.state.internals.AggregationWithHeadersDes
  * <p>
  * Semantics:
  *  - The inner store value format is:
- *        [ varint headers_size ][ headers_bytes ][ aggregation ]
+ *        [headersSize(varint)][headersBytes][aggregationBytes]
  *  - The changelog record value logged via {@code logChange(...)} is just the {@code aggregation}
  *    (no headers prefix), and the headers are logged separately.
  */
@@ -39,6 +39,19 @@ public class ChangeLoggingSessionBytesStoreWithHeaders
 
     ChangeLoggingSessionBytesStoreWithHeaders(final SessionStore<Bytes, byte[]> bytesStore) {
         super(bytesStore);
+    }
+
+    @Override
+    public void remove(final Windowed<Bytes> sessionKey) {
+        wrapped().remove(sessionKey);
+        internalContext.logChange(
+            name(),
+            SessionKeySchema.toBinary(sessionKey),
+            null,
+            internalContext.recordContext().timestamp(),
+            internalContext.recordContext().headers(),
+            wrapped().getPosition()
+        );
     }
 
     @Override
