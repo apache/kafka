@@ -148,16 +148,18 @@ public class ShareInFlightBatch<K, V> {
         int recordsRenewed = 0;
         boolean isCompletedExceptionally = acknowledgements.isCompletedExceptionally();
         if (acknowledgements.isCompleted()) {
-            Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
-            for (Map.Entry<Long, AcknowledgeType> ackTypeEntry : ackTypeMap.entrySet()) {
-                long offset = ackTypeEntry.getKey();
-                AcknowledgeType ackType = ackTypeEntry.getValue();
-                ConsumerRecord<K, V> record = renewingRecords.remove(offset);
-                if (ackType == AcknowledgeType.RENEW) {
-                    if (record != null && !isCompletedExceptionally) {
-                        // The record is moved into renewed state, and will then become in-flight later.
-                        renewedRecords.put(offset, record);
-                        recordsRenewed++;
+            if (renewingRecords != null) {
+                Map<Long, AcknowledgeType> ackTypeMap = acknowledgements.getAcknowledgementsTypeMap();
+                for (Map.Entry<Long, AcknowledgeType> ackTypeEntry : ackTypeMap.entrySet()) {
+                    long offset = ackTypeEntry.getKey();
+                    AcknowledgeType ackType = ackTypeEntry.getValue();
+                    ConsumerRecord<K, V> record = renewingRecords.remove(offset);
+                    if (ackType == AcknowledgeType.RENEW) {
+                        if (record != null && !isCompletedExceptionally) {
+                            // The record is moved into renewed state, and will then become in-flight later.
+                            renewedRecords.put(offset, record);
+                            recordsRenewed++;
+                        }
                     }
                 }
             }

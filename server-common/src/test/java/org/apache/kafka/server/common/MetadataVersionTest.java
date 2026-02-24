@@ -98,9 +98,10 @@ class MetadataVersionTest {
         assertEquals(IBP_4_3_IV0, MetadataVersion.fromVersionString("4.3-IV0", true));
 
         // Throws exception when unstableFeatureVersionsEnabled is false
-        assertEquals("Unknown metadata.version '4.3-IV0'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
-            + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, 4.1-IV1, 4.2-IV0, 4.2-IV1",
-            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.3-IV0", false)).getMessage());
+        assertEquals("Unknown metadata.version '4.4-IV0'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
+            + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, "
+            + "4.1-IV1, 4.2-IV0, 4.2-IV1, 4.3-IV0",
+            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.4-IV0", false)).getMessage());
     }
 
     @Test
@@ -240,7 +241,9 @@ class MetadataVersionTest {
     @EnumSource(value = MetadataVersion.class)
     public void testRegisterBrokerRecordVersion(MetadataVersion metadataVersion) {
         final short expectedVersion;
-        if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2)) {
+        if (metadataVersion.isAtLeast(IBP_4_3_IV0)) {
+            expectedVersion = 4;
+        } else if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2)) {
             expectedVersion = 3;
         } else if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_4_IV0)) {
             expectedVersion = 2;

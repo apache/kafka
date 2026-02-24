@@ -148,13 +148,13 @@ public class LogManagerBuilder {
     }
 
     public LogManager build() {
-        if (logDirs == null) throw new RuntimeException("you must set logDirs");
-        if (configRepository == null) throw new RuntimeException("you must set configRepository");
-        if (initialDefaultConfig == null) throw new RuntimeException("you must set initialDefaultConfig");
-        if (cleanerConfig == null) throw new RuntimeException("you must set cleanerConfig");
-        if (scheduler == null) throw new RuntimeException("you must set scheduler");
-        if (brokerTopicStats == null) throw new RuntimeException("you must set brokerTopicStats");
-        if (logDirFailureChannel == null) throw new RuntimeException("you must set logDirFailureChannel");
+        if (logDirs == null) throw new IllegalStateException("you must set logDirs");
+        if (configRepository == null) throw new IllegalStateException("you must set configRepository");
+        if (initialDefaultConfig == null) throw new IllegalStateException("you must set initialDefaultConfig");
+        if (cleanerConfig == null) throw new IllegalStateException("you must set cleanerConfig");
+        if (scheduler == null) throw new IllegalStateException("you must set scheduler");
+        if (brokerTopicStats == null) throw new IllegalStateException("you must set brokerTopicStats");
+        if (logDirFailureChannel == null) throw new IllegalStateException("you must set logDirFailureChannel");
         return new LogManager(CollectionConverters.asScala(logDirs).toSeq(),
                               CollectionConverters.asScala(initialOfflineDirs).toSeq(),
                               configRepository,

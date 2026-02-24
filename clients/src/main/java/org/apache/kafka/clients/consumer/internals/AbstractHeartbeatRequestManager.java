@@ -432,6 +432,22 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                     "subscribe. " + errorMessage));
                 break;
 
+            case GROUP_ID_NOT_FOUND:
+                // If the group doesn't exist (e.g., member never joined due to InvalidTopicException),
+                // GROUP_ID_NOT_FOUND should be ignored - the leave is effectively complete.
+                // When a leave heartbeat (epoch=-1) is sent, the state transitions synchronously
+                // from LEAVING to UNSUBSCRIBED in onHeartbeatRequestGenerated() before the request is sent.
+                if (membershipManager().state() == MemberState.UNSUBSCRIBED) {
+                    logger.info("{} received GROUP_ID_NOT_FOUND for group {} while unsubscribed. ",
+                            heartbeatRequestName(), membershipManager().groupId());
+                    membershipManager().onHeartbeatRequestSkipped();
+                } else {
+                    // Else, this is a fatal error, we should throw it and transition to fatal state.
+                    logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);
+                    handleFatalFailure(error.exception(errorMessage));
+                }
+                break;
+
             default:
                 if (!handleSpecificExceptionInResponse(response, currentTimeMs)) {
                     // If the manager receives an unknown error - there could be a bug in the code or a new error code

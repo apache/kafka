@@ -28,12 +28,14 @@ import org.apache.kafka.common.protocol.ApiKeys.{BROKER_HEARTBEAT, BROKER_REGIST
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.ControllerInformation
 
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
+import java.util.function.Supplier
 import scala.jdk.CollectionConverters._
 
-class SimpleControllerNodeProvider extends ControllerNodeProvider {
+class SimpleControllerNodeProvider extends Supplier[ControllerInformation] {
   val node = new AtomicReference[Node](null)
 
   def listenerName: ListenerName = new ListenerName("PLAINTEXT")
@@ -42,7 +44,7 @@ class SimpleControllerNodeProvider extends ControllerNodeProvider {
 
   def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
 
-  override def getControllerInfo(): ControllerInformation = ControllerInformation(Option(node.get()),
+  override def get(): ControllerInformation = new ControllerInformation(Optional.ofNullable(node.get()),
     listenerName, securityProtocol, saslMechanism)
 }
 

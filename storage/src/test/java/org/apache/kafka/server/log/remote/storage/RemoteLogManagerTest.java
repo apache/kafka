@@ -28,11 +28,11 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.PluginMetrics;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RemoteLogInputStream;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.RemoteLogInputStream;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
@@ -1139,7 +1139,7 @@ public class RemoteLogManagerTest {
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
         Map<String, Long> logProps = new HashMap<>();
-        logProps.put("retention.bytes", 1000000L);
+        logProps.put("retention.bytes", 5000L);
         logProps.put("retention.ms", -1L);
         LogConfig logConfig = new LogConfig(logProps);
         when(mockLog.config()).thenReturn(logConfig);
@@ -2177,6 +2177,80 @@ public class RemoteLogManagerTest {
         }
     }
 
+    @Test
+    public void testBuildRetentionSizeData() throws RemoteStorageException {
+        long retentionSize = 1000L;
+        long onlyLocalLogSegmentsSize = 500L;
+        long logEndOffset = 100L;
+        NavigableMap<Integer, Long> epochEntries = new TreeMap<>();
+        epochEntries.put(0, 0L);
+        long fullCopyFinishedSegmentsSizeInBytes = 1600L;
+        RemoteLogManager.RLMExpirationTask expirationTask = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
+        assertFalse(expirationTask.isAllSegmentsValid());
+
+        // 1. retentionSize < 0
+        Optional<RemoteLogManager.RetentionSizeData> result = expirationTask
+                .buildRetentionSizeData(-1L, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullCopyFinishedSegmentsSizeInBytes);
+        assertFalse(result.isPresent());
+        assertFalse(expirationTask.isAllSegmentsValid());
+
+        // 2. When (onlyLocalLogSegmentsSize + fullCopyFinishedSegmentsSizeInBytes) <= configure-retention-size
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 500L);
+        assertFalse(result.isPresent());
+        assertFalse(expirationTask.isAllSegmentsValid());
+
+        // 3. totalSize <= retentionSize
+        // totalSize = 500 (local) + 0 (remote, as listRemoteLogSegments returns empty) = 500. retentionSize = 1000.
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
+                .thenReturn(Collections.emptyIterator());
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullCopyFinishedSegmentsSizeInBytes);
+        assertFalse(result.isPresent());
+        assertFalse(expirationTask.isAllSegmentsValid());
+
+        // 4. totalSize > retentionSize
+        // Each remote log segment size is 1000 bytes.
+        // totalSize = 500 (local) + 1000 (remote) = 1500. retentionSize = 1000.
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        RemoteLogSegmentMetadata segmentMetadata = createRemoteLogSegmentMetadata(0, 50, Collections.singletonMap(0, 0L));
+        when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), eq(0)))
+                .thenAnswer(invocation -> {
+                    invocationCount.incrementAndGet();
+                    return Collections.singletonList(segmentMetadata).iterator();
+                });
+
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, fullCopyFinishedSegmentsSizeInBytes);
+        assertTrue(result.isPresent());
+        assertEquals(1000L, result.get().retentionSize());
+        assertEquals(500L, result.get().remainingBreachedSize()); // (500 + 1000) - 1000 = 500
+        assertFalse(expirationTask.isAllSegmentsValid());
+        assertEquals(1, invocationCount.get());
+
+        // 5. Provide the valid `fullCopyFinishedSegmentsSizeInBytes` size
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 1000L);
+        assertTrue(result.isPresent());
+        assertEquals(1000L, result.get().retentionSize());
+        assertEquals(500L, result.get().remainingBreachedSize()); // (500 + 1000) - 1000 = 500
+        assertTrue(expirationTask.isAllSegmentsValid());
+        assertEquals(2, invocationCount.get());
+
+        // Once all the segments are validated and the computed segmentSize for listRemoteLogSegments(tpId) and
+        // listRemoteLogSegments(tpId, epoch) are same, then the next calls to `buildRetentionSizeData` should not
+        // invoke listRemoteLogSegments(tpId, epoch) again.
+        result = expirationTask
+                .buildRetentionSizeData(retentionSize, onlyLocalLogSegmentsSize, logEndOffset, epochEntries, 1000L);
+        assertTrue(result.isPresent());
+        assertEquals(500L, result.get().remainingBreachedSize());
+        assertEquals(2, invocationCount.get());
+        assertTrue(expirationTask.isAllSegmentsValid());
+
+        expirationTask.cancel();
+        assertFalse(expirationTask.isAllSegmentsValid());
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void testRemoteSizeTime() {
@@ -2519,10 +2593,12 @@ public class RemoteLogManagerTest {
         verify(remoteStorageManager, times(1)).deleteLogSegmentData(remoteLogSegmentMetadata);
     }
 
-    @ParameterizedTest(name = "testDeletionOnRetentionBreachedSegments retentionSize={0} retentionMs={1}")
-    @CsvSource(value = {"0, -1", "-1, 0"})
+    // expectDeletion=false tests that segments with maxTimestampMs == cleanupUntilMs are NOT deleted (strict less-than)
+    @ParameterizedTest(name = "testDeletionOnRetentionBreachedSegments retentionSize={0} retentionMs={1} expectDeletion={2}")
+    @CsvSource(value = {"0, -1, true", "-1, 0, true", "-1, 0, false"})
     public void testDeletionOnRetentionBreachedSegments(long retentionSize,
-                                                        long retentionMs)
+                                                        long retentionMs,
+                                                        boolean expectDeletion)
             throws RemoteStorageException, ExecutionException, InterruptedException {
         Map<String, Long> logProps = new HashMap<>();
         logProps.put("retention.bytes", retentionSize);
@@ -2556,19 +2632,27 @@ public class RemoteLogManagerTest {
 
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
+        if (expectDeletion) {
+            advanceTimeToMakeSegmentDeletable();
+        }
         task.cleanupExpiredRemoteLogSegments();
 
-        assertEquals(200L, currentLogStartOffset.get());
-        verify(remoteStorageManager).deleteLogSegmentData(metadataList.get(0));
-        verify(remoteStorageManager).deleteLogSegmentData(metadataList.get(1));
+        if (expectDeletion) {
+            assertEquals(200L, currentLogStartOffset.get());
+            verify(remoteStorageManager).deleteLogSegmentData(metadataList.get(0));
+            verify(remoteStorageManager).deleteLogSegmentData(metadataList.get(1));
 
-        // Verify the metric for remote delete is updated correctly
-        assertEquals(2, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteRequestRate().count());
-        // Verify we did not report any failure for remote deletes
-        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteDeleteRequestRate().count());
-        // Verify aggregate metrics
-        assertEquals(2, brokerTopicStats.allTopicsStats().remoteDeleteRequestRate().count());
-        assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().count());
+            // Verify the metric for remote delete is updated correctly
+            assertEquals(2, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteDeleteRequestRate().count());
+            // Verify we did not report any failure for remote deletes
+            assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteDeleteRequestRate().count());
+            // Verify aggregate metrics
+            assertEquals(2, brokerTopicStats.allTopicsStats().remoteDeleteRequestRate().count());
+            assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().count());
+        } else {
+            assertEquals(0L, currentLogStartOffset.get());
+            verify(remoteStorageManager, never()).deleteLogSegmentData(any());
+        }
     }
 
     @ParameterizedTest(name = "testDeletionOnOverlappingRetentionBreachedSegments retentionSize={0} retentionMs={1}")
@@ -2624,6 +2708,7 @@ public class RemoteLogManagerTest {
         assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().count());
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
+        advanceTimeToMakeSegmentDeletable();
         task.cleanupExpiredRemoteLogSegments();
 
         assertEquals(metadata2.endOffset() + 1, currentLogStartOffset.get());
@@ -2678,7 +2763,7 @@ public class RemoteLogManagerTest {
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
 
         verifyRemoteDeleteMetrics(0L, 0L);
-
+        advanceTimeToMakeSegmentDeletable();
         task.cleanupExpiredRemoteLogSegments();
 
         assertEquals(200L, currentLogStartOffset.get());
@@ -2810,6 +2895,7 @@ public class RemoteLogManagerTest {
                     });
                 });
 
+        advanceTimeToMakeSegmentDeletable();
         leaderTask.cleanupExpiredRemoteLogSegments();
 
         assertEquals(200L, currentLogStartOffset.get());
@@ -2907,6 +2993,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         doThrow(new RemoteStorageException("Failed to delete segment")).when(remoteStorageManager).deleteLogSegmentData(any());
+        advanceTimeToMakeSegmentDeletable();
         assertThrows(RemoteStorageException.class, task::cleanupExpiredRemoteLogSegments);
 
         assertEquals(100L, currentLogStartOffset.get());
@@ -2962,6 +3049,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
         doThrow(new RetriableRemoteStorageException("Failed to delete segment with retriable exception")).when(remoteStorageManager).deleteLogSegmentData(any());
+        advanceTimeToMakeSegmentDeletable();
         assertThrows(RetriableRemoteStorageException.class, task::cleanupExpiredRemoteLogSegments);
 
         assertEquals(100L, currentLogStartOffset.get());
@@ -3053,6 +3141,15 @@ public class RemoteLogManagerTest {
         List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadataByTime(
                 leaderTopicIdPartition, segmentCount, deletableSegmentCount, recordsPerSegment, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount);
+    }
+
+    /**
+     * Segments created with current time won't be deleted immediately since
+     * retention check uses {@code maxTimestampMs < cleanupUntilMs} (not {@code <=}).
+     * Advance time by 1ms to make segments eligible for deletion.
+     */
+    private void advanceTimeToMakeSegmentDeletable() {
+        ((MockTime) time).sleep(1);
     }
 
     private void verifyRemoteDeleteMetrics(long remoteDeleteLagBytes, long remoteDeleteLagSegments) {
@@ -3182,7 +3279,9 @@ public class RemoteLogManagerTest {
         for (int idx = 0; idx < segmentCount; idx++) {
             long timestamp = time.milliseconds();
             if (idx < deletableSegmentCount) {
-                timestamp = time.milliseconds() - 1;
+                // Use -2 instead of -1 because some test cases use retentionMs=1.
+                // With -1, segment's maxTimestampMs == cleanupUntilMs, so the segment won't be deleted.
+                timestamp = time.milliseconds() - 2;
             }
             long startOffset = (long) idx * recordsPerSegment;
             long endOffset = startOffset + recordsPerSegment - 1;

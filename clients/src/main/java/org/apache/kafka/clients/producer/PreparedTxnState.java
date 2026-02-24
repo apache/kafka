@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
 /**
  * Class containing the state of a transaction after it has been prepared for a two-phase commit.
@@ -77,10 +77,20 @@ public class PreparedTxnState {
         this.epoch = epoch;
     }
 
+    /**
+     * Gets the producer ID associated with this prepared transaction state.
+     *
+     * @return The producer ID
+     */
     public long producerId() {
         return producerId;
     }
 
+    /**
+     * Gets the producer epoch associated with this prepared transaction state.
+     *
+     * @return The producer epoch
+     */
     public short epoch() {
         return epoch;
     }

@@ -40,7 +40,7 @@ Kafka exposes all its functionality over a language-independent protocol which h
 
 The Producer API allows applications to send streams of data to topics in the Kafka cluster. 
 
-Examples of using the producer are shown in the [javadocs](/43/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html "Kafka 4.3 Javadoc"). 
+Examples of using the producer are shown in the [javadocs](/{version}/javadoc/index.html?org/apache/kafka/clients/producer/KafkaProducer.html "Kafka 4.3 Javadoc"). 
 
 To use the producer, add the following Maven dependency to your project: 
     
@@ -55,7 +55,7 @@ To use the producer, add the following Maven dependency to your project:
 
 The Consumer API allows applications to read streams of data from topics in the Kafka cluster. 
 
-Examples of using the consumer are shown in the [javadocs](/43/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html "Kafka 4.3 Javadoc"). 
+Examples of using the consumer are shown in the [javadocs](/{version}/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html "Kafka 4.3 Javadoc"). 
 
 To use the consumer, add the following Maven dependency to your project: 
     
@@ -70,7 +70,7 @@ To use the consumer, add the following Maven dependency to your project:
 
 The Share Consumer API enables applications in a share group to cooperatively consume and process data from Kafka topics. 
 
-Examples of using the share consumer are shown in the [javadocs](/43/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaShareConsumer.html "Kafka 4.3 Javadoc"). 
+Examples of using the share consumer are shown in the [javadocs](/{version}/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaShareConsumer.html "Kafka 4.3 Javadoc"). 
 
 To use the share consumer, add the following Maven dependency to your project: 
     
@@ -85,7 +85,7 @@ To use the share consumer, add the following Maven dependency to your project:
 
 The [Streams](/43/documentation/streams) API allows transforming streams of data from input topics to output topics. 
 
-Examples of using this library are shown in the [javadocs](/43/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html "Kafka 4.3 Javadoc"). 
+Examples of using this library are shown in the [javadocs](/{version}/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html "Kafka 4.3 Javadoc"). 
 
 Additional documentation on using the Streams API is available [here](/43/documentation/streams). 
 
@@ -101,7 +101,10 @@ To use Kafka Streams, add the following Maven dependency to your project:
 When using Scala you may optionally include the `kafka-streams-scala` library. Additional documentation on using the Kafka Streams DSL for Scala is available [in the developer guide](/43/documentation/streams/developer-guide/dsl-api.html#scala-dsl). 
 
 To use Kafka Streams DSL for Scala 2.13, add the following Maven dependency to your project: 
-    
+
+> **⚠️ DEPRECATION NOTICE**: The `kafka-streams-scala` library is deprecated as of Kafka 4.3
+> and will be removed in Kafka 5.0. Please migrate to using the Java Streams API directly from Scala.
+> See the [migration guide](/{version}/streams/developer-guide/scala-migration) for details.
     
     <dependency>
     	<groupId>org.apache.kafka</groupId>
@@ -115,7 +118,7 @@ The Connect API allows implementing connectors that continually pull from some s
 
 Many users of Connect won't need to use this API directly, though, they can use pre-built connectors without needing to write any code. Additional information on using Connect is available [here](/documentation.html#connect). 
 
-Those who want to implement custom connectors can see the [javadoc](/43/javadoc/index.html?org/apache/kafka/connect "Kafka 4.3 Javadoc"). 
+Those who want to implement custom connectors can see the [javadoc](/{version}/javadoc/index.html?org/apache/kafka/connect "Kafka 4.3 Javadoc"). 
 
 # Admin API
 
@@ -130,4 +133,4 @@ To use the Admin API, add the following Maven dependency to your project:
     	<version>4.3.0</version>
     </dependency>
 
-For more information about the Admin APIs, see the [javadoc](/43/javadoc/index.html?org/apache/kafka/clients/admin/Admin.html "Kafka 4.3 Javadoc"). 
+For more information about the Admin APIs, see the [javadoc](/{version}/javadoc/index.html?org/apache/kafka/clients/admin/Admin.html "Kafka 4.3 Javadoc"). 

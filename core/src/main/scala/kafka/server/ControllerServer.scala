@@ -20,10 +20,10 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCachePublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCachePublisher}
 
 import scala.collection.immutable
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -38,7 +38,7 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, Metad
 import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, FeaturesPublisher, ScramPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, FeaturesPublisher, ScramPublisher}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
@@ -51,6 +51,8 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, L
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.util.{Deadline, FutureUtils}
+import org.apache.kafka.server.NodeToControllerChannelManagerImpl
+import org.apache.kafka.server.RaftControllerNodeProvider
 
 import java.util
 import java.util.{Optional, OptionalLong}
@@ -347,10 +349,11 @@ class ControllerServer(
       // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.
       metadataPublishers.add(new DynamicTopicClusterQuotaPublisher(
         clusterId,
-        config,
+        config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        quotaManagers,
+        quotaManagers.clientQuotaCallbackPlugin(),
+        quotaManagers.quotaConfigChangeListener()
       ))
 
       // Set up the SCRAM publisher.
@@ -405,7 +408,7 @@ class ControllerServer(
       /**
        * Start the KIP-919 controller registration manager.
        */
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
+      val controllerNodeProvider = RaftControllerNodeProvider.create(raftManager, config)
       registrationChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
@@ -446,7 +449,7 @@ class ControllerServer(
       Utils.closeQuietly(registrationManager, "registration manager")
       registrationManager = null
       if (registrationChannelManager != null) {
-        CoreUtils.swallow(registrationChannelManager.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => registrationChannelManager.shutdown())
         registrationChannelManager = null
       }
       metadataPublishers.forEach(p => sharedServer.loader.removeAndClosePublisher(p).get())
@@ -461,24 +464,24 @@ class ControllerServer(
       Utils.closeQuietly(registrationsPublisher, "registrations publisher")
       registrationsPublisher = null
       if (socketServer != null)
-        CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
+        Utils.swallow(this.logger.underlying, () => socketServer.stopProcessingRequests())
       if (controller != null)
         controller.beginShutdown()
       if (socketServer != null)
-        CoreUtils.swallow(socketServer.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => socketServer.shutdown())
       if (controllerApisHandlerPool != null)
-        CoreUtils.swallow(controllerApisHandlerPool.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => controllerApisHandlerPool.shutdown())
       if (controllerApis != null)
-        CoreUtils.swallow(controllerApis.close(), this)
+        Utils.swallow(this.logger.underlying, () => controllerApis.close())
       if (quotaManagers != null)
-        CoreUtils.swallow(quotaManagers.shutdown(), this)
+        Utils.swallow(this.logger.underlying, () => quotaManagers.shutdown())
       Utils.closeQuietly(controller, "controller")
       Utils.closeQuietly(quorumControllerMetrics, "quorum controller metrics")
       authorizerPlugin.foreach(Utils.closeQuietly(_, "authorizer plugin"))
       createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "create topic policy"))
       alterConfigPolicy.foreach(policy => Utils.closeQuietly(policy, "alter config policy"))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
-      CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      Utils.swallow(this.logger.underlying, () => config.dynamicConfig.clear())
       sharedServer.stopForController()
     } catch {
       case e: Throwable =>
