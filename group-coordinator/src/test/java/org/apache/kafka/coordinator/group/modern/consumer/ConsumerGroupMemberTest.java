@@ -296,7 +296,7 @@ public class ConsumerGroupMemberTest {
             .build();
 
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, new KRaftCoordinatorMetadataImage(metadataImage));
-        // Sort partitions in actual for deterministic comparison
+        // Sort partitions for comparison
         actual.assignment().topicPartitions().forEach(tp -> Collections.sort(tp.partitions()));
         actual.targetAssignment().topicPartitions().forEach(tp -> Collections.sort(tp.partitions()));
 

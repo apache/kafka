@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 
 import java.util.ArrayList;
-import java.util.stream.Collectors;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,6 +37,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * ConsumerGroupMember contains all the information related to a member
