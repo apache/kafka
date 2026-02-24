@@ -3086,9 +3086,9 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testRenewAcknowledgementDisabledByDefault() {
+    public void testRenewAcknowledgementDisabled() {
         alterShareAutoOffsetReset("group1", "earliest");
-        // Do not enable share.renew.acknowledge.enable - it defaults to false.
+        alterShareRenewAcknowledgeEnable("group1", false);
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                  "group1",
