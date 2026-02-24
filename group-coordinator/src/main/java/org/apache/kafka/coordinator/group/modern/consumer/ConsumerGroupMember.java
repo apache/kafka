@@ -66,9 +66,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
         private Set<String> subscribedTopicNames = Set.of();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
-        private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
         private Map<Uuid, Map<Integer, Integer>> assignedPartitions = Map.of();
         private Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocation = Map.of();
+        private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -514,10 +514,14 @@ public class ConsumerGroupMember extends ModernGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                .setTopicId(topicId)
-                .setTopicName(topicMetadata.name())
-                .setPartitions(new ArrayList<>(partitionSet))));
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> {
+                List<Integer> sortedPartitions = new ArrayList<>(partitionSet);
+                Collections.sort(sortedPartitions);
+                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName(topicMetadata.name())
+                    .setPartitions(sortedPartitions));
+            });
         });
         return topicPartitions;
     }

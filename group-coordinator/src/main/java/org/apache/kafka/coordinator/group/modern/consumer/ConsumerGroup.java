@@ -673,24 +673,8 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 "by members using the modern group protocol");
         }
 
-        // For members using the consumer protocol, the epoch must either match the last epoch sent
-        // in a heartbeat or be greater than or equal to the partition's assignment epoch.
-        if (member.useClassicProtocol()) {
-            validateMemberEpoch(memberEpoch, member.memberEpoch(), true);
-            return CommitPartitionValidator.NO_OP;
-        }
-
-        // For members using the consumer protocol
-        if (memberEpoch == member.memberEpoch()) {
-            return CommitPartitionValidator.NO_OP;
-        }
-        if (memberEpoch > member.memberEpoch()) {
-            throw new StaleMemberEpochException(String.format("Received member epoch %d is newer than "
-                + "current member epoch %d.", memberEpoch, member.memberEpoch()));
-        }
-
-        // Member epoch is older; validate against per-partition assignment epochs.
-        return createAssignmentEpochValidator(member, memberEpoch);
+        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
+        return CommitPartitionValidator.NO_OP;
     }
 
     /**

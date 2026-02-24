@@ -296,30 +296,35 @@ public class ConsumerGroupMemberTest {
 
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, new KRaftCoordinatorMetadataImage(metadataImage));
 
-        // Verify simple fields
-        assertEquals(memberId, actual.memberId());
-        assertEquals(epoch, actual.memberEpoch());
-        assertEquals(clientId, actual.clientId());
-        assertEquals(instanceId, actual.instanceId());
-        assertEquals(rackId, actual.rackId());
-        assertEquals(clientHost, actual.clientHost());
-        assertEquals(new ArrayList<>(subscribedTopicNames), actual.subscribedTopicNames());
-        assertEquals(subscribedTopicRegex, actual.subscribedTopicRegex());
-        assertEquals(withClassicMemberMetadata ? (byte) 0 : (byte) 1, actual.memberType());
+        ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
+            .setMemberId(memberId)
+            .setMemberEpoch(epoch)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setClientHost(clientHost)
+            .setSubscribedTopicNames(new ArrayList<>(subscribedTopicNames))
+            .setSubscribedTopicRegex(subscribedTopicRegex)
+            .setAssignment(
+                new ConsumerGroupDescribeResponseData.Assignment()
+                    .setTopicPartitions(List.of(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                        .setTopicId(topicId1)
+                        .setTopicName("topic1")
+                        .setPartitions(assignedPartitions)
+                    ))
+            )
+            .setTargetAssignment(
+                new ConsumerGroupDescribeResponseData.Assignment()
+                    .setTopicPartitions(targetAssignment.partitions().entrySet().stream().map(
+                        item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
+                            .setTopicId(item.getKey())
+                            .setTopicName("topic4")
+                            .setPartitions(new ArrayList<>(item.getValue()))
+                    ).toList())
+            )
+            .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 
-        // Verify assignments using set comparison (order doesn't matter)
-        assertEquals(1, actual.assignment().topicPartitions().size());
-        ConsumerGroupDescribeResponseData.TopicPartitions actualAssignment = actual.assignment().topicPartitions().get(0);
-        assertEquals(topicId1, actualAssignment.topicId());
-        assertEquals("topic1", actualAssignment.topicName());
-        assertEquals(new HashSet<>(assignedPartitions), new HashSet<>(actualAssignment.partitions()));
-
-        // Verify target assignment using set comparison
-        assertEquals(1, actual.targetAssignment().topicPartitions().size());
-        ConsumerGroupDescribeResponseData.TopicPartitions actualTargetAssignment = actual.targetAssignment().topicPartitions().get(0);
-        assertEquals(topicId4, actualTargetAssignment.topicId());
-        assertEquals("topic4", actualTargetAssignment.topicName());
-        assertEquals(new HashSet<>(assignedPartitions), new HashSet<>(actualTargetAssignment.partitions()));
+        assertEquals(expected, actual);
     }
 
     @Test
