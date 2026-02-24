@@ -1235,18 +1235,17 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // assignment of the classic group. All the members are put in the Stable state. If the classic
             // group was in Preparing Rebalance or Completing Rebalance states, the classic members are
             // asked to rejoin the group to re-trigger a rebalance or collect their assignments.
-            int memberEpoch = classicGroup.generationId();
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(classicGroupMember.memberId())
-                .setMemberEpoch(memberEpoch)
+                .setMemberEpoch(classicGroup.generationId())
                 .setState(MemberState.STABLE)
-                .setPreviousMemberEpoch(memberEpoch)
+                .setPreviousMemberEpoch(classicGroup.generationId())
                 .setInstanceId(classicGroupMember.groupInstanceId().orElse(null))
                 .setRackId(toOptional(subscription.rackId()).orElse(null))
                 .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(assignedPartitions, memberEpoch)
+                .setAssignedPartitions(assignedPartitions, classicGroup.generationId())
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())

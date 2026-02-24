@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -37,8 +38,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-
-import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsFromTopicPartitions;
 
 /**
  * ConsumerGroupMember contains all the information related to a member
@@ -97,9 +96,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
             this.subscribedTopicRegex = member.subscribedTopicRegex;
             this.serverAssignorName = member.serverAssignorName;
             this.state = member.state;
-            this.classicMemberMetadata = member.classicMemberMetadata;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
+            this.classicMemberMetadata = member.classicMemberMetadata;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -194,11 +193,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
-        public Builder setClassicMemberMetadata(ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata) {
-            this.classicMemberMetadata = classicMemberMetadata;
-            return this;
-        }
-
         public Builder setAssignedPartitions(Map<Uuid, Set<Integer>> assignedPartitions, int assignmentEpoch) {
             this.assignedPartitions = assignedPartitions.entrySet().stream()
                 .collect(Collectors.toMap(
@@ -215,6 +209,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
 
         public Builder setPartitionsPendingRevocation(Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocation) {
             this.partitionsPendingRevocation = partitionsPendingRevocation;
+            return this;
+        }
+
+        public Builder setClassicMemberMetadata(ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata) {
+            this.classicMemberMetadata = classicMemberMetadata;
             return this;
         }
 
@@ -258,10 +257,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedPartitions(
-                assignmentWithEpochsFromTopicPartitions(record.assignedPartitions(), record.memberEpoch())
+                Utils.assignmentFromTopicPartitions(record.assignedPartitions(), record.memberEpoch())
             );
             setPartitionsPendingRevocation(
-                assignmentWithEpochsFromTopicPartitions(record.partitionsPendingRevocation(), record.memberEpoch())
+                Utils.assignmentFromTopicPartitions(record.partitionsPendingRevocation(), record.memberEpoch())
             );
             return this;
         }

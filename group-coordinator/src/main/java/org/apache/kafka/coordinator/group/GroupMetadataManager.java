@@ -3583,7 +3583,7 @@ public class GroupMetadataManager {
 
             if (log.isDebugEnabled()) {
                 log.debug("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
-                        + "assignedPartitions={} and revokedPartitionsWithEpochs={}.",
+                        + "assignedPartitions={} and revokedPartitions={}.",
                     groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
                     assignmentEpochToString(updatedMember.assignedPartitions()), assignmentEpochToString(updatedMember.partitionsPendingRevocation()));
             }

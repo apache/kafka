@@ -237,7 +237,7 @@ public class Utils {
      * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
      * @return a map of topic id and partition-epoch map.
      */
-    public static Map<Uuid, Map<Integer, Integer>> assignmentWithEpochsFromTopicPartitions(
+    public static Map<Uuid, Map<Integer, Integer>> assignmentFromTopicPartitions(
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
         int defaultEpoch
     ) {
