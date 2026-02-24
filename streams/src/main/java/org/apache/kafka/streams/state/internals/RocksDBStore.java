@@ -69,6 +69,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -95,6 +96,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
+    protected static final byte[] OFFSETS_COLUMN_FAMILY_NAME = "offsets".getBytes(StandardCharsets.UTF_8);
     private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
     private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
     private static final long BLOCK_SIZE = 4096L;
@@ -111,6 +113,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     RocksDB db;
     DBAccessor dbAccessor;
     ColumnFamilyAccessor cfAccessor;
+    ColumnFamilyAccessor offsetsCfAccessor;
 
     // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
@@ -278,10 +281,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                      final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
-                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions)
+                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
 
         cfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
+        offsetsCfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1));
     }
 
     /**
@@ -634,6 +639,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     @Override
+    public Long committedOffset(final TopicPartition partition) {
+        return KeyValueStore.super.committedOffset(partition);
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public boolean managesOffsets() {
+        return true;
+    }
+
+    @Override
     public synchronized void commit(final Map<TopicPartition, Long> changelogOffsets) {
         if (db == null) {
             return;
@@ -683,6 +699,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
+        offsetsCfAccessor.close();
         cfAccessor.close();
         dbAccessor.close();
         db.close();

@@ -93,13 +93,16 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             // we have to open the default CF to be able to open the legacy CF, but we won't use it
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
             new ColumnFamilyDescriptor(LEGACY_TIMESTAMPED_CF_NAME, columnFamilyOptions),
-            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions)
+            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
 
         verifyAndCloseEmptyDefaultColumnFamily(columnFamilies.get(0));
 
         final ColumnFamilyHandle legacyCf = columnFamilies.get(1);
         final ColumnFamilyHandle headersCf = columnFamilies.get(2);
+        final ColumnFamilyHandle offsetsCf = columnFamilies.get(3);
+
 
         // Check if legacy CF has data
         try (final RocksIterator legacyIter = db.newIterator(legacyCf)) {
@@ -119,7 +122,8 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     legacyCf.close();
                 }
             }
-        } 
+            offsetsCfAccessor = new SingleColumnFamilyAccessor(offsetsCf);
+        }
     }
 
     private void openInRegularMode(final DBOptions dbOptions,
@@ -128,14 +132,17 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             dbOptions,
             // we have to open the default CF to be able to open the legacy CF, but we won't use it
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions)
+            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME, columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
 
         verifyAndCloseEmptyDefaultColumnFamily(columnFamilies.get(0));
 
         final ColumnFamilyHandle headersCf = columnFamilies.get(1);
+        final ColumnFamilyHandle offsetsCf = columnFamilies.get(2);
         log.info("Opening store {} in regular headers-aware mode", name);
         cfAccessor = new SingleColumnFamilyAccessor(headersCf);
+        offsetsCfAccessor = new SingleColumnFamilyAccessor(offsetsCf);
     }
 
     private void verifyAndCloseEmptyDefaultColumnFamily(final ColumnFamilyHandle columnFamilyHandle) {

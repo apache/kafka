@@ -56,10 +56,12 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
+            new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions),
+            new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
         final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
         final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
+        final ColumnFamilyHandle offsetsColumnFamily = columnFamilies.get(2);
 
         final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
         noTimestampsIter.seekToFirst();
@@ -76,6 +78,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             cfAccessor = new SingleColumnFamilyAccessor(withTimestampColumnFamily);
             noTimestampColumnFamily.close();
         }
+        offsetsCfAccessor = new SingleColumnFamilyAccessor(offsetsColumnFamily);
         noTimestampsIter.close();
     }
 
