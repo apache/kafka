@@ -31,17 +31,17 @@ public class DslKeyValueParams {
     private final boolean isTimestamped;
     private final DslStoreFormat dslStoreFormat;
 
-//    /**
-//     * @param name          the name of the store (cannot be {@code null})
-//     * @param isTimestamped whether the returned stores should be timestamped, see ({@link TimestampedKeyValueStore}
-//     */
-//    @Deprecated
-//    public DslKeyValueParams(final String name, final boolean isTimestamped) {
-//        Objects.requireNonNull(name);
-//        this.name = name;
-//        this.isTimestamped = isTimestamped;
-//        this.dslStoreFormat = DslStoreFormat.DEFAULT;
-//    }
+    /**
+     * @param name          the name of the store (cannot be {@code null})
+     * @param isTimestamped whether the returned stores should be timestamped, see ({@link TimestampedKeyValueStore}
+     */
+    @Deprecated
+    public DslKeyValueParams(final String name, final boolean isTimestamped) {
+        Objects.requireNonNull(name);
+        this.name = name;
+        this.isTimestamped = isTimestamped;
+        this.dslStoreFormat = DslStoreFormat.DEFAULT;
+    }
 
     /**
      * @param name           the name of the store (cannot be {@code null})
@@ -58,10 +58,10 @@ public class DslKeyValueParams {
         return name;
     }
 
-//    @Deprecated
-//    public boolean isTimestamped() {
-//        return isTimestamped;
-//    }
+    @Deprecated
+    public boolean isTimestamped() {
+        return isTimestamped;
+    }
 
     public DslStoreFormat dslStoreFormat() {
         return dslStoreFormat;
