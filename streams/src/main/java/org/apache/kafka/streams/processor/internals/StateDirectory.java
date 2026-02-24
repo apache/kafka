@@ -673,8 +673,6 @@ public class StateDirectory implements AutoCloseable {
             try {
                 final long now = time.milliseconds();
                 final long lastModifiedMs = taskDir.file().lastModified();
-                final long dirAge = now - lastModifiedMs;
-                log.info("Dir age {}", dirAge);
                 if (now - dirMaxAgeMs > lastModifiedMs) {
                     log.info("{} Deleting outdated state directory {} for {} as {}ms has elapsed (max directory age is {}ms).",
                             logPrefix(), dirName, id, now - lastModifiedMs, dirMaxAgeMs);
