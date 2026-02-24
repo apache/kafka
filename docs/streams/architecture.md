@@ -56,7 +56,7 @@ The following diagram shows two tasks each assigned with one partition of the in
 
 ### Increasing Parallelism with Multiple Input Topics {#streams_architecture_subtopology}
 
-When your application reads from multiple input topics, the way you structure your topology has a significant impact on parallelism. If you use `builder.stream(Arrays.asList("topic-a", "topic-b", "topic-c"))` or a regex pattern to subscribe to multiple topics, Kafka Streams creates a single sub-topology for all these topics. In this case, the maximum number of tasks is determined by the **maximum** number of partitions across all the input topics, not the sum. This means that data from all topics with the same partition number will be funneled through a single task.
+When your application reads from multiple input topics, the way you structure your topology has a significant impact on parallelism. If you use `builder.stream(Arrays.asList("topic-a", "topic-b", "topic-c"))` or a regex pattern to subscribe to multiple topics, Kafka Streams creates a single sub-topology for all these topics. In this case, the maximum number of tasks is determined by the **maximum** number of partitions across all these input topics, not the sum. This means that data from all topics with the same partition number will be funneled through a single task.
 
 For example, if topic-a has 5 partitions, topic-b has 3 partitions, and topic-c has 4 partitions, subscribing to all three topics in a single `stream()` call will result in only 5 tasks. All records from partition-0 of topic-a, topic-b, and topic-c will be processed by the same task.
 
