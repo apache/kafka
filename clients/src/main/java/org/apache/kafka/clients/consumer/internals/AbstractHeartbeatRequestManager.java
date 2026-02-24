@@ -87,7 +87,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     private final BackgroundEventHandler backgroundEventHandler;
 
     /**
-     * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
+     * Timer for tracking the time since the last consumer poll. If the timer expires, the consumer will stop
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
@@ -114,7 +114,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
+        int requestTimeout = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, requestTimeout, retryBackoffMs,
                 retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.pollTimer = time.timer(maxPollIntervalMs);
         this.metricsManager = metricsManager;

@@ -326,10 +326,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager, maxPollIntervalMs);
+        int requestTimeout = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.heartbeatRequestState = new HeartbeatRequestState(
             logContext,
             time,
-            0,
+            requestTimeout,
             retryBackoffMs,
             retryBackoffMaxMs,
             RETRY_BACKOFF_JITTER

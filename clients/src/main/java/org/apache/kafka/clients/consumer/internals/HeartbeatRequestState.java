@@ -88,6 +88,11 @@ public class HeartbeatRequestState extends RequestState {
     @Override
     public boolean canSendRequest(final long currentTimeMs) {
         update(currentTimeMs);
+        // Allow the first heartbeat to be sent immediately, after the first heartbeat is sent,
+        // lastSentMs will be set by onSendAttempt(), and subsequent heartbeats will be controlled by the timer.
+        if (lastSentMs == -1) {
+            return super.canSendRequest(currentTimeMs);
+        }
         return heartbeatTimer.isExpired() && super.canSendRequest(currentTimeMs);
     }
 

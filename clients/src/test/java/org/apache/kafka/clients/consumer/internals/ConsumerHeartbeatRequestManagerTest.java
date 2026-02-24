@@ -88,6 +88,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -97,6 +98,7 @@ public class ConsumerHeartbeatRequestManagerTest {
     private static final String DEFAULT_REMOTE_ASSIGNOR = "uniform";
     private static final String DEFAULT_GROUP_INSTANCE_ID = "group-instance-id";
     private static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
+    private static final int DEFAULT_REQUEST_TIMEOUT_MS = 30000;
     private static final int DEFAULT_MAX_POLL_INTERVAL_MS = 10000;
     private static final long DEFAULT_RETRY_BACKOFF_MS = 80;
     private static final long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000;
@@ -218,7 +220,7 @@ public class ConsumerHeartbeatRequestManagerTest {
     @Test
     public void testHeartbeatOnStartup() {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, result.unsentRequests.size());
+        assertEquals(1, result.unsentRequests.size());
 
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
@@ -232,6 +234,7 @@ public class ConsumerHeartbeatRequestManagerTest {
 
     @Test
     public void testSuccessfulHeartbeatTiming() {
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS); // the initial heartbeat request
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(),
             "No heartbeat should be sent while interval has not expired");
@@ -316,6 +319,7 @@ public class ConsumerHeartbeatRequestManagerTest {
 
     @Test
     public void testTimerNotDue() {
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS); // the initial heartbeat request
         time.sleep(100); // time elapsed < heartbeatInterval, no heartbeat should be sent
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
@@ -831,18 +835,21 @@ public class ConsumerHeartbeatRequestManagerTest {
             heartbeatState,
             heartbeatRequestState,
             backgroundEventHandler);
+        // Clear the initial heartbeat request
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
         when(membershipManager.state()).thenReturn(MemberState.LEAVING);
         when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
         when(membershipManager.leaveGroupOperation()).thenReturn(operation);
 
         if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
             assertNoHeartbeat(heartbeatRequestManager);
-            verify(membershipManager, never()).onHeartbeatRequestGenerated();
+            // The onHeartbeatRequestGenerated was triggered by the initial heartbeat request
+            verify(membershipManager, times(1)).onHeartbeatRequestGenerated();
         } else {
             assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
-            verify(membershipManager).onHeartbeatRequestGenerated();
+            // The onHeartbeatRequestGenerated was triggered by the initial heartbeat request and leaveGroupOperation
+            verify(membershipManager, times(2)).onHeartbeatRequestGenerated();
         }
-
     }
 
     /**

@@ -47,6 +47,10 @@ public class HeartbeatRequestStateTest {
             JITTER
         );
 
+        assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds())); // the initial heartbeat request attempt
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+
         assertFalse(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertEquals(HEARTBEAT_INTERVAL_MS, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
         time.sleep(HEARTBEAT_INTERVAL_MS - 1);
@@ -70,6 +74,11 @@ public class HeartbeatRequestStateTest {
             RETRY_BACKOFF_MAX_MS,
             JITTER
         );
+
+        assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds())); // the initial heartbeat request attempt
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+
         time.sleep(HEARTBEAT_INTERVAL_MS + 100);
         assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds()));
         assertEquals(0, heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()));
@@ -90,6 +99,11 @@ public class HeartbeatRequestStateTest {
             RETRY_BACKOFF_MAX_MS,
             JITTER
         );
+
+        assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds())); // the initial heartbeat request attempt
+        heartbeatRequestState.onSendAttempt(time.milliseconds());
+        heartbeatRequestState.onSuccessfulAttempt(time.milliseconds());
+
         final long updatedHeartbeatIntervalMs = 2 * HEARTBEAT_INTERVAL_MS;
         time.sleep(HEARTBEAT_INTERVAL_MS + 100);
 

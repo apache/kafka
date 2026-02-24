@@ -169,7 +169,7 @@ public class ShareHeartbeatRequestManagerTest {
     @Test
     public void testHeartbeatOnStartup() {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, result.unsentRequests.size());
+        assertEquals(1, result.unsentRequests.size()); // the initial heartbeat request attempt
 
         createHeartbeatRequestStateWithZeroHeartbeatInterval();
         assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
@@ -184,14 +184,16 @@ public class ShareHeartbeatRequestManagerTest {
     @Test
     public void testSuccessfulHeartbeatTiming() {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, result.unsentRequests.size(),
-                "No heartbeat should be sent while interval has not expired");
+        assertEquals(1, result.unsentRequests.size(),
+                "initial heartbeat request should be send on the first poll");
         assertEquals(heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()), result.timeUntilNextPollMs);
+        NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0);
+        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
         assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size(), "A heartbeat should be sent when interval expires");
-        NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0);
+        inflightReq = result.unsentRequests.get(0);
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS,
                 heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()),
                 "Heartbeat timer was not reset to the interval when the heartbeat request was sent.");
@@ -262,8 +264,12 @@ public class ShareHeartbeatRequestManagerTest {
 
     @Test
     public void testTimerNotDue() {
-        time.sleep(100); // time elapsed < heartbeatInterval, no heartbeat should be sent
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.UnsentRequest inflightReq = result.unsentRequests.get(0); // the initial heartbeat request attempt
+        inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
+
+        time.sleep(100); // time elapsed < heartbeatInterval, no heartbeat should be sent
+        result = heartbeatRequestManager.poll(time.milliseconds());
 
         assertEquals(0, result.unsentRequests.size());
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, result.timeUntilNextPollMs);

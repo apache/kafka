@@ -1669,7 +1669,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(acls, resource)
 
     waitUntilTrue(() => {
-      consumer.poll(Duration.ofMillis(50L))
+      try {
+        consumer.poll(Duration.ofMillis(50L))
+      } catch {
+        case _: TopicAuthorizationException =>
+      }
       brokers.forall { broker =>
         OptionConverters.toScala(broker.metadataCache.getLeaderAndIsr(newTopic, 0)) match {
           case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
