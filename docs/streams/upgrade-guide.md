@@ -67,6 +67,12 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, and `poll-ratio`, along with streams state updater metrics `active-restore-ratio`, `standby-restore-ratio`, `idle-ratio`, and `checkpoint-ratio` have been updated. Each metric now reports, over a rolling measurement window, the ratio of time this thread spends performing the given action (`{action}`) to the total elapsed time in that window. The effective window duration is determined by the metrics configuration: `metrics.sample.window.ms` (per-sample window length) and `metrics.num.samples` (number of rolling windows).
 
+### Deprecation of streams-scala module (KIP-1244)
+
+The `kafka-streams-scala` module (`org.apache.kafka.streams.scala` package) is deprecated in 4.3.0 and will be removed in 5.0.
+
+For a detailed migration guide with code examples, see [Migrating from Streams Scala to Java API](/{version}/streams/developer-guide/scala-migration).
+
 ## Streams API changes in 4.2.0
 
 ### General Availability for a core feature set of the Streams Rebalance Protocol (KIP-1071)
@@ -319,7 +325,7 @@ For multi-AZ deployments, it is desired to assign StandbyTasks to a KafkaStreams
 
 [Interactive Queries](/documentation/streams/developer-guide/interactive-queries.html) allow users to tap into the operational state of Kafka Streams processor nodes. The existing API is tightly coupled with the actual state store interfaces and thus the internal implementation of state store. To break up this tight coupling and allow for building more advanced IQ features, [KIP-796](https://cwiki.apache.org/confluence/x/34xnCw) introduces a completely new IQv2 API, via `StateQueryRequest` and `StateQueryResult` classes, as well as `Query` and `QueryResult` interfaces (plus additional helper classes). In addition, multiple built-in query types were added: `KeyQuery` for key lookups and `RangeQuery` (via [KIP-805](https://cwiki.apache.org/confluence/x/85OqCw)) for key-range queries on key-value stores, as well as `WindowKeyQuery` and `WindowRangeQuery` (via [KIP-806](https://cwiki.apache.org/confluence/x/LJaqCw)) for key and range lookup into windowed stores. 
 
-The Kafka Streams DSL may insert so-called repartition topics for certain DSL operators to ensure correct partitioning of data. These topics are configured with infinite retention time, and Kafka Streams purges old data explicitly via "delete record" requests, when commiting input topic offsets. [KIP-811](https://cwiki.apache.org/confluence/x/JY-kCw) adds a new config `repartition.purge.interval.ms` allowing you to configure the purge interval independently of the commit interval. 
+The Kafka Streams DSL may insert so-called repartition topics for certain DSL operators to ensure correct partitioning of data. These topics are configured with infinite retention time, and Kafka Streams purges old data explicitly via "delete record" requests, when committing input topic offsets. [KIP-811](https://cwiki.apache.org/confluence/x/JY-kCw) adds a new config `repartition.purge.interval.ms` allowing you to configure the purge interval independently of the commit interval. 
 
 ## Streams API changes in 3.1.0
 
