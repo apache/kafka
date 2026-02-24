@@ -53,17 +53,6 @@ public class AggregationWithHeadersSerializerTest {
     }
 
     @Test
-    public void shouldSerializeAggregationWithNullHeaders() {
-        final Long aggregation = 100L;
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, null);
-
-        final byte[] result = serializer.serialize("topic", aggregationWithHeaders);
-
-        assertNotNull(result);
-        assertTrue(result.length > 0);
-    }
-
-    @Test
     public void shouldSerializeAggregationWithHeaders() {
         final Long aggregation = 100L;
         final Headers headers = new RecordHeaders();

@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import java.util.Objects;
 
@@ -33,8 +32,9 @@ public final class AggregationWithHeaders<AGG> {
     private final Headers headers;
 
     private AggregationWithHeaders(final AGG aggregation, final Headers headers) {
+        Objects.requireNonNull(headers, "headers must not be null");
         this.aggregation = aggregation;
-        this.headers = headers == null ? new RecordHeaders() : headers;
+        this.headers = headers;
     }
 
     /**

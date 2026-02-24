@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AggregationWithHeadersTest {
@@ -49,14 +50,9 @@ public class AggregationWithHeadersTest {
     }
 
     @Test
-    public void shouldCreateWithNullHeaders() {
+    public void shouldNotCreateWithNullHeaders() {
         final Long aggregation = 100L;
-        final AggregationWithHeaders<Long> aggregationWithHeaders = AggregationWithHeaders.make(aggregation, null);
-
-        assertNotNull(aggregationWithHeaders);
-        assertEquals(aggregation, aggregationWithHeaders.aggregation());
-        assertNotNull(aggregationWithHeaders.headers());
-        assertEquals(0, aggregationWithHeaders.headers().toArray().length);
+        assertThrows(NullPointerException.class, () -> AggregationWithHeaders.make(aggregation, null));
     }
 
     @Test

@@ -65,10 +65,7 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(aggregationWithHeaders);
-        final int headersSize = ByteUtils.readVarint(buffer);
-
-        final byte[] rawHeaders = readBytes(buffer, headersSize);
-        final Headers headers = HeadersDeserializer.deserialize(rawHeaders);
+        final Headers headers = readHeaders(buffer);
         final byte[] rawAggregation = readBytes(buffer, buffer.remaining());
         final AGG aggregation = aggregationDeserializer.deserialize(topic, headers, rawAggregation);
 
@@ -120,6 +117,10 @@ class AggregationWithHeadersDeserializer<AGG> implements WrappingNullableDeseria
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawAggregationWithHeaders);
+        return readHeaders(buffer);
+    }
+
+    private static Headers readHeaders(final ByteBuffer buffer) {
         final int headersSize = ByteUtils.readVarint(buffer);
         final byte[] rawHeaders = readBytes(buffer, headersSize);
         return HeadersDeserializer.deserialize(rawHeaders);
