@@ -1419,7 +1419,7 @@ public class ClassicGroupTest {
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(5000)
                     .setSupportedProtocols(protocols1))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0)), 10))
             .build();
         consumerGroup.updateMember(member1);
@@ -1434,7 +1434,7 @@ public class ClassicGroupTest {
             .setSubscribedTopicNames(List.of(fooTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)), 10))
             .build();
         consumerGroup.updateMember(member2);
@@ -1451,7 +1451,7 @@ public class ClassicGroupTest {
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(5000)
                     .setSupportedProtocols(protocols2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)), 10))
             .build();
 
@@ -1566,7 +1566,7 @@ public class ClassicGroupTest {
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(5000)
                     .setSupportedProtocols(protocols1))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0)), 10))
             .build();
         consumerGroup.updateMember(member1);
@@ -1581,7 +1581,7 @@ public class ClassicGroupTest {
             .setSubscribedTopicNames(List.of(fooTopicName))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)), 10))
             .build();
         consumerGroup.updateMember(member2);

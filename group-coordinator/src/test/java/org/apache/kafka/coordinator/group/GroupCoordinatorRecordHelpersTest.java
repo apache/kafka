@@ -387,8 +387,8 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setAssignedPartitionsWithEpochs(AssignmentTestUtil.toEpochsAssignment(assigned, 22))
-                .setPartitionsPendingRevocationWithEpochs(AssignmentTestUtil.toEpochsAssignment(revoking, 22))
+                .setAssignedPartitions(AssignmentTestUtil.toEpochsAssignment(assigned, 22))
+                .setPartitionsPendingRevocation(AssignmentTestUtil.toEpochsAssignment(revoking, 22))
                 .build()
         ));
     }

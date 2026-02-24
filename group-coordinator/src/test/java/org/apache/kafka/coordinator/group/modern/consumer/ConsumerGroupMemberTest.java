@@ -64,9 +64,9 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
@@ -108,9 +108,9 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
@@ -127,9 +127,9 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))
@@ -154,9 +154,9 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)), 9))
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                 .setSupportedProtocols(toClassicProtocolCollection("range")))

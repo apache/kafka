@@ -58,7 +58,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)), 10))
             .build();
@@ -77,7 +77,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 1, 2, 3),
                     mkTopicAssignment(topicId2, 4, 5, 6)), 10))
                 .build(),
@@ -102,7 +102,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)), 10))
             .build();
@@ -127,7 +127,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(expectedAssignment)
+                .setAssignedPartitions(expectedAssignment)
                 .build(),
             updatedMember
         );
@@ -150,7 +150,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)), 10))
             .build();
@@ -169,10 +169,10 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 2, 3),
                     mkTopicAssignment(topicId2, 5, 6)), 10))
-                .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 1),
                     mkTopicAssignment(topicId2, 4)), 10))
                 .build(),
@@ -197,7 +197,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)), 10))
             .build();
@@ -216,7 +216,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 1, 2, 3),
                     mkTopicAssignment(topicId2, 4, 5, 6)), 10))
                 .build(),
@@ -241,7 +241,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)), 10))
             .build();
@@ -264,7 +264,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 1, 2, 3),
                     mkTopicAssignment(topicId2, 4, 5)), 10))
                 .build(),
@@ -289,10 +289,10 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1),
                 mkTopicAssignment(topicId2, 4)), 10))
             .build();
@@ -319,7 +319,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 2, 3),
                     mkTopicAssignment(topicId2, 5, 6)), 10))
                 .build(),
@@ -344,10 +344,10 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1),
                 mkTopicAssignment(topicId2, 4)), 10))
             .build();
@@ -410,10 +410,10 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1),
                 mkTopicAssignment(topicId2, 4)), 10))
             .build();
@@ -439,10 +439,10 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 3),
                     mkTopicAssignment(topicId2, 6)), 10))
-                .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 2),
                     mkTopicAssignment(topicId2, 5)), 10))
                 .build(),
@@ -467,7 +467,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 11))
             .build();
@@ -493,7 +493,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 2, 3),
                     mkTopicAssignment(topicId2, 5, 6)), 11))
                 .build(),
@@ -518,10 +518,10 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 // Partition 4 is pending revocation by the member but is back in the latest target
                 // assignment.
                 mkTopicAssignment(topicId1, 4)), 10))
@@ -574,7 +574,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(expectedAssignment)
+                .setAssignedPartitions(expectedAssignment)
                 .build(),
             updatedMember
         );
@@ -597,7 +597,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 11))
             .build();
@@ -616,7 +616,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(11)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 2, 3),
                     mkTopicAssignment(topicId2, 5, 6)), 11))
                 .build(),
@@ -641,7 +641,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 11))
             .build();
@@ -660,7 +660,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 2, 3, 4),
                     mkTopicAssignment(topicId2, 5, 6, 7)), 11))
                 .build(),
@@ -685,7 +685,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 11))
             .build();
@@ -718,7 +718,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 11))
             .build();
@@ -737,10 +737,10 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 3),
                     mkTopicAssignment(topicId2, 6)), 11))
-                .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 2),
                     mkTopicAssignment(topicId2, 5)), 11))
                 .build(),
@@ -765,10 +765,10 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setSubscribedTopicNames(List.of(topic1, topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)), 11))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2),
                 mkTopicAssignment(topicId2, 5)), 11))
             .build();
@@ -800,7 +800,7 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(11)
                 .setSubscribedTopicNames(List.of(topic1, topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 3),
                     mkTopicAssignment(topicId2, 6)), 11))
                 .build(),
@@ -835,7 +835,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(memberEpoch)
             .setPreviousMemberEpoch(memberEpoch - 1)
             .setSubscribedTopicNames(List.of(topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 // Topic 1 is assigned, but no longer in the subscription.
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)), memberEpoch))
@@ -864,7 +864,7 @@ public class CurrentAssignmentBuilderTest {
                 // change, regardless of whether the member epoch is advanced.
                 .setPreviousMemberEpoch(memberEpoch)
                 .setSubscribedTopicNames(List.of(topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId2, 4, 5, 6)), memberEpoch))
                 .build(),
             updatedMember
@@ -898,7 +898,7 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(memberEpoch)
             .setPreviousMemberEpoch(memberEpoch - 1)
             .setSubscribedTopicNames(List.of(topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 // Topic 1 is assigned, but no longer in the subscription.
                 mkTopicAssignment(topicId1, 1, 2, 3),
                 mkTopicAssignment(topicId2, 4, 5, 6)), memberEpoch))
@@ -927,9 +927,9 @@ public class CurrentAssignmentBuilderTest {
                 // The previous member epoch is updated in all cases.
                 .setPreviousMemberEpoch(memberEpoch)
                 .setSubscribedTopicNames(List.of(topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId2, 4, 5, 6)), expectedMemberEpoch))
-                .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 1, 2, 3)), memberEpoch))
                 .build(),
             updatedMember
@@ -953,10 +953,10 @@ public class CurrentAssignmentBuilderTest {
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(topic2))
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)), 10))
-            .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+            .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(topicId1, 1),
                 mkTopicAssignment(topicId2, 4)), 10))
             .build();
@@ -983,9 +983,9 @@ public class CurrentAssignmentBuilderTest {
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(topic2))
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId2, 5, 6)), 10))
-                .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(topicId1, 1, 2, 3),
                     mkTopicAssignment(topicId2, 4)), 10))
                 .build(),
@@ -1011,7 +1011,7 @@ public class CurrentAssignmentBuilderTest {
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(fooTopic))
             .setSubscribedTopicRegex("bar*")
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
             .build();
@@ -1040,9 +1040,9 @@ public class CurrentAssignmentBuilderTest {
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(fooTopic))
                 .setSubscribedTopicRegex("bar*")
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 1, 2, 3)), 10))
-                .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
                 .build(),
             updatedMember
@@ -1067,7 +1067,7 @@ public class CurrentAssignmentBuilderTest {
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of())
             .setSubscribedTopicRegex("bar*")
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
             .build();
@@ -1096,8 +1096,8 @@ public class CurrentAssignmentBuilderTest {
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of())
                 .setSubscribedTopicRegex("bar*")
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(), 10))
-                .setPartitionsPendingRevocationWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(), 10))
+                .setPartitionsPendingRevocation(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 1, 2, 3),
                     mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
                 .build(),
@@ -1123,7 +1123,7 @@ public class CurrentAssignmentBuilderTest {
             .setPreviousMemberEpoch(10)
             .setSubscribedTopicNames(List.of(fooTopic))
             .setSubscribedTopicRegex("bar*")
-            .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+            .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
             .build();
@@ -1158,7 +1158,7 @@ public class CurrentAssignmentBuilderTest {
                 .setPreviousMemberEpoch(10)
                 .setSubscribedTopicNames(List.of(fooTopic))
                 .setSubscribedTopicRegex("bar*")
-                .setAssignedPartitionsWithEpochs(toEpochsAssignment(mkAssignment(
+                .setAssignedPartitions(toEpochsAssignment(mkAssignment(
                     mkTopicAssignment(fooTopicId, 1, 2, 3),
                     mkTopicAssignment(barTopicId, 4, 5, 6)), 10))
                 .build(),

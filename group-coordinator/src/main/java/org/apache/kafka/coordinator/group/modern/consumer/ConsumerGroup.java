@@ -1246,7 +1246,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitionsWithEpochs(assignedPartitions, memberEpoch)
+                .setAssignedPartitions(assignedPartitions, memberEpoch)
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())

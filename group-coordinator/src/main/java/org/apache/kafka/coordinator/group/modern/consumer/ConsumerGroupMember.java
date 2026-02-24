@@ -199,7 +199,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
-        public Builder setAssignedPartitionsWithEpochs(Map<Uuid, Set<Integer>> assignedPartitions, int assignmentEpoch) {
+        public Builder setAssignedPartitions(Map<Uuid, Set<Integer>> assignedPartitions, int assignmentEpoch) {
             this.assignedPartitions = assignedPartitions.entrySet().stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
@@ -208,12 +208,12 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
-        public Builder setAssignedPartitionsWithEpochs(Map<Uuid, Map<Integer, Integer>> assignedPartitions) {
+        public Builder setAssignedPartitions(Map<Uuid, Map<Integer, Integer>> assignedPartitions) {
             this.assignedPartitions = assignedPartitions;
             return this;
         }
 
-        public Builder setPartitionsPendingRevocationWithEpochs(Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocation) {
+        public Builder setPartitionsPendingRevocation(Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocation) {
             this.partitionsPendingRevocation = partitionsPendingRevocation;
             return this;
         }
@@ -257,10 +257,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
-            setAssignedPartitionsWithEpochs(
+            setAssignedPartitions(
                 assignmentWithEpochsFromTopicPartitions(record.assignedPartitions(), record.memberEpoch())
             );
-            setPartitionsPendingRevocationWithEpochs(
+            setPartitionsPendingRevocation(
                 assignmentWithEpochsFromTopicPartitions(record.partitionsPendingRevocation(), record.memberEpoch())
             );
             return this;

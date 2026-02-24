@@ -4142,7 +4142,7 @@ public class GroupMetadataManager {
         // are considered assigned from epoch 0 to the new member ID.
         ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-            .setPartitionsPendingRevocationWithEpochs(Map.of())
+            .setPartitionsPendingRevocation(Map.of())
             .resetAssignedPartitionsEpochsToZero()
             .build();
 
@@ -5410,8 +5410,8 @@ public class GroupMetadataManager {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setAssignedPartitionsWithEpochs(Map.of())
-                .setPartitionsPendingRevocationWithEpochs(Map.of())
+                .setAssignedPartitions(Map.of())
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
             group.updateMember(newMember);
         }

@@ -339,8 +339,8 @@ public class CurrentAssignmentBuilder {
             return new ConsumerGroupMember.Builder(member)
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .updateMemberEpoch(memberEpoch)
-                .setAssignedPartitionsWithEpochs(newAssignedPartitionsWithEpochs)
-                .setPartitionsPendingRevocationWithEpochs(newPartitionsPendingRevocationWithEpochs)
+                .setAssignedPartitions(newAssignedPartitionsWithEpochs)
+                .setPartitionsPendingRevocation(newPartitionsPendingRevocationWithEpochs)
                 .build();
         } else {
             // There were partitions removed, but they were already revoked.
@@ -351,7 +351,7 @@ public class CurrentAssignmentBuilder {
             // partitions pending revocation.
             return new ConsumerGroupMember.Builder(member)
                 .updateMemberEpoch(memberEpoch)
-                .setAssignedPartitionsWithEpochs(newAssignedPartitionsWithEpochs)
+                .setAssignedPartitions(newAssignedPartitionsWithEpochs)
                 .build();
         }
     }
@@ -440,8 +440,8 @@ public class CurrentAssignmentBuilder {
             return new ConsumerGroupMember.Builder(member)
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .updateMemberEpoch(memberEpoch)
-                .setAssignedPartitionsWithEpochs(newAssignedPartitionsWithEpochs)
-                .setPartitionsPendingRevocationWithEpochs(newPartitionsPendingRevocationWithEpochs)
+                .setAssignedPartitions(newAssignedPartitionsWithEpochs)
+                .setPartitionsPendingRevocation(newPartitionsPendingRevocationWithEpochs)
                 .build();
         } else if (!newPartitionsPendingAssignment.isEmpty()) {
             // If there are partitions to be assigned, the member transitions to the
@@ -463,8 +463,8 @@ public class CurrentAssignmentBuilder {
             return new ConsumerGroupMember.Builder(member)
                 .setState(newState)
                 .updateMemberEpoch(targetAssignmentEpoch)
-                .setAssignedPartitionsWithEpochs(newAssignedPartitionsWithEpochs)
-                .setPartitionsPendingRevocationWithEpochs(Map.of())
+                .setAssignedPartitions(newAssignedPartitionsWithEpochs)
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
         } else if (hasUnreleasedPartitions) {
             // If there are no partitions to be revoked nor to be assigned but some
@@ -473,8 +473,8 @@ public class CurrentAssignmentBuilder {
             return new ConsumerGroupMember.Builder(member)
                 .setState(MemberState.UNRELEASED_PARTITIONS)
                 .updateMemberEpoch(targetAssignmentEpoch)
-                .setAssignedPartitionsWithEpochs(newAssignedPartitionsWithEpochs)
-                .setPartitionsPendingRevocationWithEpochs(Map.of())
+                .setAssignedPartitions(newAssignedPartitionsWithEpochs)
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -482,8 +482,8 @@ public class CurrentAssignmentBuilder {
             return new ConsumerGroupMember.Builder(member)
                 .setState(MemberState.STABLE)
                 .updateMemberEpoch(targetAssignmentEpoch)
-                .setAssignedPartitionsWithEpochs(newAssignedPartitionsWithEpochs)
-                .setPartitionsPendingRevocationWithEpochs(Map.of())
+                .setAssignedPartitions(newAssignedPartitionsWithEpochs)
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
         }
     }
