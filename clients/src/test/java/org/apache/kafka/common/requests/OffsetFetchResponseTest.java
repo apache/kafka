@@ -28,7 +28,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
 import static org.apache.kafka.common.requests.OffsetFetchResponse.NO_METADATA;
 import static org.junit.jupiter.api.Assertions.assertEquals;

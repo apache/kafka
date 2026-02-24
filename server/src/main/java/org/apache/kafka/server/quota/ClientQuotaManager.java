@@ -203,20 +203,20 @@ public class ClientQuotaManager {
     /**
      * Helper class that records per-client metrics. It is also responsible for maintaining Quota usage statistics
      * for all clients.
-     * <p/>
-     * Quotas can be set at <user, client-id>, user or client-id levels. For a given client connection,
-     * the most specific quota matching the connection will be applied. For example, if both a <user, client-id>
-     * and a user quota match a connection, the <user, client-id> quota will be used. Otherwise, user quota takes
-     * precedence over client-id quota. The order of precedence is:
+     * <p>
+     * Quotas can be set at {@code <user, client-id>}, user or client-id levels. For a given client connection,
+     * the most specific quota matching the connection will be applied. For example, if both a
+     * {@code <user, client-id>} and a user quota match a connection, the {@code <user, client-id>} quota will be
+     * used. Otherwise, user quota takes precedence over client-id quota. The order of precedence is:
      * <ul>
-     *   <li>/config/users/<user>/clients/<client-id>
-     *   <li>/config/users/<user>/clients/<default>
-     *   <li>/config/users/<user>
-     *   <li>/config/users/<default>/clients/<client-id>
-     *   <li>/config/users/<default>/clients/<default>
-     *   <li>/config/users/<default>
-     *   <li>/config/clients/<client-id>
-     *   <li>/config/clients/<default>
+     *   <li>{@code /config/users/<user>/clients/<client-id>}</li>
+     *   <li>{@code /config/users/<user>/clients/<default>}</li>
+     *   <li>{@code /config/users/<user>}</li>
+     *   <li>{@code /config/users/<default>/clients/<client-id>}</li>
+     *   <li>{@code /config/users/<default>/clients/<default>}</li>
+     *   <li>{@code /config/users/<default>}</li>
+     *   <li>{@code /config/clients/<client-id>}</li>
+     *   <li>{@code /config/clients/<default>}</li>
      * </ul>
      * Quota limits including defaults may be updated dynamically. The implementation is optimized for the case
      * where a single level of quotas is configured.
@@ -508,11 +508,12 @@ public class ClientQuotaManager {
     }
 
     /**
-     * Overrides quotas for <user>, <client-id> or <user, client-id> or the dynamic defaults
+     * Overrides quotas for {@code <user>}, {@code <client-id>} or {@code <user, client-id>} or the dynamic defaults
      * for any of these levels.
      *
-     * @param userEntity   user to override if quota applies to <user> or <user, client-id>
-     * @param clientEntity sanitized client entity to override if quota applies to <client-id> or <user, client-id>
+     * @param userEntity   user to override if quota applies to {@code <user>} or {@code <user, client-id>}
+     * @param clientEntity sanitized client entity to override if quota applies to {@code <client-id>} or
+     *                     {@code <user, client-id>}
      * @param quota        custom quota to apply or None if quota override is being removed
      */
     public void updateQuota(

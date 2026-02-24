@@ -86,17 +86,11 @@ public final class MetaProperties {
         public Builder() {
         }
 
-        public Builder(Optional<MetaProperties> metaProps) {
-            if (metaProps.isPresent()) {
-                this.version = metaProps.get().version();
-                this.clusterId = metaProps.get().clusterId();
-                this.nodeId = metaProps.get().nodeId();
-                this.directoryId = metaProps.get().directoryId();
-            }
-        }
-
         public Builder(MetaProperties metaProps) {
-            this(Optional.of(metaProps));
+            this.version = metaProps.version();
+            this.clusterId = metaProps.clusterId();
+            this.nodeId = metaProps.nodeId();
+            this.directoryId = metaProps.directoryId();
         }
 
         public Builder(Properties props) {

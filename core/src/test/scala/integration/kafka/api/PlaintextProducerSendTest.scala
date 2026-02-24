@@ -24,7 +24,8 @@ import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
-import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.internal.{DefaultRecord, DefaultRecordBatch, Records}
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
@@ -168,6 +169,19 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val exception = assertThrows(classOf[ExecutionException], () => producer.send(record).get)
     assertInstanceOf(classOf[TimeoutException], exception.getCause)
     assertEquals("Partition 10 of topic topic with partition count 4 is not present in metadata after 500 ms.", exception.getCause.getMessage)
+  }
+
+  /**
+   * Test error message received when partitionsFor fails waiting on metadata for a topic that does not exist.
+   * No need to run this for both rebalance protocols.
+   */
+  @ParameterizedTest(name = "groupProtocol={0}.autoCreateTopicsEnabled={1}")
+  @MethodSource(Array("protocolAndAutoCreateTopicProviders"))
+  def testPartitionsForTimeoutErrorWhenTopicDoesNotExist(groupProtocol: String, autoCreateTopicsEnabled: String): Unit = {
+    val producer = createProducer(maxBlockMs = 500)
+
+    val exception = assertThrows(classOf[TimeoutException], () => producer.partitionsFor("unexisting-topic"))
+    assertEquals("Topic unexisting-topic not present in metadata after 500 ms.", exception.getMessage)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

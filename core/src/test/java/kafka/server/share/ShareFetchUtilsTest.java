@@ -27,13 +27,15 @@ import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
+import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -725,6 +727,24 @@ public class ShareFetchUtilsTest {
         result = new ArrayList<>();
         ShareFetchUtils.accumulateAcquiredRecords(result, input);
         assertArrayEquals(input.toArray(), result.toArray());
+    }
+
+    @Test
+    void testDeliveryCountLimitOrDefaultWithGroupConfig() {
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        GroupConfig groupConfig = mock(GroupConfig.class);
+        when(groupConfig.shareDeliveryCountLimit()).thenReturn(8);
+        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
+
+        assertEquals(8, ShareFetchUtils.deliveryCountLimitOrDefault(groupConfigManager, "test-group", 5));
+    }
+
+    @Test
+    void testDeliveryCountLimitOrDefaultWithoutGroupConfig() {
+        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
+        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.empty());
+
+        assertEquals(5, ShareFetchUtils.deliveryCountLimitOrDefault(groupConfigManager, "test-group", 5));
     }
 
     private static class RecordsArgumentsProvider implements ArgumentsProvider {

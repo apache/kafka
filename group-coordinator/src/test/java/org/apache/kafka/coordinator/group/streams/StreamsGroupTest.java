@@ -1237,10 +1237,11 @@ public class StreamsGroupTest {
         assertEquals(List.of("fallback-topic"), describedGroup.topology().subtopologies().get(0).sourceTopics());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testCancelTimers() {
         StreamsGroup streamsGroup = createStreamsGroup("test-group");
-        CoordinatorTimer<Void, CoordinatorRecord> timer = mock(CoordinatorTimer.class);
+        CoordinatorTimer<CoordinatorRecord> timer = mock(CoordinatorTimer.class);
 
         streamsGroup.cancelTimers(timer);
 

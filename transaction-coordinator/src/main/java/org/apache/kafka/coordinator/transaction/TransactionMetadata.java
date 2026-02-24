@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.transaction;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.LogLevelConfig;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.server.common.TransactionVersion;
 
 import org.slf4j.Logger;

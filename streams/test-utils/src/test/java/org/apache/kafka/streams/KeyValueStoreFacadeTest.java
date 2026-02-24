@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -98,9 +100,9 @@ public class KeyValueStoreFacadeTest {
     }
 
     @Test
-    public void shouldForwardFlush() {
-        keyValueStoreFacade.flush();
-        verify(mockedKeyValueTimestampStore).flush();
+    public void shouldForwardCommit() {
+        keyValueStoreFacade.commit(Map.of());
+        verify(mockedKeyValueTimestampStore).commit(Map.of());
     }
 
     @Test

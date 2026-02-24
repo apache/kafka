@@ -53,7 +53,9 @@ Starting in version 4.0.0, Kafka Streams will only be compatible when running ag
 
 Downgrading from 3.5.x or newer version to 3.4.x or older version needs special attention: Since 3.5.0 release, Kafka Streams uses a new serialization format for repartition topics. This means that older versions of Kafka Streams would not be able to recognize the bytes written by newer versions, and hence it is harder to downgrade Kafka Streams with version 3.5.0 or newer to older versions in-flight. For more details, please refer to [KIP-904](https://cwiki.apache.org/confluence/x/P5VbDg). For a downgrade, first switch the config from `"upgrade.from"` to the version you are downgrading to. This disables writing of the new serialization format in your application. It's important to wait in this state long enough to make sure that the application has finished processing any "in-flight" messages written into the repartition topics in the new serialization format. Afterwards, you can downgrade your application to a pre-3.5.x version. 
 
-Downgrading from 3.0.x or newer version to 2.8.x or older version needs special attention: Since 3.0.0 release, Kafka Streams uses a newer RocksDB version whose on-disk format changed. This means that old versioned RocksDB would not be able to recognize the bytes written by that newer versioned RocksDB, and hence it is harder to downgrade Kafka Streams with version 3.0.0 or newer to older versions in-flight. Users need to wipe out the local RocksDB state stores written by the new versioned Kafka Streams before swapping in the older versioned Kafka Streams bytecode, which would then restore the state stores with the old on-disk format from the changelogs. 
+Downgrading from 3.0.x or newer version to 2.8.x or older version needs special attention: Since 3.0.0 release, Kafka Streams uses a newer RocksDB version whose on-disk format changed. This means that old versioned RocksDB would not be able to recognize the bytes written by that newer versioned RocksDB, and hence it is harder to downgrade Kafka Streams with version 3.0.0 or newer to older versions in-flight. Users need to first delete the local RocksDB state stores written by the new versioned Kafka Streams before swapping in the older versioned Kafka Streams bytecode, which would then restore the state stores with the old on-disk format from the changelogs. 
+
+Downgrading from 4.0.x or newer version to older than 4.0.0 needs special attention: Since 4.0.0 release, Kafka Streams upgraded RocksDB from version 7.9.2 to 9.7.3. This upgrade introduces a RocksDB file format version change from version 5 to version 6 (introduced in RocksDB 8.6). While the newer RocksDB version (9.7.3) can read state stores written in the old format (version 5), the older RocksDB versions cannot read state stores written in the new format (version 6). This means that downgrading from Kafka Streams 4.0.x or newer to versions older than 4.0.0 in-flight is not possible out-of-the-box. Users must first delete the local RocksDB state stores written by Kafka Streams 4.0.x or newer before downgrading to versions older than 4.0.0, which will then restore the state stores from the changelogs using the old file format.
 
 Kafka Streams does not support running multiple instances of the same application as different processes on the same physical state directory. Starting in 2.8.0 (as well as 2.7.1 and 2.6.2), this restriction will be enforced. If you wish to run more than one instance of Kafka Streams, you must configure them with different values for `state.dir`. 
 
@@ -61,7 +63,26 @@ Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS v
 
 Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.
 
+## Streams API changes in 4.3.0
+
+The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, and `poll-ratio`, along with streams state updater metrics `active-restore-ratio`, `standby-restore-ratio`, `idle-ratio`, and `checkpoint-ratio` have been updated. Each metric now reports, over a rolling measurement window, the ratio of time this thread spends performing the given action (`{action}`) to the total elapsed time in that window. The effective window duration is determined by the metrics configuration: `metrics.sample.window.ms` (per-sample window length) and `metrics.num.samples` (number of rolling windows).
+
+### Deprecation of streams-scala module (KIP-1244)
+
+The `kafka-streams-scala` module (`org.apache.kafka.streams.scala` package) is deprecated in 4.3.0 and will be removed in 5.0.
+
+For a detailed migration guide with code examples, see [Migrating from Streams Scala to Java API](/{version}/streams/developer-guide/scala-migration).
+
 ## Streams API changes in 4.2.0
+
+### General Availability for a core feature set of the Streams Rebalance Protocol (KIP-1071)
+
+The Streams Rebalance Protocol is a broker-driven rebalancing system designed specifically for Kafka Streams applications. 
+This release marks the General Availability for the core functionality detailed in [KIP-1071](https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol).
+For more information about the feature set, design, usage and migration, 
+please refer to the [developer guide](/{version}/documentation/streams/developer-guide/streams-rebalance-protocol.html).
+
+### Other changes
 
 Kafka Streams now supports Dead Letter Queue (DLQ). A new config `errors.deadletterqueue.topic.name` allows to specify the name of the DLQ topic. When set and `DefaultProductionExceptionHandler` is used, records that cause exceptions will be forwarded to the DLQ topic. If a custom exception handler is used, it is up to the custom handler to build DLQ records to send, hence, depending on the implementation, the `errors.deadletterqueue.topic.name` configuration may be ignored. `org.apache.kafka.streams.errors.ProductionExceptionHandler$ProductionExceptionHandlerResponse` is deprecated and replaced by `org.apache.kafka.streams.errors.ProductionExceptionHandler$Response`. Methods `handle` and `handleSerializationException` in `org.apache.kafka.streams.errors.ProductionExceptionHandler` are deprecated and replaced by `handleError` and `handleSerializationError` respectively in order to use the new `Response` class. More details can be found in [KIP-1034](https://cwiki.apache.org/confluence/x/HwviEQ). 
 
@@ -135,7 +156,7 @@ In this release, eos-v1 (Exactly Once Semantics version 1) is no longer supporte
   * [Old processor APIs](https://issues.apache.org/jira/browse/KAFKA-12829)
   * [KStream#through() in both Java and Scala](https://issues.apache.org/jira/browse/KAFKA-12823)
   * ["transformer" methods and classes in both Java and Scala](https://issues.apache.org/jira/browse/KAFKA-16339)
-    * migrating from `KStreams#transformValues()` to `KStreams.processValues()` might not be safe due to [KAFKA-19668](https://issues.apache.org/jira/browse/KAFKA-19668). Please refer to the [migration guide](/43/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors) for more details. 
+    * migrating from `KStreams#transformValues()` to `KStreams.processValues()` might not be safe due to [KAFKA-19668](https://issues.apache.org/jira/browse/KAFKA-19668). Please refer to the [migration guide](/43/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors) for more details. 
   * [kstream.KStream#branch in both Java and Scala](https://issues.apache.org/jira/browse/KAFKA-12824)
   * [builder methods for Time/Session/Join/SlidingWindows](https://issues.apache.org/jira/browse/KAFKA-16332)
   * [KafkaStreams#setUncaughtExceptionHandler()](https://issues.apache.org/jira/browse/KAFKA-12827)
@@ -284,7 +305,7 @@ Kafka Streams does not send a "leave group" request when an instance is closed. 
   * `KStream<KOut,VOut> KStream.process(ProcessorSupplier, ...)`
   * `KStream<K,VOut> KStream.processValues(FixedKeyProcessorSupplier, ...)`
 
-Both new methods have multiple overloads and return a `KStream` instead of `void` as the deprecated `process()` methods did. In addition, `FixedKeyProcessor`, `FixedKeyRecord`, `FixedKeyProcessorContext`, and `ContextualFixedKeyProcessor` are introduced to guard against disallowed key modification inside `processValues()`. Furthermore, `ProcessingContext` is added for a better interface hierarchy. **CAUTION:** The newly added `KStream.processValues()` method introduced a regression bug ([KAFKA-19668](https://issues.apache.org/jira/browse/KAFKA-19668)). If you have "merge repartition topics" optimization enabled, it is not safe to migrate from `transformValues()` to `processValues()` in 3.3.0 release. The bug is only fixed with Kafka Streams 4.0.1, 4.1.1, and 4.2.0. For more details, please refer to the [migration guide](/43/documentation/streams/developer-guide/dsl-api.html#transformers-removal-and-migration-to-processors). 
+Both new methods have multiple overloads and return a `KStream` instead of `void` as the deprecated `process()` methods did. In addition, `FixedKeyProcessor`, `FixedKeyRecord`, `FixedKeyProcessorContext`, and `ContextualFixedKeyProcessor` are introduced to guard against disallowed key modification inside `processValues()`. Furthermore, `ProcessingContext` is added for a better interface hierarchy. **CAUTION:** The newly added `KStream.processValues()` method introduced a regression bug ([KAFKA-19668](https://issues.apache.org/jira/browse/KAFKA-19668)). If you have "merge repartition topics" optimization enabled, it is not safe to migrate from `transformValues()` to `processValues()` in 3.3.0 release. The bug is only fixed with Kafka Streams 4.0.1, 4.1.1, and 4.2.0. For more details, please refer to the [migration guide](/43/streams/developer-guide/dsl-api/#transformers-removal-and-migration-to-processors). 
 
 Emitting a windowed aggregation result only after a window is closed is currently supported via the `suppress()` operator. However, `suppress()` uses an in-memory implementation and does not support RocksDB. To close this gap, [KIP-825](https://cwiki.apache.org/confluence/x/n7fkCw) introduces "emit strategies", which are built into the aggregation operator directly to use the already existing RocksDB store. `TimeWindowedKStream.emitStrategy(EmitStrategy)` and `SessionWindowedKStream.emitStrategy(EmitStrategy)` allow picking between "emit on window update" (default) and "emit on window close" strategies. Additionally, a few new emit metrics are added, as well as a necessary new method, `SessionStore.findSessions(long, long)`. 
 
@@ -304,7 +325,7 @@ For multi-AZ deployments, it is desired to assign StandbyTasks to a KafkaStreams
 
 [Interactive Queries](/documentation/streams/developer-guide/interactive-queries.html) allow users to tap into the operational state of Kafka Streams processor nodes. The existing API is tightly coupled with the actual state store interfaces and thus the internal implementation of state store. To break up this tight coupling and allow for building more advanced IQ features, [KIP-796](https://cwiki.apache.org/confluence/x/34xnCw) introduces a completely new IQv2 API, via `StateQueryRequest` and `StateQueryResult` classes, as well as `Query` and `QueryResult` interfaces (plus additional helper classes). In addition, multiple built-in query types were added: `KeyQuery` for key lookups and `RangeQuery` (via [KIP-805](https://cwiki.apache.org/confluence/x/85OqCw)) for key-range queries on key-value stores, as well as `WindowKeyQuery` and `WindowRangeQuery` (via [KIP-806](https://cwiki.apache.org/confluence/x/LJaqCw)) for key and range lookup into windowed stores. 
 
-The Kafka Streams DSL may insert so-called repartition topics for certain DSL operators to ensure correct partitioning of data. These topics are configured with infinite retention time, and Kafka Streams purges old data explicitly via "delete record" requests, when commiting input topic offsets. [KIP-811](https://cwiki.apache.org/confluence/x/JY-kCw) adds a new config `repartition.purge.interval.ms` allowing you to configure the purge interval independently of the commit interval. 
+The Kafka Streams DSL may insert so-called repartition topics for certain DSL operators to ensure correct partitioning of data. These topics are configured with infinite retention time, and Kafka Streams purges old data explicitly via "delete record" requests, when committing input topic offsets. [KIP-811](https://cwiki.apache.org/confluence/x/JY-kCw) adds a new config `repartition.purge.interval.ms` allowing you to configure the purge interval independently of the commit interval. 
 
 ## Streams API changes in 3.1.0
 
@@ -510,7 +531,8 @@ Kafka Streams API (rows)
 </td>  
 <td>
 
-4.1.x
+4.1.x and
+4.2.x
 </td> </tr>  
 <tr>  
 <td>
@@ -543,7 +565,8 @@ compatible
 3.8.x and  
 3.9.x and  
 4.0.x and  
-4.1.x
+4.1.x and  
+4.2.x
 </td>  
 <td>
 

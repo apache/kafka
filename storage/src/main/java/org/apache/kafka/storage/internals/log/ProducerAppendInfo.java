@@ -21,10 +21,10 @@ import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.EndTransactionMarker;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.RecordBatch;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -119,6 +119,22 @@ public class ProducerAppendInfo {
         boolean invalidEpoch = (transactionVersion >= 2) ? (producerEpoch <= current) : (producerEpoch < current);
 
         if (invalidEpoch) {
+            // TV2 Idempotent Marker Retry Detection (KAFKA-19999):
+            // When markerEpoch == currentEpoch and no transaction is ongoing, this indicates
+            // a retry of a marker that was already successfully written. Common scenarios:
+            // 1. Coordinator recovery: reloading PREPARE_COMMIT/ABORT from transaction log
+            // 2. Network retry: marker was written but response was lost due to disconnection
+            // In both cases, the transaction has already ended (currentTxnFirstOffset is empty).
+            // We suppress the InvalidProducerEpochException and allow the duplicate marker to
+            // be written to the log.
+            if (transactionVersion >= 2 &&
+                    producerEpoch == current &&
+                    updatedEntry.currentTxnFirstOffset().isEmpty()) {
+                log.info("Idempotent transaction marker retry detected for producer {} epoch {}. " +
+                                "Transaction already completed, allowing duplicate marker write.",
+                        producerId, producerEpoch);
+                return;
+            }
             String comparison = (transactionVersion >= 2) ? "<=" : "<";
             String message = "Epoch of producer " + producerId + " at offset " + offset + " in " + topicPartition +
                     " is " + producerEpoch + ", which is " + comparison + " the last seen epoch " + current +
