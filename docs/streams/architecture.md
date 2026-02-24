@@ -69,7 +69,7 @@ To achieve independent parallelism per topic, you can structure your topology to
         input.filter(...).map(...).to("output-topic");
     }
 
-With this approach, each input topic gets its own sub-topology and its own independent set of tasks. The total number of tasks becomes the **sum** of partitions across all topics (5 + 3 + 4 = 12 in the above example), allowing for greater parallelism. Each topic's data is processed independently, which can significantly improve throughput when you have multiple input topics with substantial data volumes.
+With this approach, each input topic gets its own sub-topology and its own independent set of tasks. The total number of tasks becomes the **sum** of partitions across all topics (5 + 3 + 4 = 12 in the above example), allowing for higher parallelism. Each topic's data is processed independently, which can significantly improve throughput when you have multiple input topics with substantial data volumes.
 
 ## Threading Model
 
