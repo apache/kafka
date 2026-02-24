@@ -40,9 +40,15 @@ import static org.apache.kafka.common.record.CompressionType.ZSTD;
 public class ZstdCompression implements Compression {
 
     private final int level;
+    private final int windowLog;
+    private boolean longRangeMode;
+    private boolean checksum;
 
-    private ZstdCompression(int level) {
+    private ZstdCompression(int level, int windowLog, boolean longRangeMode, boolean checksum) {
         this.level = level;
+        this.windowLog = windowLog;
+        this.longRangeMode = longRangeMode;
+        this.checksum = checksum;
     }
 
     @Override
@@ -55,7 +61,11 @@ public class ZstdCompression implements Compression {
         try {
             // Set input buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
             // in cases where the caller passes a small number of bytes to write (potentially a single byte).
-            return new BufferedOutputStream(new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE, level), 16 * 1024);
+            ZstdOutputStreamNoFinalizer zos = new ZstdOutputStreamNoFinalizer(bufferStream, RecyclingBufferPool.INSTANCE, level);
+            zos.setChecksum(checksum);
+            zos.setWindowLog(windowLog);
+            zos.setLong(longRangeMode ? windowLog : 0);
+            return new BufferedOutputStream(zos, 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -122,19 +132,39 @@ public class ZstdCompression implements Compression {
 
     public static class Builder implements Compression.Builder<ZstdCompression> {
         private int level = ZSTD.defaultLevel();
+        private int windowLog = ZSTD.windowLog();
+        private boolean longRangeMode = ZSTD.longRangeMode();
+        private boolean checksum = ZSTD.checksum();
 
         public Builder level(int level) {
             if (level < ZSTD.minLevel() || ZSTD.maxLevel() < level) {
                 throw new IllegalArgumentException("zstd doesn't support given compression level: " + level);
             }
-
             this.level = level;
+            return this;
+        }
+
+        public Builder windowLog(int windowLog) {
+            if (windowLog < 10 || 31 < windowLog) {
+                throw new IllegalArgumentException("zstd doesn't support given windowlog: " + windowLog);
+            }
+            this.windowLog = windowLog;
+            return this;
+        }
+
+        public Builder longRangeMode(boolean longRangeMode) {
+            this.longRangeMode = longRangeMode;
+            return this;
+        }
+
+        public Builder checksum(boolean checksum) {
+            this.checksum = checksum;
             return this;
         }
 
         @Override
         public ZstdCompression build() {
-            return new ZstdCompression(level);
+            return new ZstdCompression(level, windowLog, longRangeMode, checksum);
         }
     }
 }

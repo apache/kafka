@@ -115,6 +115,11 @@ public enum CompressionType {
         private static final int MAX_LEVEL = 22;
         // See ZSTD_CLEVEL_DEFAULT in https://github.com/facebook/zstd/blob/dev/lib/zstd.h#L129
         private static final int DEFAULT_LEVEL = 3;
+        // See ZSTD_c_windowLog in https://github.com/facebook/zstd/blob/lib/zstd.h#L368
+        private static final int WINDOW_LOG = 12; // 4KB — safe and memory-efficient
+        private static final boolean LONG_RANGE_MODE = false;
+        private static final boolean CHECKSUM = true;
+
 
         @Override
         public int defaultLevel() {
@@ -129,6 +134,21 @@ public enum CompressionType {
         @Override
         public int minLevel() {
             return MIN_LEVEL;
+        }
+
+        @Override
+        public int windowLog() {
+            return WINDOW_LOG;
+        }
+
+        @Override
+        public boolean longRangeMode() {
+            return LONG_RANGE_MODE;
+        }
+
+        @Override
+        public boolean checksum() {
+            return CHECKSUM;
         }
 
         @Override
@@ -191,6 +211,18 @@ public enum CompressionType {
 
     public int minLevel() {
         throw new UnsupportedOperationException("Compression levels are not defined for this compression type: " + name);
+    }
+
+    public int windowLog() {
+        throw new UnsupportedOperationException("Window log is not defined for this compression type: " + name);
+    }
+
+    public boolean longRangeMode() {
+        throw new UnsupportedOperationException("Long range mode is not defined for this compression type: " + name);
+    }
+
+    public boolean checksum() {
+        throw new UnsupportedOperationException("Checksum is not defined for this compression type: " + name);
     }
 
     public ConfigDef.Validator levelValidator() {

@@ -565,6 +565,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             case ZSTD: {
                 return Compression.zstd()
                         .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                        .windowLog(config.getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG))
+                        .checksum(config.getBoolean(ProducerConfig.COMPRESSION_ZSTD_CHECKSUM_CONFIG))
+                        .longRangeMode(config.getBoolean(ProducerConfig.COMPRESSION_ZSTD_LONG_CONFIG))
                         .build();
             }
             default:
