@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
@@ -26,6 +27,7 @@ import java.util.Set;
 public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     private final Set<String> connectedProcessorNames = new HashSet<>();
     private DslStoreSuppliers dslStoreSuppliers;
+    private DslStoreFormat dslStoreFormat;
 
     public AbstractConfigurableStoreFactory(final DslStoreSuppliers initialStoreSuppliers) {
         this.dslStoreSuppliers = initialStoreSuppliers;
@@ -40,11 +42,18 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
                 config.originals()
             );
         }
+        if (dslStoreFormat == null) {
+            dslStoreFormat = DslStoreFormat.of(config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+        }
     }
 
     @Override
     public Set<String> connectedProcessorNames() {
         return connectedProcessorNames;
+    }
+
+    public DslStoreFormat dslStoreFormat() {
+        return dslStoreFormat;
     }
 
     protected DslStoreSuppliers dslStoreSuppliers() {

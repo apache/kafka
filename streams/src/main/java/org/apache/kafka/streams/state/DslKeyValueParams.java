@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.DslStoreFormat;
+
 import java.util.Objects;
 
 /**
@@ -25,24 +27,44 @@ import java.util.Objects;
 public class DslKeyValueParams {
 
     private final String name;
+    @Deprecated
     private final boolean isTimestamped;
+    private final DslStoreFormat dslStoreFormat;
+
+//    /**
+//     * @param name          the name of the store (cannot be {@code null})
+//     * @param isTimestamped whether the returned stores should be timestamped, see ({@link TimestampedKeyValueStore}
+//     */
+//    @Deprecated
+//    public DslKeyValueParams(final String name, final boolean isTimestamped) {
+//        Objects.requireNonNull(name);
+//        this.name = name;
+//        this.isTimestamped = isTimestamped;
+//        this.dslStoreFormat = DslStoreFormat.DEFAULT;
+//    }
 
     /**
-     * @param name          the name of the store (cannot be {@code null})
-     * @param isTimestamped whether the returned stores should be timestamped, see ({@link TimestampedKeyValueStore}
+     * @param name           the name of the store (cannot be {@code null})
+     * @param dslStoreFormat the format of the state store, see ({@link DslStoreFormat}
      */
-    public DslKeyValueParams(final String name, final boolean isTimestamped) {
+    public DslKeyValueParams(final String name, final DslStoreFormat dslStoreFormat) {
         Objects.requireNonNull(name);
         this.name = name;
-        this.isTimestamped = isTimestamped;
+        this.dslStoreFormat = dslStoreFormat;
+        this.isTimestamped = true;
     }
 
     public String name() {
         return name;
     }
 
-    public boolean isTimestamped() {
-        return isTimestamped;
+//    @Deprecated
+//    public boolean isTimestamped() {
+//        return isTimestamped;
+//    }
+
+    public DslStoreFormat dslStoreFormat() {
+        return dslStoreFormat;
     }
 
     @Override
@@ -55,12 +77,13 @@ public class DslKeyValueParams {
         }
         final DslKeyValueParams that = (DslKeyValueParams) o;
         return isTimestamped == that.isTimestamped
+                && Objects.equals(dslStoreFormat, that.dslStoreFormat)
                 && Objects.equals(name, that.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, isTimestamped);
+        return Objects.hash(name, isTimestamped, dslStoreFormat);
     }
 
     @Override
@@ -68,6 +91,7 @@ public class DslKeyValueParams {
         return "DslKeyValueParams{" +
                 "name='" + name + '\'' +
                 "isTimestamped=" + isTimestamped +
+                "dslStoreFormat=" + dslStoreFormat +
                 '}';
     }
 }

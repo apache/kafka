@@ -988,6 +988,52 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldUseDefaultStoreFormatWhenNotSpecified() {
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualFormat = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        assertEquals("default", actualFormat, "dsl.store.format should default to 'default'");
+    }
+
+    @Test
+    public void shouldAcceptValidDslStoreFormatDefault() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "default");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("default", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldAcceptValidDslStoreFormatHeaders() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "headers");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("headers", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldAcceptValidDslStoreFormatBasic() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "basic");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("basic", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldAcceptDslStoreFormatCaseInsensitive() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "HEADERS");
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals("HEADERS", config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "Default");
+        final StreamsConfig config2 = new StreamsConfig(props);
+        assertEquals("Default", config2.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionForInvalidDslStoreFormat() {
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, "invalid_format");
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Invalid value invalid_format for configuration dsl.store.format"));
+    }
+
+    @Test
     public void shouldSpecifyRocksdbDslSupplierWhenNotExplicitlyAddedToConfigs() {
         final Class<?> expectedDefaultStoreType = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
         final Class<?> actualDefaultStoreType = streamsConfig.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
