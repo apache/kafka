@@ -298,7 +298,7 @@ public class ShareCompletedFetch {
                 // It's acquired, so we reject it
                 inFlightBatch.addAcknowledgement(offset, AcknowledgeType.REJECT);
                 offsets.add(offset);
-            } else if (offset < acquired.offset) {
+            } else {
                 // It's not acquired, so we skip it
                 continue;
             }

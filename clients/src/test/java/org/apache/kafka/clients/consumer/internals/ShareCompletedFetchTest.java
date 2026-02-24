@@ -50,7 +50,6 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -863,7 +862,7 @@ public class ShareCompletedFetchTest {
             .setFirstOffset(firstOffset)
             .setLastOffset(firstOffset + count - 1)
             .setDeliveryCount((short) 1);
-        return Collections.singletonList(acquiredRecords);
+        return List.of(acquiredRecords);
     }
 
     private Records newTransactionalRecords(int numRecords) {
