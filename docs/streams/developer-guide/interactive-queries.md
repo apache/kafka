@@ -486,8 +486,107 @@ At this point the full state of the application is interactively queryable:
   * Collectively, this allows us to query the full state of the entire application.
 
 
+## Interactive Queries APIs
 
+Kafka Streams currently provides two APIs for querying state:
+
+- **Interactive Queries v2 (IQv2)** – the newer, query-based API
+- **Interactive Queries v1 (IQv1)** – the original, store-access-based API
+
+This documentation introduces **Interactive Queries v2** as the **new API**, while retaining IQv1 for backward compatibility.
+
+
+**Interactive Queries v2 (IQv2)** introduces a **query-based API** for accessing Kafka Streams application state.
+Instead of directly interacting with state store objects, applications **define structured queries** that are executed by Kafka Streams.
+
+IQv2 improves API safety, extensibility, and error handling by:
+
+- Decoupling query definition from store internals
+- Returning structured query results instead of throwing exceptions.
+- Enabling clearer handling of partial failures in distributed environments.
+- Returning a StateQueryResult that encapsulates both the structured data and a Position object, providing per-partition offset metadata to track data freshness and handle partial successes.
+
+Queries are executed against local state stores on an application instance, with Kafka Streams managing:
+
+- Query execution
+- Validation
+- Result and failure reporting
+
+IQv2 is designed to evolve independently of specific state store implementations and serves as the **successor to the legacy Interactive Queries v1 API.**
+
+## How Interactive Queries v2 Works
+
+Interactive Queries v2 works by allowing applications to **define explicit query objects** that describe what data to fetch from a state store.
+These queries are submitted to Kafka Streams, which is responsible for **executing the query,** handling validation, and returning a **structured result.**
+
+Instead of exposing state store internals, Kafka Streams processes the query and returns a **StateQueryResult**, which may contain either the requested data or detailed failure information.
+This approach makes querying state safer, more extensible, and better suited for distributed environments.
 To see an end-to-end application with interactive queries, review the demo applications.
+
+## Building and Executing a Query (IQv2)
+
+In Interactive Queries v2, applications first **build a query object** that describes the data to retrieve from a specific state store (for example, a key lookup or range query).
+This query is wrapped in a **StateQueryRequest**, which also specifies the target state store.
+
+Once the request is created, it is executed using the **KafkaStreams#query()** method.
+Kafka Streams validates the request, executes the query against the appropriate local state store, and returns a **StateQueryResult** containing either the query result or failure details.
+
+This separation of **query construction** and **query execution** allows Kafka Streams to manage execution logic while keeping application code clean and extensible.
+
+1. **Build the Query**
+
+    ```
+    // Build a query to fetch the value for a specific key
+    StateQueryRequest<Long> request =
+    StateQueryRequest.inStore("counts-store")
+    .withQuery(KeyQuery.withKey("user-1"));
+
+Here:
+
+- `"counts-store"` is the name of the state store.
+- `"user-1"` is the key you want to query.
+- `KeyQuery` defines what kind of query you are performing.
+
+2. **Execute the Query**
+   ```
+   StateQueryResult<Long> result = streams.query(request);
+Kafka Streams executes the query against the local state store and returns a result object.
+
+3. **Read the Result**
+    ```
+   // Extract QueryResult from StateQueryResult 
+   QueryResult<Long> partition0Result = result.getpartitionResults().get(0);
+   assertNotNull(partition0Result, "QueryResult must be obtained first");
+   
+   // Long validation: Confirming the result is indeed 100L
+   assertEquals(100L, partition0Result.getResult(), "The result should be a Long value");
+   
+   System.out.println("Result: " + partition0Result.getResult());
+   System.out.println("Metadata Position: " + partition0Result.getPosition());
+   
+   
+
+## Comparison of IQv1 and IQv2
+
+| **Aspects** | **Interactive Queries v1 (Legacy API)** | **Interactive Queries v2 (New API)** |
+|-------------|-----------------------------------------|--------------------------------------|
+| API Style   | Store-based API                         |           Query-based API                           |
+|    How queries are defined         |            Direct access to state store objects                             |            Explicit query objects (e.g., KeyQuery)                          |
+|   Interaction with state stores          |            Application interacts directly with store internals                             |                 Kafka Streams executes queries on behalf of the application                     |
+|    Result handling         |            Results returned directly or via iterators                             |             Results wrapped in StateQueryResult                         |
+|     Error handling        |              Exception-based                           |             Structured failures returned with results                         |
+|     Coupling to store implementation        |                Tightly coupled to store types                         |           Decoupled from store internals                           |
+|  Extensibility           |       Harder to evolve without breaking changes                                  |     Designed to be extensible and future-proof                                 |
+|  Partial failure visibility           |           Limited                              |            Explicit visibility into per-host failures                          |
+|   Feature completeness          |        Feature complete and stable                                 |       Not yet feature complete                               |
+
+## Limitations of Interactive Queries v2
+
+Interactive Queries v2 is not yet feature complete.
+
+**Some advanced query patterns available in the original Interactive Queries API may not yet be supported.
+The API is expected to evolve, and user feedback will guide future improvements.**
+
 
   * [Documentation](/documentation)
   * [Kafka Streams](/documentation/streams)
