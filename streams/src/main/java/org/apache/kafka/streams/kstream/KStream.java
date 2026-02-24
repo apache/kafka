@@ -531,9 +531,12 @@ public interface KStream<K, V> {
      * The topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
-     * <p>The key and value serdes are inherited from the upstream processing chain
-     * (e.g., from a {@code Consumed} instance). If the serdes cannot be inherited,
-     * the default key and value serdes from the configuration will be used.
+     * <p>The key and value serdes may be inherited from the upstream processing chain, i.e.,
+     * if a serde was specified on an upstream operator, and the key or value is not modified
+     * afterward, the upstream serde is recursively pushed to downstream operators.
+     * If no serde was specified upstream, or if a key- or value-changing operation was
+     * performed upstream and the serde could not get pushed downstream, the default serde
+     * from the config will be used to serialize the result.
      *
      * <p>To explicitly set key/value serdes or the partitioning strategy, use {@link #to(String, Produced)}.
      *
@@ -555,9 +558,12 @@ public interface KStream<K, V> {
      * The provided {@link TopicNameExtractor} is applied to each input record to compute the output topic name.
      * All topics should be manually created before they are used (i.e., before the Kafka Streams application is started).
      *
-     * <p>The key and value serdes are inherited from the upstream processing chain
-     * (e.g., from a {@code Consumed} instance). If the serdes cannot be inherited,
-     * the default key and value serdes from the configuration will be used.
+     * <p>The key and value serdes may be inherited from the upstream processing chain, i.e.,
+     * if a serde was specified on an upstream operator, and the key or value is not modified
+     * afterward, the upstream serde is recursively pushed to downstream operators.
+     * If no serde was specified upstream, or if a key- or value-changing operation was
+     * performed upstream and the serde could not get pushed downstream, the default serde
+     * from the config will be used to serialize the result.
      *
      * <p>To explicitly set key/value serdes or the partitioning strategy, use {@link #to(TopicNameExtractor, Produced)}.
      *
@@ -636,9 +642,12 @@ public interface KStream<K, V> {
      * {@link #groupBy(KeyValueMapper)}.
      * In either case, if the grouping key is {@code null}, the record will be dropped.
      *
-     * <p>The key and value serdes are inherited from the upstream processing chain
-     * (e.g., from a {@code Consumed} instance). If the serdes cannot be inherited,
-     * the default key and value serdes from the configuration will be used.
+     * <p>The key and value serdes may be inherited from the upstream processing chain, i.e.,
+     * if a serde was specified on an upstream operator, and the key or value is not modified
+     * afterward, the upstream serde is recursively pushed to downstream operators.
+     * If no serde was specified upstream, or if a key- or value-changing operation was
+     * performed upstream and the serde could not get pushed downstream, the default serde
+     * from the config will be used to serialize the result.
      *
      * <p>If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
@@ -980,9 +989,12 @@ public interface KStream<K, V> {
      * For more details, about co-partitioning requirements, (auto-)repartitioning, and more see
      * {@link #join(KStream, ValueJoiner, JoinWindows)}.
      *
-     * <p>The key and value serdes are inherited from the upstream processing chain
-     * (e.g., from a {@code Consumed} instance). If the serdes cannot be inherited,
-     * the default key and value serdes from the configuration will be used.
+     * <p>The key and value serdes may be inherited from the upstream processing chain, i.e.,
+     * if a serde was specified on an upstream operator, and the key or value is not modified
+     * afterward, the upstream serde is recursively pushed to downstream operators.
+     * If no serde was specified upstream, or if a key- or value-changing operation was
+     * performed upstream and the serde could not get pushed downstream, the default serde
+     * from the config will be used to serialize the result.
      *
      * @param otherStream
      * the {@link KStream} to be joined with this stream
@@ -1101,9 +1113,12 @@ public interface KStream<K, V> {
      * {@code KStream}, i.e., it will create an internal repartitioning topic in Kafka and write and re-read
      * the data via this topic such that data is correctly partitioned by the {@link KTable}'s key.
      *
-     * <p>The key and value serdes are inherited from the upstream processing chain
-     * (e.g., from a {@code Consumed} instance). If the serdes cannot be inherited,
-     * the default key and value serdes from the configuration will be used.
+     * <p>The key and value serdes may be inherited from the upstream processing chain, i.e.,
+     * if a serde was specified on an upstream operator, and the key or value is not modified
+     * afterward, the upstream serde is recursively pushed to downstream operators.
+     * If no serde was specified upstream, or if a key- or value-changing operation was
+     * performed upstream and the serde could not get pushed downstream, the default serde
+     * from the config will be used to serialize the result.
      *
      * <p>The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition",
      * where "applicationId" is user-specified in {@link StreamsConfig} via parameter
@@ -1179,9 +1194,12 @@ public interface KStream<K, V> {
      *
      * <p>You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * To customize the name of the changelog topic or to explicitly set key/value serdes, use the {@link Joined} input parameter.
-     * <p>The key and value serdes are inherited from the upstream processing chain
-     * (e.g., from a {@code Consumed} instance). If the serdes cannot be inherited,
-     * the default key and value serdes from the configuration will be used.
+     * <p>The key and value serdes may be inherited from the upstream processing chain, i.e.,
+     * if a serde was specified on an upstream operator, and the key or value is not modified
+     * afterward, the upstream serde is recursively pushed to downstream operators.
+     * If no serde was specified upstream, or if a key- or value-changing operation was
+     * performed upstream and the serde could not get pushed downstream, the default serde
+     * from the config will be used to serialize the result.
      *
      * @param table
      * the {@link KTable} to be joined with this stream

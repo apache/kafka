@@ -462,8 +462,14 @@ public interface TimeWindowedKStream<K, V> {
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate()} can be used to compute aggregate functions like count (cf. {@link #count()}).
      * <p>
-     * The key serde is inherited from the upstream processing chain and wrapped in a windowed serde.
-     * The default value serde from the config will be used for serializing the result, as the {@link Aggregator} can change the value type, making the upstream value serde inapplicable.
+     * The default value serde from the config will be used for serializing the result, because
+     * {@code aggregate()} may change the value type.
+     * The key serde may be inherited from the upstream processing chain, i.e.,
+     * if a key serde was specified on an upstream operator, and the key is not modified afterward,
+     * the upstream key serde is recursively pushed to downstream operators and wrapped in a windowed serde.
+     * If no key serde was specified upstream, or if a key-changing operation was performed upstream
+     * and the key serde could not get pushed downstream, the default key serde from the config will
+     * be used to serialize the result and wrapped in a windowed serde.
      * If a different serde is required then you should use {@link #aggregate(Initializer, Aggregator, Materialized)}.
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.

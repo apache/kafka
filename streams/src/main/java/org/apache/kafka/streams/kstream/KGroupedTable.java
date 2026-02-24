@@ -566,12 +566,17 @@ public interface KGroupedTable<K, V> {
      * Records with {@code null} key are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, Reducer) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
+     * If the result value type does not match the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value
+     * serde} you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
      * <p>
-     * The key serde is inherited from the upstream processing chain (e.g., from the original
-     * {@code Consumed} instance or a previous {@code groupBy} operation).
-     * The default value serde from the config will be used for serializing the result,
-     * as the {@link Aggregator} can change the value type, making the upstream value
-     * serde inapplicable.
+     * The default value serde from the config will be used for serializing the result, because
+     * {@code aggregate()} may change the value type.
+     * The key serde may be inherited from the upstream processing chain, i.e.,
+     * if a key serde was specified on an upstream operator, and the key is not modified afterward,
+     * the upstream key serde is recursively pushed to downstream operators.
+     * If no key serde was specified upstream, or if a key-changing operation was performed upstream
+     * and the key serde could not get pushed downstream, the default key serde from the config will
+     * be used to serialize the result.
      * If a different serde is required then you should use {@link #aggregate(Initializer, Aggregator, Aggregator, Materialized)}.
      * <p>
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
