@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
@@ -1155,7 +1156,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testLeaveGroupOnCloseWhenNotInGroup() {
-        testLeaveGroupWhenNotInGroup(membershipManager::leaveGroupOnClose);
+        testLeaveGroupWhenNotInGroup(() -> membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT));
     }
 
     @Test
@@ -1231,7 +1232,7 @@ public class StreamsMembershipManagerTest {
 
     @Test
     public void testLeaveGroupOnCloseWhenNotInGroupAndFenced() {
-        testLeaveGroupOnCloseWhenNotInGroupAndFenced(membershipManager::leaveGroupOnClose);
+        testLeaveGroupOnCloseWhenNotInGroupAndFenced(() -> membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT));
     }
 
     private void testLeaveGroupOnCloseWhenNotInGroupAndFenced(final Supplier<CompletableFuture<Void>> leaveGroup) {
@@ -1274,7 +1275,8 @@ public class StreamsMembershipManagerTest {
         verifyInStatePrepareLeaving(membershipManager);
         final CompletableFuture<Void> onGroupLeftBeforeRevocationCallback = membershipManager.leaveGroup();
         assertEquals(onGroupLeft, onGroupLeftBeforeRevocationCallback);
-        final CompletableFuture<Void> onGroupLeftOnCloseBeforeRevocationCallback = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeftOnCloseBeforeRevocationCallback = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
         assertEquals(onGroupLeft, onGroupLeftOnCloseBeforeRevocationCallback);
         onTasksRevokedCallbackExecuted.complete(null);
         verify(memberStateListener).onGroupAssignmentUpdated(Set.of());
@@ -1315,7 +1317,8 @@ public class StreamsMembershipManagerTest {
 
         acknowledging(onTasksAssignedCallbackExecutedSetup);
 
-        final CompletableFuture<Void> onGroupLeft = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeft = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
 
         assertFalse(onGroupLeft.isDone());
         verifyInStateLeaving(membershipManager);
@@ -1324,7 +1327,8 @@ public class StreamsMembershipManagerTest {
         verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
         final CompletableFuture<Void> onGroupLeftBeforeHeartbeatRequestGenerated = membershipManager.leaveGroup();
         assertEquals(onGroupLeft, onGroupLeftBeforeHeartbeatRequestGenerated);
-        final CompletableFuture<Void> onGroupLeftOnCloseBeforeHeartbeatRequestGenerated = membershipManager.leaveGroupOnClose();
+        final CompletableFuture<Void> onGroupLeftOnCloseBeforeHeartbeatRequestGenerated = 
+                membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
         assertEquals(onGroupLeft, onGroupLeftOnCloseBeforeHeartbeatRequestGenerated);
         assertFalse(onGroupLeft.isDone());
         membershipManager.onHeartbeatRequestGenerated();
@@ -1377,6 +1381,49 @@ public class StreamsMembershipManagerTest {
         // Receive assignment - verify new reconciliation starts
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(activeTasks, Set.of(), Set.of());
+    }
+
+    @Test
+    public void testLeaveGroupOnCloseWithRemainInGroupSkipsLeaveHeartbeat() {
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final StreamsTasksAssignedEvent onTasksAssignedCallbackExecuted =
+            verifyOnTasksAssignedCallbackNeededEventAddedToBackgroundEventHandler(
+                activeTasks, Set.of(), Set.of());
+        acknowledging(onTasksAssignedCallbackExecuted);
+
+        final CompletableFuture<Void> onGroupLeft =
+            membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        // The future is pending: member is in LEAVING state, waiting for StreamsGroupHeartbeatRequestManager
+        // to call onHeartbeatRequestSkipped() which transitions LEAVING → UNSUBSCRIBED.
+        assertFalse(onGroupLeft.isDone());
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, membershipManager.leaveGroupOperation());
+        verify(backgroundEventHandler, never()).add(any(StreamsOnTasksRevokedCallbackNeededEvent.class));
+
+        // Simulate StreamsGroupHeartbeatRequestManager detecting REMAIN_IN_GROUP and skipping the heartbeat.
+        membershipManager.onHeartbeatRequestSkipped();
+
+        assertTrue(onGroupLeft.isDone());
+        assertFalse(onGroupLeft.isCompletedExceptionally());
+        verifyInStateUnsubscribed(membershipManager);
+        verify(subscriptionState).unsubscribe();
+    }
+
+    @Test
+    public void testLeaveGroupOnCloseWithRemainInGroupWhenNotInGroup() {
+        // When not in the group, REMAIN_IN_GROUP should complete immediately
+        setupStreamsRebalanceDataWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+
+        final CompletableFuture<Void> onGroupLeft =
+            membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+
+        assertTrue(onGroupLeft.isDone());
+        assertFalse(onGroupLeft.isCompletedExceptionally());
     }
 
     @Test

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
@@ -210,11 +211,19 @@ public class StreamsMembershipManager implements RequestManager {
 
     /**
      * If the member is currently leaving the group after a call to {@link #leaveGroup()} or
-     * {@link #leaveGroupOnClose()}, this will have a future that will complete when the ongoing leave operation
-     * completes (callbacks executed and heartbeat request to leave is sent out). This will be empty if the
-     * member is not leaving.
+     * {@link #leaveGroupOnClose(CloseOptions.GroupMembershipOperation)}, this will have a future that will 
+     * complete when the ongoing leave operation completes (callbacks executed and heartbeat request to leave 
+     * is sent out). This will be empty if the member is not leaving.
      */
     private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
+
+    /**
+     * The operation the member will perform on leaving the group. Remains {@code DEFAULT} until the
+     * member is closing.
+     *
+     * @see CloseOptions.GroupMembershipOperation
+     */
+    private CloseOptions.GroupMembershipOperation leaveGroupOperation = CloseOptions.GroupMembershipOperation.DEFAULT;
 
     /**
      * Future that will complete when a stale member completes releasing its assignment after
@@ -349,10 +358,22 @@ public class StreamsMembershipManager implements RequestManager {
     /**
      * @return True if the member is preparing to leave the group (waiting for callbacks), or
      * leaving (sending last heartbeat). This is used to skip proactively leaving the group when
-     * the poll timer expires.
+     * the poll timer expires. Returns {@code false} for {@link CloseOptions.GroupMembershipOperation#REMAIN_IN_GROUP}
+     * so that {@link StreamsGroupHeartbeatRequestManager} skips the leave heartbeat and the broker removes
+     * the member via session timeout instead.
      */
     public boolean isLeavingGroup() {
+        if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP == leaveGroupOperation) {
+            return false;
+        }
         return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
+    }
+
+    /**
+     * @return the operation the member will perform on leaving the group.
+     */
+    public CloseOptions.GroupMembershipOperation leaveGroupOperation() {
+        return leaveGroupOperation;
     }
 
     private boolean isNotInGroup() {
@@ -539,9 +560,15 @@ public class StreamsMembershipManager implements RequestManager {
      */
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
-            log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
-                    "not known/available). Member {} with epoch {} will transition to {}.",
-                memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+            if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP == leaveGroupOperation) {
+                log.info("Skipping leave group heartbeat for member {} with epoch {} because REMAIN_IN_GROUP was "
+                    + "specified. The broker will remove the member from the group via session timeout.",
+                    memberId, memberEpoch);
+            } else {
+                log.warn("Heartbeat to leave group cannot be sent (most probably due to coordinator " +
+                        "not known/available). Member {} with epoch {} will transition to {}.",
+                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+            }
             transitionTo(MemberState.UNSUBSCRIBED);
             maybeCompleteLeaveInProgress();
         }
@@ -899,23 +926,15 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     /**
-     * Leaves the group when the member closes.
+     * Closes the member's participation in the group, honoring the requested {@link CloseOptions.GroupMembershipOperation}.
+     * Stores the operation and follows the normal leaving path; {@link StreamsGroupHeartbeatRequestManager}
+     * decides whether to send or skip the leave group heartbeat based on the operation.
      *
-     * <p>
-     * This method does the following:
-     * <ol>
-     *     <li>Transitions member state to {@link MemberState#PREPARE_LEAVING}.</li>
-     *     <li>Skips the invocation of the revocation callback or lost callback.</li>
-     *     <li>Clears the current and target assignment, unsubscribes from all topics and
-     *     transitions the member state to {@link MemberState#LEAVING}.</li>
-     * </ol>
-     * States {@link MemberState#PREPARE_LEAVING} and {@link MemberState#LEAVING} cause the heartbeat request manager
-     * to send a leave group heartbeat.
-     * </p>
-     *
-     * @return future that will complete when the heartbeat to leave the group has been sent out.
+     * @param membershipOperation the requested close behavior
+     * @return future that will complete when the close operation is done
      */
-    public CompletableFuture<Void> leaveGroupOnClose() {
+    public CompletableFuture<Void> leaveGroupOnClose(final CloseOptions.GroupMembershipOperation membershipOperation) {
+        this.leaveGroupOperation = membershipOperation;
         return leaveGroup(true);
     }
 
