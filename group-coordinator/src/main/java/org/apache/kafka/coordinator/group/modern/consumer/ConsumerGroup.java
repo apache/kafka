@@ -838,41 +838,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
-     * Creates a validator that checks if the received member epoch is valid for each partition's assignment epoch.
-     * A commit is rejected if the partition is not assigned to the member
-     * or if the received client-side epoch is older than the partition's assignment epoch(KIP-1251).
-     *
-     * @param member              The consumer group member.
-     * @param receivedMemberEpoch The member epoch from the offset commit request.
-     * @return A validator that checks each partition's assignment epoch.
-     */
-    private CommitPartitionValidator createAssignmentEpochValidator(
-        ConsumerGroupMember member,
-        int receivedMemberEpoch
-    ) {
-        return (topicName, topicId, partitionId) -> {
-            // Search for the partition in the assigned partitions, then in partitions pending revocation.
-            Integer assignmentEpoch = member.assignmentEpoch(topicId, partitionId);
-            if (assignmentEpoch == null) {
-                assignmentEpoch = member.pendingRevocationEpoch(topicId, partitionId);
-            }
-
-            if (assignmentEpoch == null) {
-                throw new StaleMemberEpochException(String.format(
-                    "Partition %s-%d is not assigned or pending revocation for member.",
-                    topicName, partitionId));
-            }
-
-            if (receivedMemberEpoch < assignmentEpoch) {
-                throw new StaleMemberEpochException(
-                    String.format("The received member epoch %d is older than the assignment epoch %d for partition %s-%d.",
-                        receivedMemberEpoch, assignmentEpoch, topicName, partitionId)
-                );
-            }
-        };
-    }
-
-    /**
      * Computes the subscription type based on the provided information.
      *
      * @param subscribedRegularExpressions  The subscribed regular expression count.

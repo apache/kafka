@@ -32,6 +32,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -295,6 +296,9 @@ public class ConsumerGroupMemberTest {
             .build();
 
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, new KRaftCoordinatorMetadataImage(metadataImage));
+        // Sort partitions in actual for deterministic comparison
+        actual.assignment().topicPartitions().forEach(tp -> Collections.sort(tp.partitions()));
+        actual.targetAssignment().topicPartitions().forEach(tp -> Collections.sort(tp.partitions()));
 
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
             .setMemberId(memberId)

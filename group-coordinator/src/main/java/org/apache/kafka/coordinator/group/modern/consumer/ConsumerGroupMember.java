@@ -514,14 +514,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
         partitions.forEach((topicId, partitionSet) -> {
-            image.topicMetadata(topicId).ifPresent(topicMetadata -> {
-                List<Integer> sortedPartitions = new ArrayList<>(partitionSet);
-                Collections.sort(sortedPartitions);
-                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setTopicName(topicMetadata.name())
-                    .setPartitions(sortedPartitions));
-            });
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(topicId)
+                .setTopicName(topicMetadata.name())
+                .setPartitions(new ArrayList<>(partitionSet))));
         });
         return topicPartitions;
     }
