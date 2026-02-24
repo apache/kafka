@@ -95,6 +95,7 @@ import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -1833,6 +1834,19 @@ public class TaskManagerTest {
         assertThat(
             taskManager.taskOffsetSums(),
             is(mkMap(mkEntry(taskId00, changelogOffsetOfRunningTask)))
+        );
+    }
+
+    @Test
+    public void shouldNotComputeOffsetSumForRunningStatelessTask() {
+        final StreamTask runningStatelessTask = statelessTask(taskId00).inState(State.RUNNING).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks);
+        when(tasks.allInitializedTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatelessTask)));
+
+        assertThat(
+                taskManager.taskOffsetSums(),
+                is(emptyMap())
         );
     }
 

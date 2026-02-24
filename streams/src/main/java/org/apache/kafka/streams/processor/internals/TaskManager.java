@@ -1251,8 +1251,9 @@ public class TaskManager {
 
         // overlay latest offsets from assigned tasks
         for (final Task task : tasks.values()) {
-            if (task.isActive() && task.state() == State.RUNNING && taskOffsetSums.put(task.id(), Task.LATEST_OFFSET) == null) {
-                log.error("Could not find cached offset for assigned ACTIVE Task {}", task.id());
+            // exclude stateless and non-logged tasks
+            if (task.isActive() && task.state() == State.RUNNING && !task.changelogPartitions().isEmpty()) {
+                taskOffsetSums.put(task.id(), Task.LATEST_OFFSET);
             }
         }
 
