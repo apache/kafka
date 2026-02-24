@@ -20,7 +20,7 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCachePublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DynamicConfigPublisher}
 
 import scala.collection.immutable
 import kafka.utils.Logging
@@ -38,7 +38,7 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, Metad
 import org.apache.kafka.metadata.{KafkaConfigSchema, KRaftMetadataCache, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, FeaturesPublisher, ScramPublisher}
+import org.apache.kafka.metadata.publisher.{AclPublisher, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicTopicClusterQuotaPublisher, FeaturesPublisher, MetadataCachePublisher, ScramPublisher}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.{CredentialProvider, DelegationTokenManager}
 import org.apache.kafka.server.{ProcessRole, SimpleApiVersionManager}
@@ -105,7 +105,7 @@ class ControllerServer(
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
   @volatile var metadataCache : KRaftMetadataCache = _
-  @volatile var metadataCachePublisher: KRaftMetadataCachePublisher = _
+  @volatile var metadataCachePublisher: MetadataCachePublisher = _
   @volatile var featuresPublisher: FeaturesPublisher = _
   @volatile var registrationsPublisher: ControllerRegistrationsPublisher = _
   @volatile var incarnationId: Uuid = _
@@ -149,7 +149,7 @@ class ControllerServer(
 
       metadataCache = new KRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
-      metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
+      metadataCachePublisher = new MetadataCachePublisher(metadataCache)
 
       featuresPublisher = new FeaturesPublisher(logContext, sharedServer.metadataPublishingFaultHandler)
 
