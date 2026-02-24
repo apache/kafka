@@ -662,9 +662,9 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
-	private void cleanStateAndTaskDirectoriesOnStartup(long dirMaxAgeMs) throws Exception {
+    private void cleanStateAndTaskDirectoriesOnStartup(final long dirMaxAgeMs) throws Exception {
         if (!lockedTasksToOwner.isEmpty()) {
-            log.warn("TODO message");
+            log.warn("Found some still-locked task directories when cleaning outdated directories");
         }
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
@@ -673,6 +673,8 @@ public class StateDirectory implements AutoCloseable {
             try {
                 final long now = time.milliseconds();
                 final long lastModifiedMs = taskDir.file().lastModified();
+                final long dirAge = now - lastModifiedMs;
+                log.info("Dir age {}", dirAge);
                 if (now - dirMaxAgeMs > lastModifiedMs) {
                     log.info("{} Deleting outdated state directory {} for {} as {}ms has elapsed (max directory age is {}ms).",
                             logPrefix(), dirName, id, now - lastModifiedMs, dirMaxAgeMs);
@@ -684,11 +686,7 @@ public class StateDirectory implements AutoCloseable {
                     Utils.delete(taskDir.file());
                 }
             } catch (final IOException exception) {
-                log.error(
-                        String.format("%s Failed to delete task directory %s for %s with exception:",
-                                logPrefix(), dirName, id),
-                        exception
-                );
+                log.error("{} Failed to delete task directory {} for {} with exception:", logPrefix(), dirName, id, exception);
                 firstException.compareAndSet(null, exception);
             }
         }
@@ -697,7 +695,7 @@ public class StateDirectory implements AutoCloseable {
         if (exception != null) {
             throw exception;
         }
-	}
+    }
 
     /**
      * Cleans up any leftover named topology directories that are empty, if any exist
