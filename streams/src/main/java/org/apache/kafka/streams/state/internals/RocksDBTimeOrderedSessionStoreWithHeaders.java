@@ -30,7 +30,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  * {@link QueryResult#forUnknownQueryType(Query, Object)} for all queries,
  * as IQv2 query handling is done at the metered layer.
  * <p>
- * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]
+ * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytesn]
  *
  * @see RocksDBTimeOrderedSessionStore
  */
