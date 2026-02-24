@@ -218,14 +218,7 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         public <R> QueryResult<R> query(final Query<R> query,
                                         final PositionBound positionBound,
                                         final QueryConfig config) {
-
-            final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-            final QueryResult<R> result = wrapped().query(query, positionBound, config);
-            if (config.isCollectExecutionInfo()) {
-                final long end = System.nanoTime();
-                result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");
-            }
-            return result;
+            throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped window stores with headers yet.");
         }
 
         @Override

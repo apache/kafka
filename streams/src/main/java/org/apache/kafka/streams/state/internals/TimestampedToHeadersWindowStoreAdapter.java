@@ -32,6 +32,7 @@ import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
@@ -62,6 +63,9 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     public TimestampedToHeadersWindowStoreAdapter(final WindowStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
+        }
+        if (!(store instanceof TimestampedBytesStore)) {
+            throw new IllegalArgumentException("Provided store must be a timestamped store, but it is not.");
         }
         this.store = store;
     }
@@ -176,36 +180,8 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
-        final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-        QueryResult<R> result = store.query(query, positionBound, config);
 
-        // this adapter always needs to return a `value-with-timestamp-and-headers` result to hold up its contract
-        // thus, we need to add the empty headers wrapper even for timestamped queries
-        if (result.isSuccess()) {
-            if (query instanceof WindowKeyQuery) {
-                final WindowStoreIterator<byte[]> iterator = (WindowStoreIterator<byte[]>) result.getResult();
-                final TimestampedToHeadersWindowStoreIteratorAdapter wrappedIterator =
-                    new TimestampedToHeadersWindowStoreIteratorAdapter(iterator);
-                result = (QueryResult<R>) InternalQueryResultUtil
-                    .copyAndSubstituteDeserializedResult(result, wrappedIterator);
-            } else if (query instanceof WindowRangeQuery) {
-                final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
-                    (KeyValueIterator<Windowed<Bytes>, byte[]>) result.getResult();
-                final TimestampedToHeadersKeyValueIteratorAdapter wrappedIterator =
-                    new TimestampedToHeadersKeyValueIteratorAdapter(iterator);
-                result = (QueryResult<R>) InternalQueryResultUtil
-                    .copyAndSubstituteDeserializedResult(result, wrappedIterator);
-            }
-            // For other query types (if any), return as-is and let StoreQueryUtils handle them
-        }
-
-        if (config.isCollectExecutionInfo()) {
-            final long end = System.nanoTime();
-            result.addExecutionInfo(
-                "Handled in " + getClass() + " in " + (end - start) + "ns"
-            );
-        }
-        return result;
+        throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped window stores with headers yet.");
     }
 
     @Override
