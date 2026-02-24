@@ -88,6 +88,76 @@ class TransactionCoordinatorTest {
       .thenReturn(true)
   }
 
+  /**
+   * Sets up an ONGOING 2PC transaction, configures mocks,
+   * and calls InitProducerId(keepPreparedTxn=true) to bump client epoch.
+   * Returns the transit metadata captor for verifying subsequent operations.
+   */
+  private def setupPrepared2PcTxnWithBumpedClientEpoch(): ArgumentCaptor[TxnTransitMetadata] = {
+    // Setup: ONGOING transaction with no next producer epoch set
+    // Use Integer.MAX_VALUE for timeout to indicate this is a distributed 2PC transaction
+    val txnMetadata = new TransactionMetadata(
+      transactionalId,
+      producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH,
+      Integer.MAX_VALUE /*2PC*/, TransactionState.ONGOING, partitions,
+      time.milliseconds(), time.milliseconds(), TV_2
+    )
+    // Verify this is correctly identified as a distributed 2PC transaction
+    assertTrue(txnMetadata.isDistributedTwoPhaseCommitTxn)
+
+    // Add partitions so the transaction has data
+    txnMetadata.addPartitions(partitions)
+
+    // Configure mocks
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
+      .thenReturn(true)
+    when(transactionManager.isTransaction2pcEnabled())
+      .thenReturn(true)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_2)
+
+    val capturedTransitMetadata: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      capturedTransitMetadata.capture(),
+      capturedErrorsCallback.capture(),
+      any(),
+      any()
+    )).thenAnswer(invocation => {
+      val metadata = invocation.getArgument[TxnTransitMetadata](2)
+      txnMetadata.completeTransitionTo(metadata)
+      capturedErrorsCallback.getValue.apply(Errors.NONE)
+    })
+
+    val bumpedClientEpoch = (producerEpoch + 1).toShort
+
+    // Action: Call InitProducerId(keepPreparedTxn=true) to set up dual identity
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = true,
+      keepPreparedTxn = true,
+      None,
+      initProducerIdMockCallback
+    )
+
+    // Verify dual identity was set up in InitProducerId result
+    assertEquals(producerId, result.producerId)
+    assertEquals(bumpedClientEpoch, result.producerEpoch)
+    assertEquals(producerId, result.ongoingTxnProducerId)
+    assertEquals(producerEpoch, result.ongoingTxnProducerEpoch)
+    assertEquals(Errors.NONE, result.error)
+
+    // Verify dual identity was set up in TransactionMetadata
+    assertEquals(producerId, txnMetadata.nextProducerId)
+    assertEquals(bumpedClientEpoch, txnMetadata.nextProducerEpoch)
+
+    capturedTransitMetadata
+  }
+
   @Test
   def shouldReturnInvalidRequestWhenTransactionalIdIsEmpty(): Unit = {
     mockPidGenerator()
@@ -2151,5 +2221,144 @@ class TransactionCoordinatorTest {
     
     // Final verification that hasFailedEpochFence was never set to true for TV2
     assertFalse(txnMetadata.hasFailedEpochFence)
+  }
+
+  @Test
+  def shouldIncrementClientEpochOnMultipleInitPidWithKeepPreparedTxn(): Unit = {
+    // Test that multiple calls to InitProducerId(keepPreparedTxn=true) increment the client-facing epoch
+    // while keeping the ongoing transaction epoch constant.
+
+    // Setup: Use helper to set up 2PC transaction and make first InitProducerId call
+    val capturedNewMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+
+    // Verify that epoch bumps a few times (the first bump happened during the setup)
+    var iteration = 0
+    do {
+      val expectedClientEpoch = (producerEpoch + 1 + iteration).toShort
+
+      // Verify: each previous iteration must've bumped client epoch
+      assertEquals(producerId, result.producerId)
+      assertEquals(expectedClientEpoch, result.producerEpoch)
+      assertEquals(producerId, result.ongoingTxnProducerId)
+      assertEquals(producerEpoch, result.ongoingTxnProducerEpoch)
+
+      // Verify: captured metadata has proper nextProducerEpoch
+      val transitMetadata = capturedNewMetadata.getAllValues.get(iteration)
+      assertEquals(producerId, transitMetadata.nextProducerId)
+      assertEquals(expectedClientEpoch, transitMetadata.nextProducerEpoch)
+
+      coordinator.handleInitProducerId(
+        transactionalId,
+        txnTimeoutMs,
+        enableTwoPCFlag = true,
+        keepPreparedTxn = true,
+        None,
+        initProducerIdMockCallback
+      )
+
+      iteration = iteration + 1
+    } while (iteration < 4)
+  }
+
+  @Test
+  def shouldCompletePreparedTransactionWithOngoingTxnEpoch(): Unit = {
+    // Test that a prepared transaction can be completed (committed or aborted) using the client-facing
+    // epoch after InitProducerId(keepPrepared=true), while markers are sent with the bumped ongoing epoch.
+
+    def testComplete(txnResult: TransactionResult): Unit = {
+      val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+
+      // Setup bumped from epoch 1 to epoch 2, now bump again from 2 to 3
+      // Action: Call InitProducerId again to bump client epoch once more
+      coordinator.handleInitProducerId(
+        transactionalId,
+        txnTimeoutMs,
+        enableTwoPCFlag = true,
+        keepPreparedTxn = true,
+        None,
+        initProducerIdMockCallback
+      )
+
+      // Verify: Second InitProducerId bumped client epoch from 2 to 3
+      val secondClientEpoch = (producerEpoch + 2).toShort
+      assertEquals(producerId, result.producerId)
+      assertEquals(secondClientEpoch, result.producerEpoch)
+      assertEquals(producerId, result.ongoingTxnProducerId)
+      assertEquals(producerEpoch, result.ongoingTxnProducerEpoch)
+
+      // Verify: captured metadata from second InitProducerId has proper nextProducerEpoch
+      val secondInitMetadata = capturedTransitMetadata.getAllValues.get(1)
+      assertEquals(producerId, secondInitMetadata.nextProducerId)
+      assertEquals(secondClientEpoch, secondInitMetadata.nextProducerEpoch)
+
+      val bumpedEpoch = (producerEpoch + 1).toShort  // Epoch bumped during prepare phase
+      val tripleBumpedEpoch = (producerEpoch + 3).toShort  // NextProducerEpoch bumped a third time
+
+      val expectedState = if (txnResult == TransactionResult.COMMIT) {
+        TransactionState.PREPARE_COMMIT
+      } else {
+        TransactionState.PREPARE_ABORT
+      }
+
+      // Action: Call EndTransaction with second client-facing epoch
+      // After second InitProducerId(keepPrepared=true), validation checks against latest clientProducerEpoch
+      coordinator.handleEndTransaction(
+        transactionalId,
+        producerId,
+        secondClientEpoch,  // Must use latest client-facing epoch for validation to pass
+        txnResult,
+        TV_2,
+        endTxnCallback
+      )
+
+      // Verify: Transaction completes successfully
+      assertEquals(Errors.NONE, error)
+
+      // Verify: Transaction transitions to expected state
+      // Get the third call (index 2) which is the complete, index 0 was first InitProducerId, index 1 was second
+      val transitMetadata = capturedTransitMetadata.getAllValues.get(2)
+      assertEquals(expectedState, transitMetadata.txnState)
+
+      // Verify: Markers are sent with bumped epoch
+      // prepareAbortOrCommit bumps producerEpoch for TV2
+      assertEquals(producerId, transitMetadata.producerId)
+      assertEquals(bumpedEpoch, transitMetadata.producerEpoch)
+
+      // Verify: After complete, nextProducerEpoch is bumped again (third time total)
+      assertEquals(tripleBumpedEpoch, transitMetadata.nextProducerEpoch)
+    }
+
+    // Test both commit and abort
+    testComplete(TransactionResult.COMMIT)
+    testComplete(TransactionResult.ABORT)
+  }
+
+  @Test
+  def shouldFenceNewClientEpochDuringOngoingTransaction(): Unit = {
+    // Test that the client-facing epoch is fenced when trying to add partitions during an ongoing
+    // transaction, since only the ongoing transaction epoch is valid for partition operations.
+
+    setupPrepared2PcTxnWithBumpedClientEpoch()  // Return value not used - only need the setup and mocks
+
+    val clientEpoch = (producerEpoch + 1).toShort
+
+    val newPartitions = new util.HashSet[TopicPartition]()
+    newPartitions.add(new TopicPartition("topic2", 0))
+
+    // Action: Client tries AddPartitions with the client-facing epoch
+    // This should be fenced because during an ongoing transaction, only the ongoing epoch is valid
+    coordinator.handleAddPartitionsToTransaction(
+      transactionalId,
+      producerId,
+      clientEpoch,
+      newPartitions,
+      errorsCallback,
+      TV_2
+    )
+
+    // Verify: Returns PRODUCER_FENCED (new epoch is for AFTER transaction completes, not during)
+    // Note: Client won't actually try this in practice because it would use the ongoing epoch
+    // But this tests the server-side validation
+    assertEquals(Errors.PRODUCER_FENCED, error)
   }
 }
