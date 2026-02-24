@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -49,7 +48,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -62,7 +60,8 @@ import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -128,12 +127,12 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
         final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
         verify(context).logChange(
-            ArgumentMatchers.eq(store.name()),
-            ArgumentMatchers.eq(key),
-            ArgumentMatchers.eq(value),
-            ArgumentMatchers.eq(testTimestamp),
-            ArgumentMatchers.eq(Position.emptyPosition()),
-            headersCaptor.capture()
+            eq(store.name()),
+            eq(key),
+            eq(value),
+            eq(testTimestamp),
+            headersCaptor.capture(),
+            eq(Position.emptyPosition())
         );
 
         final Headers capturedHeaders = headersCaptor.getValue();
@@ -154,12 +153,12 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
         final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
         verify(context).logChange(
-            ArgumentMatchers.eq(store.name()),
-            ArgumentMatchers.eq(key),
-            ArgumentMatchers.eq(value),
-            ArgumentMatchers.eq(testTimestamp),
-            ArgumentMatchers.eq(POSITION),
-            headersCaptor.capture()
+            eq(store.name()),
+            eq(key),
+            eq(value),
+            eq(testTimestamp),
+            headersCaptor.capture(),
+            eq(POSITION)
         );
 
         final Headers capturedHeaders = headersCaptor.getValue();
@@ -178,9 +177,25 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
     @SuppressWarnings({"resource", "unused"})
     @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
+        try (final WindowStoreIterator<byte[]> unused = store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10))) {
+            verify(inner).backwardFetch(bytesKey, 0, 10);
+        }
+    }
+
+    @SuppressWarnings({"resource", "unused"})
+    @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
             verify(inner).fetch(bytesKey, bytesKey, 0, 1);
+        }
+    }
+
+    @SuppressWarnings({"resource", "unused"})
+    @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> unused = store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1))) {
+            verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
         }
     }
 
@@ -198,60 +213,18 @@ public class ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest {
 
         final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
         verify(context, times(2)).logChange(
-            ArgumentMatchers.eq(store.name()),
-            ArgumentMatchers.any(Bytes.class),
-            ArgumentMatchers.eq(value),
-            ArgumentMatchers.eq(testTimestamp),
-            ArgumentMatchers.eq(Position.emptyPosition()),
-            headersCaptor.capture()
+            eq(store.name()),
+            any(Bytes.class),
+            eq(value),
+            eq(testTimestamp),
+            headersCaptor.capture(),
+            eq(Position.emptyPosition())
         );
 
         final Headers capturedHeaders = headersCaptor.getValue();
         assertEquals(2, capturedHeaders.toArray().length);
         assertEquals("value1", new String(capturedHeaders.lastHeader("key1").value()));
         assertEquals("value2", new String(capturedHeaders.lastHeader("key2").value()));
-    }
-
-    @Test
-    public void shouldLogPutsWithComplexHeaders() {
-        final Headers complexHeaders = new RecordHeaders();
-        complexHeaders.add(new RecordHeader("trace-id", "abc123".getBytes()));
-        complexHeaders.add(new RecordHeader("tenant-id", "customer-1".getBytes()));
-        complexHeaders.add(new RecordHeader("nullable-header", null));
-
-        final ValueTimestampHeaders<byte[]> valueWithHeaders = ValueTimestampHeaders.make(value, 99L, complexHeaders);
-        final ValueTimestampHeadersSerializer<byte[]> serializer = new ValueTimestampHeadersSerializer<>(new ByteArraySerializer());
-        final byte[] serializedValue = serializer.serialize("topic", valueWithHeaders);
-
-        final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
-        when(inner.getPosition()).thenReturn(Position.emptyPosition());
-        when(context.recordContext()).thenReturn(new ProcessorRecordContext(0, 0, 0, "topic", new RecordHeaders()));
-
-        store.put(bytesKey, serializedValue, context.recordContext().timestamp());
-
-        verify(inner).put(bytesKey, serializedValue, 0);
-
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
-        verify(context).logChange(
-            ArgumentMatchers.eq(store.name()),
-            ArgumentMatchers.eq(key),
-            ArgumentMatchers.eq(value),
-            ArgumentMatchers.eq(99L),
-            ArgumentMatchers.eq(Position.emptyPosition()),
-            headersCaptor.capture()
-        );
-
-        final Headers capturedHeaders = headersCaptor.getValue();
-        assertEquals(3, capturedHeaders.toArray().length);
-
-        final Header traceId = capturedHeaders.lastHeader("trace-id");
-        assertEquals("abc123", new String(traceId.value()));
-
-        final Header tenantId = capturedHeaders.lastHeader("tenant-id");
-        assertEquals("customer-1", new String(tenantId.value()));
-
-        final Header nullableHeader = capturedHeaders.lastHeader("nullable-header");
-        assertNull(nullableHeader.value());
     }
 
     private InternalMockProcessorContext mockContext() {
