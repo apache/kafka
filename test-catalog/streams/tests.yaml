@@ -3717,6 +3717,16 @@ org.apache.kafka.streams.query.StateQueryResultTest:
 org.apache.kafka.streams.query.VersionedKeyQueryTest:
 - shouldThrowNPEWithNullAsOftimestamp
 - shouldThrowNPEWithNullKey
+org.apache.kafka.streams.state.AggregationWithHeadersTest:
+- shouldAllowNullableAggregation
+- shouldCreateAggregationWithHeaders
+- shouldGetAggregationOrNull
+- shouldImplementEquals
+- shouldImplementToString
+- shouldNotBeEqualWithDifferentAggregations
+- shouldNotBeEqualWithDifferentHeaders
+- shouldNotCreateWithNullHeaders
+- shouldReturnNullForNullAggregation
 org.apache.kafka.streams.state.HeadersBytesStoreTest:
 - shouldConvertEmptyValueToHeaderFormat
 - shouldConvertLegacyValueToHeaderFormat
@@ -3801,6 +3811,19 @@ org.apache.kafka.streams.state.ValueTimestampHeadersTest:
 - shouldNotBeEqualWhenDifferentTimestamps
 - shouldNotBeEqualWhenDifferentValues
 - shouldReturnNullWhenValueIsNullWithMake
+org.apache.kafka.streams.state.internals.AggregationWithHeadersDeserializerTest:
+- shouldDeserializeAggregationWithEmptyHeaders
+- shouldDeserializeAggregationWithHeaders
+- shouldDeserializeNullAsNull
+- shouldExtractHeaders
+- shouldReturnNullForNullInput
+- shouldThrowOnInvalidFormat
+org.apache.kafka.streams.state.internals.AggregationWithHeadersSerializerTest:
+- shouldHandleNullAggregationInAggregationWithHeaders
+- shouldSerializeAggregationWithEmptyHeaders
+- shouldSerializeAggregationWithHeaders
+- shouldSerializeAndDeserializeConsistently
+- shouldSerializeNullAsNull
 org.apache.kafka.streams.state.internals.BlockBasedTableConfigWithAccessibleCacheTest:
 - shouldReturnNoBlockCacheIfNoneIsSet
 - shouldSetBlockCacheAndMakeItAccessible
@@ -4714,6 +4737,33 @@ org.apache.kafka.streams.state.internals.MeteredSessionStoreTest:
 - shouldThrowNullPointerOnRemoveIfKeyIsNull
 - shouldThrowNullPointerOnRemoveIfWindowIsNull
 - shouldThrowNullPointerOnRemoveIfWrappedKeyIsNull
+- shouldTimeIteratorDuration
+- shouldTrackOldestOpenIteratorTimestamp
+- shouldTrackOpenIteratorsMetric
+- shouldWriteBytesToInnerStoreAndRecordPutMetric
+- testMetrics
+org.apache.kafka.streams.state.internals.MeteredSessionStoreWithHeadersTest:
+- shouldBackwardFetchForKeyAndRecordFetchMetric
+- shouldBackwardFetchRangeFromStoreAndRecordFetchMetric
+- shouldBackwardFindSessionRangeFromStoreAndRecordFetchMetric
+- shouldBackwardFindSessionsFromStoreAndRecordFetchMetric
+- shouldCloseInnerStore
+- shouldDelegateInit
+- shouldFetchForKeyAndRecordFetchMetric
+- shouldFetchRangeFromStoreAndRecordFetchMetric
+- shouldFetchSessionAndReturnValueWithHeaders
+- shouldFindSessionRangeFromStoreAndRecordFetchMetric
+- shouldFindSessionsFromStoreAndRecordFetchMetric
+- shouldRecordRestoreTime
+- shouldRemoveFromStoreAndRecordRemoveMetric
+- shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose
+- shouldRemoveMetricsOnClose
+- shouldReturnNullOnFetchSessionWhenSessionDoesNotExist
+- shouldSetFlushListenerOnWrappedCachingStore
+- shouldThrowNullPointerOnFetchSessionIfKeyIsNull
+- shouldThrowNullPointerOnPutIfKeyIsNull
+- shouldThrowNullPointerOnPutIfWrappedKeyIsNull
+- shouldThrowNullPointerOnRemoveIfKeyIsNull
 - shouldTimeIteratorDuration
 - shouldTrackOldestOpenIteratorTimestamp
 - shouldTrackOpenIteratorsMetric
