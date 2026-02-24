@@ -38,6 +38,7 @@ import org.mockito.quality.Strictness;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,9 +74,15 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
         verify(inner).init(context, store);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldDelegateInit() {
-        // testing the combination of setUp and tearDown
+        final SessionStore<Bytes, byte[]> innerMock = mock(SessionStore.class);
+        final ChangeLoggingSessionBytesStoreWithHeaders outer =
+            new ChangeLoggingSessionBytesStoreWithHeaders(innerMock);
+
+        outer.init(context, outer);
+        verify(innerMock).init(context, outer);
     }
 
     @Test
