@@ -924,7 +924,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          */
         List<EnrichedLogSegment> candidateLogSegments(UnifiedLog log, Long fromOffset, Long lastStableOffset) throws IOException {
             List<EnrichedLogSegment> candidateLogSegments = new ArrayList<>();
-            List<LogSegment> segments = log.logSegments(fromOffset, Long.MAX_VALUE);
+            List<LogSegment> segments = log.logSegments();
             if (segments.isEmpty()) {
                 return candidateLogSegments;
             }
@@ -960,7 +960,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentExpiredByRemoteRetention);
                 }
 
-                candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
+                if (previousSeg.baseOffset() >= fromOffset) {
+                    candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
+                }
             }
             return candidateLogSegments;
         }
