@@ -941,8 +941,6 @@ kafka.log.LogCleanerIntegrationTest:
 - testIsThreadFailed
 - testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics
 - testMaxLogCompactionLag
-kafka.log.LogCleanerLagIntegrationTest:
-- cleanerTest
 kafka.log.LogCleanerParameterizedIntegrationTest:
 - cleanerConfigUpdateTest
 - cleanerTest
