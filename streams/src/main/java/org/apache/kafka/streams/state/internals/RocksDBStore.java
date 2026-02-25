@@ -699,6 +699,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         metricsRecorder.removeValueProviders(name);
 
+        // Important: do not rearrange the order in which the below objects are closed!
+        // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
         cfAccessor.close();
         dbAccessor.close();
         db.close();
