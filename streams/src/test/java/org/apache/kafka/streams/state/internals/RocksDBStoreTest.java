@@ -224,7 +224,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldDetectIfTheOffsetColumnFamilyAlreadyExists() {
+    public void shouldCommitOffsets() {
         final TopicPartition tp0 = new TopicPartition("topic-0", 0);
         final TopicPartition tp1 = new TopicPartition("topic-1", 0);
         final Map<TopicPartition, Long> offsetsToCommit = Map.of(tp0, 100L, tp1, 200L);
