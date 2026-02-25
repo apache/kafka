@@ -48,7 +48,7 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
     private static final Logger LOG = LoggerFactory.getLogger(DelayedRemoteListOffsets.class);
 
     // For compatibility, metrics are defined to be under `kafka.server.DelayedRemoteListOffsetsMetrics` class
-    private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedRemoteListOffsetsMetrics");
+    static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedRemoteListOffsetsMetrics");
     static final Meter AGGREGATE_EXPIRATION_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
     static final Map<TopicPartition, Meter> PARTITION_EXPIRATION_METERS = new ConcurrentHashMap<>();
 
@@ -190,5 +190,12 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
                 "requests",
                 TimeUnit.SECONDS,
                 mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))).mark();
+    }
+
+    public static void removePartitionMetrics(TopicPartition partition) {
+        if (PARTITION_EXPIRATION_METERS.remove(partition) != null) {
+            METRICS_GROUP.removeMetric("ExpiresPerSec",
+                    mkMap(mkEntry("topic", partition.topic()), mkEntry("partition", String.valueOf(partition.partition()))));
+        }
     }
 }
