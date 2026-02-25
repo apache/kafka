@@ -66,6 +66,9 @@ public class DualColumnFamilyAccessorTest {
     private ColumnFamilyHandle newCF;
 
     @Mock
+    private ColumnFamilyHandle offsetsCF;
+
+    @Mock
     private DBAccessor dbAccessor;
 
     private Function<byte[], byte[]> valueConverter;
@@ -95,7 +98,7 @@ public class DualColumnFamilyAccessorTest {
             return ByteBuffer.allocate(oldValue.length + 10).put("converted:".getBytes()).put(oldValue).array();
         };
 
-        accessor = new DualColumnFamilyAccessor(oldCF, newCF, valueConverter, store);
+        accessor = new DualColumnFamilyAccessor(offsetsCF, oldCF, newCF, valueConverter, store);
     }
 
     @Test

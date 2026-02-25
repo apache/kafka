@@ -68,6 +68,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         if (noTimestampsIter.isValid()) {
             log.info("Opening store {} in upgrade mode", name);
             cfAccessor = new DualColumnFamilyAccessor(
+                offsetsColumnFamily,
                 noTimestampColumnFamily,
                 withTimestampColumnFamily,
                 TimestampedBytesStore::convertToTimestampedFormat,
@@ -75,10 +76,9 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             );
         } else {
             log.info("Opening store {} in regular mode", name);
-            cfAccessor = new SingleColumnFamilyAccessor(withTimestampColumnFamily);
+            cfAccessor = new SingleColumnFamilyAccessor(offsetsColumnFamily, withTimestampColumnFamily);
             noTimestampColumnFamily.close();
         }
-        offsetsCfAccessor = new SingleColumnFamilyAccessor(offsetsColumnFamily);
         noTimestampsIter.close();
     }
 

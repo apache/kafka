@@ -113,7 +113,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     RocksDB db;
     DBAccessor dbAccessor;
     ColumnFamilyAccessor cfAccessor;
-    ColumnFamilyAccessor offsetsCfAccessor;
 
     // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
@@ -285,8 +284,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
 
-        cfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
-        offsetsCfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1));
+        cfAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(1), columnFamilies.get(0));
     }
 
     /**
@@ -697,9 +695,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         metricsRecorder.removeValueProviders(name);
 
-        // Important: do not rearrange the order in which the below objects are closed!
-        // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
-        offsetsCfAccessor.close();
         cfAccessor.close();
         dbAccessor.close();
         db.close();
@@ -862,10 +857,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         void close();
     }
 
-    class SingleColumnFamilyAccessor implements ColumnFamilyAccessor {
+    class SingleColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
         private final ColumnFamilyHandle columnFamily;
 
-        SingleColumnFamilyAccessor(final ColumnFamilyHandle columnFamily) {
+        SingleColumnFamilyAccessor(final ColumnFamilyHandle offsetsColumnFamily, final ColumnFamilyHandle columnFamily) {
+            super(offsetsColumnFamily);
             this.columnFamily = columnFamily;
         }
 
@@ -969,8 +965,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void commit(final DBAccessor accessor,
-                           final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
+        public void commit(final DBAccessor accessor) throws RocksDBException {
             accessor.flush(columnFamily);
         }
 

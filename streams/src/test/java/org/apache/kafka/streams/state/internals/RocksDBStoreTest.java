@@ -223,6 +223,16 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldDetectIfTheOffsetColumnFamilyAlreadyExists() {
+        rocksDBStore = getRocksDBStore();
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.commit(Map.of());
+        rocksDBStore.close();
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.close();
+    }
+
+    @Test
     public void shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         try {

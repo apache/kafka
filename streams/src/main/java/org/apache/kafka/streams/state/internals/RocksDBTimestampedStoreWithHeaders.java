@@ -109,11 +109,11 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
             legacyIter.seekToFirst();
             if (legacyIter.isValid()) {
                 log.info("Opening store {} in upgrade mode", name);
-                cfAccessor = new DualColumnFamilyAccessor(legacyCf, headersCf,
+                cfAccessor = new DualColumnFamilyAccessor(offsetsCf, legacyCf, headersCf,
                     HeadersBytesStore::convertToHeaderFormat, this);
             } else {
                 log.info("Opening store {} in regular headers-aware mode", name);
-                cfAccessor = new SingleColumnFamilyAccessor(headersCf);
+                cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, headersCf);
                 try {
                     db.dropColumnFamily(legacyCf);
                 } catch (final RocksDBException e) {
@@ -122,7 +122,6 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     legacyCf.close();
                 }
             }
-            offsetsCfAccessor = new SingleColumnFamilyAccessor(offsetsCf);
         }
     }
 
@@ -141,8 +140,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
         final ColumnFamilyHandle headersCf = columnFamilies.get(1);
         final ColumnFamilyHandle offsetsCf = columnFamilies.get(2);
         log.info("Opening store {} in regular headers-aware mode", name);
-        cfAccessor = new SingleColumnFamilyAccessor(headersCf);
-        offsetsCfAccessor = new SingleColumnFamilyAccessor(offsetsCf);
+        cfAccessor = new SingleColumnFamilyAccessor(offsetsCf, headersCf);
     }
 
     private void verifyAndCloseEmptyDefaultColumnFamily(final ColumnFamilyHandle columnFamilyHandle) {

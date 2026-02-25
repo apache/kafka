@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -30,7 +29,6 @@ import org.rocksdb.WriteBatchInterface;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -48,7 +46,7 @@ import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWit
  * When reading, it first checks the new column family, then falls back to the old column family
  * and converts values on-the-fly using the provided conversion function.
  */
-class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
+class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     private final ColumnFamilyHandle oldColumnFamily;
     private final ColumnFamilyHandle newColumnFamily;
@@ -63,10 +61,12 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
      * @param valueConverter  function to convert old format values to new format
      * @param store           the RocksDBStore instance (for accessing position, context, and name)
      */
-    DualColumnFamilyAccessor(final ColumnFamilyHandle oldColumnFamily,
+    DualColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamily,
+                             final ColumnFamilyHandle oldColumnFamily,
                              final ColumnFamilyHandle newColumnFamily,
                              final Function<byte[], byte[]> valueConverter,
                              final RocksDBStore store) {
+        super(offsetColumnFamily);
         this.oldColumnFamily = oldColumnFamily;
         this.newColumnFamily = newColumnFamily;
         this.valueConverter = valueConverter;
@@ -236,8 +236,7 @@ class DualColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
     }
 
     @Override
-    public void commit(final DBAccessor accessor,
-                       final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
+    public void commit(final DBAccessor accessor) throws RocksDBException {
         accessor.flush(oldColumnFamily, newColumnFamily);
     }
 
