@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -27,7 +28,9 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 
@@ -35,7 +38,8 @@ import java.util.Map;
 
 /**
  * A wrapper class for non-windowed key-value stores used within the DSL. All such stores are
- * instances of either {@link TimestampedKeyValueStore} or {@link VersionedKeyValueStore}.
+ * instances of either {@link TimestampedKeyValueStore}, {@link TimestampedKeyValueStoreWithHeaders},
+ * or {@link VersionedKeyValueStore}.
  *
  * @param <K> The key type
  * @param <V> The value type
@@ -46,6 +50,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         = VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
 
     private TimestampedKeyValueStore<K, V> timestampedStore = null;
+    private TimestampedKeyValueStoreWithHeaders<K, V> headersStore = null;
     private VersionedKeyValueStore<K, V> versionedStore = null;
 
     // same as either timestampedStore or versionedStore above. kept merely as a convenience
@@ -53,8 +58,18 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     private StateStore store;
 
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
+        // Try headers-aware store first, then regular timestamped store, then versioned store
         try {
-            // first try timestamped store
+            // first try headers-aware timestamped store
+            headersStore = context.getStateStore(storeName);
+            store = headersStore;
+            return;
+        } catch (final ClassCastException e) {
+            // ignore since could be regular timestamped or versioned store instead
+        }
+
+        try {
+            // next try regular timestamped store
             timestampedStore = context.getStateStore(storeName);
             store = timestampedStore;
             return;
@@ -63,18 +78,24 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         }
 
         try {
-            // next try versioned store
+            // finally try versioned store
             versionedStore = context.getStateStore(storeName);
             store = versionedStore;
         } catch (final ClassCastException e) {
             store = context.getStateStore(storeName);
             final String storeType = store == null ? "null" : store.getClass().getName();
             throw new InvalidStateStoreException("KTable source state store must implement either "
-                + "TimestampedKeyValueStore or VersionedKeyValueStore. Got: " + storeType);
+                + "TimestampedKeyValueStore, TimestampedKeyValueStoreWithHeaders, or VersionedKeyValueStore. Got: " + storeType);
         }
     }
 
     public ValueAndTimestamp<V> get(final K key) {
+        if (headersStore != null) {
+            final ValueTimestampHeaders<V> valueTimestampHeaders = headersStore.get(key);
+            return valueTimestampHeaders == null
+                ? null
+                : ValueAndTimestamp.make(valueTimestampHeaders.value(), valueTimestampHeaders.timestamp());
+        }
         if (timestampedStore != null) {
             return timestampedStore.get(key);
         }
@@ -84,7 +105,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
                 ? null
                 : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
         }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped, headers, or versioned store");
     }
 
     public ValueAndTimestamp<V> get(final K key, final long asOfTimestamp) {
@@ -95,12 +116,27 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         return versionedRecord == null ? null : ValueAndTimestamp.make(versionedRecord.value(), versionedRecord.timestamp());
     }
 
+    public ValueTimestampHeaders<V> getWithHeaders(final K key) {
+        if (headersStore != null) {
+            return headersStore.get(key);
+        }
+        throw new UnsupportedOperationException("getWithHeaders is only supported for headers-aware stores");
+    }
+
     /**
      * @return {@code -1} if the put record is the latest for its key, and {@code Long.MIN_VALUE}
      *         if the put was rejected (i.e., due to grace period having elapsed for a versioned
      *         store). If neither, any other long value may be returned.
      */
     public long put(final K key, final V value, final long timestamp) {
+        return put(key, value, timestamp, null);
+    }
+
+    public long put(final K key, final V value, final long timestamp, final Headers headers) {
+        if (headersStore != null) {
+            headersStore.put(key, ValueTimestampHeaders.make(value, timestamp, headers));
+            return PUT_RETURN_CODE_IS_LATEST;
+        }
         if (timestampedStore != null) {
             timestampedStore.put(key, ValueAndTimestamp.make(value, timestamp));
             return PUT_RETURN_CODE_IS_LATEST;
@@ -108,7 +144,7 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
         if (versionedStore != null) {
             return versionedStore.put(key, value, timestamp);
         }
-        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped or versioned store");
+        throw new IllegalStateException("KeyValueStoreWrapper must be initialized with either timestamped, headers, or versioned store");
     }
 
     public StateStore store() {
@@ -117,6 +153,10 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
 
     public boolean isVersionedStore() {
         return versionedStore != null;
+    }
+
+    public boolean supportsHeaders() {
+        return headersStore != null;
     }
 
     @Override
