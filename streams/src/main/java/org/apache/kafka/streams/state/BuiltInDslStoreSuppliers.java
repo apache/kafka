@@ -38,13 +38,19 @@ public class BuiltInDslStoreSuppliers {
         @Override
         public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {
             final DslStoreFormat storeFormat = params.dslStoreFormat();
-            if (storeFormat.equals(DslStoreFormat.DEFAULT)) {
-                return Stores.persistentTimestampedKeyValueStore(params.name());
-            }
             if (storeFormat.equals(DslStoreFormat.HEADERS)) {
                 return Stores.persistentTimestampedKeyValueStoreWithHeaders(params.name());
             }
-            return Stores.persistentKeyValueStore(params.name());
+            if (storeFormat.equals(DslStoreFormat.TIMESTAMPED)) {
+                return Stores.persistentTimestampedKeyValueStore(params.name());
+            }
+            if (storeFormat.equals(DslStoreFormat.PLAIN)) {
+                return Stores.persistentKeyValueStore(params.name());
+            }
+            throw new IllegalArgumentException(
+                "Unsupported DslStoreFormat: " + storeFormat +
+                    ". Expected one of: HEADERS, TIMESTAMPED, or PLAIN"
+            );
         }
 
         @Override

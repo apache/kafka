@@ -539,7 +539,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code dsl.store.suppliers.class } */
     public static final String DSL_STORE_FORMAT_CONFIG = "dsl.store.format";
-    public static final String DSL_STORE_FORMAT_DEFAULT = DslStoreFormat.DEFAULT.name().toLowerCase(Locale.ROOT);
+    public static final String DSL_STORE_FORMAT_DEFAULT = "DEFAULT";
     private static final String DSL_STORE_FORMAT_DOC = "Controls the state store type used by the DSL store supplier (see " +
         "config 'dsl.store.suppliers.class'). " +
         "'default' uses timestamped stores. " +
@@ -1123,7 +1123,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(DSL_STORE_FORMAT_CONFIG,
                     Type.STRING,
                     DSL_STORE_FORMAT_DEFAULT,
-                    ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(DslStoreFormat.class)),
+                    ConfigDef.CaseInsensitiveValidString.in("DEFAULT", "HEADERS"),
                     Importance.LOW,
                     DSL_STORE_FORMAT_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,

@@ -43,8 +43,14 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
             );
         }
         if (dslStoreFormat == null) {
-            dslStoreFormat = DslStoreFormat.of(config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG));
+            final String dslStoreFormatValue = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+            if (dslStoreFormatValue.equalsIgnoreCase("HEADERS")) {
+                dslStoreFormat = DslStoreFormat.HEADERS;
+            } else { // DEFAULT
+                dslStoreFormat = DslStoreFormat.TIMESTAMPED;
+            }
         }
+
     }
 
     @Override
