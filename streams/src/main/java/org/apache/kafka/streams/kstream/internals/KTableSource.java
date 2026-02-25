@@ -175,7 +175,12 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 } else {
                     oldValue = null;
                 }
-                final long putReturnCode = store.put(record.key(), record.value(), record.timestamp(), record.headers());
+                final long putReturnCode;
+                if (store.supportsHeaders()) {
+                    putReturnCode = store.put(record.key(), record.value(), record.timestamp(), record.headers());
+                } else {
+                    putReturnCode = store.put(record.key(), record.value(), record.timestamp());
+                }
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(record.value(), oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));

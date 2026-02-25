@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -124,6 +125,20 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         processed.clear();
     }
 
+    public void checkAndClearProcessResultWithHeaders(final KeyValueTimestampHeaders<?, ?>... expected) {
+        assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
+        for (int i = 0; i < expected.length; i++) {
+            final Record<KIn, VIn> record = processed.get(i);
+            assertThat(
+                "output[" + i + "]:",
+                new KeyValueTimestampHeaders<>(record.key(), record.value(), record.timestamp(), record.headers()),
+                is(expected[i])
+            );
+        }
+
+        processed.clear();
+    }
+
     public void checkAndClearProcessedRecords(final Record<?, ?>... expected) {
         assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
         for (int i = 0; i < expected.length; i++) {
@@ -163,6 +178,13 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         return processed
             .stream()
             .map(r -> new KeyValueTimestamp<>(r.key(), r.value(), r.timestamp()))
+            .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    public ArrayList<KeyValueTimestampHeaders<KIn, VIn>> processedWithHeaders() {
+        return processed
+            .stream()
+            .map(r -> new KeyValueTimestampHeaders<>(r.key(), r.value(), r.timestamp(), r.headers()))
             .collect(Collectors.toCollection(ArrayList::new));
     }
 
