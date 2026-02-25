@@ -4347,7 +4347,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -4412,7 +4412,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             List.of(
-                new ExpiredTimeout<CoordinatorRecord>(
+                new ExpiredTimeout<>(
                     groupSessionTimeoutKey(groupId, memberId),
                     new CoordinatorResult<>(
                         List.of(
@@ -4473,7 +4473,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -4536,7 +4536,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             List.of(
-                new ExpiredTimeout<CoordinatorRecord>(
+                new ExpiredTimeout<>(
                     groupSessionTimeoutKey(groupId, memberId),
                     new CoordinatorResult<>(
                         List.of(
@@ -4616,7 +4616,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -4894,7 +4894,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupRebalanceTimeoutKey(groupId, memberId1),
                 new CoordinatorResult<>(
                     List.of(
@@ -8039,7 +8039,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStaticMemberRejoinWithKnownLeaderIdToTriggerRebalanceAndFollowerWithChangeofProtocol()
+    public void testStaticMemberRejoinWithKnownLeaderIdToTriggerRebalanceAndFollowerWithChangeOfProtocol()
         throws Exception {
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -19344,7 +19344,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     List.of(
@@ -19653,7 +19653,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupRebalanceTimeoutKey(groupId, memberId1),
                 new CoordinatorResult<>(
                     List.of(
@@ -23509,7 +23509,7 @@ public class GroupMetadataManagerTest {
 
         // Verify the expired timeout.
         assertEquals(
-            List.of(new ExpiredTimeout<CoordinatorRecord>(
+            List.of(new ExpiredTimeout<>(
                 groupSessionTimeoutKey(groupId, memberId2),
                 new CoordinatorResult<>(
                     List.of(
@@ -25038,7 +25038,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onMetadataUpdate(image.emptyDelta(), image);
 
-        // Cleanup happens from initialzing state only.
+        // Cleanup happens from initializing state only.
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -25582,7 +25582,7 @@ public class GroupMetadataManagerTest {
 
         // Verify foo-0 is unassigned and bar-0 is assigned to member A.
         StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
-        assertEquals(null, group.currentActiveTaskProcessId(subtopologyFoo, 0));
+        assertNull(group.currentActiveTaskProcessId(subtopologyFoo, 0));
         assertEquals(processIdA, group.currentActiveTaskProcessId(subtopologyBar, 0));
     }
 

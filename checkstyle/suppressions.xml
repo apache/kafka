@@ -222,8 +222,11 @@
     <suppress checks="(NPathComplexity|CyclomaticComplexity)"
               files="(KStreamSlidingWindowAggregate|RackAwareTaskAssignor).java"/>
 
-    <!-- suppress FinalLocalVariable outside of the streams package. -->
+    <!-- suppress FinalLocalVariable and FinalParameters outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
+              files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
+
+    <suppress checks="FinalParameters"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
     <!-- Generated code -->
@@ -273,14 +276,15 @@
               files="PageViewTypedDemo.java|PipeDemo.java|TemperatureDemo.java|WordCountDemo.java|WordCountProcessorDemo.java|WordCountTransformerDemo.java"/>
 
     <!-- Tools -->
+    <suppress checks="ClassFanOutComplexity" files="DumpLogSegmentsTest"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files="VerifiableConsumer.java"/>
+              files="(VerifiableConsumer|DumpLogSegmentsTest).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(AclCommand|ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance|Agent).java"/>
     <suppress checks="BooleanExpressionComplexity"
               files="(StreamsResetter|DefaultMessageFormatter).java"/>
     <suppress checks="NPathComplexity"
-              files="(AclCommand|DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool|LineMessageReader|ConsoleProducer).java"/>
+              files="(AclCommand|DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool|LineMessageReader|ConsoleProducer|DumpLogSegments).java"/>
     <suppress checks="ImportControl"
               files="SignalLogger.java"/>
     <suppress checks="IllegalImport"
@@ -374,8 +378,5 @@
 
      <!-- Add the new suppression rule for JaasTestUtils.java -->
     <suppress checks="ImportControl" files="(JaasTestUtils).java" />
-
-    <suppress checks="FinalLocalVariable" files="."/>
-    <suppress checks="FinalParameters" files="."/>
 
 </suppressions>

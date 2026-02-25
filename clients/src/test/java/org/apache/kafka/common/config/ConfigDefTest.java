@@ -616,7 +616,10 @@ public class ConfigDefTest {
 
     @Test
     public void testConvertValueToStringDouble() {
-        assertEquals("3.125", ConfigDef.convertToString(3.125, Type.DOUBLE));
+        assertEquals("3.125", ConfigDef.convertToString(3.125d, Type.DOUBLE));
+        assertEquals("1.7976931348623157E308", ConfigDef.convertToString(Double.MAX_VALUE, Type.DOUBLE));
+        assertEquals("1.024E8",  ConfigDef.convertToString(102400000d, Type.DOUBLE));
+        assertEquals("-1.024E8",  ConfigDef.convertToString(-102400000d, Type.DOUBLE));
         assertNull(ConfigDef.convertToString(null, Type.DOUBLE));
     }
 
@@ -654,6 +657,12 @@ public class ConfigDefTest {
         assertEquals("org.apache.kafka.common.config.ConfigDefTest$NestedClass", actual);
         // Additionally validate that we can look up this class by this name
         assertEquals(NestedClass.class, Class.forName(actual));
+    }
+
+    @Test
+    public void testConvertValueToStringNullType() {
+        assertEquals("foobar", ConfigDef.convertToString("foobar", null));
+        assertNull(ConfigDef.convertToString(null, null));
     }
 
     @Test

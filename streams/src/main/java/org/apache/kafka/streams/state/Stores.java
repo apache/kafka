@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesSto
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
@@ -94,7 +95,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, false);
+        return new RocksDBKeyValueBytesStoreSupplier(name, false, false);
     }
 
     /**
@@ -113,7 +114,33 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDBKeyValueBytesStoreSupplier(name, true);
+        return new RocksDBKeyValueBytesStoreSupplier(name, true, false);
+    }
+
+    /**
+     * Create a persistent {@link KeyValueBytesStoreSupplier} that stores headers along with timestamps.
+     * <p>
+     * This store supplier can be passed into a
+     * {@link #timestampedKeyValueStoreBuilderWithHeaders(KeyValueBytesStoreSupplier, Serde, Serde)}
+     * to build a {@link TimestampedKeyValueStoreWithHeaders}.
+     * <p>
+     * The store will persist key-value pairs along with record timestamps and headers,
+     * using the format specified in KIP-1271. This allows state stores to maintain
+     * full record context including headers for downstream processing.
+     * <p>
+     * If you want to create a {@link KeyValueStore}, {@link TimestampedKeyValueStore}, or
+     * {@link VersionedKeyValueStore} you should use {@link #persistentKeyValueStore(String)},
+     * {@link #persistentTimestampedKeyValueStore(String)}, or
+     * {@link #persistentVersionedKeyValueStore(String, Duration)}, respectively,
+     * to create a store supplier instead.
+     *
+     * @param name  name of the store (cannot be {@code null})
+     * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used
+     * to build a persistent key-(headers/timestamp/value) store
+     */
+    public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStoreWithHeaders(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
+        return new RocksDBKeyValueBytesStoreSupplier(name, true, true);
     }
 
     /**
@@ -562,5 +589,23 @@ public final class Stores {
                                                                               final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
         return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedKeyValueStoreWithHeaders}.
+     *
+     * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of {@link StoreBuilder} than can build a {@link KeyValueStore}
+     */
+    public static <K, V> StoreBuilder<TimestampedKeyValueStoreWithHeaders<K, V>> timestampedKeyValueStoreBuilderWithHeaders(final KeyValueBytesStoreSupplier supplier,
+                                                                                                                            final Serde<K> keySerde,
+                                                                                                                            final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 }

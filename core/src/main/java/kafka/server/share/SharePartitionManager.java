@@ -53,7 +53,6 @@ import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.server.share.session.ShareSessionKey;
 import org.apache.kafka.server.storage.log.FetchParams;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -362,7 +361,7 @@ public class SharePartitionManager implements AutoCloseable {
         ShareSessionKey key = shareSessionKey(groupId, memberId);
         if (cache.remove(key) == null) {
             log.error("Share session error for {}: no such share session found", key);
-            return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
+            return CompletableFuture.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
         } else {
             log.debug("Removed share session with key {}", key);
         }

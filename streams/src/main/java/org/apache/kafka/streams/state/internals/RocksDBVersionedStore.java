@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
@@ -303,9 +305,9 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     @Override
-    public void flush() {
-        segmentStores.flush();
-        // flushing segments store includes flushing latest value store, since they share the
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        segmentStores.commit(changelogOffsets);
+        // committing segments store includes committing latest value store, since they share the
         // same physical RocksDB instance
     }
 

@@ -18,12 +18,12 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
-import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MutableRecordBatch;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.ControlRecordType;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.MutableRecordBatch;
+import org.apache.kafka.common.record.internal.Record;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.storage.log.FetchIsolation;

@@ -50,7 +50,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
+import static org.apache.kafka.common.record.internal.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
 /**
  * A class encapsulating some of the logic around metadata.

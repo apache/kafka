@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -56,6 +57,10 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
 
+    protected abstract S createSegment(long segmentId, String segmentName);
+
+    protected abstract void openSegmentDB(final S segment, final StateStoreContext context);
+
     public void setPosition(final Position position) {
         this.position = position;
     }
@@ -80,6 +85,23 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
+    public S getOrCreateSegment(final long segmentId,
+                                final StateStoreContext context) {
+        if (segments.containsKey(segmentId)) {
+            return segments.get(segmentId);
+        } else {
+            final S newSegment = createSegment(segmentId, segmentName(segmentId));
+
+            if (segments.put(segmentId, newSegment) != null) {
+                throw new IllegalStateException(newSegment.getClass().getSimpleName() + " already exists. Possible concurrent access.");
+            }
+
+            openSegmentDB(newSegment, context);
+            return newSegment;
+        }
+    }
+
+    @Override
     public S getOrCreateSegmentIfLive(final long segmentId,
                                       final StateStoreContext context,
                                       final long streamTime) {
@@ -88,7 +110,9 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
 
         if (segmentId >= minLiveSegment) {
             // The segment is live. get it, ensure it's open, and return it.
-            return getOrCreateSegment(segmentId, context);
+            final S segment = getOrCreateSegment(segmentId, context);
+            cleanupExpiredSegments(streamTime);
+            return segment;
         } else {
             return null;
         }
@@ -160,9 +184,9 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public void flush() {
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
         for (final S segment : segments.values()) {
-            segment.flush();
+            segment.commit(changelogOffsets);
         }
     }
 
