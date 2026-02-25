@@ -45,7 +45,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() != null ? dslStoreFormat() : DslStoreFormat.DEFAULT;
+        final DslStoreFormat storeFormat = dslStoreFormat() != null ? dslStoreFormat() : DslStoreFormat.TIMESTAMPED;
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
@@ -61,11 +61,16 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
-        } else if (storeFormat.equals(DslStoreFormat.DEFAULT)) {
+        } else if (storeFormat.equals(DslStoreFormat.TIMESTAMPED)) {
             builder = Stores.timestampedKeyValueStoreBuilder(
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
+        } else if (storeFormat.equals(DslStoreFormat.PLAIN)) {
+            builder = Stores.keyValueStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
         } else {
             throw new IllegalArgumentException("Unsupported store format: " + storeFormat);
         }

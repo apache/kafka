@@ -40,7 +40,7 @@ public class DslKeyValueParams {
         Objects.requireNonNull(name);
         this.name = name;
         this.isTimestamped = isTimestamped;
-        this.dslStoreFormat = DslStoreFormat.DEFAULT;
+        this.dslStoreFormat = DslStoreFormat.TIMESTAMPED;
     }
 
     /**
