@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -26,6 +29,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -46,7 +50,9 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -54,6 +60,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -67,12 +74,35 @@ public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Grouped<String, String> stringSerialized = Grouped.with(stringSerde, stringSerde);
-    private final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
-    private static final Properties CONFIG = mkProperties(mkMap(
-        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
 
-    @Test
-    public void testAggBasic() {
+    /**
+     * Provides both store format configurations for parameterized tests.
+     */
+    private static Stream<Arguments> storeFormats() {
+        return Stream.of(
+            Arguments.of("default"),
+            Arguments.of("headers")
+        );
+    }
+
+    private Properties getProps(final String storeFormat) {
+        final Properties props = mkProperties(mkMap(
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
+        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
+        return props;
+    }
+
+    private static Headers makeHeaders(final String key, final String value) {
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add(new RecordHeader(key, value.getBytes()));
+        return headers;
+    }
+
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testAggBasic(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -92,35 +122,57 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            inputTopic.pipeInput("A", "1", 10L);
-            inputTopic.pipeInput("B", "2", 15L);
-            inputTopic.pipeInput("A", "3", 20L);
-            inputTopic.pipeInput("B", "4", 18L);
-            inputTopic.pipeInput("C", "5", 5L);
-            inputTopic.pipeInput("D", "6", 25L);
-            inputTopic.pipeInput("B", "7", 15L);
-            inputTopic.pipeInput("C", "8", 10L);
+            final Headers headersA = makeHeaders("key", "A");
+            final Headers headersB = makeHeaders("key", "B");
+            final Headers headersC = makeHeaders("key", "C");
+            final Headers headersD = makeHeaders("key", "D");
 
-            assertEquals(
-                asList(
-                    new KeyValueTimestamp<>("A", "0+1", 10L),
-                    new KeyValueTimestamp<>("B", "0+2", 15L),
-                    new KeyValueTimestamp<>("A", "0+1-1+3", 20L),
-                    new KeyValueTimestamp<>("B", "0+2-2+4", 18L),
-                    new KeyValueTimestamp<>("C", "0+5", 5L),
-                    new KeyValueTimestamp<>("D", "0+6", 25L),
-                    new KeyValueTimestamp<>("B", "0+2-2+4-4+7", 18L),
-                    new KeyValueTimestamp<>("C", "0+5-5+8", 10L)),
-                supplier.theCapturedProcessor().processed());
+            inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 10L));
+            inputTopic.pipeInput(new TestRecord<>("B", "2", headersB, 15L));
+            inputTopic.pipeInput(new TestRecord<>("A", "3", headersA, 20L));
+            inputTopic.pipeInput(new TestRecord<>("B", "4", headersB, 18L));
+            inputTopic.pipeInput(new TestRecord<>("C", "5", headersC, 5L));
+            inputTopic.pipeInput(new TestRecord<>("D", "6", headersD, 25L));
+            inputTopic.pipeInput(new TestRecord<>("B", "7", headersB, 15L));
+            inputTopic.pipeInput(new TestRecord<>("C", "8", headersC, 10L));
+
+            if (storeFormat.equals("default")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestamp<>("A", "0+1", 10L),
+                        new KeyValueTimestamp<>("B", "0+2", 15L),
+                        new KeyValueTimestamp<>("A", "0+1-1+3", 20L),
+                        new KeyValueTimestamp<>("B", "0+2-2+4", 18L),
+                        new KeyValueTimestamp<>("C", "0+5", 5L),
+                        new KeyValueTimestamp<>("D", "0+6", 25L),
+                        new KeyValueTimestamp<>("B", "0+2-2+4-4+7", 18L),
+                        new KeyValueTimestamp<>("C", "0+5-5+8", 10L)),
+                    supplier.theCapturedProcessor().processed());
+            } else if (storeFormat.equals("headers")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestampHeaders<>("A", "0+1", 10L, headersA),
+                        new KeyValueTimestampHeaders<>("B", "0+2", 15L, headersB),
+                        new KeyValueTimestampHeaders<>("A", "0+1-1+3", 20L, headersA),
+                        new KeyValueTimestampHeaders<>("B", "0+2-2+4", 18L, headersB),
+                        new KeyValueTimestampHeaders<>("C", "0+5", 5L, headersC),
+                        new KeyValueTimestampHeaders<>("D", "0+6", 25L, headersD),
+                        new KeyValueTimestampHeaders<>("B", "0+2-2+4-4+7", 18L, headersB),
+                        new KeyValueTimestampHeaders<>("C", "0+5-5+8", 10L, headersC)),
+                    supplier.theCapturedProcessor().processedWithHeaders());
+            }
         }
     }
 
-    @Test
-    public void testAggRepartition() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testAggRepartition(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -149,35 +201,61 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            inputTopic.pipeInput("A", "1", 10L);
-            inputTopic.pipeInput("A", (String) null, 15L);
-            inputTopic.pipeInput("A", "1", 12L);
-            inputTopic.pipeInput("B", "2", 20L);
-            inputTopic.pipeInput("null", "3", 25L);
-            inputTopic.pipeInput("B", "4", 23L);
-            inputTopic.pipeInput("NULL", "5", 24L);
-            inputTopic.pipeInput("B", "7", 22L);
+            final Headers headersA = makeHeaders("key", "A");
+            final Headers headersB = makeHeaders("key", "B");
+            final Headers headersNull = makeHeaders("key", "null");
+            final Headers headersNULL = makeHeaders("key", "NULL");
 
-            assertEquals(
-                asList(
-                    new KeyValueTimestamp<>("1", "0+1", 10),
-                    new KeyValueTimestamp<>("1", "0+1-1", 15),
-                    new KeyValueTimestamp<>("1", "0+1-1+1", 15),
-                    new KeyValueTimestamp<>("2", "0+2", 20),
-                    new KeyValueTimestamp<>("2", "0+2-2", 23),
-                    new KeyValueTimestamp<>("4", "0+4", 23),
-                    new KeyValueTimestamp<>("4", "0+4-4", 23),
-                    new KeyValueTimestamp<>("7", "0+7", 22)),
-                supplier.theCapturedProcessor().processed());
+            inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 10L));
+            inputTopic.pipeInput(new TestRecord<>("A", null, headersA, 15L));
+            inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 12L));
+            inputTopic.pipeInput(new TestRecord<>("B", "2", headersB, 20L));
+            inputTopic.pipeInput(new TestRecord<>("null", "3", headersNull, 25L));
+            inputTopic.pipeInput(new TestRecord<>("B", "4", headersB, 23L));
+            inputTopic.pipeInput(new TestRecord<>("NULL", "5", headersNULL, 24L));
+            inputTopic.pipeInput(new TestRecord<>("B", "7", headersB, 22L));
+
+            if (storeFormat.equals("default")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestamp<>("1", "0+1", 10),
+                        new KeyValueTimestamp<>("1", "0+1-1", 15),
+                        new KeyValueTimestamp<>("1", "0+1-1+1", 15),
+                        new KeyValueTimestamp<>("2", "0+2", 20),
+                        new KeyValueTimestamp<>("2", "0+2-2", 23),
+                        new KeyValueTimestamp<>("4", "0+4", 23),
+                        new KeyValueTimestamp<>("4", "0+4-4", 23),
+                        new KeyValueTimestamp<>("7", "0+7", 22)),
+                    supplier.theCapturedProcessor().processed());
+            } else if (storeFormat.equals("headers")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestampHeaders<>("1", "0+1", 10, headersA),
+                        new KeyValueTimestampHeaders<>("1", "0+1-1", 15, headersA),
+                        new KeyValueTimestampHeaders<>("1", "0+1-1+1", 15, headersA),
+                        new KeyValueTimestampHeaders<>("2", "0+2", 20, headersB),
+                        new KeyValueTimestampHeaders<>("2", "0+2-2", 23, headersB),
+                        new KeyValueTimestampHeaders<>("4", "0+4", 23, headersB),
+                        new KeyValueTimestampHeaders<>("4", "0+4-4", 23, headersB),
+                        new KeyValueTimestampHeaders<>("7", "0+7", 22, headersB)),
+                    supplier.theCapturedProcessor().processedWithHeaders());
+            }
         }
     }
 
-    @Test
-    public void testAggOfVersionedStore() {
+    /**
+     * The versioned store (table1) remains unchanged across both modes - it always uses VersionedKeyValueStore.
+     * Only the aggregate store (table2) changes based on the DSL_STORE_FORMAT_CONFIG setting.
+     */
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testAggOfVersionedStore(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -208,90 +286,132 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            inputTopic.pipeInput("A", "1", 10L);
-            inputTopic.pipeInput("A", (String) null, 15L);
-            inputTopic.pipeInput("A", "1", 12L); // out-of-order record will be ignored
-            inputTopic.pipeInput("B", "2", 20L);
-            inputTopic.pipeInput("null", "3", 25L);
-            inputTopic.pipeInput("B", "4", 23L);
-            inputTopic.pipeInput("NULL", "5", 24L);
-            inputTopic.pipeInput("B", "7", 22L); // out-of-order record will be ignored
+            final Headers headersA = makeHeaders("key", "A");
+            final Headers headersB = makeHeaders("key", "B");
+            final Headers headersNull = makeHeaders("key", "null");
+            final Headers headersNULL = makeHeaders("key", "NULL");
 
-            assertEquals(
-                asList(
-                    new KeyValueTimestamp<>("1", "0+1", 10),
-                    new KeyValueTimestamp<>("1", "0+1-1", 15),
-                    new KeyValueTimestamp<>("2", "0+2", 20),
-                    new KeyValueTimestamp<>("2", "0+2-2", 23),
-                    new KeyValueTimestamp<>("4", "0+4", 23)),
-                supplier.theCapturedProcessor().processed());
+            inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 10L));
+            inputTopic.pipeInput(new TestRecord<>("A", null, headersA, 15L));
+            inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 12L)); // out-of-order record will be ignored
+            inputTopic.pipeInput(new TestRecord<>("B", "2", headersB, 20L));
+            inputTopic.pipeInput(new TestRecord<>("null", "3", headersNull, 25L));
+            inputTopic.pipeInput(new TestRecord<>("B", "4", headersB, 23L));
+            inputTopic.pipeInput(new TestRecord<>("NULL", "5", headersNULL, 24L));
+            inputTopic.pipeInput(new TestRecord<>("B", "7", headersB, 22L)); // out-of-order record will be ignored
+
+            if (storeFormat.equals("default")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestamp<>("1", "0+1", 10),
+                        new KeyValueTimestamp<>("1", "0+1-1", 15),
+                        new KeyValueTimestamp<>("2", "0+2", 20),
+                        new KeyValueTimestamp<>("2", "0+2-2", 23),
+                        new KeyValueTimestamp<>("4", "0+4", 23)),
+                    supplier.theCapturedProcessor().processed());
+            } else if (storeFormat.equals("headers")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestampHeaders<>("1", "0+1", 10, headersA),
+                        new KeyValueTimestampHeaders<>("1", "0+1-1", 15, headersA),
+                        new KeyValueTimestampHeaders<>("2", "0+2", 20, headersB),
+                        new KeyValueTimestampHeaders<>("2", "0+2-2", 23, headersB),
+                        new KeyValueTimestampHeaders<>("4", "0+4", 23, headersB)),
+                    supplier.theCapturedProcessor().processedWithHeaders());
+            }
         }
     }
 
-    private static void testCountHelper(final StreamsBuilder builder,
-                                        final String input,
-                                        final MockApiProcessorSupplier<String, Object, Void, Void> supplier) {
+    private void testCountHelper(final String storeFormat,
+                                  final Properties props,
+                                  final boolean useMaterialized) {
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String input = "count-test-input";
+
+        if (useMaterialized) {
+            builder
+                .table(input, consumed)
+                .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
+                .count(Materialized.as("count"))
+                .toStream()
+                .process(supplier);
+        } else {
+            builder
+                .table(input, consumed)
+                .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
+                .count()
+                .toStream()
+                .process(supplier);
+        }
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            inputTopic.pipeInput("A", "green", 10L);
-            inputTopic.pipeInput("B", "green", 9L);
-            inputTopic.pipeInput("A", "blue", 12L);
-            inputTopic.pipeInput("C", "yellow", 15L);
-            inputTopic.pipeInput("D", "green", 11L);
+            final Headers headersA = makeHeaders("key", "A");
+            final Headers headersB = makeHeaders("key", "B");
+            final Headers headersC = makeHeaders("key", "C");
+            final Headers headersD = makeHeaders("key", "D");
 
-            assertEquals(
-                asList(
-                    new KeyValueTimestamp<>("green", 1L, 10),
-                    new KeyValueTimestamp<>("green", 2L, 10),
-                    new KeyValueTimestamp<>("green", 1L, 12),
-                    new KeyValueTimestamp<>("blue", 1L, 12),
-                    new KeyValueTimestamp<>("yellow", 1L, 15),
-                    new KeyValueTimestamp<>("green", 2L, 12)),
-                supplier.theCapturedProcessor().processed());
+            inputTopic.pipeInput(new TestRecord<>("A", "green", headersA, 10L));
+            inputTopic.pipeInput(new TestRecord<>("B", "green", headersB, 9L));
+            inputTopic.pipeInput(new TestRecord<>("A", "blue", headersA, 12L));
+            inputTopic.pipeInput(new TestRecord<>("C", "yellow", headersC, 15L));
+            inputTopic.pipeInput(new TestRecord<>("D", "green", headersD, 11L));
+
+            if (storeFormat.equals("default")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestamp<>("green", 1L, 10),
+                        new KeyValueTimestamp<>("green", 2L, 10),
+                        new KeyValueTimestamp<>("green", 1L, 12),
+                        new KeyValueTimestamp<>("blue", 1L, 12),
+                        new KeyValueTimestamp<>("yellow", 1L, 15),
+                        new KeyValueTimestamp<>("green", 2L, 12)),
+                    supplier.theCapturedProcessor().processed());
+            } else if (storeFormat.equals("headers")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestampHeaders<>("green", 1L, 10, headersA),
+                        new KeyValueTimestampHeaders<>("green", 2L, 10, headersB),
+                        new KeyValueTimestampHeaders<>("green", 1L, 12, headersA),
+                        new KeyValueTimestampHeaders<>("blue", 1L, 12, headersA),
+                        new KeyValueTimestampHeaders<>("yellow", 1L, 15, headersC),
+                        new KeyValueTimestampHeaders<>("green", 2L, 12, headersD)),
+                    supplier.theCapturedProcessor().processedWithHeaders());
+            }
         }
     }
 
 
-    @Test
-    public void testCount() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String input = "count-test-input";
-
-        builder
-            .table(input, consumed)
-            .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
-            .count(Materialized.as("count"))
-            .toStream()
-            .process(supplier);
-
-        testCountHelper(builder, input, supplier);
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testCount(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+        testCountHelper(storeFormat, props, true);
     }
 
-    @Test
-    public void testCountWithInternalStore() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String input = "count-test-input";
-
-        builder
-            .table(input, consumed)
-            .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
-            .count()
-            .toStream()
-            .process(supplier);
-
-        testCountHelper(builder, input, supplier);
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testCountWithInternalStore(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+        testCountHelper(storeFormat, props, false);
     }
 
-    @Test
-    public void testCountOfVersionedStore() {
+    /** Source table: VersionedKeyValueStore (explicitly materialized)
+    * Aggregate store: Created by .count() - will respect DSL_STORE_FORMAT_CONFIG
+    */
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testCountOfVersionedStore(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
 
@@ -306,34 +426,53 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            inputTopic.pipeInput("A", "green", 10L);
-            inputTopic.pipeInput("B", "green", 9L);
-            inputTopic.pipeInput("A", "blue", 12L);
-            inputTopic.pipeInput("A", "blue", 11L); // out-of-order record will be ignored
-            inputTopic.pipeInput("C", "yellow", 15L);
-            inputTopic.pipeInput("D", "green", 11L);
+            final Headers headersA = makeHeaders("key", "A");
+            final Headers headersB = makeHeaders("key", "B");
+            final Headers headersC = makeHeaders("key", "C");
+            final Headers headersD = makeHeaders("key", "D");
 
-            assertEquals(
-                asList(
-                    new KeyValueTimestamp<>("green", 1L, 10),
-                    new KeyValueTimestamp<>("green", 2L, 10),
-                    new KeyValueTimestamp<>("green", 1L, 12),
-                    new KeyValueTimestamp<>("blue", 1L, 12),
-                    new KeyValueTimestamp<>("yellow", 1L, 15),
-                    new KeyValueTimestamp<>("green", 2L, 12)),
-                supplier.theCapturedProcessor().processed());
+            inputTopic.pipeInput(new TestRecord<>("A", "green", headersA, 10L));
+            inputTopic.pipeInput(new TestRecord<>("B", "green", headersB, 9L));
+            inputTopic.pipeInput(new TestRecord<>("A", "blue", headersA, 12L));
+            inputTopic.pipeInput(new TestRecord<>("A", "blue", headersA, 11L)); // out-of-order record will be ignored
+            inputTopic.pipeInput(new TestRecord<>("C", "yellow", headersC, 15L));
+            inputTopic.pipeInput(new TestRecord<>("D", "green", headersD, 11L));
+
+            if (storeFormat.equals("default")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestamp<>("green", 1L, 10),
+                        new KeyValueTimestamp<>("green", 2L, 10),
+                        new KeyValueTimestamp<>("green", 1L, 12),
+                        new KeyValueTimestamp<>("blue", 1L, 12),
+                        new KeyValueTimestamp<>("yellow", 1L, 15),
+                        new KeyValueTimestamp<>("green", 2L, 12)),
+                    supplier.theCapturedProcessor().processed());
+            } else if (storeFormat.equals("headers")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestampHeaders<>("green", 1L, 10, headersA),
+                        new KeyValueTimestampHeaders<>("green", 2L, 10, headersB),
+                        new KeyValueTimestampHeaders<>("green", 1L, 12, headersA),
+                        new KeyValueTimestampHeaders<>("blue", 1L, 12, headersA),
+                        new KeyValueTimestampHeaders<>("yellow", 1L, 15, headersC),
+                        new KeyValueTimestampHeaders<>("green", 2L, 12, headersD)),
+                    supplier.theCapturedProcessor().processedWithHeaders());
+            }
         }
     }
 
-    @Test
-    public void testRemoveOldBeforeAddNew() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testRemoveOldBeforeAddNew(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
-        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         builder
             .table(input, consumed)
@@ -353,30 +492,48 @@ public class KTableAggregateTest {
 
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+                builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             final MockApiProcessor<String, String, Void, Void> proc = supplier.theCapturedProcessor();
 
-            inputTopic.pipeInput("11", "A", 10L);
-            inputTopic.pipeInput("12", "B", 8L);
-            inputTopic.pipeInput("11", (String) null, 12L);
-            inputTopic.pipeInput("12", "C", 6L);
+            final Headers headers11 = makeHeaders("key", "11");
+            final Headers headers12 = makeHeaders("key", "12");
 
-            assertEquals(
-                asList(
-                    new KeyValueTimestamp<>("1", "1", 10),
-                    new KeyValueTimestamp<>("1", "12", 10),
-                    new KeyValueTimestamp<>("1", "2", 12),
-                    new KeyValueTimestamp<>("1", "2", 12L)
-                ),
-                proc.processed()
-            );
+            inputTopic.pipeInput(new TestRecord<>("11", "A", headers11, 10L));
+            inputTopic.pipeInput(new TestRecord<>("12", "B", headers12, 8L));
+            inputTopic.pipeInput(new TestRecord<>("11", null, headers11, 12L));
+            inputTopic.pipeInput(new TestRecord<>("12", "C", headers12, 6L));
+
+            if (storeFormat.equals("default")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestamp<>("1", "1", 10),
+                        new KeyValueTimestamp<>("1", "12", 10),
+                        new KeyValueTimestamp<>("1", "2", 12),
+                        new KeyValueTimestamp<>("1", "2", 12L)
+                    ),
+                    proc.processed()
+                );
+            } else if (storeFormat.equals("headers")) {
+                assertEquals(
+                    asList(
+                        new KeyValueTimestampHeaders<>("1", "1", 10, headers11),
+                        new KeyValueTimestampHeaders<>("1", "12", 10, headers12),
+                        new KeyValueTimestampHeaders<>("1", "2", 12, headers11),
+                        new KeyValueTimestampHeaders<>("1", "2", 12L, headers12)
+                    ),
+                    proc.processedWithHeaders()
+                );
+            }
         }
     }
 
-    private void testUpgradeFromConfig(final Properties config, final List<KeyValueTimestamp<String, Long>> expected) {
+    private void testUpgradeFromConfig(final Properties config,
+                                       final List<KeyValueTimestamp<String, Long>> expectedDefault,
+                                       final List<KeyValueTimestampHeaders<String, Long>> expectedHeaders,
+                                       final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "input-topic";
         final String output = "output-topic";
@@ -396,34 +553,70 @@ public class KTableAggregateTest {
             final TestOutputTopic<String, Long> outputTopic =
                     driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
 
-            inputTopic.pipeInput("1", "", 8L);
-            inputTopic.pipeInput("1", "", 9L);
+            final Headers headers1 = makeHeaders("key", "1");
 
-            final List<KeyValueTimestamp<String, Long>> actual = new ArrayList<>();
-            outputTopic.readRecordsToList().forEach(tr -> actual.add(new KeyValueTimestamp<>(tr.key(), tr.value(), tr.timestamp())));
+            inputTopic.pipeInput(new TestRecord<>("1", "", headers1, 8L));
+            inputTopic.pipeInput(new TestRecord<>("1", "", headers1, 9L));
 
-            assertEquals(expected, actual);
+            final List<KeyValueTimestamp<String, Long>> actualDefault = new ArrayList<>();
+            final List<KeyValueTimestampHeaders<String, Long>> actualHeaders = new ArrayList<>();
+
+            outputTopic.readRecordsToList().forEach(tr -> {
+                actualDefault.add(new KeyValueTimestamp<>(tr.key(), tr.value(), tr.timestamp()));
+                actualHeaders.add(new KeyValueTimestampHeaders<>(tr.key(), tr.value(), tr.timestamp(), tr.headers()));
+            });
+
+            if (storeFormat.equals("default")) {
+                assertEquals(expectedDefault, actualDefault);
+            } else if (storeFormat.equals("headers")) {
+                assertEquals(expectedHeaders, actualHeaders);
+            }
         }
     }
 
-    @Test
-    public void testShouldSendTransientStateWhenUpgrading() {
-        final Properties upgradingConfig = new Properties();
-        upgradingConfig.putAll(CONFIG);
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testShouldSendTransientStateWhenUpgrading(final String storeFormat) {
+        final Properties upgradingConfig = getProps(storeFormat);
         upgradingConfig.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_33);
-        testUpgradeFromConfig(upgradingConfig, asList(
+
+        final Headers headers1 = makeHeaders("key", "1");
+
+        testUpgradeFromConfig(
+            upgradingConfig,
+            asList(
                 new KeyValueTimestamp<>("1", 1L, 8),
                 new KeyValueTimestamp<>("1", 0L, 9), // transient inconsistent state
                 new KeyValueTimestamp<>("1", 1L, 9)
-        ));
+            ),
+            asList(
+                new KeyValueTimestampHeaders<>("1", 1L, 8, headers1),
+                new KeyValueTimestampHeaders<>("1", 0L, 9, headers1), // transient inconsistent state
+                new KeyValueTimestampHeaders<>("1", 1L, 9, headers1)
+            ),
+            storeFormat
+        );
     }
 
-    @Test
-    public void testShouldNotSendTransientStateIfNotUpgrading() {
-        testUpgradeFromConfig(CONFIG, asList(
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testShouldNotSendTransientStateIfNotUpgrading(final String storeFormat) {
+        final Properties props = getProps(storeFormat);
+
+        final Headers headers1 = makeHeaders("key", "1");
+
+        testUpgradeFromConfig(
+            props,
+            asList(
                 new KeyValueTimestamp<>("1", 1L, 8),
                 new KeyValueTimestamp<>("1", 1L, 9)
-        ));
+            ),
+            asList(
+                new KeyValueTimestampHeaders<>("1", 1L, 8, headers1),
+                new KeyValueTimestampHeaders<>("1", 1L, 9, headers1)
+            ),
+            storeFormat
+        );
     }
 
     private static class NoEqualsImpl {
@@ -459,7 +652,9 @@ public class KTableAggregateTest {
 
     private void testKeyWithNoEquals(
             final KeyValueMapper<NoEqualsImpl, NoEqualsImpl, KeyValue<NoEqualsImpl, NoEqualsImpl>> keyValueMapper,
-            final List<TestRecord<NoEqualsImpl, Long>> expected) {
+            final List<TestRecord<NoEqualsImpl, Long>> expected,
+            final String storeFormat) {
+        final Properties props = getProps(storeFormat);
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "input-topic";
         final String output = "output-topic";
@@ -472,7 +667,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .to(output);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<NoEqualsImpl, NoEqualsImpl> inputTopic =
                     driver.createInputTopic(input, noEqualsImplSerde.serializer(), noEqualsImplSerde.serializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<NoEqualsImpl, Long> outputTopic =
@@ -483,8 +678,11 @@ public class KTableAggregateTest {
             assertNotEquals(a, b);
             assertNotSame(a, b);
 
-            inputTopic.pipeInput(a, a, 8);
-            inputTopic.pipeInput(b, b, 9);
+            final Headers headersA = makeHeaders("key", "A");
+            final Headers headersB = makeHeaders("key", "B");
+
+            inputTopic.pipeInput(new TestRecord<>(a, a, headersA, 8L));
+            inputTopic.pipeInput(new TestRecord<>(b, b, headersB, 9L));
 
             final List<TestRecord<String, Long>> actualComparable = toComparableList(outputTopic.readRecordsToList());
             final List<TestRecord<String, Long>> expectedComparable = toComparableList(expected);
@@ -492,28 +690,38 @@ public class KTableAggregateTest {
         }
     }
 
-    @Test
-    public void testNoEqualsAndNotSameObject() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testNoEqualsAndNotSameObject(final String storeFormat) {
+        final Headers headersA = makeHeaders("key", "A");
+        final Headers headersB = makeHeaders("key", "B");
+
         testKeyWithNoEquals(
                 // key changes, different object reference (deserializer returns a new object reference)
                 (k, v) -> new KeyValue<>(v, v),
                 asList(
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
-                        new TestRecord<>(new NoEqualsImpl("1"), 0L, Instant.ofEpochMilli(9)), // transient inconsistent state
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
-                )
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, headersA, Instant.ofEpochMilli(8)),
+                        new TestRecord<>(new NoEqualsImpl("1"), 0L, headersB, Instant.ofEpochMilli(9)), // transient inconsistent state
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, headersB, Instant.ofEpochMilli(9))
+                ),
+                storeFormat
         );
     }
 
-    @Test
-    public void testNoEqualsAndSameObject() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testNoEqualsAndSameObject(final String storeFormat) {
+        final Headers headersA = makeHeaders("key", "A");
+        final Headers headersB = makeHeaders("key", "B");
+
         testKeyWithNoEquals(
                 // key does not change, same object reference
                 KeyValue::new,
                 asList(
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(8)),
-                        new TestRecord<>(new NoEqualsImpl("1"), 1L, Instant.ofEpochMilli(9))
-                )
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, headersA, Instant.ofEpochMilli(8)),
+                        new TestRecord<>(new NoEqualsImpl("1"), 1L, headersB, Instant.ofEpochMilli(9))
+                ),
+                storeFormat
         );
     }
 }

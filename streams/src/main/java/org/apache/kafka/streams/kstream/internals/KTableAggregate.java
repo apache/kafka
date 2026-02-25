@@ -84,11 +84,19 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
         @Override
         public void init(final ProcessorContext<KIn, Change<VAgg>> context) {
             store = new KeyValueStoreWrapper<>(context, storeName);
-            tupleForwarder = new TimestampedTupleForwarder<>(
-                store.store(),
-                context,
-                new TimestampedCacheFlushListener<>(context),
-                sendOldValues);
+            if (store.supportsHeaders()) {
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store.store(),
+                    context,
+                    new TimestampedCacheFlushListenerWithHeaders<>(context),
+                    sendOldValues);
+            } else {
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store.store(),
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
+                    sendOldValues);
+            }
         }
 
         /**
