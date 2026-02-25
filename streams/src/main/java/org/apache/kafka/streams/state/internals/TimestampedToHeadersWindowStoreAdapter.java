@@ -75,6 +75,7 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
      * Input:  [headersSize(varint)][headers][timestamp(8)][value]
      * Output: [timestamp(8)][value]
      */
+    // TODO: should be extract to util class, tracked by KAFKA-20205
     static byte[] rawTimestampedValue(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders == null) {
             return null;
@@ -113,33 +114,33 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo,
                                                            final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersKeyValueIteratorAdapter(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(store.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo,
                                                                    final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersKeyValueIteratorAdapter(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersKeyValueIteratorAdapter(store.fetchAll(timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom, final long timeTo) {
-        return new TimestampedToHeadersKeyValueIteratorAdapter(store.backwardFetchAll(timeFrom, timeTo));
+        return new TimestampedToHeadersIteratorAdapter<>(store.backwardFetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return new TimestampedToHeadersKeyValueIteratorAdapter(store.all());
+        return new TimestampedToHeadersIteratorAdapter<>(store.all());
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-        return new TimestampedToHeadersKeyValueIteratorAdapter(store.backwardAll());
+        return new TimestampedToHeadersIteratorAdapter<>(store.backwardAll());
     }
 
     @Override
@@ -215,42 +216,6 @@ public class TimestampedToHeadersWindowStoreAdapter implements WindowStore<Bytes
         @Override
         public KeyValue<Long, byte[]> next() {
             final KeyValue<Long, byte[]> timestampedKeyValue = innerIterator.next();
-            if (timestampedKeyValue == null) {
-                return null;
-            }
-            return KeyValue.pair(timestampedKeyValue.key, convertToHeaderFormat(timestampedKeyValue.value));
-        }
-    }
-
-    /**
-     * Iterator adapter for KeyValueIterator that converts timestamp-only values
-     * to timestamp-with-headers format by adding empty headers.
-     */
-    private static class TimestampedToHeadersKeyValueIteratorAdapter implements KeyValueIterator<Windowed<Bytes>, byte[]> {
-        private final KeyValueIterator<Windowed<Bytes>, byte[]> innerIterator;
-
-        TimestampedToHeadersKeyValueIteratorAdapter(final KeyValueIterator<Windowed<Bytes>, byte[]> innerIterator) {
-            this.innerIterator = innerIterator;
-        }
-
-        @Override
-        public void close() {
-            innerIterator.close();
-        }
-
-        @Override
-        public Windowed<Bytes> peekNextKey() {
-            return innerIterator.peekNextKey();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return innerIterator.hasNext();
-        }
-
-        @Override
-        public KeyValue<Windowed<Bytes>, byte[]> next() {
-            final KeyValue<Windowed<Bytes>, byte[]> timestampedKeyValue = innerIterator.next();
             if (timestampedKeyValue == null) {
                 return null;
             }
