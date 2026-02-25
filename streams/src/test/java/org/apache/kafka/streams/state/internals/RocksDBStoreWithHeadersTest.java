@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.AggregationWithHeaders;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.junit.jupiter.api.Test;
@@ -45,6 +51,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
 
     private final Serializer<String> stringSerializer = new StringSerializer();
+    private final AggregationWithHeadersSerializer<String> aggSerializer =
+        new AggregationWithHeadersSerializer<>(new StringSerializer());
+    private final AggregationWithHeadersDeserializer<String> aggDeserializer =
+        new AggregationWithHeadersDeserializer<>(new StringDeserializer());
 
     RocksDBStore getRocksDBStore() {
         return new RocksDBStoreWithHeaders(DB_NAME, METRICS_SCOPE);
@@ -133,55 +143,37 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in upgrade mode"));
         }
 
-        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 7 entries in DEFAULT CF and 0 in headers-aware CF before migration");
-
-        // get() - tests lazy migration on read
-
+        // get() - tests lazy migration on read: legacy value converted via convertToHeaderFormat
         assertNull(rocksDBStore.get(new Bytes("unknown".getBytes())), "Expected null for unknown key");
-        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 7 entries on DEFAULT CF, 0 in headers-aware CF");
 
-        assertEquals(1 + 0 + 1, rocksDBStore.get(new Bytes("key1".getBytes())).length,
-            "Expected header-aware format: varint(1) + empty headers(0) + value(1) = 2 bytes");
-        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 6 entries on DEFAULT CF, 1 in headers-aware CF after migrating key1");
+        final byte[] key1Result = rocksDBStore.get(new Bytes("key1".getBytes()));
+        assertMigratedValue(key1Result, "1");
 
-        // put() - tests migration on write
-
-        rocksDBStore.put(new Bytes("key2".getBytes()), "headers+22".getBytes());
-        assertEquals(7L, rocksDBStore.approximateNumEntries(), "Expected 5 entries on DEFAULT CF, 2 in headers-aware CF after migrating key2 with put()");
+        // put() - tests migration on write using properly serialized AggregationWithHeaders
+        final byte[] key2Value = serializeAggWithHeaders("22", testHeaders());
+        rocksDBStore.put(new Bytes("key2".getBytes()), key2Value);
 
         rocksDBStore.put(new Bytes("key3".getBytes()), null);
-        // count is off by one, due to two delete operations (even if one does not delete anything)
-        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 4 entries on DEFAULT CF, 1 in headers-aware CF after deleting key3 with put()");
 
-        rocksDBStore.put(new Bytes("key8new".getBytes()), "headers+88888888".getBytes());
-        // one delete on old CF, one put on new CF, but count is off by one due to delete on old CF not deleting anything
-        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 3 entries on DEFAULT CF, 2 in headers-aware CF after adding new key8new with put()");
+        final byte[] key8Value = serializeAggWithHeaders("88888888", new RecordHeaders());
+        rocksDBStore.put(new Bytes("key8new".getBytes()), key8Value);
 
         // putIfAbsent() - tests migration on conditional write
+        final byte[] key11Value = serializeAggWithHeaders("11111111111", testHeaders());
+        assertNull(rocksDBStore.putIfAbsent(new Bytes("key11new".getBytes()), key11Value),
+            "Expected null return value for putIfAbsent on non-existing key11new");
 
-        assertNull(rocksDBStore.putIfAbsent(new Bytes("key11new".getBytes()), "headers+11111111111".getBytes()),
-            "Expected null return value for putIfAbsent on non-existing key11new, and new key should be added to headers-aware CF");
-        // one delete on old CF, one put on new CF, but count is off by one due to delete on old CF not deleting anything
-        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 2 entries on DEFAULT CF, 3 in headers-aware CF after adding new key11new with putIfAbsent()");
-
-        assertEquals(1 + 0 + 5, rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length,
-            "Expected header-aware format: varint(1) + empty headers(0) + value(5) = 6 bytes for putIfAbsent with null on existing key5");
-        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 1 entry on DEFAULT CF, 4 in headers-aware CF after migrating key5 with putIfAbsent(null)");
+        final byte[] key5Result = rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null);
+        assertMigratedValue(key5Result, "55555");
 
         assertNull(rocksDBStore.putIfAbsent(new Bytes("key12new".getBytes()), null));
-        // two delete operation, however, only one is counted because old CF count can not be less than 0
-        assertEquals(3L, rocksDBStore.approximateNumEntries(), "Expected 0 entries on DEFAULT CF, 3 in headers-aware CF after putIfAbsent with null on non-existing key12new");
 
         // delete() - tests migration on delete
-
-        assertEquals(1 + 0 + 6, rocksDBStore.delete(new Bytes("key6".getBytes())).length,
-            "Expected header-aware format: varint(1) + empty headers(0) + value(6) = 7 bytes for delete() on existing key6");
-        // two delete operation, however, only one is counted because old CF count was zero before already
-        assertEquals(2L, rocksDBStore.approximateNumEntries(), "Expected 0 entries on DEFAULT CF, 2 in headers-aware CF after deleting key6 with delete()");
+        final byte[] key6Result = rocksDBStore.delete(new Bytes("key6".getBytes()));
+        assertMigratedValue(key6Result, "666666");
 
         // iterators should not trigger migration (read-only)
         iteratorsShouldNotMigrateData();
-        assertEquals(2L, rocksDBStore.approximateNumEntries());
 
         rocksDBStore.close();
 
@@ -191,43 +183,42 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
 
     private void iteratorsShouldNotMigrateData() {
         // iterating should not migrate any data, but return all keys over both CFs
-        // Values from DEFAULT CF are converted to header-aware format on the fly: 1 byte varint + [value]
+        // Values from DEFAULT CF are converted to header-aware format on the fly via convertToHeaderFormat
         try (final KeyValueIterator<Bytes, byte[]> itAll = rocksDBStore.all()) {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key1".getBytes(), keyValue.key.get()); // migrated by get()
-                assertEquals(2, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(1) = 2 bytes for key1 from headers-aware CF");
+                assertMigratedValue(keyValue.value, "1");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key11new".getBytes(), keyValue.key.get()); // inserted by putIfAbsent()
-                assertArrayEquals("headers+11111111111".getBytes(), keyValue.value);
+                assertValueWithHeaders(keyValue.value, "11111111111", testHeaders());
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
-                assertArrayEquals("key2".getBytes(), keyValue.key.get()); // migrated by put()
-                assertArrayEquals("headers+22".getBytes(), keyValue.value);
+                assertArrayEquals("key2".getBytes(), keyValue.key.get()); // replaced by put()
+                assertValueWithHeaders(keyValue.value, "22", testHeaders());
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get()); // not migrated, on-the-fly conversion
-                assertEquals(5, keyValue.value.length,
-                    "Expected header-aware format: varint(1) + empty headers(0) + value(4) = 5 bytes for key4 from DEFAULT CF");
+                assertMigratedValue(keyValue.value, "4444");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get()); // migrated by putIfAbsent with null value
-                assertEquals(6, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(5) = 6 bytes for key5 from headers-aware CF");
+                assertMigratedValue(keyValue.value, "55555");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key7".getBytes(), keyValue.key.get()); // not migrated, on-the-fly conversion
-                assertEquals(8, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(7) = 8 bytes for key7 from DEFAULT CF");
+                assertMigratedValue(keyValue.value, "7777777");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key8new".getBytes(), keyValue.key.get()); // inserted by put()
-                assertArrayEquals("headers+88888888".getBytes(), keyValue.value);
+                assertMigratedValue(keyValue.value, "88888888");
             }
             assertFalse(itAll.hasNext());
         }
@@ -237,17 +228,17 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key2".getBytes(), keyValue.key.get());
-                assertArrayEquals("headers+22".getBytes(), keyValue.value);
+                assertValueWithHeaders(keyValue.value, "22", testHeaders());
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get());
-                assertEquals(5, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(4) = 5 bytes for key4 from DEFAULT CF");
+                assertMigratedValue(keyValue.value, "4444");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
-                assertEquals(6, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(5) = 6 bytes for key5 from headers-aware CF");
+                assertMigratedValue(keyValue.value, "55555");
             }
             assertFalse(it.hasNext());
         }
@@ -256,37 +247,37 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key8new".getBytes(), keyValue.key.get());
-                assertArrayEquals("headers+88888888".getBytes(), keyValue.value);
+                assertMigratedValue(keyValue.value, "88888888");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key7".getBytes(), keyValue.key.get());
-                assertEquals(8, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(7) = 8 bytes for key7 from DEFAULT CF");
+                assertMigratedValue(keyValue.value, "7777777");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
-                assertEquals(6, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(5) = 6 bytes for key5 from headers-aware CF");
+                assertMigratedValue(keyValue.value, "55555");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get());
-                assertEquals(5, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(4) = 5 bytes for key4 from DEFAULT CF");
+                assertMigratedValue(keyValue.value, "4444");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key2".getBytes(), keyValue.key.get());
-                assertArrayEquals("headers+22".getBytes(), keyValue.value);
+                assertValueWithHeaders(keyValue.value, "22", testHeaders());
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key11new".getBytes(), keyValue.key.get());
-                assertArrayEquals("headers+11111111111".getBytes(), keyValue.value);
+                assertValueWithHeaders(keyValue.value, "11111111111", testHeaders());
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = itAll.next();
                 assertArrayEquals("key1".getBytes(), keyValue.key.get());
-                assertEquals(2, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(1) = 2 bytes for key1 from headers-aware CF");
+                assertMigratedValue(keyValue.value, "1");
             }
             assertFalse(itAll.hasNext());
         }
@@ -296,17 +287,17 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key5".getBytes(), keyValue.key.get());
-                assertEquals(6, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(5) = 6 bytes for key5 from headers-aware CF");
+                assertMigratedValue(keyValue.value, "55555");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key4".getBytes(), keyValue.key.get());
-                assertEquals(5, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(4) = 5 bytes for key4 from DEFAULT CF");
+                assertMigratedValue(keyValue.value, "4444");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key2".getBytes(), keyValue.key.get());
-                assertArrayEquals("headers+22".getBytes(), keyValue.value);
+                assertValueWithHeaders(keyValue.value, "22", testHeaders());
             }
             assertFalse(it.hasNext());
         }
@@ -315,12 +306,12 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key1".getBytes(), keyValue.key.get());
-                assertEquals(2, keyValue.value.length, "Expected header-aware format: varint(1) + empty headers(0) + value(1) = 2 bytes for key1 from headers-aware CF");
+                assertMigratedValue(keyValue.value, "1");
             }
             {
                 final KeyValue<Bytes, byte[]> keyValue = it.next();
                 assertArrayEquals("key11new".getBytes(), keyValue.key.get());
-                assertArrayEquals("headers+11111111111".getBytes(), keyValue.value);
+                assertValueWithHeaders(keyValue.value, "11111111111", testHeaders());
             }
             assertFalse(it.hasNext());
         }
@@ -365,31 +356,31 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
     }
 
     private void verifyDefaultColumnFamily(final RocksDB db, final ColumnFamilyHandle defaultColumnFamily) throws Exception {
-        // DEFAULT CF should have un-migrated keys, migrated keys should be deleted
+        // DEFAULT CF should have un-migrated keys with plain aggregation bytes; migrated keys should be deleted
         assertNull(db.get(defaultColumnFamily, "unknown".getBytes()));
-        assertNull(db.get(defaultColumnFamily, "key1".getBytes())); // migrated
-        assertNull(db.get(defaultColumnFamily, "key2".getBytes())); // migrated
+        assertNull(db.get(defaultColumnFamily, "key1".getBytes())); // migrated by get()
+        assertNull(db.get(defaultColumnFamily, "key2".getBytes())); // migrated by put()
         assertNull(db.get(defaultColumnFamily, "key3".getBytes())); // deleted
-        assertEquals(4, db.get(defaultColumnFamily, "key4".getBytes()).length); // not migrated
-        assertNull(db.get(defaultColumnFamily, "key5".getBytes())); // migrated
-        assertNull(db.get(defaultColumnFamily, "key6".getBytes())); // migrated
-        assertEquals(7, db.get(defaultColumnFamily, "key7".getBytes()).length); // not migrated
+        assertArrayEquals("4444".getBytes(), db.get(defaultColumnFamily, "key4".getBytes())); // not migrated, plain aggregation
+        assertNull(db.get(defaultColumnFamily, "key5".getBytes())); // migrated by putIfAbsent()
+        assertNull(db.get(defaultColumnFamily, "key6".getBytes())); // migrated by delete()
+        assertArrayEquals("7777777".getBytes(), db.get(defaultColumnFamily, "key7".getBytes())); // not migrated, plain aggregation
         assertNull(db.get(defaultColumnFamily, "key8new".getBytes()));
         assertNull(db.get(defaultColumnFamily, "key11new".getBytes()));
     }
 
     private void verifyHeadersColumnFamily(final RocksDB db, final ColumnFamilyHandle headersColumnFamily) throws Exception {
-        // Headers CF should have all migrated/new keys
+        // Headers CF should have all migrated/new keys in headers-aware format
         assertNull(db.get(headersColumnFamily, "unknown".getBytes()));
-        assertEquals(1 + 0 + 1, db.get(headersColumnFamily, "key1".getBytes()).length); // migrated by get()
-        assertEquals("headers+22".getBytes().length, db.get(headersColumnFamily, "key2".getBytes()).length); // migrated by put() => value is inserted without any conversion
-        assertNull(db.get(headersColumnFamily, "key3".getBytes())); // migrated by put() with null value => deleted
-        assertNull(db.get(headersColumnFamily, "key4".getBytes())); // not migrated, should still be in DEFAULT column family
-        assertEquals(1 + 0 + 5, db.get(headersColumnFamily, "key5".getBytes()).length); // migrated by putIfAbsent with null value
+        assertMigratedValue(db.get(headersColumnFamily, "key1".getBytes()), "1"); // migrated by get()
+        assertValueWithHeaders(db.get(headersColumnFamily, "key2".getBytes()), "22", testHeaders()); // put with headers
+        assertNull(db.get(headersColumnFamily, "key3".getBytes())); // put with null value => deleted
+        assertNull(db.get(headersColumnFamily, "key4".getBytes())); // not migrated, still in DEFAULT CF
+        assertMigratedValue(db.get(headersColumnFamily, "key5".getBytes()), "55555"); // migrated by putIfAbsent
         assertNull(db.get(headersColumnFamily, "key6".getBytes())); // migrated by delete() => deleted
-        assertNull(db.get(headersColumnFamily, "key7".getBytes())); // not migrated, should still be in DEFAULT column family
-        assertEquals("headers+88888888".getBytes().length, db.get(headersColumnFamily, "key8new".getBytes()).length); // added by put()
-        assertEquals("headers+11111111111".getBytes().length, db.get(headersColumnFamily, "key11new".getBytes()).length); // inserted by putIfAbsent()
+        assertNull(db.get(headersColumnFamily, "key7".getBytes())); // not migrated, still in DEFAULT CF
+        assertMigratedValue(db.get(headersColumnFamily, "key8new".getBytes()), "88888888"); // put with empty headers
+        assertValueWithHeaders(db.get(headersColumnFamily, "key11new".getBytes()), "11111111111", testHeaders()); // putIfAbsent with headers
         assertNull(db.get(headersColumnFamily, "key12new".getBytes())); // putIfAbsent with null value on non-existing key
     }
 
@@ -475,7 +466,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
         try {
             kvStore.init(context, kvStore);
 
-            // Write plain key-value pairs to default column family
+            // Write plain aggregation bytes to default column family (simulating pre-headers store data)
             kvStore.put(new Bytes("key1".getBytes()), "1".getBytes());
             kvStore.put(new Bytes("key2".getBytes()), "22".getBytes());
             kvStore.put(new Bytes("key3".getBytes()), "333".getBytes());
@@ -485,6 +476,36 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
             kvStore.put(new Bytes("key7".getBytes()), "7777777".getBytes());
         } finally {
             kvStore.close();
+        }
+    }
+
+    private Headers testHeaders() {
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add(new RecordHeader("source", "test".getBytes(StandardCharsets.UTF_8)));
+        return headers;
+    }
+
+    private byte[] serializeAggWithHeaders(final String aggregation, final Headers headers) {
+        return aggSerializer.serialize(null, AggregationWithHeaders.make(aggregation, headers));
+    }
+
+    private void assertMigratedValue(final byte[] value, final String expectedAggregation) {
+        final Headers headers = AggregationWithHeadersDeserializer.headers(value);
+        assertFalse(headers.iterator().hasNext(), "Migrated value should have empty headers");
+        assertArrayEquals(
+            expectedAggregation.getBytes(StandardCharsets.UTF_8),
+            AggregationWithHeadersDeserializer.rawAggregation(value),
+            "Migrated value should preserve original aggregation: " + expectedAggregation);
+    }
+
+    private void assertValueWithHeaders(final byte[] value, final String expectedAggregation, final Headers expectedHeaders) {
+        final AggregationWithHeaders<String> deserialized = aggDeserializer.deserialize(null, value);
+        assertEquals(expectedAggregation, deserialized.aggregation());
+        for (final Header header : expectedHeaders) {
+            assertArrayEquals(
+                header.value(),
+                deserialized.headers().lastHeader(header.key()).value(),
+                "Expected header '" + header.key() + "' to match");
         }
     }
 }
