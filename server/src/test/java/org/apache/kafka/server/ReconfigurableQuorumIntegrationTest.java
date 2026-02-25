@@ -182,9 +182,7 @@ public class ReconfigurableQuorumIntegrationTest {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
-
-                retryOnExceptionWithTimeout(30_000, 1_000, () ->
-                    admin.addRaftVoter(3000, dirId, Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port))).all().get());
+                admin.addRaftVoter(3000, dirId, Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port))).all().get();
             }
         }
     }
@@ -294,10 +292,8 @@ public class ReconfigurableQuorumIntegrationTest {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
-
-                retryOnExceptionWithTimeout(30_000, 1_000, () ->
-                    admin.addRaftVoter(3000, dirId, Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port)),
-                        new AddRaftVoterOptions().setClusterId(Optional.of("test-cluster"))).all().get());
+                admin.addRaftVoter(3000, dirId, Set.of(new RaftVoterEndpoint("CONTROLLER", "localhost", port)),
+                    new AddRaftVoterOptions().setClusterId(Optional.of("test-cluster"))).all().get();
             }
         }
     }
