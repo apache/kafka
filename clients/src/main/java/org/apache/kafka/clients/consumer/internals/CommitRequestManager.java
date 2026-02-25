@@ -280,19 +280,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 
-    /**
-     * Force an auto-commit regardless of the timer state. Used when assign() is called
-     * to ensure offsets for previously-assigned partitions are committed immediately.
-     *
-     * @return the future for the commit request, or null if auto-commit is not enabled
-     */
-    public CompletableFuture<Void> forceAutoCommitAsync() {
-        if (autoCommitEnabled()) {
-            return doAutoCommitAsync();
-        }
-        return null;
-    }
-
     private CompletableFuture<Void> doAutoCommitAsync() {
         OffsetCommitRequestState requestState = createOffsetCommitRequest(
             subscriptions.allConsumed(),
