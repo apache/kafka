@@ -276,16 +276,36 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     private void maybeAutoCommitAsync() {
         if (autoCommitEnabled() && autoCommitState.get().shouldAutoCommit()) {
-            OffsetCommitRequestState requestState = createOffsetCommitRequest(
-                subscriptions.allConsumed(),
-                Long.MAX_VALUE);
-            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit(requestState);
-            // Reset timer to the interval (even if no request was generated), but ensure that if
-            // the request completes with a retriable error, the timer is reset to send the next
-            // auto-commit after the backoff expires.
-            resetAutoCommitTimer();
-            maybeResetTimerWithBackoff(result);
+            doAutoCommitAsync();
         }
+    }
+
+    /**
+     * Force an auto-commit regardless of the timer state. Used when assign() is called
+     * to ensure offsets for previously-assigned partitions are committed immediately.
+     *
+     * @return the future for the commit request, or null if auto-commit is not enabled
+     */
+    public CompletableFuture<Void> forceAutoCommitAsync() {
+        if (autoCommitEnabled()) {
+            return doAutoCommitAsync();
+        }
+        return null;
+    }
+
+    private CompletableFuture<Void> doAutoCommitAsync() {
+        OffsetCommitRequestState requestState = createOffsetCommitRequest(
+            subscriptions.allConsumed(),
+            Long.MAX_VALUE);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = requestAutoCommit(requestState);
+        // Reset timer to the interval (even if no request was generated), but ensure that if
+        // the request completes with a retriable error, the timer is reset to send the next
+        // auto-commit after the backoff expires.
+        resetAutoCommitTimer();
+        maybeResetTimerWithBackoff(result);
+        // Return a Void future that completes when the commit completes (ignoring errors,
+        // consistent with async auto-commit behavior which logs but does not propagate errors)
+        return result.thenApply(v -> null);
     }
 
     /**

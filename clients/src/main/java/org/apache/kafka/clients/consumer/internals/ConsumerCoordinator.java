@@ -1177,7 +1177,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return false;
     }
 
-    private void maybeAutoCommitOffsetsSync(Timer timer) {
+    public void maybeAutoCommitOffsetsSync(Timer timer) {
         if (autoCommitEnabled) {
             Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
             try {
@@ -1195,9 +1195,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    // FIXME: autocommit
-//    public void maybeAutoCommitOffsetsAsync(long now, boolean force) {
-    // if force, then need to wait until it committed
     public void maybeAutoCommitOffsetsAsync(long now) {
         if (autoCommitEnabled) {
             nextAutoCommitTimer.update(now);

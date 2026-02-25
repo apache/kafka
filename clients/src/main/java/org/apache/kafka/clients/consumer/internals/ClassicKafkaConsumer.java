@@ -608,9 +608,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 // make sure the offsets of topic partitions the consumer is unsubscribing from
                 // are committed since there will be no following rebalance
-                // FIXME: i think this should commmit autocommitoffset, may need a force option to force commit
                 if (coordinator != null)
-                    this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
+                    this.coordinator.maybeAutoCommitOffsetsSync(time.timer(defaultApiTimeoutMs));
 
                 log.info("Assigned to partition(s): {}", partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
                 if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))

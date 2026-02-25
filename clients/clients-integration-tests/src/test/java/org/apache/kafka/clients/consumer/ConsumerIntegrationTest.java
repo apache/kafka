@@ -434,13 +434,24 @@ public class ConsumerIntegrationTest {
             // Give a small window for the async commit to complete
             Thread.sleep(2000);
 
+//            TestUtils.waitForCondition(
+//                    () -> !consumer.poll(Duration.ofMillis(1000)).isEmpty(),
+//                    10000,
+//                    "Should have received records from tp1");
+//            consumer.assign(List.of(tp0));
+//
+//            // Give a small window for the async commit to complete
+//            Thread.sleep(2000);
+//
             // Verify that tp0 offset was committed
             var offsets = admin.listConsumerGroupOffsets(groupId)
                 .partitionsToOffsetAndMetadata().get();
+            System.out.printf("offsets: %s\n", offsets);
             assertTrue(offsets.containsKey(tp0) && offsets.get(tp0) != null,
                 "tp0 offset should have been auto-committed on reassignment, but no committed offset found. " +
                 "This proves the bug: assign() does not trigger immediate auto-commit when timer hasn't expired.");
         }
+
     }
 
     private void sendMsg(ClusterInstance clusterInstance, String topic, int sendMsgNum) {

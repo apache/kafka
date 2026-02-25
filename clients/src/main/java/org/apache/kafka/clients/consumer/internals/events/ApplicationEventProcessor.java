@@ -289,23 +289,32 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
-     * that will not be retried if the commit request fails.
+     * Commit all consumed if auto-commit is enabled, then update the assignment.
+     * The event future is completed only after the commit completes, ensuring
+     * assign() blocks until offsets are durably committed.
      */
     private void process(final AssignmentChangeEvent event) {
+        CompletableFuture<Void> commitFuture = null;
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager manager = requestManagers.commitRequestManager.get();
-            manager.updateTimerAndMaybeCommit(event.currentTimeMs());
+            commitFuture = manager.maybeAutoCommitSyncBeforeRebalance(event.deadlineMs());
         }
 
         log.info("Assigned to partition(s): {}", event.partitions());
         try {
             if (subscriptions.assignFromUser(new HashSet<>(event.partitions())))
                 metadata.requestUpdateForNewTopics();
-
-            event.future().complete(null);
         } catch (Exception e) {
             event.future().completeExceptionally(e);
+            return;
+        }
+
+        if (commitFuture != null) {
+            // Wait for the commit to complete before signaling assign() can return.
+            // Errors are logged by CommitRequestManager, so we complete normally regardless.
+            commitFuture.whenComplete((v, error) -> event.future().complete(null));
+        } else {
+            event.future().complete(null);
         }
     }
 
