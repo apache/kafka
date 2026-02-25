@@ -93,7 +93,7 @@ RUN mkdir -p "/opt/kafka-3.5.2" && chmod a+rw /opt/kafka-3.5.2 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-3.6.2" && chmod a+rw /opt/kafka-3.6.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.6.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.6.2"
 RUN mkdir -p "/opt/kafka-3.7.2" && chmod a+rw /opt/kafka-3.7.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.7.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.7.2"
 RUN mkdir -p "/opt/kafka-3.8.1" && chmod a+rw /opt/kafka-3.8.1 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.8.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.8.1"
-RUN mkdir -p "/opt/kafka-3.9.2" && chmod a+rw /opt/kafka-3.9.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.9.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.2"
+RUN mkdir -p "/opt/kafka-3.9.2" && chmod a+rw /opt/kafka-3.9.2 && curl -s "$KAFKA_MIRROR/kafka_2.13-3.9.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.9.2"
 RUN mkdir -p "/opt/kafka-4.0.1" && chmod a+rw /opt/kafka-4.0.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.0.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.0.1"
 RUN mkdir -p "/opt/kafka-4.1.1" && chmod a+rw /opt/kafka-4.1.1 && curl -s "$KAFKA_MIRROR/kafka_2.13-4.1.1.tgz" | tar xz --strip-components=1 -C "/opt/kafka-4.1.1"
 
