@@ -131,8 +131,6 @@ public class AssignorBenchmarkUtils {
         for (Map.Entry<String, ConsumerGroupMember> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
             ConsumerGroupMember member = memberEntry.getValue();
-
-            // Convert Map<Uuid, Map<Integer, Integer>> to Map<Uuid, Set<Integer>>
             Map<Uuid, Set<Integer>> partitions = new HashMap<>();
             member.assignedPartitions().forEach((topicId, partitionEpochMap) ->
                 partitions.put(topicId, partitionEpochMap.keySet())
