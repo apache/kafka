@@ -435,7 +435,7 @@ The first step to decommission brokers is to mark them as cordoned via the Admin
 
 For example to cordon broker 1:
 
-    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config cordoned.log.dirs=all --entity-type brokers --entity-name 1
+    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config cordoned.log.dirs="*" --entity-type brokers --entity-name 1
     Completed updating config for broker 1.
 
 Then reassign all the partitions from that broker to other brokers in the cluster.
