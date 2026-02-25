@@ -23,7 +23,9 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.KeyQuery;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -57,10 +59,10 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
     }
 
@@ -106,8 +108,8 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
         assertInstanceOf(ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders.class, wrapped);
@@ -118,9 +120,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
         setUp();
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingEnabled(Collections.emptyMap())
-                .withCachingEnabled()
-                .build();
+            .withLoggingEnabled(Collections.emptyMap())
+            .withCachingEnabled()
+            .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertInstanceOf(MeteredTimestampedKeyValueStoreWithHeaders.class, store);
@@ -135,9 +137,9 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("name", "metrics-scope"));
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
         assertInstanceOf(RocksDBTimestampedStoreWithHeaders.class, ((WrappedStateStore) store).wrapped());
     }
 
@@ -147,18 +149,17 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("name", "metrics-scope"));
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
         assertInstanceOf(TimestampedToHeadersStoreAdapter.class, ((WrappedStateStore) store).wrapped());
     }
 
-    @SuppressWarnings("all")
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
         setUpWithoutInner();
         assertThrows(NullPointerException.class, () ->
-                new TimestampedKeyValueStoreBuilderWithHeaders<>(null, Serdes.String(), Serdes.String(), new MockTime()));
+            new TimestampedKeyValueStoreBuilderWithHeaders<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
     @Test
@@ -179,7 +180,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
     public void shouldThrowNullPointerIfTimeIsNull() {
         setUpWithoutInner();
         assertThrows(NullPointerException.class, () ->
-                new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), null));
+            new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
     @Test
@@ -188,7 +189,7 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.metricsScope()).thenReturn(null);
 
         final Exception e = assertThrows(NullPointerException.class,
-                () -> new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+            () -> new TimestampedKeyValueStoreBuilderWithHeaders<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
         assertTrue(e.getMessage().contains("storeSupplier's metricsScope can't be null"));
     }
 
@@ -199,29 +200,29 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final KeyQuery<String, ValueTimestampHeaders<String>> query =
-                KeyQuery.withKey("test-key");
+            KeyQuery.withKey("test-key");
 
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
 
         final UnsupportedOperationException exception = assertThrows(
-                UnsupportedOperationException.class,
-                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
+            UnsupportedOperationException.class,
+            () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
         );
 
         assertTrue(exception.getMessage().contains(
-            "Queries are not supported by in-memory timestamped key-value stores with headers"));
+            "Queries (IQv2) are not supported by timestamped key-value stores with headers yet."));
     }
 
     @Test
@@ -231,31 +232,191 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
 
         builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
 
         final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
 
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped);
 
         final KeyQuery<String, ValueTimestampHeaders<String>> query =
-                KeyQuery.withKey("test-key");
+            KeyQuery.withKey("test-key");
 
         final UnsupportedOperationException exception = assertThrows(
-                UnsupportedOperationException.class,
-                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
+            UnsupportedOperationException.class,
+            () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
         );
 
-        assertTrue(exception.getMessage().contains(
-            "Querying (IQv2) is not supported on TimestampedToHeadersStoreAdapter. " +
-                "This adapter is only meant for backward compatibility at DSL level, and does not support the new querying features."));
+        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
+    }
+
+    @Test
+    public void shouldThrowWhenPlainKeyValueStoreIsProvided() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new RocksDBStore("test-store", "metrics-scope"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> builder.withLoggingDisabled().withCachingDisabled().build()
+        );
+
+        assertTrue(exception.getMessage().contains("Provided store must be a timestamped store"));
+    }
+
+    @Test
+    public void shouldThrowUsingIQv2ForNativeHeadersStore() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(RocksDBTimestampedStoreWithHeaders.class, wrapped);
+
+        final KeyQuery<String, ValueTimestampHeaders<String>> query =
+            KeyQuery.withKey("test-key");
+
+        final UnsupportedOperationException exception = assertThrows(
+            UnsupportedOperationException.class,
+            () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
+        );
+
+        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
+    }
+
+    @Test
+    public void shouldThrowOnGetPositionForInMemoryStores() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+
+        final UnsupportedOperationException exception = assertThrows(
+            UnsupportedOperationException.class,
+            store::getPosition
+        );
+
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
+    }
+
+    @Test
+    public void shouldThrowOnGetPositionForInMemoryStoreMarker() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new InMemoryKeyValueStore("test-store"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+
+        // Unwrap to get directly to the InMemoryTimestampedKeyValueStoreWithHeadersMarker
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertInstanceOf(KeyValueStore.class, wrapped);
+        assertInstanceOf(HeadersBytesStore.class, wrapped);
+
+        final UnsupportedOperationException exception = assertThrows(
+            UnsupportedOperationException.class,
+            wrapped::getPosition
+        );
+
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
+    }
+
+    @Test
+    public void shouldThrowOnGetPositionForHeadersStoreAdapter() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+
+        final UnsupportedOperationException exception = assertThrows(
+            UnsupportedOperationException.class,
+            store::getPosition
+        );
+
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
+    }
+
+    @Test
+    public void shouldThrowOnGetPositionForNativeHeadersStore() {
+        when(supplier.name()).thenReturn("test-store");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
+
+        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
+        );
+
+        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+
+        final UnsupportedOperationException exception = assertThrows(
+            UnsupportedOperationException.class,
+            store::getPosition
+        );
+
+        assertTrue(exception.getMessage().contains("Position is not supported by timestamped key-value stores with headers yet."));
     }
 
 }

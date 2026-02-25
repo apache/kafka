@@ -428,9 +428,9 @@ public class TimestampedKeyValueStoreWithHeadersTest {
     @SuppressWarnings("varargs")
     @SafeVarargs
     private final int produceDataToTopicWithHeaders(final String topic,
-                                                     final long timestamp,
-                                                     final Headers headers,
-                                                     final KeyValue<Integer, String>... keyValues) {
+                                                    final long timestamp,
+                                                    final Headers headers,
+                                                    final KeyValue<Integer, String>... keyValues) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             topic,
             Arrays.asList(keyValues),
@@ -526,14 +526,6 @@ public class TimestampedKeyValueStoreWithHeadersTest {
 
         @Override
         public void process(final Record<Integer, String> record) {
-            // add record to store
-            if (DataTracker.DELETE_VALUE_KEYWORD.equals(record.value())) {
-                // special value "delete" is interpreted as a delete() call from
-                // VersionedStoreContentCheckerProcessor but we do not support it here
-                throw new IllegalArgumentException("Using 'delete' keyword for "
-                    + "TimestampedStoreContentCheckerProcessor will result in the record "
-                    + "timestamp being ignored. Use regular put with null value instead.");
-            }
             final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(record.value(), record.timestamp());
             store.put(record.key(), valueAndTimestamp);
             data.put(record.key(), Optional.ofNullable(valueAndTimestamp));
@@ -560,28 +552,6 @@ public class TimestampedKeyValueStoreWithHeadersTest {
                 }
             }
             return failedChecks;
-        }
-    }
-
-    /**
-     * In-memory copy of data put to versioned store, for verification purposes.
-     */
-    private static class DataTracker {
-
-        // special value which is interpreted as call to store.delete()
-        static final String DELETE_VALUE_KEYWORD = "delete";
-
-        // maps from key -> timestamp -> value.
-        // value is represented as Optional to ensure proper recording of nulls.
-        final Map<Integer, Map<Long, Optional<String>>> data = new HashMap<>();
-
-        void add(final Integer key, final long timestamp, final String value) {
-            data.computeIfAbsent(key, k -> new HashMap<>());
-            if (DELETE_VALUE_KEYWORD.equals(value)) {
-                data.get(key).put(timestamp, Optional.empty());
-            } else {
-                data.get(key).put(timestamp, Optional.ofNullable(value));
-            }
         }
     }
 }

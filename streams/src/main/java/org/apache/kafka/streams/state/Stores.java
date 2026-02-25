@@ -118,12 +118,19 @@ public final class Stores {
     }
 
     /**
-     * Create a persistent {@link KeyValueBytesStoreSupplier}.
+     * Create a persistent {@link KeyValueBytesStoreSupplier} that stores headers along with timestamps.
      * <p>
      * This store supplier can be passed into a
-     * {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
-     * If you want to create a {@link KeyValueStore} or a {@link VersionedKeyValueStore}
-     * you should use {@link KeyValueStore(String)} or
+     * {@link #timestampedKeyValueStoreBuilderWithHeaders(KeyValueBytesStoreSupplier, Serde, Serde)}
+     * to build a {@link TimestampedKeyValueStoreWithHeaders}.
+     * <p>
+     * The store will persist key-value pairs along with record timestamps and headers,
+     * using the format specified in KIP-1271. This allows state stores to maintain
+     * full record context including headers for downstream processing.
+     * <p>
+     * If you want to create a {@link KeyValueStore}, {@link TimestampedKeyValueStore}, or
+     * {@link VersionedKeyValueStore} you should use {@link #persistentKeyValueStore(String)},
+     * {@link #persistentTimestampedKeyValueStore(String)}, or
      * {@link #persistentVersionedKeyValueStore(String, Duration)}, respectively,
      * to create a store supplier instead.
      *

@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -951,6 +952,109 @@ public class StoreUpgradeIntegrationTest {
             },
             60_000L,
             "Could not get expected result in time.");
+    }
+
+    @Test
+    public void shouldFailDowngradeFromTimestampedToRegularKeyValueStore() throws Exception {
+        final Properties props = props();
+        setupAndPopulateTimestampedStore(props);
+        kafkaStreams = null;
+
+        // Attempt to downgrade to regular key-value store - this should fail
+        final StreamsBuilder streamsBuilderForRegularStore = new StreamsBuilder();
+
+        streamsBuilderForRegularStore.addStateStore(
+            Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.Long()))
+            .<Integer, Integer>stream(inputStream)
+            .process(KeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(streamsBuilderForRegularStore.build(), props);
+
+        boolean exceptionThrown = false;
+        try {
+            kafkaStreams.start();
+        } catch (final Exception e) {
+            Throwable cause = e;
+            while (cause != null) {
+                if (cause instanceof ProcessorStateException &&
+                    cause.getMessage() != null &&
+                    cause.getMessage().contains("timestamped key-value store") &&
+                    cause.getMessage().contains("Downgrade from timestamped to regular store is not supported")) {
+                    exceptionThrown = true;
+                    break;
+                }
+                cause = cause.getCause();
+            }
+
+            if (!exceptionThrown) {
+                throw new AssertionError("Expected ProcessorStateException about downgrade not being supported, but got: " + e.getMessage(), e);
+            }
+        } finally {
+            kafkaStreams.close(Duration.ofSeconds(30L));
+        }
+
+        if (!exceptionThrown) {
+            throw new AssertionError("Expected ProcessorStateException to be thrown when attempting to downgrade from timestamped to regular store");
+        }
+    }
+
+    @Test
+    public void shouldSuccessfullyDowngradeFromTimestampedToRegularKeyValueStoreAfterCleanup() throws Exception {
+        final Properties props = props();
+        setupAndPopulateTimestampedStore(props);
+
+        kafkaStreams.cleanUp(); // Delete local state
+        kafkaStreams = null;
+
+        // Now downgrade to regular key-value store - this should succeed because we cleaned up
+        final StreamsBuilder streamsBuilderForRegularStore = new StreamsBuilder();
+
+        streamsBuilderForRegularStore.addStateStore(
+            Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.Long()))
+            .<Integer, Integer>stream(inputStream)
+            .process(KeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(streamsBuilderForRegularStore.build(), props);
+        kafkaStreams.start();
+
+        processKeyValueAndVerifyPlainCount(3, asList(
+            KeyValue.pair(1, 1L),
+            KeyValue.pair(2, 1L),
+            KeyValue.pair(3, 1L)));
+
+        kafkaStreams.close();
+    }
+
+    private void setupAndPopulateTimestampedStore(final Properties props) throws Exception {
+        final StreamsBuilder streamsBuilderForTimestampedStore = new StreamsBuilder();
+
+        streamsBuilderForTimestampedStore.addStateStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                Stores.persistentTimestampedKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.Long()))
+            .<Integer, Integer>stream(inputStream)
+            .process(TimestampedKeyValueProcessor::new, STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(streamsBuilderForTimestampedStore.build(), props);
+        kafkaStreams.start();
+
+        final long timestamp1 = CLUSTER.time.milliseconds();
+        processKeyValueAndVerifyCountWithTimestamp(1, timestamp1, singletonList(
+            KeyValue.pair(1, ValueAndTimestamp.make(1L, timestamp1))));
+
+        final long timestamp2 = CLUSTER.time.milliseconds() + 10;
+        processKeyValueAndVerifyCountWithTimestamp(2, timestamp2, asList(
+            KeyValue.pair(1, ValueAndTimestamp.make(1L, timestamp1)),
+            KeyValue.pair(2, ValueAndTimestamp.make(1L, timestamp2))));
+
+        kafkaStreams.close();
     }
 
     private static class KeyValueProcessor implements Processor<Integer, Integer, Void, Void> {
