@@ -115,11 +115,15 @@ public enum CompressionType {
         private static final int MAX_LEVEL = 22;
         // See ZSTD_CLEVEL_DEFAULT in https://github.com/facebook/zstd/blob/dev/lib/zstd.h#L129
         private static final int DEFAULT_LEVEL = 3;
-        // See ZSTD_c_windowLog in https://github.com/facebook/zstd/blob/lib/zstd.h#L368
-        private static final int WINDOW_LOG = 12; // 4KB — safe and memory-efficient
+        // Window log for zstd-jni (Zstd#setCompressionParameters).
+        // See ZSTD_c_windowLog in https://github.com/luben/zstd-jni/blob/master/src/main/java/com/github/luben/zstd/Zstd.java
+        private static final int WINDOW_LOG = 12; // 4KB -- safe and memory-efficient
+        // Long range mode for zstd-jni (Zstd#setCompressionParameters).
+        // See ZSTD_c_enableLongDistanceMatching in https://github.com/luben/zstd-jni/blob/master/src/main/java/com/github/luben/zstd/Zstd.java
         private static final boolean LONG_RANGE_MODE = false;
+        //Checksum for zstd-jni (Zstd#setCompressionParameters).
+        // See ZSTD_c_checksumFlag in https://github.com/luben/zstd-jni/blob/master/src/main/java/com/github/luben/zstd/Zstd.java
         private static final boolean CHECKSUM = true;
-
 
         @Override
         public int defaultLevel() {
