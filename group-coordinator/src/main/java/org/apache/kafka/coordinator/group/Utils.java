@@ -241,13 +241,16 @@ public class Utils {
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
         int defaultEpoch
     ) {
+        // For legacy static member, the defaultEpoch could be -2(LEAVE_GROUP_STATIC_MEMBER_EPOCH).
+        // But we want to ensure the default memberEpoch assigned is non-negative.
+        int adjustedDefaultEpoch = Math.max(defaultEpoch, 0);
         Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs = new HashMap<>();
         for (ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions tp : topicPartitions) {
             Map<Integer, Integer> partitionEpochs = new HashMap<>();
             List<Integer> partitions = tp.partitions();
             List<Integer> epochs = tp.assignmentEpochs();
             for (int i = 0; i < partitions.size(); i++) {
-                int epoch = (epochs != null && epochs.size() > i) ? epochs.get(i) : defaultEpoch;
+                int epoch = (epochs != null && epochs.size() > i) ? epochs.get(i) : adjustedDefaultEpoch;
                 partitionEpochs.put(partitions.get(i), epoch);
             }
             assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));

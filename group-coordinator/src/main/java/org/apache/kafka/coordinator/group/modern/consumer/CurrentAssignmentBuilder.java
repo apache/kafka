@@ -306,10 +306,10 @@ public class CurrentAssignmentBuilder {
 
         if (subscribedTopicIds.isEmpty() && member.partitionsPendingRevocation().isEmpty()) {
             newAssignedPartitionsWithEpochs = Map.of();
-            // Move all assigned to pending revocation with their epochs
-            newPartitionsPendingRevocationWithEpochs = new HashMap<>(member.assignedPartitions());
+            // Move all assigned to pending revocation
+            newPartitionsPendingRevocationWithEpochs = memberAssignedPartitionsWithEpochs;
         } else {
-            newAssignedPartitionsWithEpochs = new HashMap<>(member.assignedPartitions());
+            newAssignedPartitionsWithEpochs = memberAssignedPartitionsWithEpochs;
             newPartitionsPendingRevocationWithEpochs = new HashMap<>(member.partitionsPendingRevocation());
             for (Map.Entry<Uuid, Map<Integer, Integer>> entry : memberAssignedPartitionsWithEpochs.entrySet()) {
                 if (!subscribedTopicIds.contains(entry.getKey())) {
@@ -319,7 +319,7 @@ public class CurrentAssignmentBuilder {
                     newAssignedPartitionsWithEpochs.remove(entry.getKey());
                     newPartitionsPendingRevocationWithEpochs.merge(
                         entry.getKey(),
-                        member.assignedPartitions().get(entry.getKey()),
+                        entry.getValue(),
                         (existing, additional) -> {
                             existing = new HashMap<>(existing);
                             existing.putAll(additional);
@@ -409,7 +409,7 @@ public class CurrentAssignmentBuilder {
                 !member.partitionsPendingRevocation().getOrDefault(topicId, Map.of()).containsKey(partitionId)
             ) || hasUnreleasedPartitions;
 
-            // Build epochs map for assigned partitions (preserve existing epochs)
+            // Build epochs map for assigned partitions, preserve existing epochs
             if (!assignedPartitions.isEmpty()) {
                 Map<Integer, Integer> partitionEpochs = new HashMap<>();
                 for (Integer partitionId : assignedPartitions) {
@@ -418,7 +418,7 @@ public class CurrentAssignmentBuilder {
                 newAssignedPartitionsWithEpochs.put(topicId, partitionEpochs);
             }
 
-            // Build epochs map for partitions pending revocation (preserve existing epochs)
+            // Build epochs map for partitions pending revocation, preserve existing epochs
             if (!partitionsPendingRevocation.isEmpty()) {
                 Map<Integer, Integer> partitionEpochs = new HashMap<>();
                 for (Integer partitionId : partitionsPendingRevocation) {

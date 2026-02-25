@@ -561,7 +561,7 @@ public class CurrentAssignmentBuilderTest {
                     .setPartitions(Arrays.asList(5, 6))))
             .build();
 
-        // Retained partitions keep original epoch (10), partition 4 was pending revocation so gets new epoch (12),
+        // Retained partitions keep original epoch (10), partition 4 was pending revocation so gets original epoch 10,
         // new partition 7 also gets new epoch (12)
         Map<Uuid, Map<Integer, Integer>> expectedAssignment = Map.of(
             topicId1, Map.of(2, 10, 3, 10, 4, 10),

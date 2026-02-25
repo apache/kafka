@@ -487,15 +487,9 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(
-                    assignedPartitions.entrySet().stream()
-                        .collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            e -> Set.copyOf(e.getValue().keySet())
-                        )),
-                    image)))
+                .setTopicPartitions(topicPartitionsFromEpochMap(assignedPartitions, image)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(
+                .setTopicPartitions(topicPartitionsFromPartitionSet(
                     targetAssignment != null ? targetAssignment.partitions() : Map.of(),
                     image
                 )))
@@ -508,7 +502,21 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setMemberType(useClassicProtocol() ? (byte) 0 : (byte) 1);
     }
 
-    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
+    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromEpochMap(
+        Map<Uuid, Map<Integer, Integer>> partitions,
+        CoordinatorMetadataImage image
+    ) {
+        List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
+        partitions.forEach((topicId, partitionEpochMap) -> {
+            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(topicId)
+                .setTopicName(topicMetadata.name())
+                .setPartitions(new ArrayList<>(partitionEpochMap.keySet()))));
+        });
+        return topicPartitions;
+    }
+
+    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromPartitionSet(
         Map<Uuid, Set<Integer>> partitions,
         CoordinatorMetadataImage image
     ) {

@@ -809,6 +809,7 @@ public class GroupCoordinatorRecordHelpers {
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(topicPartitionsWithEpochs.size());
         topicPartitionsWithEpochs.forEach((topicId, partitionEpochMap) -> {
             List<Integer> partitionList = new ArrayList<>(partitionEpochMap.keySet());
+            Collections.sort(partitionList);
             List<Integer> epochList = partitionList.stream()
                 .map(partitionEpochMap::get)
                 .toList();
