@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterAll;
@@ -469,9 +470,13 @@ public class TimestampedWindowStoreWithHeadersTest {
                         windowEntry.getValue().orElse(null);
 
                     // validate fetch from store
-                    final ValueTimestampHeaders<String> actualValueTimestampHeaders = store.fetch(key, windowStartTime);
-                    if (!Objects.equals(actualValueTimestampHeaders, expectedValueTimestampHeaders)) {
-                        failedChecks++;
+                    try (final WindowStoreIterator<ValueTimestampHeaders<String>> iterator =
+                             store.fetch(key, windowStartTime, windowStartTime)) {
+                        final ValueTimestampHeaders<String> actualValueTimestampHeaders =
+                            iterator.hasNext() ? iterator.next().value : null;
+                        if (!Objects.equals(actualValueTimestampHeaders, expectedValueTimestampHeaders)) {
+                            failedChecks++;
+                        }
                     }
                 }
             }
@@ -530,9 +535,13 @@ public class TimestampedWindowStoreWithHeadersTest {
                     final ValueAndTimestamp<String> expectedValueAndTimestamp = windowEntry.getValue().orElse(null);
 
                     // validate fetch from store
-                    final ValueAndTimestamp<String> actualValueAndTimestamp = store.fetch(key, windowStartTime);
-                    if (!Objects.equals(actualValueAndTimestamp, expectedValueAndTimestamp)) {
-                        failedChecks++;
+                    try (final WindowStoreIterator<ValueAndTimestamp<String>> iterator =
+                             store.fetch(key, windowStartTime, windowStartTime)) {
+                        final ValueAndTimestamp<String> actualValueAndTimestamp =
+                            iterator.hasNext() ? iterator.next().value : null;
+                        if (!Objects.equals(actualValueAndTimestamp, expectedValueAndTimestamp)) {
+                            failedChecks++;
+                        }
                     }
                 }
             }
