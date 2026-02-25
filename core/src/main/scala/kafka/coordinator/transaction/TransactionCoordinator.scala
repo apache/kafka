@@ -459,7 +459,13 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
             } else if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
-              Left(Errors.PRODUCER_FENCED)
+              // Check if client is using the client-facing epoch (nextProducerEpoch) after calling
+              // InitProducerId(keepPreparedTxn=true).  Adding partitions is not allowed in this state.
+              if (txnMetadata.hasNextProducerEpoch() && txnMetadata.nextProducerEpoch() == producerEpoch) {
+                Left(Errors.INVALID_TXN_STATE)
+              } else {
+                Left(Errors.PRODUCER_FENCED)
+              }
             } else if (txnMetadata.state == TransactionState.PREPARE_COMMIT || txnMetadata.state == TransactionState.PREPARE_ABORT) {
               Left(Errors.CONCURRENT_TRANSACTIONS)
             } else if (txnMetadata.state == TransactionState.ONGOING && txnMetadata.topicPartitions.containsAll(partitions)) {

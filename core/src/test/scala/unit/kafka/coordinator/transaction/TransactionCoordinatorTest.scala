@@ -2334,9 +2334,10 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldFenceNewClientEpochDuringOngoingTransaction(): Unit = {
-    // Test that the client-facing epoch is fenced when trying to add partitions during an ongoing
-    // transaction, since only the ongoing transaction epoch is valid for partition operations.
+  def shouldRejectAddPartitionsAfterInitProducerIdWithKeepPreparedTxn(): Unit = {
+    // Test that trying to add partitions with the client-facing epoch (after calling
+    // InitProducerId with keepPreparedTxn=true) returns INVALID_TXN_STATE.
+    // A properly implemented client should never try this, but the server validates it.
 
     setupPrepared2PcTxnWithBumpedClientEpoch()  // Return value not used - only need the setup and mocks
 
@@ -2346,7 +2347,8 @@ class TransactionCoordinatorTest {
     newPartitions.add(new TopicPartition("topic2", 0))
 
     // Action: Client tries AddPartitions with the client-facing epoch
-    // This should be fenced because during an ongoing transaction, only the ongoing epoch is valid
+    // This is invalid because after InitProducerId(keepPreparedTxn=true), the client should
+    // not add partitions.
     coordinator.handleAddPartitionsToTransaction(
       transactionalId,
       producerId,
@@ -2356,9 +2358,7 @@ class TransactionCoordinatorTest {
       TV_2
     )
 
-    // Verify: Returns PRODUCER_FENCED (new epoch is for AFTER transaction completes, not during)
-    // Note: Client won't actually try this in practice because it would use the ongoing epoch
-    // But this tests the server-side validation
-    assertEquals(Errors.PRODUCER_FENCED, error)
+    // Verify: Returns INVALID_TXN_STATE (cannot add partitions in this state)
+    assertEquals(Errors.INVALID_TXN_STATE, error)
   }
 }
