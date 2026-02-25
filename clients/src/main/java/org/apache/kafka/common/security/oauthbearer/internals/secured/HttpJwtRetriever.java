@@ -25,12 +25,12 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHand
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -317,9 +317,6 @@ public class HttpJwtRetriever implements JwtRetriever {
 
     @Override
     public void close() throws IOException {
-        // Close the request formatter if it implements Closeable (e.g., ClientAssertionRequestFormatter)
-        if (requestFormatter instanceof Closeable) {
-            ((Closeable) requestFormatter).close();
-        }
+        Utils.maybeCloseQuietly(requestFormatter, "request formatter");
     }
 }

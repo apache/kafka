@@ -52,7 +52,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  *
  * <p>
  * The created supplier can be invoked repeatedly to obtain assertions as needed (for example, when
- * refreshing tokens). For file-based assertions, the same assertion is returned on each invocation.
+ * refreshing tokens). For file-based assertions, the assertion is cached and reloaded automatically when the file changes on disk.
  * For locally-generated assertions, a new assertion with updated timestamps is created on each invocation.
  * </p>
  */

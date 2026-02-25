@@ -64,11 +64,10 @@ public class AssertionUtils {
      */
     public static PrivateKey privateKey(byte[] privateKeyContents,
                                         Optional<String> passphrase) throws GeneralSecurityException, IOException {
+        byte[] derEncodedBytes = Base64.getDecoder().decode(privateKeyContents);
         PKCS8EncodedKeySpec keySpec;
-
         if (passphrase.isPresent()) {
-            byte[] derEncoded = Base64.getDecoder().decode(privateKeyContents);
-            EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(derEncoded);
+            EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(derEncodedBytes);
             String algorithm = keyInfo.getAlgName();
             SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(algorithm);
             SecretKey pbeKey = secretKeyFactory.generateSecret(new PBEKeySpec(passphrase.get().toCharArray()));
@@ -76,8 +75,7 @@ public class AssertionUtils {
             cipher.init(Cipher.DECRYPT_MODE, pbeKey, keyInfo.getAlgParameters());
             keySpec = keyInfo.getKeySpec(cipher);
         } else {
-            byte[] pkcs8EncodedBytes = Base64.getDecoder().decode(privateKeyContents);
-            keySpec = new PKCS8EncodedKeySpec(pkcs8EncodedBytes);
+            keySpec = new PKCS8EncodedKeySpec(derEncodedBytes);
         }
 
         // Try RSA first, then EC. PKCS#8 encoded keys are algorithm-agnostic, so we need to

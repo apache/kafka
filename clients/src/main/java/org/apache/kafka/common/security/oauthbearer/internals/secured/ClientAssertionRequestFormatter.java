@@ -89,10 +89,10 @@ public class ClientAssertionRequestFormatter implements HttpRequestFormatter, Cl
         requestParameters.append("client_assertion_type=").append("urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer");
         requestParameters.append("&client_assertion=").append(assertionSupplier.get());
         requestParameters.append("&grant_type=").append(URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8));
-        if (clientId != null && !clientId.isEmpty()) {
+        if (!Utils.isBlank(clientId)) {
             requestParameters.append("&client_id=").append(clientId);
         }
-        if (scope != null && !scope.trim().isEmpty()) {
+        if (!Utils.isBlank(scope)) {
             String encodedScope = URLEncoder.encode(scope.trim(), StandardCharsets.UTF_8);
             requestParameters.append("&scope=").append(encodedScope);
         }
