@@ -21,76 +21,88 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import java.util.List;
 import java.util.Objects;
 
-public class TimestampedKeyValueStoreBuilder<K, V>
-    extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> {
+/**
+ * Builder for {@link TimestampedKeyValueStoreWithHeaders} instances.
+ *
+ * This is analogous to {@link TimestampedKeyValueStoreBuilder}, but uses
+ * {@link ValueTimestampHeaders} as the value wrapper and wires up the
+ * header-aware store stack (change-logging, caching, metering).
+ */
+public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
+    extends AbstractStoreBuilder<K, ValueTimestampHeaders<V>, TimestampedKeyValueStoreWithHeaders<K, V>> {
 
     private final KeyValueBytesStoreSupplier storeSupplier;
 
-    public TimestampedKeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
-                                           final Serde<K> keySerde,
-                                           final Serde<V> valueSerde,
-                                           final Time time) {
+    public TimestampedKeyValueStoreBuilderWithHeaders(final KeyValueBytesStoreSupplier storeSupplier,
+                                                      final Serde<K> keySerde,
+                                                      final Serde<V> valueSerde,
+                                                      final Time time) {
         super(
             storeSupplier.name(),
             keySerde,
-            valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde),
-            time);
+            valueSerde == null ? null : new ValueTimestampHeadersSerde<>(valueSerde),
+            time
+        );
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
     }
 
     @Override
-    public TimestampedKeyValueStore<K, V> build() {
+    public TimestampedKeyValueStoreWithHeaders<K, V> build() {
         KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
-        if (!(store instanceof TimestampedBytesStore)) {
+
+        if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
-                store = new KeyValueToTimestampedKeyValueByteStoreAdapter(store);
+                store = new TimestampedToHeadersStoreAdapter(store);
             } else {
-                store = new InMemoryTimestampedKeyValueStoreMarker(store);
+                store = new InMemoryTimestampedKeyValueStoreWithHeadersMarker(store);
             }
         }
-        return new MeteredTimestampedKeyValueStore<>(
+
+        return new MeteredTimestampedKeyValueStoreWithHeaders<>(
             maybeWrapCaching(maybeWrapLogging(store)),
             storeSupplier.metricsScope(),
             time,
             keySerde,
-            valueSerde);
+            valueSerde
+        );
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
         if (!enableCaching) {
             return inner;
         }
-        return new CachingKeyValueStore(inner, CachingKeyValueStore.CacheType.TIMESTAMPED_KEY_VALUE_STORE);
+        return new CachingKeyValueStore(inner, CachingKeyValueStore.CacheType.TIMESTAMPED_KEY_VALUE_STORE_WITH_HEADERS);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+        return new ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders(inner);
     }
 
-    private static final class InMemoryTimestampedKeyValueStoreMarker
+    private static final class InMemoryTimestampedKeyValueStoreWithHeadersMarker
         extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, Bytes, byte[]>
-        implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
+        implements KeyValueStore<Bytes, byte[]>, HeadersBytesStore {
 
-        private InMemoryTimestampedKeyValueStoreMarker(final KeyValueStore<Bytes, byte[]> wrapped) {
+        private InMemoryTimestampedKeyValueStoreWithHeadersMarker(final KeyValueStore<Bytes, byte[]> wrapped) {
             super(wrapped);
             if (wrapped.persistent()) {
                 throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
@@ -159,16 +171,15 @@ public class TimestampedKeyValueStoreBuilder<K, V>
 
         @Override
         public <R> QueryResult<R> query(final Query<R> query,
-            final PositionBound positionBound,
-            final QueryConfig config) {
+                                        final PositionBound positionBound,
+                                        final QueryConfig config) {
 
-            final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-            final QueryResult<R> result = wrapped().query(query, positionBound, config);
-            if (config.isCollectExecutionInfo()) {
-                final long end = System.nanoTime();
-                result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");
-            }
-            return result;
+            throw new UnsupportedOperationException("Queries (IQv2) are not supported by timestamped key-value stores with headers yet.");
+        }
+
+        @Override
+        public Position getPosition() {
+            return wrapped().getPosition();
         }
 
         @Override
