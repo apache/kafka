@@ -25,7 +25,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHeaders;
 import org.apache.kafka.streams.state.internals.VersionedKeyValueStoreBuilder;
 
 import org.slf4j.Logger;
@@ -62,11 +61,13 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
-        } else {
+        } else if (storeFormat.equals(DslStoreFormat.DEFAULT)) {
             builder = Stores.timestampedKeyValueStoreBuilder(
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
+        } else {
+            throw new IllegalArgumentException("Unsupported store format: " + storeFormat);
         }
 
         if (materialized.loggingEnabled()) {
@@ -78,8 +79,6 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
         if (materialized.cachingEnabled()) {
             if (builder instanceof VersionedKeyValueStoreBuilder) {
                 LOG.info("Not enabling caching for store '{}' as versioned stores do not support caching.", supplier.name());
-            } else if (builder instanceof TimestampedKeyValueStoreBuilderWithHeaders) {
-                LOG.info("Not enabling caching for store '{}' as headers-aware stores do not yet support caching.", supplier.name());
             } else {
                 builder.withCachingEnabled();
             }
