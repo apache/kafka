@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -224,11 +225,16 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldDetectIfTheOffsetColumnFamilyAlreadyExists() {
+        final TopicPartition tp0 = new TopicPartition("topic-0", 0);
+        final TopicPartition tp1 = new TopicPartition("topic-1", 0);
+        final Map<TopicPartition, Long> offsetsToCommit = Map.of(tp0, 100L, tp1, 200L);
         rocksDBStore = getRocksDBStore();
         rocksDBStore.init(context, rocksDBStore);
-        rocksDBStore.commit(Map.of());
+        rocksDBStore.commit(offsetsToCommit);
         rocksDBStore.close();
         rocksDBStore.init(context, rocksDBStore);
+        assertEquals(100L, rocksDBStore.committedOffset(tp0));
+        assertEquals(200L, rocksDBStore.committedOffset(tp1));
         rocksDBStore.close();
     }
 

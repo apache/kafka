@@ -638,7 +638,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public Long committedOffset(final TopicPartition partition) {
-        return KeyValueStore.super.committedOffset(partition);
+        try {
+            return cfAccessor.getCommitedOffset(dbAccessor, partition);
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error while getting committed offset for partition " + partition, e);
+        }
     }
 
     @Override
@@ -855,6 +859,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                         final WriteBatchInterface batch) throws RocksDBException;
 
         void close();
+
+        Long getCommitedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
     }
 
     class SingleColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
@@ -982,6 +988,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void close() {
+            super.close();
             columnFamily.close();
         }
     }

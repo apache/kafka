@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.rocksdb.ColumnFamilyHandle;
@@ -29,7 +29,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
 
     private final ColumnFamilyHandle offsetColumnFamilyHandle;
     private final StringSerializer stringSerializer = new StringSerializer();
-    private final LongSerializer longSerializer = new LongSerializer();
+    private final Serdes.LongSerde longSerde = new Serdes.LongSerde();
 
     AbstractColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamilyHandle) {
         this.offsetColumnFamilyHandle = offsetColumnFamilyHandle;
@@ -42,7 +42,7 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
             final TopicPartition tp = entry.getKey();
             final Long offset = entry.getValue();
             final byte[] key = stringSerializer.serialize(null, tp.toString());
-            final byte[] value = longSerializer.serialize(null, offset);
+            final byte[] value = longSerde.serializer().serialize(null, offset);
             accessor.put(offsetColumnFamilyHandle, key, value);
         }
         accessor.flush(offsetColumnFamilyHandle);
@@ -51,6 +51,15 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     @Override
     public void close() {
         offsetColumnFamilyHandle.close();
+    }
+
+    @Override
+    public final Long getCommitedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException {
+        final byte[] valueBytes = accessor.get(offsetColumnFamilyHandle, stringSerializer.serialize(null, partition.toString()));
+        if (valueBytes != null) {
+            return longSerde.deserializer().deserialize(null, valueBytes);
+        }
+        return null;
     }
 
     protected abstract void commit(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
