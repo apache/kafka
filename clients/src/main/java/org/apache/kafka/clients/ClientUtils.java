@@ -53,6 +53,49 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
+    /**
+     * Resolves a single URL to one or more InetSocketAddress based on the DNS lookup strategy.
+     *
+     * @param url the original URL string (for logging)
+     * @param host the hostname extracted from the URL
+     * @param port the port extracted from the URL
+     * @param clientDnsLookup the DNS lookup strategy
+     * @return list of resolved addresses (may be empty if addresses are unresolved)
+     * @throws UnknownHostException if DNS resolution fails
+     */
+    private static List<InetSocketAddress> resolveAddress(
+            String url,
+            String host,
+            Integer port,
+            ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+
+        List<InetSocketAddress> addresses = new ArrayList<>();
+
+        if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
+            InetAddress[] inetAddresses = InetAddress.getAllByName(host);
+            for (InetAddress inetAddress : inetAddresses) {
+                String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                if (address.isUnresolved()) {
+                    log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}",
+                            url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
+                } else {
+                    addresses.add(address);
+                }
+            }
+        } else {
+            InetSocketAddress address = new InetSocketAddress(host, port);
+            if (address.isUnresolved()) {
+                log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}",
+                        url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+            } else {
+                addresses.add(address);
+            }
+        }
+
+        return addresses;
+    }
+
     public static List<InetSocketAddress> validateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
         if (urls == null) {
@@ -62,30 +105,10 @@ public final class ClientUtils {
             final String host = getHost(url);
             final Integer port = getPort(url);
 
-            if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
-                InetAddress[] inetAddresses;
-                try {
-                    inetAddresses = InetAddress.getAllByName(host);
-                } catch (UnknownHostException e) {
-                    inetAddresses = new InetAddress[0];
-                }
-
-                for (InetAddress inetAddress : inetAddresses) {
-                    String resolvedCanonicalName = inetAddress.getCanonicalHostName();
-                    InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
-                    if (address.isUnresolved()) {
-                        log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
-                    } else {
-                        addresses.add(address);
-                    }
-                }
-            } else {
-                InetSocketAddress address = new InetSocketAddress(host, port);
-                if (address.isUnresolved()) {
-                    log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
-                } else {
-                    addresses.add(address);
-                }
+            try {
+                addresses.addAll(resolveAddress(url, host, port, clientDnsLookup));
+            } catch (UnknownHostException e) {
+                // Silently ignore - this matches the original behavior
             }
         });
         return addresses;
@@ -111,25 +134,7 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
-                        InetAddress[] inetAddresses = InetAddress.getAllByName(host);
-                        for (InetAddress inetAddress : inetAddresses) {
-                            String resolvedCanonicalName = inetAddress.getCanonicalHostName();
-                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
-                            if (address.isUnresolved()) {
-                                log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname {} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
-                            } else {
-                                addresses.add(address);
-                            }
-                        }
-                    } else {
-                        InetSocketAddress address = new InetSocketAddress(host, port);
-                        if (address.isUnresolved()) {
-                            log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
-                        } else {
-                            addresses.add(address);
-                        }
-                    }
+                    addresses.addAll(resolveAddress(url, host, port, clientDnsLookup));
 
                 } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
