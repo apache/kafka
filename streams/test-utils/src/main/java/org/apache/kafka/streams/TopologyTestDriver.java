@@ -880,6 +880,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     public Map<String, StateStore> getAllStateStores() {
@@ -912,6 +913,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     public StateStore getStateStore(final String name) throws IllegalArgumentException {
@@ -993,6 +995,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1021,6 +1024,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1045,6 +1049,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1069,6 +1074,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1098,6 +1104,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
