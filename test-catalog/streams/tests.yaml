@@ -4070,6 +4070,14 @@ org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStoreTest:
 - shouldLogPuts
 - shouldLogPutsWithPosition
 - shouldLogRemoves
+org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStoreWithHeadersTest:
+- shouldDelegateInit
+- shouldHandleEmptyHeaders
+- shouldHandleMultipleHeadersInSingleRecord
+- shouldHandleNullValueInPut
+- shouldLogPutWithHeaders
+- shouldLogPutWithPosition
+- shouldLogRemoveWithRecordContextHeaders
 org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedKeyValueBytesStoreTest:
 - shouldDelegateInit
 - shouldLogChangesOnPutAll
