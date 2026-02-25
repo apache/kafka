@@ -33,8 +33,7 @@ import java.util.Objects;
  * header-aware storage with dual-column-family migration support from
  * plain key-value format to headers format.
  */
-class KeyValueSegmentWithHeaders extends RocksDBStoreWithHeaders
-    implements Comparable<KeyValueSegmentWithHeaders>, Segment {
+class KeyValueSegmentWithHeaders extends RocksDBStoreWithHeaders implements Segment {
 
     public final long id;
 
@@ -54,13 +53,13 @@ class KeyValueSegmentWithHeaders extends RocksDBStoreWithHeaders
     }
 
     @Override
-    public void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
-        throw new UnsupportedOperationException();
+    public long id() {
+        return id;
     }
 
     @Override
-    public int compareTo(final KeyValueSegmentWithHeaders segment) {
-        return Long.compare(id, segment.id);
+    public void deleteRange(final Bytes keyFrom, final Bytes keyTo) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
