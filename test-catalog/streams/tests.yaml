@@ -3096,6 +3096,7 @@ org.apache.kafka.streams.processor.internals.TaskManagerTest:
 - shouldNotCommitOnHandleAssignmentIfOnlyStandbyTaskClosed
 - shouldNotCompleteRestorationIfTaskCannotCompleteRestoration
 - shouldNotCompleteRestorationIfTasksCannotInitialize
+- shouldNotComputeOffsetSumForRunningStatelessTask
 - shouldNotFailForTimeoutExceptionOnConsumerCommit
 - shouldNotFailOnTimeoutException
 - shouldNotLockAnythingIfStateDirIsEmpty
