@@ -1143,10 +1143,12 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testAsDescribedGroupPrefersConfiguredTopologyOverStreamsTopology
 - testAsDescribedGroupWithStreamsTopologyHavingSubtopologies
 - testAsListedGroup
+- testCacheEndpointToPartitionsAndRetrieve
 - testCancelTimers
 - testComputeMetadataHash
 - testCreateGroupTombstoneRecords
 - testDeletingMemberRemovesProcessId
+- testGetCachedEndpointToPartitionsReturnsEmptyWhenNoCache
 - testGetMemberOrThrow
 - testGetOrCreateDefaultMember
 - testGetOrCreateUninitializedMember
@@ -1158,10 +1160,13 @@ org.apache.kafka.coordinator.group.streams.StreamsGroupTest:
 - testNoStaticMember
 - testOffsetExpirationCondition
 - testRemoveMember
+- testRemoveMemberRemovesCacheEntry
 - testRemoveStaticMember
 - testRemoveTaskProcessIds
+- testSetConfiguredTopologyClearsCache
 - testShutdownRequestedMethods
 - testUpdateMember
+- testUpdateMemberInvalidatesCache
 - testUpdatingMemberUpdatesProcessId
 - testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsNotReleased
 - testUpdatingMemberUpdatesTaskProcessIdWhenPartitionIsReassignedBeforeBeingRevoked
