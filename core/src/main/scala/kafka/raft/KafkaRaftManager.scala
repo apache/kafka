@@ -21,7 +21,7 @@ import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.{OptionalInt, Collection => JCollection, Map => JMap}
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, Executors}
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, MetadataRecoveryStrategy, NetworkClient}
@@ -41,7 +41,7 @@ import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateSt
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
+import org.apache.kafka.server.util.{DefaultEventExecutor, FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.storage.internals.log.{LogManager, UnifiedLog}
@@ -128,7 +128,11 @@ class KafkaRaftManager[T](
   private val expirationTimer = new SystemTimer("raft-expiration-executor")
   private val expirationService = new TimingWheelExpirationService(expirationTimer)
   override val client: KafkaRaftClient[T] = buildRaftClient()
-  private val clientDriver = new KafkaRaftClientDriver[T](client, threadNamePrefix, fatalFaultHandler, logContext)
+  private val eventExecutor = new DefaultEventExecutor(
+    Executors.defaultThreadFactory(),
+    Integer.MAX_VALUE
+  )
+  private val clientDriver = new KafkaRaftClientDriver[T](client, eventExecutor, fatalFaultHandler, logContext)
 
   def startup(): Unit = {
     client.initialize(

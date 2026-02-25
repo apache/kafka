@@ -21,84 +21,100 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.fault.FaultHandler;
-import org.apache.kafka.server.util.ShutdownableThread;
+import org.apache.kafka.server.util.EventExecutor;
 
 import org.slf4j.Logger;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * A single-threaded driver for {@link KafkaRaftClient}. Client APIs will only do useful work
- * as long as the driver's thread is active. To start the thread, use {@link #start()}. To
- * stop it, use {@link #shutdown()}.
+ * as long as the driver is active. To start it, use {@link #start()}. To stop it, use
+ * {@link #shutdown()}.
  *
- * Note that the driver is responsible for the lifecycle of the {@link KafkaRaftClient} instance.
+ * <p>The driver uses an {@link EventExecutor} to schedule poll events. Each poll event calls
+ * {@link KafkaRaftClient#poll()} and then re-submits itself for the next iteration, forming
+ * a self-rescheduling loop.
+ *
+ * <p>Note that the driver is responsible for the lifecycle of the {@link KafkaRaftClient} instance.
  * Shutdown of the driver through {@link #shutdown()} ensures that the client itself is properly
  * shutdown and closed.
  *
- * @param <T> See {@link KafkaRaftClient<T>}
+ * @param <T> See {@link KafkaRaftClient}
  */
-public class KafkaRaftClientDriver<T> extends ShutdownableThread {
+public class KafkaRaftClientDriver<T> {
     /**
      * Closed in {@link #shutdown()} after shutdown completes.
      */
     private final KafkaRaftClient<T> client;
+    private final EventExecutor eventExecutor;
     private final Logger log;
     private final FaultHandler fatalFaultHandler;
 
     public KafkaRaftClientDriver(
         KafkaRaftClient<T> client,
-        String threadNamePrefix,
+        EventExecutor eventExecutor,
         FaultHandler fatalFaultHandler,
         LogContext logContext
     ) {
-        super(threadNamePrefix + "-io-thread", false);
         this.client = client;
+        this.eventExecutor = eventExecutor;
         this.fatalFaultHandler = fatalFaultHandler;
         this.log = logContext.logger(KafkaRaftClientDriver.class);
     }
 
-    @Override
-    public void doWork() {
+    /**
+     * Start the driver by submitting the first poll event to the event executor.
+     */
+    public void start() {
+        schedulePoll();
+    }
+
+    private void schedulePoll() {
         try {
-            client.poll();
-        } catch (Throwable t) {
-            throw fatalFaultHandler.handleFault("Unexpected error in raft IO thread", t);
+            eventExecutor.submit(this::doPoll);
+        } catch (RejectedExecutionException e) {
+            // Event executor has been shut down; stop polling
         }
     }
 
-    @Override
-    public boolean initiateShutdown() {
-        if (super.initiateShutdown()) {
-            client.shutdown(5000).whenComplete((na, exception) -> {
-                if (exception != null) {
-                    log.error("Graceful shutdown of RaftClient failed", exception);
-                } else {
-                    log.info("Completed graceful shutdown of RaftClient");
-                }
-            });
-            return true;
-        } else {
-            return false;
+    private void doPoll() {
+        try {
+            client.poll();
+        } catch (Throwable t) {
+            fatalFaultHandler.handleFault("Unexpected error in raft IO thread", t);
+            return;
+        }
+        if (client.isRunning()) {
+            schedulePoll();
         }
     }
 
     /**
-     * Shutdown the thread. In addition to stopping any utilized threads, this will
-     * close the {@link KafkaRaftClient} instance.
+     * Shutdown the driver. This initiates a graceful shutdown of the {@link KafkaRaftClient},
+     * waits for the event executor to drain all pending events, and then closes the client.
      */
-    @Override
     public void shutdown() throws InterruptedException {
+        client.shutdown(5000).whenComplete((v, ex) -> {
+            if (ex != null) {
+                log.error("Graceful shutdown of RaftClient failed", ex);
+            } else {
+                log.info("Completed graceful shutdown of RaftClient");
+            }
+        });
         try {
-            super.shutdown();
+            eventExecutor.shutdown().get();
+        } catch (ExecutionException e) {
+            log.error("Error while shutting down event executor", e);
         } finally {
             client.close();
         }
     }
 
-    @Override
     public boolean isRunning() {
-        return client.isRunning() && !isThreadFailed();
+        return client.isRunning();
     }
 
     public CompletableFuture<ApiMessage> handleRequest(
@@ -123,5 +139,4 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
     public KafkaRaftClient<T> client() {
         return client;
     }
-
 }
