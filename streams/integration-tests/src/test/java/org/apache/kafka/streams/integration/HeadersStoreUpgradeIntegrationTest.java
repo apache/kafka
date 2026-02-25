@@ -28,14 +28,19 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.TestUtils;
@@ -50,14 +55,22 @@ import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Tag("integration")
 public class HeadersStoreUpgradeIntegrationTest {
     private static final String STORE_NAME = "store";
+    private static final String WINDOW_STORE_NAME = "window-store";
+    private static final long WINDOW_SIZE_MS = 1000L;
+    private static final long RETENTION_MS = Duration.ofDays(1).toMillis();
+
     private String inputStream;
 
     private KafkaStreams kafkaStreams;
@@ -347,6 +360,294 @@ public class HeadersStoreUpgradeIntegrationTest {
         @Override
         public void process(final Record<String, String> record) {
             store.put(record.key(), ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()));
+        }
+    }
+
+    @Test
+    public void shouldMigrateInMemoryTimestampedWindowStoreToTimestampedWindowStoreWithHeaders() throws Exception {
+        shouldMigrateTimestampedWindowStoreToTimestampedWindowStoreWithHeaders(false);
+    }
+
+    @Test
+    public void shouldMigratePersistentTimestampedWindowStoreToTimestampedWindowStoreWithHeaders() throws Exception {
+        shouldMigrateTimestampedWindowStoreToTimestampedWindowStoreWithHeaders(true);
+    }
+
+    /**
+     * Tests migration from TimestampedWindowStore (v2) to TimestampedWindowStoreWithHeaders (v3).
+     * This is a true migration where both supplier and builder are upgraded.
+     */
+    private void shouldMigrateTimestampedWindowStoreToTimestampedWindowStoreWithHeaders(final boolean persistentStore) throws Exception {
+        // Phase 1: Run with old v2 store
+        final StreamsBuilder oldBuilder = new StreamsBuilder();
+        oldBuilder.addStateStore(
+                Stores.timestampedWindowStoreBuilder(
+                    persistentStore
+                        ? Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false)
+                        : Stores.inMemoryWindowStore(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedProcessor::new, WINDOW_STORE_NAME);
+
+        final Properties props = props();
+        kafkaStreams = new KafkaStreams(oldBuilder.build(), props);
+        kafkaStreams.start();
+
+        final long baseTime = CLUSTER.time.milliseconds();
+        processWindowedKeyValueAndVerifyTimestamped("key1", "value1", baseTime + 100);
+        processWindowedKeyValueAndVerifyTimestamped("key2", "value2", baseTime + 200);
+        processWindowedKeyValueAndVerifyTimestamped("key3", "value3", baseTime + 300);
+
+        kafkaStreams.close();
+        kafkaStreams = null;
+
+        final StreamsBuilder newBuilder = new StreamsBuilder();
+        newBuilder.addStateStore(
+                Stores.timestampedWindowStoreWithHeadersBuilder(
+                    persistentStore
+                        ? Stores.persistentTimestampedWindowStoreWithHeaders(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false)
+                        : Stores.inMemoryWindowStore(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedWithHeadersProcessor::new, WINDOW_STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(newBuilder.build(), props);
+        kafkaStreams.start();
+
+        verifyWindowValueWithEmptyHeaders("key1", "value1", baseTime + 100);
+        verifyWindowValueWithEmptyHeaders("key2", "value2", baseTime + 200);
+        verifyWindowValueWithEmptyHeaders("key3", "value3", baseTime + 300);
+
+        final Headers headers = new RecordHeaders();
+        headers.add("source", "migration-test".getBytes());
+        headers.add("version", "v3".getBytes());
+
+        processWindowedKeyValueWithHeadersAndVerify("key3", "value3-updated", baseTime + 350, headers, headers);
+        processWindowedKeyValueWithHeadersAndVerify("key4", "value4", baseTime + 400, headers, headers);
+
+        kafkaStreams.close();
+    }
+
+    @Test
+    public void shouldProxyTimestampedWindowStoreToTimestampedWindowStoreWithHeaders() throws Exception {
+        final StreamsBuilder oldBuilder = new StreamsBuilder();
+        oldBuilder.addStateStore(
+                Stores.timestampedWindowStoreBuilder(
+                    Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedProcessor::new, WINDOW_STORE_NAME);
+
+        final Properties props = props();
+        kafkaStreams = new KafkaStreams(oldBuilder.build(), props);
+        kafkaStreams.start();
+
+        final long baseTime = CLUSTER.time.milliseconds();
+        processWindowedKeyValueAndVerifyTimestamped("key1", "value1", baseTime + 100);
+        processWindowedKeyValueAndVerifyTimestamped("key2", "value2", baseTime + 200);
+        processWindowedKeyValueAndVerifyTimestamped("key3", "value3", baseTime + 300);
+
+        kafkaStreams.close();
+        kafkaStreams = null;
+
+        // Restart with v3 builder BUT v2 supplier (proxy/adapter mode)
+        final StreamsBuilder newBuilder = new StreamsBuilder();
+        newBuilder.addStateStore(
+                Stores.timestampedWindowStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),  // v2 supplier!
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedWithHeadersProcessor::new, WINDOW_STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(newBuilder.build(), props);
+        kafkaStreams.start();
+
+        verifyWindowValueWithEmptyHeaders("key1", "value1", baseTime + 100);
+        verifyWindowValueWithEmptyHeaders("key2", "value2", baseTime + 200);
+        verifyWindowValueWithEmptyHeaders("key3", "value3", baseTime + 300);
+
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add("source", "proxy-test".getBytes());
+
+        // In proxy mode, headers are stripped when writing to v2 store
+        // So we expect empty headers when reading back
+        final Headers expectedHeaders = new RecordHeaders();
+
+        processWindowedKeyValueWithHeadersAndVerify("key3", "value3-updated", baseTime + 350, headers, expectedHeaders);
+        processWindowedKeyValueWithHeadersAndVerify("key4", "value4", baseTime + 400, headers, expectedHeaders);
+
+        kafkaStreams.close();
+    }
+
+    private void processWindowedKeyValueAndVerifyTimestamped(final String key,
+                                                              final String value,
+                                                              final long timestamp) throws Exception {
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair(key, value)),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class),
+            timestamp,
+            false);
+
+        TestUtils.waitForCondition(() -> {
+            try {
+                final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store =
+                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+                if (store == null) {
+                    return false;
+                }
+
+                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
+                final ValueAndTimestamp<String> result = store.fetch(key, windowStart);
+
+                return result != null
+                    && result.value().equals(value)
+                    && result.timestamp() == timestamp;
+            } catch (final Exception e) {
+                return false;
+            }
+        }, 60_000L, "Could not verify timestamped value in time.");
+    }
+
+    private void processWindowedKeyValueWithHeadersAndVerify(final String key,
+                                                              final String value,
+                                                              final long timestamp,
+                                                              final Headers headers,
+                                                              final Headers expectedHeaders) throws Exception {
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair(key, value)),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class),
+            headers,
+            timestamp,
+            false);
+
+        TestUtils.waitForCondition(() -> {
+            try {
+                final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
+                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.windowStore());
+
+                if (store == null) {
+                    return false;
+                }
+
+                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
+
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> results = new LinkedList<>();
+                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
+                    while (iterator.hasNext()) {
+                        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
+                        if (kv.key.key().equals(key) && kv.key.window().start() == windowStart) {
+                            results.add(kv);
+                        }
+                    }
+                }
+
+                if (results.isEmpty()) {
+                    return false;
+                }
+
+                final ValueTimestampHeaders<String> result = results.get(0).value;
+                return result != null
+                    && result.value().equals(value)
+                    && result.timestamp() == timestamp
+                    && result.headers().equals(expectedHeaders);
+            } catch (final Exception e) {
+                e.printStackTrace();
+                return false;
+            }
+        }, 60_000L, "Could not verify windowed value with headers in time.");
+    }
+
+    private void verifyWindowValueWithEmptyHeaders(final String key,
+                                                    final String value,
+                                                    final long timestamp) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            try {
+                final ReadOnlyWindowStore<String, ValueTimestampHeaders<String>> store =
+                    IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.windowStore());
+
+                if (store == null) {
+                    return false;
+                }
+
+                final long windowStart = timestamp - (timestamp % WINDOW_SIZE_MS);
+
+                final List<KeyValue<Windowed<String>, ValueTimestampHeaders<String>>> results = new LinkedList<>();
+                try (final KeyValueIterator<Windowed<String>, ValueTimestampHeaders<String>> iterator = store.all()) {
+                    while (iterator.hasNext()) {
+                        final KeyValue<Windowed<String>, ValueTimestampHeaders<String>> kv = iterator.next();
+                        if (kv.key.key().equals(key) && kv.key.window().start() == windowStart) {
+                            results.add(kv);
+                        }
+                    }
+                }
+
+                if (results.isEmpty()) {
+                    return false;
+                }
+
+                final ValueTimestampHeaders<String> result = results.get(0).value;
+                assertNotNull(result, "Result should not be null");
+                assertEquals(value, result.value(), "Value should match");
+                assertEquals(timestamp, result.timestamp(), "Timestamp should match");
+
+                // Verify headers exist but are empty (migrated from v2)
+                assertNotNull(result.headers(), "Headers should not be null for migrated data");
+                assertEquals(0, result.headers().toArray().length, "Headers should be empty for migrated data");
+
+                return true;
+            } catch (final Exception e) {
+                e.printStackTrace();
+                return false;
+            }
+        }, 60_000L, "Could not verify legacy value with empty headers in time.");
+    }
+
+    /**
+     * Processor for TimestampedWindowStore (v2 - without headers).
+     */
+    private static class TimestampedWindowedProcessor implements Processor<String, String, Void, Void> {
+        private TimestampedWindowStore<String, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(WINDOW_STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<String, String> record) {
+            final long windowStart = record.timestamp() - (record.timestamp() % WINDOW_SIZE_MS);
+            store.put(record.key(), ValueAndTimestamp.make(record.value(), record.timestamp()), windowStart);
+        }
+    }
+
+    /**
+     * Processor for TimestampedWindowStoreWithHeaders (v3 - with headers).
+     */
+    private static class TimestampedWindowedWithHeadersProcessor implements Processor<String, String, Void, Void> {
+        private TimestampedWindowStoreWithHeaders<String, String> store;
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(WINDOW_STORE_NAME);
+        }
+
+        @Override
+        public void process(final Record<String, String> record) {
+            final long windowStart = record.timestamp() - (record.timestamp() % WINDOW_SIZE_MS);
+            store.put(record.key(),
+                ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()),
+                windowStart);
         }
     }
 }
