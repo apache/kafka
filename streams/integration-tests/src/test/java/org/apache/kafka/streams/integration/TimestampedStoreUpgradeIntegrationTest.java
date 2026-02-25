@@ -62,7 +62,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 
 @Tag("integration")
-public class StoreUpgradeIntegrationTest {
+public class TimestampedStoreUpgradeIntegrationTest {
     private static final String STORE_NAME = "store";
     private String inputStream;
 

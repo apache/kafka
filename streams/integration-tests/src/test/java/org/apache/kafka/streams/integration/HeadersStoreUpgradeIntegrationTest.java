@@ -255,10 +255,10 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     private <K, V> void processKeyValueWithTimestampAndHeadersAndVerify(final K key,
-                                                                   final V value,
-                                                                    final long timestamp,
-                                                                    final Headers headers,
-                                                                    final Headers expectedHeaders)
+                                                                        final V value,
+                                                                        final long timestamp,
+                                                                        final Headers headers,
+                                                                        final Headers expectedHeaders)
         throws Exception {
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
