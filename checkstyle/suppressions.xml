@@ -197,10 +197,7 @@
     <!-- Generated code -->
     <suppress checks="[a-zA-Z0-9]*" files="[\\/]generated[\\/]"/>
 
-    <suppress checks="ImportControl" files="FetchResponseData.java"/>
     <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
-    <suppress checks="ImportControl" files="ClientTelemetryTest.java"/>
-    <suppress checks="ImportControl" files="AdminFenceProducersTest.java"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
@@ -221,7 +218,7 @@
     <suppress checks="NPathComplexity"
               files="(EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|KTableKTableForeignKeyJoinIntegrationTest|RelationalSmokeTest|MockProcessorContextStateStoreTest|TopologyTestDriverTest|IQv2StoreIntegrationTest).java"/>
 
-    <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
+    <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl)"
               files="Murmur3Test.java"/>
 
     <suppress checks="MethodLength"
@@ -245,8 +242,6 @@
               files="(StreamsResetter|DefaultMessageFormatter).java"/>
     <suppress checks="NPathComplexity"
               files="(AclCommand|DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool|LineMessageReader|ConsoleProducer|DumpLogSegments).java"/>
-    <suppress checks="ImportControl|IllegalImport"
-              files="SignalLogger.java"/>
     <suppress checks="ParameterNumber"
               files="(ProduceBenchSpec|ConsumeBenchSpec|SustainedConnectionSpec).java"/>
     <suppress id="dontUseSystemExit"
@@ -254,9 +249,7 @@
 
     <!-- Shell -->
     <suppress checks="CyclomaticComplexity"
-              files="(GlobComponent|MetadataNodeManager).java"/>
-    <suppress checks="MethodLength|JavaNCSS"
-              files="(MetadataNodeManager).java"/>
+              files="GlobComponent.java"/>
 
     <!-- metadata -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -275,8 +268,6 @@
               files="(MetadataImage).java"/>
     <suppress checks="ImportControl"
               files="ApiVersionsResponse.java"/>
-    <suppress checks="AvoidStarImport"
-              files="MetadataVersionTest.java"/>
 
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
@@ -286,7 +277,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
     <suppress checks="ParameterNumber"
-              files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorConfig).java"/>
+              files="(ConsumerGroupMember|GroupMetadataManager).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files="(RecordHelpersTest|GroupCoordinatorRecordHelpers|GroupMetadataManager|GroupCoordinatorService|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest|GroupCoordinatorRecordSerde|StreamsGroupTest).java"/>
     <suppress checks="JavaNCSS"
@@ -308,14 +299,14 @@
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
-              files="(LogLoader|LogValidator|RemoteLogManagerConfig|RemoteLogManager|UnifiedLog).java"/>
+              files="(LogLoader|LogValidator|RemoteLogManager|UnifiedLog).java"/>
     <suppress checks="NPathComplexity"
               files="(LocalLog|LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache|UnifiedLog).java"/>
     <suppress checks="ParameterNumber"
-              files="(LogAppendInfo|LogLoader|RemoteLogManagerConfig|UnifiedLog).java"/>
+              files="(LogLoader|UnifiedLog).java"/>
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest).java"/>
-    <suppress checks="MethodLength" files="(RemoteLogManager|RemoteLogManagerConfig).java"/>
+    <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
     <suppress checks="JavaNCSS" files="RemoteLogManagerTest.java"/>
 
     <!-- benchmarks -->
