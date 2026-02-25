@@ -1173,9 +1173,9 @@ public class TopologyTestDriver implements Closeable {
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
      * @see #getVersionedKeyValueStore(String)
-     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getTimestampedWindowStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
