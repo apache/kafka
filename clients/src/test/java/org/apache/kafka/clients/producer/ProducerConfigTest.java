@@ -128,4 +128,78 @@ public class ProducerConfigTest {
         final ProducerConfig producerConfig = new ProducerConfig(configs);
         assertEquals(saslSslLowerCase, producerConfig.originals().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
+
+    @Test
+    public void testZstdWindowLogDefault() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertEquals(12, producerConfig.getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG));
+    }
+
+    @Test
+    public void testZstdChecksumDefault() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertTrue(producerConfig.getBoolean(ProducerConfig.COMPRESSION_ZSTD_CHECKSUM_CONFIG));
+    }
+
+    @Test
+    public void testZstdLongRangeModeDefault() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertEquals(false, producerConfig.getBoolean(ProducerConfig.COMPRESSION_ZSTD_LONG_CONFIG));
+    }
+
+    @Test
+    public void testInvalidZstdWindowLogTooLow() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG, 9);
+        assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+    }
+
+    @Test
+    public void testInvalidZstdWindowLogTooHigh() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG, 32);
+        assertThrows(ConfigException.class, () -> new ProducerConfig(configs));
+    }
+
+    @Test
+    public void testValidZstdWindowLogBoundaries() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+
+        configs.put(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG, 10);
+        ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertEquals(10, producerConfig.getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG));
+
+        configs.put(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG, 31);
+        producerConfig = new ProducerConfig(configs);
+        assertEquals(31, producerConfig.getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG));
+    }
+
+    @Test
+    public void testCustomZstdOptions() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
+        configs.put(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG, 20);
+        configs.put(ProducerConfig.COMPRESSION_ZSTD_CHECKSUM_CONFIG, false);
+        configs.put(ProducerConfig.COMPRESSION_ZSTD_LONG_CONFIG, true);
+        ProducerConfig producerConfig = new ProducerConfig(configs);
+        assertEquals(20, producerConfig.getInt(ProducerConfig.COMPRESSION_ZSTD_WINDOW_LOG_CONFIG));
+        assertEquals(false, producerConfig.getBoolean(ProducerConfig.COMPRESSION_ZSTD_CHECKSUM_CONFIG));
+        assertEquals(true, producerConfig.getBoolean(ProducerConfig.COMPRESSION_ZSTD_LONG_CONFIG));
+    }
 }

@@ -391,7 +391,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(COMPRESSION_GZIP_LEVEL_CONFIG, Type.INT, CompressionType.GZIP.defaultLevel(), CompressionType.GZIP.levelValidator(), Importance.MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
                                 .define(COMPRESSION_LZ4_LEVEL_CONFIG, Type.INT, CompressionType.LZ4.defaultLevel(), CompressionType.LZ4.levelValidator(), Importance.MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
                                 .define(COMPRESSION_ZSTD_LEVEL_CONFIG, Type.INT, CompressionType.ZSTD.defaultLevel(), CompressionType.ZSTD.levelValidator(), Importance.MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
-                                .define(COMPRESSION_ZSTD_WINDOW_LOG_CONFIG, Type.INT, CompressionType.ZSTD.windowLog(), atLeast(10), Importance.HIGH, COMPRESSION_ZSTD_WINDOW_LOG_DOC)
+                                .define(COMPRESSION_ZSTD_WINDOW_LOG_CONFIG, Type.INT, CompressionType.ZSTD.windowLog(), between(10, 31), Importance.MEDIUM, COMPRESSION_ZSTD_WINDOW_LOG_DOC)
                                 .define(COMPRESSION_ZSTD_LONG_CONFIG, Type.BOOLEAN, CompressionType.ZSTD.longRangeMode(), Importance.MEDIUM, COMPRESSION_ZSTD_LONG_DOC)
                                 .define(COMPRESSION_ZSTD_CHECKSUM_CONFIG, Type.BOOLEAN, CompressionType.ZSTD.checksum(), Importance.MEDIUM, COMPRESSION_ZSTD_CHECKSUM_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
