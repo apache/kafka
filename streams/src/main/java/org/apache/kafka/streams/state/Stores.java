@@ -615,7 +615,7 @@ public final class Stores {
      * @param <V>           value type
      * @return an instance of {@link StoreBuilder} that can build a {@link TimestampedWindowStoreWithHeaders}
      */
-    public static <K, V> StoreBuilder<org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders<K, V>> timestampedWindowStoreWithHeadersBuilder(
+    public static <K, V> StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> timestampedWindowStoreWithHeadersBuilder(
             final WindowBytesStoreSupplier supplier,
             final Serde<K> keySerde,
             final Serde<V> valueSerde) {
