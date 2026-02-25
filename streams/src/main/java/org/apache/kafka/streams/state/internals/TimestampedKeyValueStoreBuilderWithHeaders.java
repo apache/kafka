@@ -179,7 +179,7 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
 
         @Override
         public Position getPosition() {
-            throw new UnsupportedOperationException("Position is not supported by timestamped key-value stores with headers yet.");
+            return wrapped().getPosition();
         }
 
         @Override
