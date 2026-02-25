@@ -27,7 +27,7 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.internal.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
@@ -278,6 +278,111 @@ class LocalLeaderEndPointTest extends Logging {
     log.updateHighestOffsetInRemoteStorage(1)
 
     val expectedOffset = Math.max(2L, log.logStartOffset())
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenLocalStartGreaterThanStartWithKnownRemoteOffset(): Unit = {
+    // Append records to create initial log state
+    appendRecords(replicaManager, topicIdPartition, records)
+      .onFire(response => assertEquals(Errors.NONE, response.error))
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Simulate remote upload up to offset 5
+    log.updateHighestOffsetInRemoteStorage(5)
+
+    // Simulate local log start advancing to offset 8
+    log.updateLocalLogStartOffset(8)
+
+    // Expected: max(highestRemoteOffset + 1, max(logStartOffset, localLogStartOffset))
+    //         = max(5 + 1, max(0, 8)) = max(6, 8) = 8
+    val expectedOffset = 8L
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenLogStartGreaterThanLocalStartWithLowRemoteOffset(): Unit = {
+    // Append 12 records (offsets 0-11)
+    for (_ <- 1 to 4) {
+      appendRecords(replicaManager, topicIdPartition, records)
+        .onFire(response => assertEquals(Errors.NONE, response.error))
+    }
+
+    // Delete records to advance logStartOffset to 10
+    replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 10), _ => ())
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Set localLogStartOffset to 3 (less than logStartOffset)
+    log.updateLocalLogStartOffset(3)
+
+    // Set highestRemoteOffset to 5 (less than logStartOffset)
+    log.updateHighestOffsetInRemoteStorage(5)
+
+    // Expected: max(5+1, max(10, 3)) = max(6, 10) = 10
+    val expectedOffset = 10L
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenRemoteOffsetDominatesLogStart(): Unit = {
+    // Append 18 records (offsets 0-17)
+    for (_ <- 1 to 6) {
+      appendRecords(replicaManager, topicIdPartition, records)
+        .onFire(response => assertEquals(Errors.NONE, response.error))
+    }
+
+    // Delete records to advance logStartOffset to 10
+    replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 10), _ => ())
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Set localLogStartOffset to 3 (less than logStartOffset)
+    log.updateLocalLogStartOffset(3)
+
+    // Set highestRemoteOffset to 15 (greater than logStartOffset)
+    log.updateHighestOffsetInRemoteStorage(15)
+
+    // Expected: max(15+1, max(10, 3)) = max(16, 10) = 16
+    val expectedOffset = 16L
+    val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
+
+    val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)
+    assertEquals(new OffsetAndEpoch(expectedOffset, epoch), result)
+  }
+
+  @Test
+  def testEarliestPendingUploadOffsetWhenBothStartOffsetsEqualAndDominateRemote(): Unit = {
+    // Append 12 records (offsets 0-11)
+    for (_ <- 1 to 4) {
+      appendRecords(replicaManager, topicIdPartition, records)
+        .onFire(response => assertEquals(Errors.NONE, response.error))
+    }
+
+    // Delete records to advance both logStartOffset and localLogStartOffset to 10
+    replicaManager.deleteRecords(timeout = 1000L, Map(topicPartition -> 10), _ => ())
+
+    val log = replicaManager.getPartitionOrException(topicPartition).localLogOrException
+
+    // Verify both offsets are equal (deleteRecords updates both)
+    assertEquals(10L, log.logStartOffset())
+    assertEquals(10L, log.localLogStartOffset())
+
+    // Set highestRemoteOffset to 5 (less than start offsets)
+    log.updateHighestOffsetInRemoteStorage(5)
+
+    // Expected: max(5+1, max(10, 10)) = max(6, 10) = 10
+    val expectedOffset = 10L
     val epoch = log.leaderEpochCache().epochForOffset(expectedOffset).orElse(0)
 
     val result = endPoint.fetchEarliestPendingUploadOffset(topicPartition, 0)

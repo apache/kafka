@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.coordinator.transaction.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
@@ -113,20 +113,46 @@ public class TransactionLog {
         }
     }
 
-    /**
-     * Decodes the transaction log messages' payload and retrieves the transaction metadata from it
-     *
-     * @return a transaction metadata object from the message, or null if tombstone
-     */
-    public static TransactionMetadata readTxnRecordValue(String transactionalId, ByteBuffer buffer) {
-        if (buffer == null) {
-            return null; // tombstone
-        } else {
-            short version = buffer.getShort();
-            if (version >= TransactionLogValue.LOWEST_SUPPORTED_VERSION
-                    && version <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
 
-                TransactionLogValue value = new TransactionLogValue(new ByteBufferAccessor(buffer), version);
+
+    public sealed interface ReadResult permits TxnRecord, TxnTombstone, UnknownKeyVersion, UnknownValueVersion { }
+
+    public record TxnRecord(String transactionId, TransactionMetadata metadata) implements ReadResult { }
+
+    public record TxnTombstone(String transactionId) implements ReadResult { }
+
+    public record UnknownKeyVersion(short version) implements ReadResult { }
+
+    public record UnknownValueVersion(short version) implements ReadResult { }
+
+    /**
+     * Decodes the transaction log messages' key and value, returning a structured result.
+     *
+     * @return a {@link ReadResult} which is one of:
+     *         <ul>
+     *           <li>{@link TxnRecord} - contains the transactional id and metadata if successfully decoded</li>
+     *           <li>{@link TxnTombstone} - if the value is null (tombstone record)</li>
+     *           <li>{@link UnknownKeyVersion} - if the key version is not recognized</li>
+     *           <li>{@link UnknownValueVersion} - if the value version is not recognized</li>
+     *         </ul>
+     */
+    public static ReadResult read(ByteBuffer keyBuffer, ByteBuffer valueBuffer) {
+        short keyVersion = keyBuffer.getShort();
+        String transactionalId;
+        if (keyVersion == CoordinatorRecordType.TRANSACTION_LOG.id()) {
+            transactionalId = new TransactionLogKey(new ByteBufferAccessor(keyBuffer), (short) 0).transactionalId();
+        } else {
+            return new UnknownKeyVersion(keyVersion);
+        }
+
+        if (valueBuffer == null) {
+            return new TxnTombstone(transactionalId);
+        } else {
+            short valueVersion = valueBuffer.getShort();
+            if (valueVersion >= TransactionLogValue.LOWEST_SUPPORTED_VERSION
+                && valueVersion <= TransactionLogValue.HIGHEST_SUPPORTED_VERSION) {
+
+                TransactionLogValue value = new TransactionLogValue(new ByteBufferAccessor(valueBuffer), valueVersion);
                 TransactionState state = TransactionState.fromId(value.transactionStatus());
 
                 Set<TopicPartition> tps = new HashSet<>();
@@ -138,22 +164,22 @@ public class TransactionLog {
                     }
                 }
 
-                return new TransactionMetadata(
-                        transactionalId,
-                        value.producerId(),
-                        value.previousProducerId(),
-                        value.nextProducerId(),
-                        value.producerEpoch(),
-                        RecordBatch.NO_PRODUCER_EPOCH,
-                        value.transactionTimeoutMs(),
-                        state,
-                        tps,
-                        value.transactionStartTimestampMs(),
-                        value.transactionLastUpdateTimestampMs(),
-                        TransactionVersion.fromFeatureLevel(value.clientTransactionVersion())
+                return new TxnRecord(transactionalId, new TransactionMetadata(
+                    transactionalId,
+                    value.producerId(),
+                    value.previousProducerId(),
+                    value.nextProducerId(),
+                    value.producerEpoch(),
+                    RecordBatch.NO_PRODUCER_EPOCH,
+                    value.transactionTimeoutMs(),
+                    state,
+                    tps,
+                    value.transactionStartTimestampMs(),
+                    value.transactionLastUpdateTimestampMs(),
+                    TransactionVersion.fromFeatureLevel(value.clientTransactionVersion()))
                 );
             } else {
-                throw new IllegalStateException("Unknown version " + version + " from the transaction log message value");
+                return new UnknownValueVersion(valueVersion);
             }
         }
     }

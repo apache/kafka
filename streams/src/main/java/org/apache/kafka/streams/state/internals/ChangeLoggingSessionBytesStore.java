@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -73,13 +74,13 @@ public class ChangeLoggingSessionBytesStore
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         wrapped().remove(sessionKey);
-        internalContext.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, internalContext.recordContext().timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, internalContext.recordContext().timestamp(), new RecordHeaders(), wrapped().getPosition());
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(sessionKey, aggregate);
-        internalContext.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, internalContext.recordContext().timestamp(), wrapped().getPosition());
+        internalContext.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, internalContext.recordContext().timestamp(), new RecordHeaders(), wrapped().getPosition());
     }
 
     @Override

@@ -101,7 +101,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "security.inter.broker.protocol=PLAINTEXT")),
-            errOut -> assertTrue(errOut.contains("Cannot update these configs dynamically: Set(security.inter.broker.protocol)"), errOut));
+            errOut -> assertTrue(errOut.contains("Cannot update these configs dynamically: [security.inter.broker.protocol]"), errOut));
     }
 
     @ClusterTest

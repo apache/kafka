@@ -39,7 +39,6 @@ import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -76,7 +75,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -1073,32 +1071,21 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     @Override
-    public void onTopicsDeleted(Set<Uuid> deletedTopicIds, BufferSupplier bufferSupplier) throws ExecutionException, InterruptedException {
-        throwIfNotActive();
-        if (deletedTopicIds.isEmpty()) {
-            return;
-        }
-        CompletableFuture.allOf(
-            FutureUtils.mapExceptionally(
-                runtime.scheduleWriteAllOperation(
-                    "on-topics-deleted",
-                    coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
-                ),
-                exception -> {
-                    log.error("Received error while trying to cleanup deleted topics.", exception);
-                    return null;
-                }
-            ).toArray(new CompletableFuture<?>[0])
-        ).get();
-    }
-
-    @Override
     public void onMetadataUpdate(MetadataDelta delta, MetadataImage newImage) {
         throwIfNotActive();
+        Objects.requireNonNull(delta, "delta must be provided");
+        Objects.requireNonNull(newImage, "newImage must be provided");
+
         this.runtime.onMetadataUpdate(
-            new KRaftCoordinatorMetadataDelta(Objects.requireNonNull(delta, "delta must be provided")),
-            new KRaftCoordinatorMetadataImage(Objects.requireNonNull(newImage, "newImage must be provided"))
+            new KRaftCoordinatorMetadataDelta(delta),
+            new KRaftCoordinatorMetadataImage(newImage)
         );
+
+        // Handle topic deletions from the delta.
+        if (delta.topicsDelta() != null && !delta.topicsDelta().deletedTopicIds().isEmpty()) {
+            handleTopicsDeletion(delta.topicsDelta().deletedTopicIds());
+        }
+
         boolean enabled = isShareGroupsEnabled(newImage);
         // enabled    shouldRunJob         result (XOR)
         // 0            0               no op on flag, do not call jobs
@@ -1111,6 +1098,21 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 setupPeriodicJobs();
             }
         }
+    }
+
+    private void handleTopicsDeletion(Set<Uuid> deletedTopicIds) {
+        CompletableFuture.allOf(
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "on-topics-deleted",
+                    coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
+                ),
+                exception -> {
+                    log.error("Received error while trying to cleanup deleted topics.", exception);
+                    return null;
+                }
+            ).toArray(new CompletableFuture<?>[0])
+        ).join();
     }
 
     TopicPartition topicPartitionFor(SharePartitionKey key) {

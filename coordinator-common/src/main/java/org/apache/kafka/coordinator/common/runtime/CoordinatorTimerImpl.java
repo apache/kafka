@@ -18,15 +18,16 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -38,11 +39,11 @@ import java.util.concurrent.TimeUnit;
  *
  * When a timer fails with an unexpected exception, the timer is rescheduled with a backoff.
  */
-public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
+public class CoordinatorTimerImpl<U> implements CoordinatorTimer<U> {
     private final Logger log;
     private final Timer timer;
     private final CoordinatorShardScheduler<U> scheduler;
-    private final Map<String, TimerTask> tasks = new HashMap<>();
+    private final Map<String, TimerTask> tasks = new ConcurrentHashMap<>();
 
     public CoordinatorTimerImpl(
         LogContext logContext,
@@ -60,7 +61,7 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
         long delay,
         TimeUnit unit,
         boolean retry,
-        TimeoutOperation<Void, U> operation
+        TimeoutOperation<U> operation
     ) {
         schedule(key, delay, unit, retry, 500, operation);
     }
@@ -72,7 +73,7 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
         TimeUnit unit,
         boolean retry,
         long retryBackoff,
-        TimeoutOperation<Void, U> operation
+        TimeoutOperation<U> operation
     ) {
         // The TimerTask wraps the TimeoutOperation into a write operation. When the TimerTask
         // expires, the operation is scheduled through the scheduler to be executed. This
@@ -97,6 +98,11 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
                         return operation.generateRecords();
                     }
                 ).exceptionally(ex -> {
+                    // Exceptions may be wrapped in CompletionException when propagated
+                    // through CompletableFuture chains, so we unwrap them before
+                    // checking types with instanceof.
+                    ex = Errors.maybeUnwrapException(ex);
+
                     // Remove the task after a failure.
                     tasks.remove(key, this);
 
@@ -141,7 +147,7 @@ public class CoordinatorTimerImpl<U> implements CoordinatorTimer<Void, U> {
         long delay,
         TimeUnit unit,
         boolean retry,
-        TimeoutOperation<Void, U> operation
+        TimeoutOperation<U> operation
     ) {
         if (!tasks.containsKey(key)) {
             schedule(key, delay, unit, retry, 500, operation);

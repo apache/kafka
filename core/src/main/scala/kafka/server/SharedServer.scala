@@ -33,11 +33,11 @@ import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.ListenerInfo
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
-import org.apache.kafka.raft.Endpoints
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics}
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
-import org.apache.kafka.server.metrics.{BrokerServerMetrics, DefaultExternalKRaftMetrics, KafkaYammerMetrics, NodeMetrics}
+import org.apache.kafka.server.metrics.{BrokerServerMetrics, KafkaYammerMetrics, NodeMetrics}
 
 import java.net.InetSocketAddress
 import java.util.Arrays
@@ -282,7 +282,10 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
 
-        val externalKRaftMetrics = new DefaultExternalKRaftMetrics(Optional.ofNullable(brokerMetrics), Optional.ofNullable(controllerServerMetrics))
+        val externalKRaftMetrics: ExternalKRaftMetrics = ignoredStaticVoters => {
+          Option(brokerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
+          Option(controllerServerMetrics).foreach(_.setIgnoredStaticVoters(ignoredStaticVoters))
+        }
 
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,

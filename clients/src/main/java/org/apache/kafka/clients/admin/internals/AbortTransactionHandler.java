@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static java.util.Collections.singleton;
@@ -56,7 +55,7 @@ public class AbortTransactionHandler extends AdminApiHandler.Batched<TopicPartit
 
     public static PartitionLeaderStrategy.PartitionLeaderFuture<Void> newFuture(
         Set<TopicPartition> topicPartitions,
-        Map<TopicPartition, Integer> partitionLeaderCache
+        PartitionLeaderCache partitionLeaderCache
     ) {
         return new PartitionLeaderStrategy.PartitionLeaderFuture<>(topicPartitions, partitionLeaderCache);
     }

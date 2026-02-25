@@ -255,6 +255,7 @@ public class AbstractProcessorContextTest {
                               final Bytes key,
                               final byte[] value,
                               final long timestamp,
+                              final Headers headers,
                               final Position position) {
         }
 

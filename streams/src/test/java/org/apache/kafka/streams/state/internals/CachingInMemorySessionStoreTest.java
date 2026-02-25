@@ -54,6 +54,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import static java.util.Arrays.asList;
@@ -166,7 +167,7 @@ public class CachingInMemorySessionStoreTest {
         assertEquals(Position.emptyPosition(), cachingStore.getPosition());
         assertEquals(Position.emptyPosition(), underlyingStore.getPosition());
 
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 2L))))),
@@ -472,7 +473,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         cachingStore.put(a4, "4".getBytes());
         cachingStore.put(a5, "5".getBytes());
         cachingStore.put(a6, "6".getBytes());
@@ -499,7 +500,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a1, "1".getBytes());
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
         cachingStore.put(a4, "4".getBytes());
         cachingStore.put(a5, "5".getBytes());
         cachingStore.put(a6, "6".getBytes());
@@ -580,7 +581,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.setFlushListener(flushListener, true);
 
         cachingStore.put(b, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -593,7 +594,7 @@ public class CachingInMemorySessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.put(a, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -606,7 +607,7 @@ public class CachingInMemorySessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.put(a, "2".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -619,7 +620,7 @@ public class CachingInMemorySessionStoreTest {
         flushListener.forwarded.clear();
 
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.singletonList(
@@ -634,7 +635,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a, "1".getBytes());
         cachingStore.put(a, "2".getBytes());
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.emptyList(),
@@ -654,13 +655,13 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.setFlushListener(flushListener, false);
 
         cachingStore.put(a, "1".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         cachingStore.put(a, "2".getBytes());
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             asList(new KeyValueTimestamp<>(
@@ -682,7 +683,7 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.put(a, "1".getBytes());
         cachingStore.put(a, "2".getBytes());
         cachingStore.remove(a);
-        cachingStore.flush();
+        cachingStore.commit(Map.of());
 
         assertEquals(
             Collections.emptyList(),

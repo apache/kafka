@@ -27,10 +27,10 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.internal.FileRecords;
+import org.apache.kafka.common.record.internal.MemoryRecords;
+import org.apache.kafka.common.record.internal.RecordBatch;
+import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -271,6 +271,22 @@ public class ShareFetchUtils {
     public static int recordLockDurationMsOrDefault(GroupConfigManager groupConfigManager, String groupId, int defaultValue) {
         if (groupConfigManager.groupConfig(groupId).isPresent()) {
             return groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
+        }
+        return defaultValue;
+    }
+
+    /**
+     * The method is used to get the delivery count limit for the group. If the group config is present,
+     * then the delivery count limit is returned. Otherwise, the default value is returned.
+     *
+     * @param groupConfigManager The group config manager.
+     * @param groupId The group id for which the delivery count limit is to be fetched.
+     * @param defaultValue The default value to be returned if the group config is not present.
+     * @return The delivery count limit for the group.
+     */
+    public static int deliveryCountLimitOrDefault(GroupConfigManager groupConfigManager, String groupId, int defaultValue) {
+        if (groupConfigManager.groupConfig(groupId).isPresent()) {
+            return groupConfigManager.groupConfig(groupId).get().shareDeliveryCountLimit();
         }
         return defaultValue;
     }
