@@ -909,26 +909,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         /**
-         * Check if segment has already expired based on remote storage's retention time.
-         */
-        private boolean isSegmentExpiredByTimeForRemoteStorage(LogSegment segment, long retentionMs) throws IOException {
-            if (retentionMs <= 0) {
-                return false;
-            }
-            return time.milliseconds() - segment.largestTimestamp() > retentionMs;
-        }
-
-        /**
-         * Check if segment has already expired based on remote storage‘s retention size.
-         */
-        private boolean isSegmentExpiredBySizeForRemoteStorage(LogSegment segment, long retentionBytes, long logSize, long accumulatedSkippedSize) {
-            if (retentionBytes <= 0) {
-                return false;
-            }
-            return (logSize - retentionBytes - accumulatedSkippedSize) > segment.size();
-        }
-
-        /**
          *  Segments which match the following criteria are eligible for copying to remote storage:
          *  1) Segment is not the active segment and
          *  2) Segment end-offset is less than the last-stable-offset as remote storage should contain only
@@ -951,8 +931,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             long retentionMs = log.config() != null ? log.config().retentionMs : -1;
             long retentionSize = log.config() != null ? log.config().retentionSize : -1;
             long logSize = retentionSize > 0 ? log.size() : -1;
-            long accumulatedSkippedSize = 0;
-            boolean needCheckExpiredSegment = true;
+            long expiredSegmentsTotalSize = 0;
+            boolean checkSegmentExpired = true;
             long newLogStartOffset = -1;
             
             for (int idx = 1; idx < segments.size(); idx++) {
@@ -962,16 +942,16 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     continue;
                 }
 
-                if (needCheckExpiredSegment) {
+                if (checkSegmentExpired) {
                     boolean isExpired = isSegmentExpiredByTimeForRemoteStorage(previousSeg, retentionMs) ||
-                            isSegmentExpiredBySizeForRemoteStorage(previousSeg, retentionSize, logSize, accumulatedSkippedSize);
-                    accumulatedSkippedSize += previousSeg.size();
+                            isSegmentExpiredBySizeForRemoteStorage(previousSeg, retentionSize, logSize, expiredSegmentsTotalSize);
                     if (isExpired) {
                         logger.info("Segment {} has already expired based on remote storage's retention configuration.", previousSeg);
                         newLogStartOffset = currentSeg.baseOffset();
+                        expiredSegmentsTotalSize += previousSeg.size();
                         continue;
                     } else {
-                        needCheckExpiredSegment = false;
+                        checkSegmentExpired = false;
                     }
                 }
 
@@ -983,6 +963,26 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
             }
             return candidateLogSegments;
+        }
+
+        /**
+         * Check if segment has already expired based on remote storage's retention time.
+         */
+        private boolean isSegmentExpiredByTimeForRemoteStorage(LogSegment segment, long retentionMs) throws IOException {
+            if (retentionMs <= 0) {
+                return false;
+            }
+            return time.milliseconds() - segment.largestTimestamp() > retentionMs;
+        }
+
+        /**
+         * Check if segment has already expired based on remote storage‘s retention size.
+         */
+        private boolean isSegmentExpiredBySizeForRemoteStorage(LogSegment segment, long retentionBytes, long logSize, long accumulatedSkippedSize) {
+            if (retentionBytes <= 0) {
+                return false;
+            }
+            return (logSize - retentionBytes - accumulatedSkippedSize) > segment.size();
         }
 
         public void copyLogSegmentsToRemote(UnifiedLog log) throws InterruptedException, RetriableRemoteStorageException {
