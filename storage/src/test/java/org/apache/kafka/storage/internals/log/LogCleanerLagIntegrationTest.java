@@ -42,11 +42,11 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -79,8 +79,10 @@ public class LogCleanerLagIntegrationTest {
     private static final long DEFAULT_MIN_COMPACTION_LAG_MS = 0L;
     private static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     private static final long MIN_COMPACTION_LAG = Duration.ofHours(1).toMillis();
+    private static final long MAX_COMPACTION_LAG = Duration.ofHours(6).toMillis();
     private static final long CLEANER_BACKOFF_MS = 200L;
     private static final float DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.0F;
+    private static final float MIN_CLEANABLE_DIRTY_RATIO = 1.0F;
     private static final int SEGMENT_SIZE = 512;
 
     private final Compression codec = Compression.lz4().build();
@@ -213,17 +215,8 @@ public class LogCleanerLagIntegrationTest {
 
     @Test
     public void testMaxLogCompactionLag() throws Exception {
-        int msPerHour = 60 * 60 * 1000;
-
-        long minCompactionLagMs = msPerHour;
-        long maxCompactionLagMs = 6L * msPerHour;
-
-        long cleanerBackOffMs = 200L;
-        int segmentSize = 512;
-        float minCleanableDirtyRatio = 1.0F;
-
-        cleaner = makeCleaner(TOPIC_PARTITIONS, cleanerBackOffMs, minCompactionLagMs, segmentSize,
-            maxCompactionLagMs, minCleanableDirtyRatio);
+        cleaner = makeCleaner(TOPIC_PARTITIONS, CLEANER_BACKOFF_MS, MIN_COMPACTION_LAG, SEGMENT_SIZE,
+            MAX_COMPACTION_LAG, MIN_CLEANABLE_DIRTY_RATIO);
         UnifiedLog theLog = cleaner.logs().get(TOPIC_PARTITIONS.get(0));
 
         long t0 = time.milliseconds();
@@ -235,13 +228,13 @@ public class LogCleanerLagIntegrationTest {
 
         cleaner.startup();
 
-        // advance to a time still less than maxCompactionLagMs from start
-        time.sleep(maxCompactionLagMs / 2);
-        Thread.sleep(5 * cleanerBackOffMs); // give cleaning thread a chance to _not_ clean
+        // advance to a time still less than MAX_COMPACTION_LAG from start
+        time.sleep(MAX_COMPACTION_LAG / 2);
+        Thread.sleep(5 * CLEANER_BACKOFF_MS); // give cleaning thread a chance to _not_ clean
         assertEquals(startSizeBlock0, theLog.size(), "There should be no cleaning until the max compaction lag has passed");
 
-        // advance to time a bit more than one maxCompactionLagMs from start
-        time.sleep(maxCompactionLagMs / 2 + 1);
+        // advance to time a bit more than one MAX_COMPACTION_LAG from start
+        time.sleep(MAX_COMPACTION_LAG / 2 + 1);
         long t1 = time.milliseconds();
 
         // write the second block of data: all zero keys
@@ -263,7 +256,7 @@ public class LogCleanerLagIntegrationTest {
         // minCleanableDirtyRatio will prevent second block of data from compacting
         assertNotEquals(appends1.size(), read1.size(), "log should still contain non-zero keys");
 
-        time.sleep(maxCompactionLagMs + 1);
+        time.sleep(MAX_COMPACTION_LAG + 1);
         // the second block should get cleaned. only zero keys left
         cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT1.baseOffset(), 60000L);
 
@@ -295,8 +288,6 @@ public class LogCleanerLagIntegrationTest {
         assertEquals(cleaner.cleaners().size(), getGauge("DeadThreadCount").value());
         assertEquals(cleaner.cleaners().size(), cleaner.deadThreadCount());
     }
-
-    // --- Helper methods ---
 
     private void breakPartitionLog(TopicPartition tp) throws IOException {
         UnifiedLog theLog = cleaner.logs().get(tp);
