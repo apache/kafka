@@ -4113,6 +4113,15 @@ org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedWindowBytesStor
 - shouldLogPuts
 - shouldLogPutsWithPosition
 - shouldRetainDuplicatesWhenSet
+org.apache.kafka.streams.state.internals.ChangeLoggingTimestampedWindowBytesStoreWithHeadersTest:
+- shouldDelegateInit
+- shouldDelegateToUnderlyingStoreWhenBackwardFetching
+- shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange
+- shouldDelegateToUnderlyingStoreWhenFetching
+- shouldDelegateToUnderlyingStoreWhenFetchingRange
+- shouldLogPuts
+- shouldLogPutsWithPosition
+- shouldRetainDuplicatesWhenSet
 org.apache.kafka.streams.state.internals.ChangeLoggingVersionedKeyValueBytesStoreTest:
 - shouldDelegateGet
 - shouldDelegateGetWithTimestamp
@@ -5424,6 +5433,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreTest:
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig
 - shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics
+- shouldNotSupportDowngradeFromTimestampedToPlainKeyValueStore
 - shouldNotThrowConcurrentModificationException
 - shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles
 - shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo
@@ -5505,6 +5515,8 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldNotIncludeDeletedFromRangeResult
 - shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig
 - shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics
+- shouldNotSupportDowngradeFromHeadersAwareToRegularStore
+- shouldNotSupportDowngradeFromHeadersAwareToTimestampedStore
 - shouldNotThrowConcurrentModificationException
 - shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles
 - shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo
@@ -5553,6 +5565,7 @@ org.apache.kafka.streams.state.internals.RocksDBTimestampedStoreWithHeadersTest:
 - shouldThrowNullPointerExceptionOnPutNullKey
 - shouldThrowProcessorStateExceptionOnOpeningReadOnlyDir
 - shouldThrowProcessorStateExceptionOnPutDeletedDir
+- shouldThrowUnsupportedOperationExceptionOnQuery
 - shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig
 - shouldVerifyThatMetricsRecordedFromPropertiesGetMeasurementsFromRocksDB
 - shouldVerifyThatMetricsRecordedFromStatisticsGetMeasurementsFromRocksDB
@@ -5912,6 +5925,28 @@ org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderTest:
 - shouldThrowNullPointerIfMetricsScopeIsNull
 - shouldThrowNullPointerIfTimeIsNull
 - shouldWrapPlainKeyValueStoreAsTimestampStore
+org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilderWithHeadersTest:
+- shouldHaveCachingAndChangeLoggingWhenBothEnabled
+- shouldHaveCachingStoreWhenEnabled
+- shouldHaveChangeLoggingStoreByDefault
+- shouldHaveChangeLoggingStoreWhenLoggingEnabled
+- shouldHaveMeteredStoreAsOuterStore
+- shouldNotHaveChangeLoggingStoreWhenDisabled
+- shouldNotThrowNullPointerIfKeySerdeIsNull
+- shouldNotThrowNullPointerIfValueSerdeIsNull
+- shouldNotWrapTimestampedByteStore
+- shouldThrowNullPointerIfInnerIsNull
+- shouldThrowNullPointerIfMetricsScopeIsNull
+- shouldThrowNullPointerIfTimeIsNull
+- shouldThrowOnGetPositionForHeadersStoreAdapter
+- shouldThrowOnGetPositionForInMemoryStoreMarker
+- shouldThrowOnGetPositionForInMemoryStores
+- shouldThrowOnGetPositionForNativeHeadersStore
+- shouldThrowUsingIQv2ForInMemoryStores
+- shouldThrowUsingIQv2ForNativeHeadersStore
+- shouldThrowWhenPlainKeyValueStoreIsProvided
+- shouldThrowWhenUsingIQv2InHeadersStore
+- shouldWrapTimestampKeyValueStoreAsHeadersStore
 org.apache.kafka.streams.state.internals.TimestampedSegmentTest:
 - shouldBeEqualIfIdIsEqual
 - shouldCompareSegmentIdOnly

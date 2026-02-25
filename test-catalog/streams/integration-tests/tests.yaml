@@ -287,12 +287,14 @@ org.apache.kafka.streams.integration.StoreQueryIntegrationTest:
 - shouldQuerySpecificStalePartitionStoresMultiStreamThreadsNamedTopology
 - shouldQueryStoresAfterAddingAndRemovingStreamThread
 org.apache.kafka.streams.integration.StoreUpgradeIntegrationTest:
+- shouldFailDowngradeFromTimestampedToRegularKeyValueStore
 - shouldMigrateInMemoryKeyValueStoreToTimestampedKeyValueStoreUsingPapi
 - shouldMigrateInMemoryWindowStoreToTimestampedWindowStoreUsingPapi
 - shouldMigratePersistentKeyValueStoreToTimestampedKeyValueStoreUsingPapi
 - shouldMigratePersistentWindowStoreToTimestampedWindowStoreUsingPapi
 - shouldProxyKeyValueStoreToTimestampedKeyValueStoreUsingPapi
 - shouldProxyWindowStoreToTimestampedWindowStoreUsingPapi
+- shouldSuccessfullyDowngradeFromTimestampedToRegularKeyValueStoreAfterCleanup
 org.apache.kafka.streams.integration.StreamStreamJoinIntegrationTest:
 - testInner
 - testInnerRepartitioned
@@ -371,6 +373,11 @@ org.apache.kafka.streams.integration.TimeWindowedKStreamIntegrationTest:
 - shouldAggregateWindowedWithNoGrace
 - shouldRestoreAfterJoinRestart
 - shouldThrowUnlimitedWindows
+org.apache.kafka.streams.integration.TimestampedKeyValueStoreWithHeadersTest:
+- shouldManualUpgradeFromTimestampedToHeaders
+- shouldPutGetAndDelete
+- shouldRestore
+- shouldSetChangelogTopicProperties
 org.apache.kafka.streams.integration.VersionedKeyValueStoreIntegrationTest:
 - shouldAllowCustomIQv2ForCustomStoreImplementations
 - shouldManualUpgradeFromNonVersionedNonTimestampedToVersioned
