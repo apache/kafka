@@ -80,11 +80,20 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
         @Override
         public void init(final ProcessorContext<K, Change<V>> context) {
             store = new KeyValueStoreWrapper<>(context, storeName);
-            tupleForwarder = new TimestampedTupleForwarder<>(
-                store.store(),
-                context,
-                new TimestampedCacheFlushListener<>(context),
-                sendOldValues);
+            // Use headers-aware cache flush listener if the store supports headers
+            if (store.supportsHeaders()) {
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store.store(),
+                    context,
+                    new TimestampedCacheFlushListenerWithHeaders<>(context),
+                    sendOldValues);
+            } else {
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store.store(),
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
+                    sendOldValues);
+            }
         }
 
         /**
