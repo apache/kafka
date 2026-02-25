@@ -20,6 +20,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.state.HeadersBytesStore;
 
 /**
  * RocksDB-backed session store with support for record headers.
@@ -31,7 +32,7 @@ import org.apache.kafka.streams.query.QueryResult;
  *
  * @see RocksDBSessionStore
  */
-class RocksDBSessionStoreWithHeaders extends RocksDBSessionStore {
+class RocksDBSessionStoreWithHeaders extends RocksDBSessionStore implements HeadersBytesStore {
 
     RocksDBSessionStoreWithHeaders(final SegmentedBytesStore bytesStore) {
         super(bytesStore);
