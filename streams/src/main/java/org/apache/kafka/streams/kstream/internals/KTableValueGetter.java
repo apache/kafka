@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 public interface KTableValueGetter<K, V> {
 
@@ -35,11 +36,31 @@ public interface KTableValueGetter<K, V> {
     }
 
     /**
+     * Returns the latest record with value, timestamp, and headers. This method may only be
+     * called if {@link #supportsHeaders()} is true.
+     *
+     * @param key the key to get
+     * @return the value with timestamp and headers, or null if not found
+     */
+    default ValueTimestampHeaders<V> getWithHeaders(final K key) {
+        throw new UnsupportedOperationException("getWithHeaders(key) is only supported for headers-aware stores");
+    }
+
+    /**
      * @return whether this value getter supports multiple record versions for the same key.
      *         If true, then {@link #get(Object, long)} must be implemented. If not, then
      *         {@link #get(Object, long)} must not be called.
      */
     boolean isVersioned();
+
+    /**
+     * @return whether this value getter supports headers.
+     *         If true, then {@link #getWithHeaders(Object)} can be called to retrieve
+     *         value, timestamp, and headers together.
+     */
+    default boolean supportsHeaders() {
+        return false;
+    }
 
     default void close() {}
 }

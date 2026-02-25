@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
@@ -56,6 +57,16 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
         @Override
         public boolean isVersioned() {
             return store.isVersionedStore();
+        }
+
+        @Override
+        public boolean supportsHeaders() {
+            return store.supportsHeaders();
+        }
+
+        @Override
+        public ValueTimestampHeaders<V> getWithHeaders(final K key) {
+            return store.getWithHeaders(key);
         }
     }
 }
