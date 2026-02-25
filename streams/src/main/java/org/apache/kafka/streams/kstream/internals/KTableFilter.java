@@ -124,11 +124,19 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
             this.context = context;
             if (queryableName != null) {
                 store = new KeyValueStoreWrapper<>(context, queryableName);
-                tupleForwarder = new TimestampedTupleForwarder<>(
-                    store.store(),
-                    context,
-                    new TimestampedCacheFlushListener<>(context),
-                    sendOldValues);
+                if (store.supportsHeaders()) {
+                    tupleForwarder = new TimestampedTupleForwarder<>(
+                        store.store(),
+                        context,
+                        new TimestampedCacheFlushListenerWithHeaders<>(context),
+                        sendOldValues);
+                } else {
+                    tupleForwarder = new TimestampedTupleForwarder<>(
+                        store.store(),
+                        context,
+                        new TimestampedCacheFlushListener<>(context),
+                        sendOldValues);
+                }
             }
         }
 
