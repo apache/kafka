@@ -936,9 +936,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          * 
          * Additionally, if a segment has already expired based on remote storage's retention configuration,
          * it will be skipped from upload and logStartOffset will be updated to allow local deletion.
-         * However, we can only skip and advance logStartOffset for a CONTIGUOUS sequence of expired segments
-         * from the beginning. Once we encounter a non-expired segment, we must stop skipping to ensure
-         * data consistency (similar to local segment deletion logic).
          *
          * @param log The log from which the segments are to be copied
          * @param fromOffset The offset from which the segments are to be copied
@@ -953,13 +950,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             }
             long retentionMs = log.config() != null ? log.config().retentionMs : -1;
             long retentionSize = log.config() != null ? log.config().retentionSize : -1;
-            // Compute log.size() once when retention is size-based; skip when not needed to avoid wasted work.
             long logSize = retentionSize > 0 ? log.size() : -1;
             long accumulatedSkippedSize = 0;
-            // Flag to track if we can still skip expired segments.
-            // We can only skip contiguous expired segments from the beginning.
-            // Once we encounter a non-expired segment, we must stop skipping.
-            boolean canSkipExpiredSegments = true;
+            boolean needCheckExpiredSegment = true;
+            long newLogStartOffset = -1;
             
             for (int idx = 1; idx < segments.size(); idx++) {
                 LogSegment previousSeg = segments.get(idx - 1);
@@ -967,30 +961,25 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 if (currentSeg.baseOffset() > lastStableOffset) {
                     continue;
                 }
-                
-                boolean isExpired = isSegmentExpiredByTimeForRemoteStorage(previousSeg, retentionMs) || 
-                    isSegmentExpiredBySizeForRemoteStorage(previousSeg, retentionSize, logSize, accumulatedSkippedSize);
-                
-                if (isExpired) {
-                    if (canSkipExpiredSegments) {
-                        // Can skip and advance logStartOffset for contiguous expired segments at the beginning
-                        long newLogStartOffset = currentSeg.baseOffset();
-                        log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentExpiredByRemoteRetention);
-                        logger.info("Segment {} has already expired based on remote storage's retention configuration. Skipping upload and incrementing logStartOffset to {} to allow local deletion.",
-                                previousSeg, newLogStartOffset);
-                        accumulatedSkippedSize += previousSeg.size();
+
+                if (needCheckExpiredSegment) {
+                    boolean isExpired = isSegmentExpiredByTimeForRemoteStorage(previousSeg, retentionMs) ||
+                            isSegmentExpiredBySizeForRemoteStorage(previousSeg, retentionSize, logSize, accumulatedSkippedSize);
+                    accumulatedSkippedSize += previousSeg.size();
+                    if (isExpired) {
+                        logger.info("Segment {} has already expired based on remote storage's retention configuration.", previousSeg);
+                        newLogStartOffset = currentSeg.baseOffset();
+                        continue;
                     } else {
-                        // Expired segment after a non-expired segment - cannot skip.
-                        // Add to candidates to maintain order. Will be handled after earlier segments are uploaded.
-                        logger.debug("Segment {} is expired but must be processed because earlier non-expired segments are pending upload.",
-                                previousSeg);
-                        candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
+                        needCheckExpiredSegment = false;
                     }
-                    continue;
                 }
-                
-                // Found a non-expired segment - stop allowing skip-and-advance for subsequent expired segments
-                canSkipExpiredSegments = false;
+
+                if (newLogStartOffset != -1) {
+                    logger.info("Skipping all expired segments' upload and incrementing logStartOffset to {} to allow local deletion.", newLogStartOffset);
+                    log.maybeIncrementLogStartOffset(newLogStartOffset, LogStartOffsetIncrementReason.SegmentExpiredByRemoteRetention);
+                }
+
                 candidateLogSegments.add(new EnrichedLogSegment(previousSeg, currentSeg.baseOffset()));
             }
             return candidateLogSegments;
