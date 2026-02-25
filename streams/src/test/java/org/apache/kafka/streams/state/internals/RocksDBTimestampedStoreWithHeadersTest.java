@@ -39,6 +39,7 @@ import org.rocksdb.RocksIterator;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -177,19 +178,24 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         // one delete on old CF, one put on new CF, but count is off by one due to delete on old CF not deleting anything
         assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 3 entries on legacy CF, 2 in headers-aware CF after adding new key8new with put()");
 
+        rocksDBStore.put(new Bytes("key9new".getBytes()), null);
+        // one delete on old CF, one put on new CF, but count is off by two due to deletes not deleting anything
+        assertEquals(3L, rocksDBStore.approximateNumEntries(), "Expected 2 entries on legacy CF, 1 in headers-aware CF after adding new key8new with put()");
+
         // putIfAbsent() - tests migration on conditional write
 
         assertNull(rocksDBStore.putIfAbsent(new Bytes("key11new".getBytes()), "headers+timestamp+11111111111".getBytes()),
             "Expected null return value for putIfAbsent on non-existing key11new, and new key should be added to headers-aware CF");
         // one delete on old CF, one put on new CF, but count is off by one due to delete on old CF not deleting anything
-        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 2 entries on legacy CF, 3 in headers-aware CF after adding new key11new with putIfAbsent()");
+        assertEquals(3L, rocksDBStore.approximateNumEntries(), "Expected 1 entries on legacy CF, 2 in headers-aware CF after adding new key11new with putIfAbsent()");
 
         assertEquals(1 + 0 + 8 + 5, rocksDBStore.putIfAbsent(new Bytes("key5".getBytes()), null).length,
             "Expected header-aware format: varint(1) + empty headers(0) + timestamp(8) + value(5) = 14 bytes for putIfAbsent with null on existing key5");
-        assertEquals(5L, rocksDBStore.approximateNumEntries(), "Expected 1 entry on legacy CF, 4 in headers-aware CF after migrating key5 with putIfAbsent(null)");
+        // one delete on old CF, one put on new CF, due to `get()` migration
+        assertEquals(3L, rocksDBStore.approximateNumEntries(), "Expected 0 entry on legacy CF, 3 in headers-aware CF after migrating key5 with putIfAbsent(null)");
 
         assertNull(rocksDBStore.putIfAbsent(new Bytes("key12new".getBytes()), null));
-        // two delete operation, however, only one is counted because old CF count can not be less than 0
+        // no delete operation, because key12new is unknown
         assertEquals(3L, rocksDBStore.approximateNumEntries(), "Expected 0 entries on legacy CF, 3 in headers-aware CF after putIfAbsent with null on non-existing key12new");
 
         // delete() - tests migration on delete
@@ -410,7 +416,10 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         assertNull(db.get(legacyTimestampedColumnFamily, "key6".getBytes())); // migrated
         assertEquals(8 + 7, db.get(legacyTimestampedColumnFamily, "key7".getBytes()).length); // not migrated
         assertNull(db.get(legacyTimestampedColumnFamily, "key8new".getBytes()));
+        assertNull(db.get(legacyTimestampedColumnFamily, "key9new".getBytes()));
         assertNull(db.get(legacyTimestampedColumnFamily, "key11new".getBytes()));
+        assertNull(db.get(legacyTimestampedColumnFamily, "key12new".getBytes()));
+
     }
 
     private void verifyHeadersColumnFamily(final RocksDB db, final ColumnFamilyHandle headersColumnFamily) throws Exception {
@@ -424,6 +433,7 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         assertNull(db.get(headersColumnFamily, "key6".getBytes())); // migrated by delete() => deleted
         assertNull(db.get(headersColumnFamily, "key7".getBytes())); // not migrated, should still be in legacy column family
         assertEquals("headers+timestamp+88888888".getBytes().length, db.get(headersColumnFamily, "key8new".getBytes()).length); // added by put() => value is inserted without any conversion
+        assertNull(db.get(headersColumnFamily, "key9new".getBytes()));
         assertEquals("headers+timestamp+11111111111".getBytes().length, db.get(headersColumnFamily, "key11new".getBytes()).length); // inserted (newly added) by putIfAbsent() => value is inserted without any conversion
         assertNull(db.get(headersColumnFamily, "key12new".getBytes())); // putIfAbsent with null value on non-existing key should not create any entry
     }
@@ -525,11 +535,11 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             boolean hasLegacy = false;
 
             for (final byte[] cf : existingCFs) {
-                if (java.util.Arrays.equals(cf, RocksDB.DEFAULT_COLUMN_FAMILY)) {
+                if (Arrays.equals(cf, RocksDB.DEFAULT_COLUMN_FAMILY)) {
                     hasDefault = true;
-                } else if (java.util.Arrays.equals(cf, "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8))) {
+                } else if (Arrays.equals(cf, "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8))) {
                     hasHeadersAware = true;
-                } else if (java.util.Arrays.equals(cf, "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8))) {
+                } else if (Arrays.equals(cf, "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8))) {
                     hasLegacy = true;
                 }
             }
@@ -546,6 +556,52 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
             rocksDBStore.init(context, rocksDBStore);
 
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in regular headers-aware mode"));
+        }
+    }
+
+    @Test
+    public void shouldNotSupportDowngradeFromHeadersAwareToRegularStore() {
+        // prepare headers-aware store with data
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(new Bytes("key1".getBytes()), "headers-aware-value1".getBytes());
+        rocksDBStore.put(new Bytes("key2".getBytes()), "headers-aware-value2".getBytes());
+        rocksDBStore.close();
+
+        final RocksDBStore regularStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
+        try {
+            final ProcessorStateException exception = assertThrows(
+                ProcessorStateException.class,
+                () -> regularStore.init(context, regularStore)
+            );
+
+            assertTrue(exception.getMessage().contains("Store " + DB_NAME + " is a headers-aware store"));
+            assertTrue(exception.getMessage().contains("cannot be opened as a regular key-value store"));
+            assertTrue(exception.getMessage().contains("Downgrade from headers-aware to regular store is not supported"));
+        } finally {
+            regularStore.close();
+        }
+    }
+
+    @Test
+    public void shouldNotSupportDowngradeFromHeadersAwareToTimestampedStore() {
+        rocksDBStore.init(context, rocksDBStore);
+        rocksDBStore.put(new Bytes("key1".getBytes()), "headers-aware-value1".getBytes());
+        rocksDBStore.put(new Bytes("key2".getBytes()), "headers-aware-value2".getBytes());
+        rocksDBStore.close();
+
+        final RocksDBTimestampedStore timestampedStore = new RocksDBTimestampedStore(DB_NAME, METRICS_SCOPE);
+        try {
+            final ProcessorStateException exception = assertThrows(
+                ProcessorStateException.class,
+                () -> timestampedStore.init(context, timestampedStore)
+            );
+
+            assertTrue(exception.getMessage().contains("Store " + DB_NAME + " is a headers-aware store"));
+            assertTrue(exception.getMessage().contains("cannot be opened as a timestamped store"));
+            assertTrue(exception.getMessage().contains("Downgrade from headers-aware to timestamped store is not supported"));
+            assertTrue(exception.getMessage().contains("To downgrade, you can delete the local state in the state directory, and rebuild the store as timestamped store from the changelog"));
+        } finally {
+            timestampedStore.close();
         }
     }
 

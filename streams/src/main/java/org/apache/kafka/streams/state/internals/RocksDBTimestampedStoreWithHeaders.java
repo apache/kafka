@@ -54,7 +54,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     private static final byte[] LEGACY_TIMESTAMPED_CF_NAME =
         RocksDBTimestampedStore.TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME;
 
-    private static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
+    static final byte[] TIMESTAMPED_VALUES_WITH_HEADERS_CF_NAME =
         "keyValueWithTimestampAndHeaders".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBTimestampedStoreWithHeaders(final String name,
@@ -91,7 +91,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     }
 
     private void openInUpgradeMode(final DBOptions dbOptions,
-                                              final ColumnFamilyOptions columnFamilyOptions) {
+                                   final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             // we have to open the default CF to be able to open the legacy CF, but we won't use it
@@ -127,7 +127,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     }
 
     private void openInRegularMode(final DBOptions dbOptions,
-                              final ColumnFamilyOptions columnFamilyOptions) {
+                                   final ColumnFamilyOptions columnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             // we have to open the default CF to be able to open the legacy CF, but we won't use it
@@ -143,7 +143,7 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
     }
 
     private void verifyAndCloseEmptyDefaultColumnFamily(final ColumnFamilyHandle columnFamilyHandle) {
-        try (final RocksIterator defaultIter = db.newIterator(columnFamilyHandle)) {
+        try (columnFamilyHandle; final RocksIterator defaultIter = db.newIterator(columnFamilyHandle)) {
             defaultIter.seekToFirst();
             if (defaultIter.isValid()) {
                 throw new ProcessorStateException("Cannot upgrade directly from key-value store to headers-aware store for " + name + ". " +

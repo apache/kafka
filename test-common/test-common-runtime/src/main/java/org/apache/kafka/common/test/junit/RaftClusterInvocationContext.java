@@ -129,7 +129,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
-        final AtomicBoolean formated = new AtomicBoolean(false);
+        final AtomicBoolean formatted = new AtomicBoolean(false);
         private KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
         private final ListenerName listenerName;
@@ -269,7 +269,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         public void format() throws Exception {
-            if (formated.compareAndSet(false, true)) {
+            if (formatted.compareAndSet(false, true)) {
                 Map<String, Feature> nameToSupportedFeature = new TreeMap<>();
                 Feature.PRODUCTION_FEATURES.forEach(feature -> nameToSupportedFeature.put(feature.featureName(), feature));
                 Map<String, Short> newFeatureLevels = new TreeMap<>();

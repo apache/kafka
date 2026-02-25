@@ -3888,6 +3888,119 @@ public class ShareConsumerTest {
         }
     }
 
+    @ClusterTest
+    public void testDynamicDeliveryCountLimitDecreaseArchivesRecords() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            // Produce 1 record.
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(),
+                null, "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            // Consume and release twice (deliveryCount becomes 2).
+            // Delivery 1: acquire (deliveryCount=1) → release (1 < default limit 5 → AVAILABLE).
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Delivery 2: acquire (deliveryCount=2) → release (2 < 5 → AVAILABLE).
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Dynamically decrease delivery count limit to 3 via group config.
+            alterShareDeliveryCountLimit("group1", "3");
+
+            // Delivery 3: acquire (deliveryCount=3) → release (3 >= 3 → ARCHIVED).
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 3, records.records(tp).get(0).deliveryCount().get());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Next poll should have no records because the record was archived.
+            records = shareConsumer.poll(Duration.ofMillis(2500L));
+            assertTrue(records.isEmpty(),
+                "Records should be empty as the record was archived. But received: " + records.count());
+        }
+    }
+
+    @ClusterTest(
+        serverProperties = {
+            @ClusterConfigProperty(key = "group.share.delivery.count.limit", value = "3"),
+        }
+    )
+    public void testDynamicDeliveryCountLimitIncreaseAllowsMoreDeliveries() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))
+        ) {
+            // Produce 1 record.
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(),
+                null, "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+
+            // Consume and release twice (deliveryCount becomes 2).
+            // Delivery 1: acquire (deliveryCount=1) → release (1 < broker limit 3 → AVAILABLE).
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Delivery 2: acquire (deliveryCount=2) → release (2 < 3 → AVAILABLE).
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Dynamically increase delivery count limit to 5 via group config.
+            alterShareDeliveryCountLimit("group1", "5");
+
+            // Delivery 3: acquire (deliveryCount=3) → release (3 < 5 → AVAILABLE).
+            // Without the config increase, 3 >= 3 would have caused archival.
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 3, records.records(tp).get(0).deliveryCount().get());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Delivery 4: acquire (deliveryCount=4) → release (4 < 5 → AVAILABLE).
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 4, records.records(tp).get(0).deliveryCount().get());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Delivery 5: acquire (deliveryCount=5) → release (5 >= 5 → ARCHIVED).
+            records = waitedPoll(shareConsumer, 2500L, 1);
+            assertEquals(1, records.count());
+            assertEquals((short) 5, records.records(tp).get(0).deliveryCount().get());
+            records.forEach(r -> shareConsumer.acknowledge(r, AcknowledgeType.RELEASE));
+            shareConsumer.commitSync();
+
+            // Next poll should have no records because the record was archived.
+            records = shareConsumer.poll(Duration.ofMillis(2500L));
+            assertTrue(records.isEmpty(),
+                "Records should be empty as the record was archived. But received: " + records.count());
+        }
+    }
+
     /**
      * Util class to encapsulate state for a consumer/producer
      * being executed by an {@link ExecutorService}.
@@ -4178,6 +4291,19 @@ public class ShareConsumerTest {
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
+        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
+                .all()
+                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
+        }
+    }
+
+    private void alterShareDeliveryCountLimit(String groupId, String newValue) {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
+        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_DELIVERY_COUNT_LIMIT_CONFIG, newValue), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
         try (Admin adminClient = createAdminClient()) {
             assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
