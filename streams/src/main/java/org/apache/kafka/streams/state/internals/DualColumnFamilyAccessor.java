@@ -255,6 +255,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
 
     @Override
     public void close() {
+        super.close();
         oldColumnFamily.close();
         newColumnFamily.close();
     }

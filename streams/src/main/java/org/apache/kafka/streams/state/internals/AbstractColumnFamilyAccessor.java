@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
@@ -26,6 +28,8 @@ import java.util.Map;
 abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
 
     private final ColumnFamilyHandle offsetColumnFamilyHandle;
+    private final StringSerializer stringSerializer = new StringSerializer();
+    private final LongSerializer longSerializer = new LongSerializer();
 
     AbstractColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamilyHandle) {
         this.offsetColumnFamilyHandle = offsetColumnFamilyHandle;
@@ -34,6 +38,19 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     @Override
     public final void commit(final RocksDBStore.DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
         this.commit(accessor);
+        for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
+            final TopicPartition tp = entry.getKey();
+            final Long offset = entry.getValue();
+            final byte[] key = stringSerializer.serialize(null, tp.toString());
+            final byte[] value = longSerializer.serialize(null, offset);
+            accessor.put(offsetColumnFamilyHandle, key, value);
+        }
+        accessor.flush(offsetColumnFamilyHandle);
+    }
+
+    @Override
+    public void close() {
+        offsetColumnFamilyHandle.close();
     }
 
     protected abstract void commit(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
