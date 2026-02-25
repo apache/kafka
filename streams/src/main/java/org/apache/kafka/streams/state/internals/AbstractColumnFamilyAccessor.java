@@ -25,6 +25,11 @@ import org.rocksdb.RocksDBException;
 
 import java.util.Map;
 
+/**
+ * Abstract base class for all ColumnFamilyAccessor.
+ * Provides common logic for committing and retrieving offsets,
+ * while delegating specific commit behavior to subclasses.
+ */
 abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamilyAccessor {
 
     private final ColumnFamilyHandle offsetColumnFamilyHandle;
@@ -62,5 +67,12 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
         return null;
     }
 
+    /**
+     * Invokes commit in the underlying ColumnFamilyAccessor.
+     * Subclasses should implement this method to define specific commit behavior.
+     *
+     * @param accessor the RocksDB accessor used to interact with the database
+     * @throws RocksDBException if an error occurs during the commit operation
+     */
     protected abstract void commit(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
 }

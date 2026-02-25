@@ -56,6 +56,7 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     /**
      * Constructs a DualColumnFamilyAccessor.
      *
+     * @param offsetColumnFamily the column family for the managed offsets
      * @param oldColumnFamily the column family containing legacy data
      * @param newColumnFamily the column family for new format data
      * @param valueConverter  function to convert old format values to new format
