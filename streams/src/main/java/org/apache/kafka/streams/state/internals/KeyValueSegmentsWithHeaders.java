@@ -36,21 +36,13 @@ class KeyValueSegmentsWithHeaders extends AbstractSegments<KeyValueSegmentWithHe
     }
 
     @Override
-    public KeyValueSegmentWithHeaders getOrCreateSegment(final long segmentId,
-                                                         final StateStoreContext context) {
-        if (segments.containsKey(segmentId)) {
-            return segments.get(segmentId);
-        } else {
-            final KeyValueSegmentWithHeaders newSegment =
-                new KeyValueSegmentWithHeaders(segmentName(segmentId), name, segmentId, position, metricsRecorder);
+    protected KeyValueSegmentWithHeaders createSegment(final long segmentId, final String segmentName) {
+        return new KeyValueSegmentWithHeaders(segmentName, name, segmentId, position, metricsRecorder);
+    }
 
-            if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("KeyValueSegmentWithHeaders already exists. Possible concurrent access.");
-            }
-
-            newSegment.openDB(context.appConfigs(), context.stateDir());
-            return newSegment;
-        }
+    @Override
+    protected void openSegmentDB(final KeyValueSegmentWithHeaders segment, final StateStoreContext context) {
+        segment.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override
