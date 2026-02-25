@@ -415,7 +415,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public abstract static class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public abstract static class AbstractTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
 
         @Override
         public String version() {
@@ -424,7 +424,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     }
 
-    public abstract static class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public abstract static class AbstractKeyValueTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
         @Override
         public R apply(R record) {
             return null;

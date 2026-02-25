@@ -31,14 +31,7 @@ import org.apache.kafka.common.config.ConfigDef;
 
  *
  */
-public interface ConnectPlugin {
-
-    /**
-     * Get the version of this component.
-     *
-     * @return the version, formatted as a String. The version may not be {@code null} or empty.
-     */
-    String version();
+public interface ConnectPlugin extends Versioned {
 
     /**
      * Returns the configuration specification for this component.

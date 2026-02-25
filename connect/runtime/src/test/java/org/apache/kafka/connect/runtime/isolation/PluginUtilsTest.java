@@ -654,7 +654,7 @@ public class PluginUtilsTest {
         }
     }
 
-    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R> {
 
         @Override
         public String version() {

@@ -59,6 +59,16 @@ public interface Transformation<R extends ConnectRecord<R>> extends Configurable
     @Override
     ConfigDef config();
 
+    /**
+     * Get the version of this component.
+     *
+     * @return the version, formatted as a String. The version may not be {@code null} or empty.
+     */
+    @Override
+    default String version() {
+        return "undefined";
+    }
+
     /** Signal that this transformation instance will no longer will be used. */
     @Override
     void close();

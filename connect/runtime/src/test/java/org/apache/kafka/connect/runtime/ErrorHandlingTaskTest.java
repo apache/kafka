@@ -513,7 +513,7 @@ public class ErrorHandlingTaskTest {
     }
 
     // Public to allow plugin discovery to complete without errors
-    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
 
         private static final Logger log = LoggerFactory.getLogger(FaultyPassthrough.class);
 

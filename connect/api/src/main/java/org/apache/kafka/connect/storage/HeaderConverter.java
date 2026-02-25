@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -57,13 +56,6 @@ public interface HeaderConverter extends Configurable, Closeable, ConnectPlugin 
      * @return the byte array form of the Header's value; may be null if the value is null
      */
     byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value);
-
-    /**
-     * Configuration specification for this set of header converters.
-     * @return the configuration specification; may not be null
-     */
-    @Override
-    ConfigDef config();
 
     /**
      * Get the version of this component.
