@@ -63,6 +63,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Tag("integration")
 public class HeadersStoreUpgradeIntegrationTest {
@@ -374,11 +375,11 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     /**
-     * Tests migration from TimestampedWindowStore (v2) to TimestampedWindowStoreWithHeaders (v3).
+     * Tests migration from TimestampedWindowStore to TimestampedWindowStoreWithHeaders.
      * This is a true migration where both supplier and builder are upgraded.
      */
     private void shouldMigrateTimestampedWindowStoreToTimestampedWindowStoreWithHeaders(final boolean persistentStore) throws Exception {
-        // Phase 1: Run with old v2 store
+        // Phase 1: Run with old TimestampedWindowStore
         final StreamsBuilder oldBuilder = new StreamsBuilder();
         oldBuilder.addStateStore(
                 Stores.timestampedWindowStoreBuilder(
@@ -422,7 +423,7 @@ public class HeadersStoreUpgradeIntegrationTest {
 
         final Headers headers = new RecordHeaders();
         headers.add("source", "migration-test".getBytes());
-        headers.add("version", "v3".getBytes());
+        headers.add("version", "1.0".getBytes());
 
         processWindowedKeyValueWithHeadersAndVerify("key3", "value3-updated", baseTime + 350, headers, headers);
         processWindowedKeyValueWithHeadersAndVerify("key4", "value4", baseTime + 400, headers, headers);
@@ -453,11 +454,11 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams.close();
         kafkaStreams = null;
 
-        // Restart with v3 builder BUT v2 supplier (proxy/adapter mode)
+        // Restart with headers-aware builder but non-headers supplier (proxy/adapter mode)
         final StreamsBuilder newBuilder = new StreamsBuilder();
         newBuilder.addStateStore(
                 Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),  // v2 supplier!
+                    Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME, Duration.ofMillis(RETENTION_MS), Duration.ofMillis(WINDOW_SIZE_MS), false),  // non-headers supplier!
                     Serdes.String(),
                     Serdes.String()))
             .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
@@ -473,7 +474,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         final RecordHeaders headers = new RecordHeaders();
         headers.add("source", "proxy-test".getBytes());
 
-        // In proxy mode, headers are stripped when writing to v2 store
+        // In proxy mode, headers are stripped when writing to non-headers store
         // So we expect empty headers when reading back
         final Headers expectedHeaders = new RecordHeaders();
 
@@ -601,7 +602,7 @@ public class HeadersStoreUpgradeIntegrationTest {
                 assertEquals(value, result.value(), "Value should match");
                 assertEquals(timestamp, result.timestamp(), "Timestamp should match");
 
-                // Verify headers exist but are empty (migrated from v2)
+                // Verify headers exist but are empty (migrated from timestamped store without headers)
                 assertNotNull(result.headers(), "Headers should not be null for migrated data");
                 assertEquals(0, result.headers().toArray().length, "Headers should be empty for migrated data");
 
@@ -614,7 +615,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     /**
-     * Processor for TimestampedWindowStore (v2 - without headers).
+     * Processor for TimestampedWindowStore (without headers).
      */
     private static class TimestampedWindowedProcessor implements Processor<String, String, Void, Void> {
         private TimestampedWindowStore<String, String> store;
@@ -632,7 +633,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     /**
-     * Processor for TimestampedWindowStoreWithHeaders (v3 - with headers).
+     * Processor for TimestampedWindowStoreWithHeaders (with headers).
      */
     private static class TimestampedWindowedWithHeadersProcessor implements Processor<String, String, Void, Void> {
         private TimestampedWindowStoreWithHeaders<String, String> store;
@@ -648,6 +649,111 @@ public class HeadersStoreUpgradeIntegrationTest {
             store.put(record.key(),
                 ValueTimestampHeaders.make(record.value(), record.timestamp(), record.headers()),
                 windowStart);
+        }
+    }
+
+    @Test
+    public void shouldFailDowngradeFromTimestampedWindowStoreWithHeadersToTimestampedWindowStore() throws Exception {
+        final StreamsBuilder headersBuilder = new StreamsBuilder();
+        headersBuilder.addStateStore(
+                Stores.timestampedWindowStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedWindowStoreWithHeaders(WINDOW_STORE_NAME,
+                        Duration.ofMillis(RETENTION_MS),
+                        Duration.ofMillis(WINDOW_SIZE_MS),
+                        false),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedWithHeadersProcessor::new, WINDOW_STORE_NAME);
+
+        final Properties props = props();
+        kafkaStreams = new KafkaStreams(headersBuilder.build(), props);
+        kafkaStreams.start();
+
+        final long baseTime = CLUSTER.time.milliseconds();
+        final Headers headers = new RecordHeaders();
+        headers.add("source", "test".getBytes());
+
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair("key1", "value1")),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            headers,
+            baseTime + 100,
+            false);
+
+        // Wait for processing
+        Thread.sleep(3000);
+
+        kafkaStreams.close();
+        kafkaStreams = null;
+
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.timestampedWindowStoreBuilder(
+                    Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME,
+                        Duration.ofMillis(RETENTION_MS),
+                        Duration.ofMillis(WINDOW_SIZE_MS),
+                        false),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedProcessor::new, WINDOW_STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+
+        // Note: Window stores use segment-level versioning, not column family detection like key-value stores.
+        // Therefore, they do not throw an explicit "downgrade not supported" exception during initialization.
+        // Instead, attempting to read headers-aware data with a non-headers-aware store will result in
+        // data corruption (misinterpreting [headers][timestamp][value] as [timestamp][value]).
+        //
+        // This test verifies that downgrade without cleanup leads to data corruption or read failures.
+        boolean dataIsCorruptedOrUnreadable = false;
+
+        try {
+            kafkaStreams.start();
+            Thread.sleep(5000);
+
+            // Try to read the data that was written with headers
+            final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store =
+                IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
+
+            if (store == null) {
+                fail("Store should be available after startup");
+            }
+
+            final long windowStart = baseTime + 100 - ((baseTime + 100) % WINDOW_SIZE_MS);
+            final ValueAndTimestamp<String> result = store.fetch("key1", windowStart);
+
+            // The data should either:
+            // 1. Be null (unable to read due to format mismatch), or
+            // 2. Be corrupted (wrong value/timestamp due to misinterpreting the format)
+            if (result == null) {
+                // Data is null - indicates read failure due to format mismatch (expected)
+                dataIsCorruptedOrUnreadable = true;
+            } else {
+                // If we can read something, verify it's corrupted
+                final boolean isCorrupted = !result.value().equals("value1") || result.timestamp() != (baseTime + 100);
+                if (isCorrupted) {
+                    // Data is corrupted as expected
+                    dataIsCorruptedOrUnreadable = true;
+                } else {
+                    // Data was read correctly - this should NOT happen
+                    fail("Expected data corruption or read failure when downgrading without cleanup, " +
+                        "but data was read correctly (value=" + result.value() + ", timestamp=" + result.timestamp() + "). " +
+                        "downgrades without cleanup should not succeed.");
+                }
+            }
+        } catch (final Exception e) {
+            // An exception during read is also acceptable - indicates format mismatch caused a failure
+            dataIsCorruptedOrUnreadable = true;
+        } finally {
+            kafkaStreams.close(Duration.ofSeconds(30L));
+        }
+
+        // Verify that the downgrade resulted in data corruption or read failure
+        if (!dataIsCorruptedOrUnreadable) {
+            fail("Downgrade without cleanup should result in data corruption or read failure");
         }
     }
 }
