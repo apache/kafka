@@ -21,35 +21,35 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
- * Manages the {@link KeyValueSegmentWithHeaders}s that are used by the {@link RocksDBSegmentedBytesStoreWithHeaders}.
+ * Manages the {@link SessionSegmentWithHeaders}s that are used by the {@link SessionRocksDBSegmentedBytesStoreWithHeaders}.
  */
-class KeyValueSegmentsWithHeaders extends AbstractSegments<KeyValueSegmentWithHeaders> {
+class SessionSegmentsWithHeaders extends AbstractSegments<SessionSegmentWithHeaders> {
 
     private final RocksDBMetricsRecorder metricsRecorder;
 
-    KeyValueSegmentsWithHeaders(final String name,
-                                final String metricsScope,
-                                final long retentionPeriod,
-                                final long segmentInterval) {
+    SessionSegmentsWithHeaders(final String name,
+                               final String metricsScope,
+                               final long retentionPeriod,
+                               final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
         metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }
 
     @Override
-    protected KeyValueSegmentWithHeaders createSegment(final long segmentId, final String segmentName) {
-        return new KeyValueSegmentWithHeaders(segmentName, name, segmentId, position, metricsRecorder);
+    protected SessionSegmentWithHeaders createSegment(final long segmentId, final String segmentName) {
+        return new SessionSegmentWithHeaders(segmentName, name, segmentId, position, metricsRecorder);
     }
 
     @Override
-    protected void openSegmentDB(final KeyValueSegmentWithHeaders segment, final StateStoreContext context) {
+    protected void openSegmentDB(final SessionSegmentWithHeaders segment, final StateStoreContext context) {
         segment.openDB(context.appConfigs(), context.stateDir());
     }
 
     @Override
-    public KeyValueSegmentWithHeaders getOrCreateSegmentIfLive(final long segmentId,
-                                                               final StateStoreContext context,
-                                                               final long streamTime) {
-        final KeyValueSegmentWithHeaders segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
+    public SessionSegmentWithHeaders getOrCreateSegmentIfLive(final long segmentId,
+                                                              final StateStoreContext context,
+                                                              final long streamTime) {
+        final SessionSegmentWithHeaders segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
         cleanupExpiredSegments(streamTime);
         return segment;
     }

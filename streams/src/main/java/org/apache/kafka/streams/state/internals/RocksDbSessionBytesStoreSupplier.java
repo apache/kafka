@@ -47,7 +47,7 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     public SessionStore<Bytes, byte[]> get() {
         if (withHeaders) {
             return new RocksDBSessionStoreWithHeaders(
-                new RocksDBSegmentedBytesStoreWithHeaders(
+                new SessionRocksDBSegmentedBytesStoreWithHeaders(
                     name,
                     metricsScope(),
                     retentionPeriod,

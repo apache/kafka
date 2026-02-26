@@ -36,13 +36,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class KeyValueSegmentsWithHeadersTest {
+public class SessionSegmentsWithHeadersTest {
 
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
     private static final String METRICS_SCOPE = "test-state-id";
     private InternalMockProcessorContext context;
-    private KeyValueSegmentsWithHeaders segments;
+    private SessionSegmentsWithHeaders segments;
     private File stateDirectory;
     private final String storeName = "test";
 
@@ -56,7 +56,7 @@ public class KeyValueSegmentsWithHeadersTest {
             new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
-        segments = new KeyValueSegmentsWithHeaders(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments = new SessionSegmentsWithHeaders(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
         segments.openExisting(context, -1L);
     }
 
@@ -82,9 +82,9 @@ public class KeyValueSegmentsWithHeadersTest {
 
     @Test
     public void shouldCreateSegments() {
-        final KeyValueSegmentWithHeaders segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        final KeyValueSegmentWithHeaders segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
-        final KeyValueSegmentWithHeaders segment3 = segments.getOrCreateSegmentIfLive(2, context, -1L);
+        final SessionSegmentWithHeaders segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        final SessionSegmentWithHeaders segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
+        final SessionSegmentWithHeaders segment3 = segments.getOrCreateSegmentIfLive(2, context, -1L);
 
         assertTrue(new File(context.stateDir(), "test/test.0").isDirectory());
         assertTrue(new File(context.stateDir(), "test/test." + SEGMENT_INTERVAL).isDirectory());
@@ -103,9 +103,9 @@ public class KeyValueSegmentsWithHeadersTest {
 
     @Test
     public void shouldCleanupSegmentsThatHaveExpired() {
-        final KeyValueSegmentWithHeaders segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        final KeyValueSegmentWithHeaders segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
-        final KeyValueSegmentWithHeaders segment3 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
+        final SessionSegmentWithHeaders segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        final SessionSegmentWithHeaders segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
+        final SessionSegmentWithHeaders segment3 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
 
         assertFalse(segment1.isOpen());
         assertFalse(segment2.isOpen());
@@ -117,22 +117,22 @@ public class KeyValueSegmentsWithHeadersTest {
 
     @Test
     public void shouldGetSegmentForTimestamp() {
-        final KeyValueSegmentWithHeaders segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        final SessionSegmentWithHeaders segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
         assertEquals(segment, segments.segmentForTimestamp(0L));
     }
 
     @Test
     public void shouldGetCorrectSegmentString() {
-        final KeyValueSegmentWithHeaders segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        assertEquals("KeyValueSegmentWithHeaders(id=0, name=test.0)", segment.toString());
+        final SessionSegmentWithHeaders segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        assertEquals("SessionSegmentWithHeaders(id=0, name=test.0)", segment.toString());
     }
 
     @Test
     public void shouldCloseAllOpenSegments() {
-        final KeyValueSegmentWithHeaders first = segments.getOrCreateSegmentIfLive(0, context, -1L);
-        final KeyValueSegmentWithHeaders second = segments.getOrCreateSegmentIfLive(1, context, -1L);
-        final KeyValueSegmentWithHeaders third = segments.getOrCreateSegmentIfLive(2, context, -1L);
+        final SessionSegmentWithHeaders first = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        final SessionSegmentWithHeaders second = segments.getOrCreateSegmentIfLive(1, context, -1L);
+        final SessionSegmentWithHeaders third = segments.getOrCreateSegmentIfLive(2, context, -1L);
         segments.close();
 
         assertFalse(first.isOpen());
@@ -142,7 +142,7 @@ public class KeyValueSegmentsWithHeadersTest {
 
     @Test
     public void shouldOpenExistingSegments() {
-        segments = new KeyValueSegmentsWithHeaders("test", METRICS_SCOPE, 4, 1);
+        segments = new SessionSegmentsWithHeaders("test", METRICS_SCOPE, 4, 1);
         segments.openExisting(context, -1L);
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
@@ -152,7 +152,7 @@ public class KeyValueSegmentsWithHeadersTest {
         // close existing.
         segments.close();
 
-        segments = new KeyValueSegmentsWithHeaders("test", METRICS_SCOPE, 4, 1);
+        segments = new SessionSegmentsWithHeaders("test", METRICS_SCOPE, 4, 1);
         segments.openExisting(context, -1L);
 
         assertTrue(segments.segmentForTimestamp(0).isOpen());
@@ -175,7 +175,7 @@ public class KeyValueSegmentsWithHeadersTest {
         segments.getOrCreateSegmentIfLive(3, context, streamTime);
         segments.getOrCreateSegmentIfLive(4, context, streamTime);
 
-        final List<KeyValueSegmentWithHeaders> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
+        final List<SessionSegmentWithHeaders> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);

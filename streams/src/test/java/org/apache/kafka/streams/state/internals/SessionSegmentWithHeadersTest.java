@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-public class KeyValueSegmentWithHeadersTest {
+public class SessionSegmentWithHeadersTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
         new RocksDBMetricsRecorder("metrics-scope", "store-name");
@@ -60,8 +60,8 @@ public class KeyValueSegmentWithHeadersTest {
 
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {
-        final KeyValueSegmentWithHeaders segment =
-            new KeyValueSegmentWithHeaders("segment", "window", 0L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segment =
+            new SessionSegmentWithHeaders("segment", "window", 0L, Position.emptyPosition(), metricsRecorder);
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
 
@@ -79,12 +79,12 @@ public class KeyValueSegmentWithHeadersTest {
 
     @Test
     public void shouldBeEqualIfIdIsEqual() {
-        final KeyValueSegmentWithHeaders segment =
-            new KeyValueSegmentWithHeaders("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
-        final KeyValueSegmentWithHeaders segmentSameId =
-            new KeyValueSegmentWithHeaders("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
-        final KeyValueSegmentWithHeaders segmentDifferentId =
-            new KeyValueSegmentWithHeaders("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segment =
+            new SessionSegmentWithHeaders("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segmentSameId =
+            new SessionSegmentWithHeaders("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segmentDifferentId =
+            new SessionSegmentWithHeaders("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
 
         assertEquals(segment, segment);
         assertEquals(segment, segmentSameId);
@@ -99,14 +99,14 @@ public class KeyValueSegmentWithHeadersTest {
 
     @Test
     public void shouldHashOnSegmentIdOnly() {
-        final KeyValueSegmentWithHeaders segment =
-            new KeyValueSegmentWithHeaders("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
-        final KeyValueSegmentWithHeaders segmentSameId =
-            new KeyValueSegmentWithHeaders("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
-        final KeyValueSegmentWithHeaders segmentDifferentId =
-            new KeyValueSegmentWithHeaders("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segment =
+            new SessionSegmentWithHeaders("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segmentSameId =
+            new SessionSegmentWithHeaders("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segmentDifferentId =
+            new SessionSegmentWithHeaders("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
 
-        final Set<KeyValueSegmentWithHeaders> set = new HashSet<>();
+        final Set<SessionSegmentWithHeaders> set = new HashSet<>();
         assertTrue(set.add(segment));
         assertFalse(set.add(segmentSameId));
         assertTrue(set.add(segmentDifferentId));
@@ -118,12 +118,12 @@ public class KeyValueSegmentWithHeadersTest {
 
     @Test
     public void shouldCompareSegmentIdOnly() {
-        final KeyValueSegmentWithHeaders segment1 =
-            new KeyValueSegmentWithHeaders("a", "C", 50L, Position.emptyPosition(), metricsRecorder);
-        final KeyValueSegmentWithHeaders segment2 =
-            new KeyValueSegmentWithHeaders("b", "B", 100L, Position.emptyPosition(), metricsRecorder);
-        final KeyValueSegmentWithHeaders segment3 =
-            new KeyValueSegmentWithHeaders("c", "A", 0L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segment1 =
+            new SessionSegmentWithHeaders("a", "C", 50L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segment2 =
+            new SessionSegmentWithHeaders("b", "B", 100L, Position.emptyPosition(), metricsRecorder);
+        final SessionSegmentWithHeaders segment3 =
+            new SessionSegmentWithHeaders("c", "A", 0L, Position.emptyPosition(), metricsRecorder);
 
         assertEquals(0, segment1.compareTo(segment1));
         assertEquals(-1, segment1.compareTo(segment2));

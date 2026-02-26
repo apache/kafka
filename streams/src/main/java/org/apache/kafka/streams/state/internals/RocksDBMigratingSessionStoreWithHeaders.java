@@ -38,19 +38,19 @@ import java.util.List;
  * to a headers-aware column family ({@code sessionKeyValueWithHeaders}). It uses
  * {@link DualColumnFamilyAccessor} for lazy migration when legacy data exists in the DEFAULT CF.
  */
-public class RocksDBStoreWithHeaders extends RocksDBStore implements HeadersBytesStore {
-    private static final Logger log = LoggerFactory.getLogger(RocksDBStoreWithHeaders.class);
+public class RocksDBMigratingSessionStoreWithHeaders extends RocksDBStore implements HeadersBytesStore {
+    private static final Logger log = LoggerFactory.getLogger(RocksDBMigratingSessionStoreWithHeaders.class);
 
     static final byte[] SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME = "sessionKeyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
 
-    public RocksDBStoreWithHeaders(final String name,
-                                   final String metricsScope) {
+    public RocksDBMigratingSessionStoreWithHeaders(final String name,
+                                                   final String metricsScope) {
         super(name, metricsScope);
     }
 
-    RocksDBStoreWithHeaders(final String name,
-                            final String parentDir,
-                            final RocksDBMetricsRecorder metricsRecorder) {
+    RocksDBMigratingSessionStoreWithHeaders(final String name,
+                                            final String parentDir,
+                                            final RocksDBMetricsRecorder metricsRecorder) {
         super(name, parentDir, metricsRecorder);
     }
 

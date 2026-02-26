@@ -48,22 +48,22 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
+public class RocksDBMigratingSessionStoreWithHeadersTest extends RocksDBStoreTest {
 
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final AggregationWithHeadersSerializer<String> aggSerializer =
         new AggregationWithHeadersSerializer<>(new StringSerializer());
     private final AggregationWithHeadersDeserializer<String> aggDeserializer =
         new AggregationWithHeadersDeserializer<>(new StringDeserializer());
-    private final byte[] sessionStoreHeaderColumnFamilyName = RocksDBStoreWithHeaders.SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME;
+    private final byte[] sessionStoreHeaderColumnFamilyName = RocksDBMigratingSessionStoreWithHeaders.SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME;
 
     RocksDBStore getRocksDBStore() {
-        return new RocksDBStoreWithHeaders(DB_NAME, METRICS_SCOPE);
+        return new RocksDBMigratingSessionStoreWithHeaders(DB_NAME, METRICS_SCOPE);
     }
 
     @Test
     public void shouldOpenNewStoreInRegularMode() {
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBStoreWithHeaders.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBMigratingSessionStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in regular mode"));
@@ -84,7 +84,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
         rocksDBStore.close();
 
         // re-open store
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBStoreWithHeaders.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBMigratingSessionStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in regular mode"));
@@ -137,8 +137,8 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
     public void shouldMigrateFromDefaultToHeadersAwareColumnFamily() throws Exception {
         prepareDefaultStore();
 
-        // Open with RocksDBStoreWithHeaders - should detect legacy data in DEFAULT CF and enter upgrade mode
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBStoreWithHeaders.class)) {
+        // Open with RocksDBMigratingSessionStoreWithHeaders - should detect legacy data in DEFAULT CF and enter upgrade mode
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBMigratingSessionStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in upgrade mode"));
@@ -403,7 +403,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
 
     private void verifyStillInUpgradeMode() {
         // check that still in upgrade mode
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBStoreWithHeaders.class)) {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBMigratingSessionStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in upgrade mode"));
@@ -454,7 +454,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
 
     private void verifyInRegularMode() {
         // check that now in regular mode (all legacy data migrated)
-        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBStoreWithHeaders.class)) {
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBMigratingSessionStoreWithHeaders.class)) {
             rocksDBStore.init(context, rocksDBStore);
 
             assertTrue(appender.getMessages().contains("Opening store " + DB_NAME + " in regular mode"));

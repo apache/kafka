@@ -19,18 +19,18 @@ package org.apache.kafka.streams.state.internals;
 /**
  * A RocksDB-backed segmented bytes store with headers support.
  * <p>
- * This store uses {@link KeyValueSegmentsWithHeaders} to manage segments,
- * where each segment is a {@link KeyValueSegmentWithHeaders} that extends
- * {@link RocksDBStoreWithHeaders}. This provides automatic dual-CF
+ * This store uses {@link SessionSegmentsWithHeaders} to manage segments,
+ * where each segment is a {@link SessionSegmentWithHeaders} that extends
+ * {@link RocksDBMigratingSessionStoreWithHeaders}. This provides automatic dual-CF
  * migration support from plain key-value format to headers format.
  */
-public class RocksDBSegmentedBytesStoreWithHeaders extends AbstractRocksDBSegmentedBytesStore<KeyValueSegmentWithHeaders> {
+public class SessionRocksDBSegmentedBytesStoreWithHeaders extends AbstractRocksDBSegmentedBytesStore<SessionSegmentWithHeaders> {
 
-    RocksDBSegmentedBytesStoreWithHeaders(final String name,
-                                          final String metricsScope,
-                                          final long retention,
-                                          final long segmentInterval,
-                                          final KeySchema keySchema) {
-        super(name, retention, keySchema, new KeyValueSegmentsWithHeaders(name, metricsScope, retention, segmentInterval));
+    SessionRocksDBSegmentedBytesStoreWithHeaders(final String name,
+                                                 final String metricsScope,
+                                                 final long retention,
+                                                 final long segmentInterval,
+                                                 final KeySchema keySchema) {
+        super(name, retention, keySchema, new SessionSegmentsWithHeaders(name, metricsScope, retention, segmentInterval));
     }
 }

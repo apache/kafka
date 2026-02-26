@@ -29,19 +29,19 @@ import java.util.Objects;
 /**
  * A segment that stores key-value pairs with headers.
  * <p>
- * This segment extends {@link RocksDBStoreWithHeaders} to provide
+ * This segment extends {@link RocksDBMigratingSessionStoreWithHeaders} to provide
  * header-aware storage with dual-column-family migration support from
  * plain key-value format to headers format.
  */
-class KeyValueSegmentWithHeaders extends RocksDBStoreWithHeaders implements Segment {
+class SessionSegmentWithHeaders extends RocksDBMigratingSessionStoreWithHeaders implements Segment {
 
     public final long id;
 
-    KeyValueSegmentWithHeaders(final String segmentName,
-                               final String windowName,
-                               final long id,
-                               final Position position,
-                               final RocksDBMetricsRecorder metricsRecorder) {
+    SessionSegmentWithHeaders(final String segmentName,
+                              final String windowName,
+                              final long id,
+                              final Position position,
+                              final RocksDBMetricsRecorder metricsRecorder) {
         super(segmentName, windowName, metricsRecorder);
         this.id = id;
         this.position = position;
@@ -70,7 +70,7 @@ class KeyValueSegmentWithHeaders extends RocksDBStoreWithHeaders implements Segm
 
     @Override
     public String toString() {
-        return "KeyValueSegmentWithHeaders(id=" + id + ", name=" + name() + ")";
+        return "SessionSegmentWithHeaders(id=" + id + ", name=" + name() + ")";
     }
 
     @Override
@@ -78,7 +78,7 @@ class KeyValueSegmentWithHeaders extends RocksDBStoreWithHeaders implements Segm
         if (obj == null || getClass() != obj.getClass()) {
             return false;
         }
-        final KeyValueSegmentWithHeaders segment = (KeyValueSegmentWithHeaders) obj;
+        final SessionSegmentWithHeaders segment = (SessionSegmentWithHeaders) obj;
         return id == segment.id;
     }
 
