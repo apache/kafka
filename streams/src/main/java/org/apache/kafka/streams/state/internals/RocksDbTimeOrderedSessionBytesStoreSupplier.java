@@ -78,4 +78,9 @@ public class RocksDbTimeOrderedSessionBytesStoreSupplier implements SessionBytes
     public long retentionPeriod() {
         return retentionPeriod;
     }
+
+    @Override
+    public boolean withHeaders() {
+        return withHeaders;
+    }
 }

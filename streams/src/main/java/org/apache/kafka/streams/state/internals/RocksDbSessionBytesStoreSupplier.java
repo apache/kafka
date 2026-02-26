@@ -78,4 +78,9 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     public long retentionPeriod() {
         return retentionPeriod;
     }
+
+    @Override
+    public boolean withHeaders() {
+        return withHeaders;
+    }
 }
