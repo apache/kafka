@@ -134,7 +134,12 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, K, V> {
             }
 
             // update the store with the new value
-            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp);
+            final long putReturnCode;
+            if (store.supportsHeaders()) {
+                putReturnCode = store.put(record.key(), newAgg, newTimestamp, record.headers());
+            } else {
+                putReturnCode = store.put(record.key(), newAgg, newTimestamp);
+            }
             // if not put to store, do not forward downstream either
             if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                 tupleForwarder.maybeForward(

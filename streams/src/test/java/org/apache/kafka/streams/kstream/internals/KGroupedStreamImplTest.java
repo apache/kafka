@@ -25,8 +25,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.KeyValueTimestampHeaders;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -825,7 +825,7 @@ public class KGroupedStreamImplTest {
                 KeyValueTimestampHeaders<String, String> lastKey2 = null;
                 KeyValueTimestampHeaders<String, String> lastKey3 = null;
 
-                for (KeyValueTimestampHeaders<String, String> record : processedRecords) {
+                for (final KeyValueTimestampHeaders<String, String> record : processedRecords) {
                     if (record.key().equals("1")) {
                         lastKey1 = record;
                     } else if (record.key().equals("2")) {
@@ -850,17 +850,27 @@ public class KGroupedStreamImplTest {
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-        final Headers headers1 = makeHeaders("key", "1");
-        final Headers headers2 = makeHeaders("key", "2");
-        final Headers headers3 = makeHeaders("key", "3");
+        if (storeFormat.equals("headers")) {
+            final Headers headers1 = makeHeaders("key", "1");
+            final Headers headers2 = makeHeaders("key", "2");
+            final Headers headers3 = makeHeaders("key", "3");
 
-        inputTopic.pipeInput(new TestRecord<>("1", "A", headers1, 5L));
-        inputTopic.pipeInput(new TestRecord<>("2", "B", headers2, 1L));
-        inputTopic.pipeInput(new TestRecord<>("1", "C", headers1, 3L));
-        inputTopic.pipeInput(new TestRecord<>("1", "D", headers1, 10L));
-        inputTopic.pipeInput(new TestRecord<>("3", "E", headers3, 8L));
-        inputTopic.pipeInput(new TestRecord<>("3", "F", headers3, 9L));
-        inputTopic.pipeInput(new TestRecord<>("3", null, headers3));
+            inputTopic.pipeInput(new TestRecord<>("1", "A", headers1, 5L));
+            inputTopic.pipeInput(new TestRecord<>("2", "B", headers2, 1L));
+            inputTopic.pipeInput(new TestRecord<>("1", "C", headers1, 3L));
+            inputTopic.pipeInput(new TestRecord<>("1", "D", headers1, 10L));
+            inputTopic.pipeInput(new TestRecord<>("3", "E", headers3, 8L));
+            inputTopic.pipeInput(new TestRecord<>("3", "F", headers3, 9L));
+            inputTopic.pipeInput(new TestRecord<>("3", null, headers3));
+        } else {
+            inputTopic.pipeInput("1", "A", 5L);
+            inputTopic.pipeInput("2", "B", 1L);
+            inputTopic.pipeInput("1", "C", 3L);
+            inputTopic.pipeInput("1", "D", 10L);
+            inputTopic.pipeInput("3", "E", 8L);
+            inputTopic.pipeInput("3", "F", 9L);
+            inputTopic.pipeInput("3", (String) null);
+        }
     }
 
     private void doCountWindowed(final MockApiProcessorSupplier<Windowed<String>, Long, Void, Void> supplier) {

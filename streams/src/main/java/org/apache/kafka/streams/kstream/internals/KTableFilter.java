@@ -155,7 +155,12 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
             }
 
             if (queryableName != null) {
-                final long putReturnCode = store.put(key, newValue, record.timestamp());
+                final long putReturnCode;
+                if (store.supportsHeaders()) {
+                    putReturnCode = store.put(key, newValue, record.timestamp(), record.headers());
+                } else {
+                    putReturnCode = store.put(key, newValue, record.timestamp());
+                }
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));

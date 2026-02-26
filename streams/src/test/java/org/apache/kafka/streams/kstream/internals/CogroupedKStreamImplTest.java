@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -51,8 +54,14 @@ import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -81,6 +90,29 @@ public class CogroupedKStreamImplTest {
 
     private static final Initializer<Integer> SUM_INITIALIZER = () -> 0;
 
+    /**
+     * Provides test parameters for different store formats.
+     */
+    private static Stream<Arguments> storeFormats() {
+        return Stream.of(
+            Arguments.of("default"),
+            Arguments.of("headers")
+        );
+    }
+
+    private Properties getProps(final String storeFormat) {
+        final Properties properties = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        properties.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
+        // Disable caching to avoid ValueTimestampHeaders casting issues
+        properties.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
+        return properties;
+    }
+
+    private static Headers makeHeaders(final String key, final String value) {
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add(new RecordHeader(key, value.getBytes()));
+        return headers;
+    }
 
     @BeforeEach
     public void setup() {
@@ -840,8 +872,9 @@ public class CogroupedKStreamImplTest {
                         "      <-- COGROUPKSTREAM-AGGREGATE-0000000012\n\n"));
     }
 
-    @Test
-    public void shouldCogroupAndAggregateSingleKStreams() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldCogroupAndAggregateSingleKStreams(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
 
@@ -853,25 +886,41 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
             final TestInputTopic<String, String> testInputTopic =
-                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            testInputTopic.pipeInput("k1", "A", 0);
-            testInputTopic.pipeInput("k2", "B", 0);
-            testInputTopic.pipeInput("k2", "B", 0);
-            testInputTopic.pipeInput("k1", "A", 0);
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 0);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "B", headers2, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "B", headers2, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", headers2, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", headers2, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", headers1, 0);
+            } else {
+                testInputTopic.pipeInput("k1", "A", 0);
+                testInputTopic.pipeInput("k2", "B", 0);
+                testInputTopic.pipeInput("k2", "B", 0);
+                testInputTopic.pipeInput("k1", "A", 0);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 0);
+            }
         }
     }
 
-    @Test
-    public void testCogroupHandleNullValues() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testCogroupHandleNullValues(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
 
@@ -883,24 +932,43 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestOutputTopic<String, String> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
-            testInputTopic.pipeInput("k1", "A", 0);
-            testInputTopic.pipeInput("k2", "B", 0);
-            testInputTopic.pipeInput("k2", null, 0);
-            testInputTopic.pipeInput("k2", "B", 0);
-            testInputTopic.pipeInput("k1", "A", 0);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+            final TestInputTopic<String, String> testInputTopic =
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestOutputTopic<String, String> testOutputTopic =
+                driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 0);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "B", headers2, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", null, headers2, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "B", headers2, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", headers2, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", headers2, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", headers1, 0);
+            } else {
+                testInputTopic.pipeInput("k1", "A", 0);
+                testInputTopic.pipeInput("k2", "B", 0);
+                testInputTopic.pipeInput("k2", null, 0);
+                testInputTopic.pipeInput("k2", "B", 0);
+                testInputTopic.pipeInput("k1", "A", 0);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 0);
+            }
         }
     }
 
-    @Test
-    public void shouldCogroupAndAggregateTwoKStreamsWithDistinctKeys() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldCogroupAndAggregateTwoKStreamsWithDistinctKeys(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -915,40 +983,67 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
             final TestInputTopic<String, String> testInputTopic =
-                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
-                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
-            testInputTopic.pipeInput("k1", "A", 0);
-            testInputTopic.pipeInput("k1", "A", 1);
-            testInputTopic.pipeInput("k1", "A", 10);
-            testInputTopic.pipeInput("k1", "A", 100);
-            testInputTopic2.pipeInput("k2", "B", 100L);
-            testInputTopic2.pipeInput("k2", "B", 200L);
-            testInputTopic2.pipeInput("k2", "B", 1L);
-            testInputTopic2.pipeInput("k2", "B", 500L);
-            testInputTopic2.pipeInput("k2", "B", 500L);
-            testInputTopic2.pipeInput("k2", "B", 100L);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 1L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 10L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 200L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 1L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 100L));
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAA", 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAAA", 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 200);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBB", 200);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBB", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBBB", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBBBB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", headers1, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAA", headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAAA", headers1, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", headers2, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBB", headers2, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBB", headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBBB", headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBBBB", headers2, 500);
+            } else {
+                testInputTopic.pipeInput("k1", "A", 0);
+                testInputTopic.pipeInput("k1", "A", 1);
+                testInputTopic.pipeInput("k1", "A", 10);
+                testInputTopic.pipeInput("k1", "A", 100);
+                testInputTopic2.pipeInput("k2", "B", 100L);
+                testInputTopic2.pipeInput("k2", "B", 200L);
+                testInputTopic2.pipeInput("k2", "B", 1L);
+                testInputTopic2.pipeInput("k2", "B", 500L);
+                testInputTopic2.pipeInput("k2", "B", 500L);
+                testInputTopic2.pipeInput("k2", "B", 100L);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAA", 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAAA", 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B", 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BB", 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBB", 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBBB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "BBBBBB", 500);
+            }
         }
     }
 
-    @Test
-    public void shouldCogroupAndAggregateTwoKStreamsWithSharedKeys() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldCogroupAndAggregateTwoKStreamsWithSharedKeys(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -963,42 +1058,72 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
             final TestInputTopic<String, String> testInputTopic =
-                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
-                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
-            testInputTopic.pipeInput("k1", "A", 0L);
-            testInputTopic.pipeInput("k2", "A", 1L);
-            testInputTopic.pipeInput("k1", "A", 10L);
-            testInputTopic.pipeInput("k2", "A", 100L);
-            testInputTopic2.pipeInput("k2", "B", 100L);
-            testInputTopic2.pipeInput("k2", "B", 200L);
-            testInputTopic2.pipeInput("k1", "B", 1L);
-            testInputTopic2.pipeInput("k2", "B", 500L);
-            testInputTopic2.pipeInput("k1", "B", 500L);
-            testInputTopic2.pipeInput("k2", "B", 500L);
-            testInputTopic2.pipeInput("k3", "B", 500L);
-            testInputTopic2.pipeInput("k2", "B", 100L);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers3 = makeHeaders("key", "k3");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "A", headers2, 1L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 10L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "A", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 200L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", "B", headers1, 1L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", "B", headers1, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k3", "B", headers3, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 100L));
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "A", 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AA", 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AAB", 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABB", 200);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAB", 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBB", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AABB", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBBB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "A", headers2, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AA", headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AAB", headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABB", headers2, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAB", headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBB", headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AABB", headers1, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBBB", headers2, 500);
+            } else {
+                testInputTopic.pipeInput("k1", "A", 0L);
+                testInputTopic.pipeInput("k2", "A", 1L);
+                testInputTopic.pipeInput("k1", "A", 10L);
+                testInputTopic.pipeInput("k2", "A", 100L);
+                testInputTopic2.pipeInput("k2", "B", 100L);
+                testInputTopic2.pipeInput("k2", "B", 200L);
+                testInputTopic2.pipeInput("k1", "B", 1L);
+                testInputTopic2.pipeInput("k2", "B", 500L);
+                testInputTopic2.pipeInput("k1", "B", 500L);
+                testInputTopic2.pipeInput("k2", "B", 500L);
+                testInputTopic2.pipeInput("k3", "B", 500L);
+                testInputTopic2.pipeInput("k2", "B", 100L);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "A", 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AA", 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AAB", 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABB", 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAB", 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AABB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBBB", 500);
+            }
         }
     }
 
-    @Test
-    public void shouldAllowDifferentOutputTypeInCoGroup() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldAllowDifferentOutputTypeInCoGroup(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -1016,42 +1141,72 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
             final TestInputTopic<String, String> testInputTopic =
-                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
-                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Integer> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new IntegerDeserializer());
 
-            testInputTopic.pipeInput("k1", "1", 0L);
-            testInputTopic.pipeInput("k2", "1", 1L);
-            testInputTopic.pipeInput("k1", "1", 10L);
-            testInputTopic.pipeInput("k2", "1", 100L);
-            testInputTopic2.pipeInput("k2", "2", 100L);
-            testInputTopic2.pipeInput("k2", "2", 200L);
-            testInputTopic2.pipeInput("k1", "2", 1L);
-            testInputTopic2.pipeInput("k2", "2", 500L);
-            testInputTopic2.pipeInput("k1", "2", 500L);
-            testInputTopic2.pipeInput("k2", "3", 500L);
-            testInputTopic2.pipeInput("k3", "2", 500L);
-            testInputTopic2.pipeInput("k2", "2", 100L);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers3 = makeHeaders("key", "k3");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 1L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 10L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "2", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "2", headers2, 200L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", "2", headers1, 1L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "2", headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", "2", headers1, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "3", headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k3", "2", headers3, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "2", headers2, 100L));
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 1, 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 1, 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 2, 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 2, 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 4, 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 6, 200);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 4, 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 8, 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 6, 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 11, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 1, headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 1, headers2, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 2, headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 2, headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 4, headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 6, headers2, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 4, headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 8, headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 6, headers1, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 11, headers2, 500);
+            } else {
+                testInputTopic.pipeInput("k1", "1", 0L);
+                testInputTopic.pipeInput("k2", "1", 1L);
+                testInputTopic.pipeInput("k1", "1", 10L);
+                testInputTopic.pipeInput("k2", "1", 100L);
+                testInputTopic2.pipeInput("k2", "2", 100L);
+                testInputTopic2.pipeInput("k2", "2", 200L);
+                testInputTopic2.pipeInput("k1", "2", 1L);
+                testInputTopic2.pipeInput("k2", "2", 500L);
+                testInputTopic2.pipeInput("k1", "2", 500L);
+                testInputTopic2.pipeInput("k2", "3", 500L);
+                testInputTopic2.pipeInput("k3", "2", 500L);
+                testInputTopic2.pipeInput("k2", "2", 100L);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 1, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 2, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 4, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 6, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 4, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 8, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 6, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 11, 500);
+            }
         }
     }
 
-    @Test
-    public void shouldCoGroupStreamsWithDifferentInputTypes() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldCoGroupStreamsWithDifferentInputTypes(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<String, Integer> integerConsumed = Consumed.with(Serdes.String(), Serdes.Integer());
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -1070,40 +1225,73 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
-            final TestInputTopic<String, Integer> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new IntegerSerializer());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+            final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<String, Integer> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Integer> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new IntegerDeserializer());
-            testInputTopic.pipeInput("k1", "1", 0L);
-            testInputTopic.pipeInput("k2", "1", 1L);
-            testInputTopic.pipeInput("k1", "1", 10L);
-            testInputTopic.pipeInput("k2", "1", 100L);
 
-            testInputTopic2.pipeInput("k2", 2, 100L);
-            testInputTopic2.pipeInput("k2", 2, 200L);
-            testInputTopic2.pipeInput("k1", 2, 1L);
-            testInputTopic2.pipeInput("k2", 2, 500L);
-            testInputTopic2.pipeInput("k1", 2, 500L);
-            testInputTopic2.pipeInput("k2", 3, 500L);
-            testInputTopic2.pipeInput("k3", 2, 500L);
-            testInputTopic2.pipeInput("k2", 2, 100L);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers3 = makeHeaders("key", "k3");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 1L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 10L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 100L));
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 1, 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 1, 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 2, 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 2, 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 4, 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 6, 200);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 4, 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 8, 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", 6, 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", 11, 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k3", 2, 500);
+                testInputTopic2.pipeInput(new TestRecord<>("k2", 2, headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", 2, headers2, 200L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", 2, headers1, 1L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", 2, headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", 2, headers1, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", 3, headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k3", 2, headers3, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", 2, headers2, 100L));
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 1, headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 1, headers2, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 2, headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 2, headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 4, headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 6, headers2, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 4, headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 8, headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 6, headers1, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 11, headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k3", 2, headers3, 500);
+            } else {
+                testInputTopic.pipeInput("k1", "1", 0L);
+                testInputTopic.pipeInput("k2", "1", 1L);
+                testInputTopic.pipeInput("k1", "1", 10L);
+                testInputTopic.pipeInput("k2", "1", 100L);
+
+                testInputTopic2.pipeInput("k2", 2, 100L);
+                testInputTopic2.pipeInput("k2", 2, 200L);
+                testInputTopic2.pipeInput("k1", 2, 1L);
+                testInputTopic2.pipeInput("k2", 2, 500L);
+                testInputTopic2.pipeInput("k1", 2, 500L);
+                testInputTopic2.pipeInput("k2", 3, 500L);
+                testInputTopic2.pipeInput("k3", 2, 500L);
+                testInputTopic2.pipeInput("k2", 2, 100L);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 1, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 2, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 4, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 6, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 4, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 8, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", 6, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", 11, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k3", 2, 500);
+            }
         }
     }
 
-    @Test
-    public void testCogroupKeyMixedAggregators() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testCogroupKeyMixedAggregators(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -1121,36 +1309,59 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
             final TestInputTopic<String, String> testInputTopic =
-                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
-                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
-            testInputTopic.pipeInput("k1", "1", 0L);
-            testInputTopic.pipeInput("k2", "1", 1L);
-            testInputTopic.pipeInput("k1", "1", 10L);
-            testInputTopic.pipeInput("k2", "1", 100L);
-            testInputTopic2.pipeInput("k1", "2", 500L);
-            testInputTopic2.pipeInput("k2", "2", 500L);
-            testInputTopic2.pipeInput("k1", "2", 500L);
-            testInputTopic2.pipeInput("k2", "2", 100L);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 1L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 10L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", "2", headers1, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "2", headers2, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", "2", headers1, 500L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "2", headers2, 100L));
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1", 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1", 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1", 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1+2", 500L);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1+2", 500L);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1+2+2", 500L);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1+2+2", 500L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1", headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1", headers2, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1", headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1", headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1+2", headers1, 500L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1+2", headers2, 500L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1+2+2", headers1, 500L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1+2+2", headers2, 500L);
+            } else {
+                testInputTopic.pipeInput("k1", "1", 0L);
+                testInputTopic.pipeInput("k2", "1", 1L);
+                testInputTopic.pipeInput("k1", "1", 10L);
+                testInputTopic.pipeInput("k2", "1", 100L);
+                testInputTopic2.pipeInput("k1", "2", 500L);
+                testInputTopic2.pipeInput("k2", "2", 500L);
+                testInputTopic2.pipeInput("k1", "2", 500L);
+                testInputTopic2.pipeInput("k2", "2", 100L);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1", 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1", 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1", 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1+2", 500L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1+2", 500L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0-1-1+2+2", 500L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0-1-1+2+2", 500L);
+            }
         }
     }
 
-    @Test
-    public void testCogroupWithThreeGroupedStreams() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testCogroupWithThreeGroupedStreams(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -1168,46 +1379,77 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
             final TestInputTopic<String, String> testInputTopic =
-                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
-                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic3 =
-                driver.createInputTopic("three", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("three", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
-            testInputTopic.pipeInput("k1", "A", 0L);
-            testInputTopic.pipeInput("k2", "A", 1L);
-            testInputTopic.pipeInput("k1", "A", 10L);
-            testInputTopic.pipeInput("k2", "A", 100L);
-            testInputTopic2.pipeInput("k2", "B", 100L);
-            testInputTopic2.pipeInput("k2", "B", 200L);
-            testInputTopic2.pipeInput("k1", "B", 1L);
-            testInputTopic2.pipeInput("k2", "B", 500L);
-            testInputTopic3.pipeInput("k1", "B", 500L);
-            testInputTopic3.pipeInput("k2", "B", 500L);
-            testInputTopic3.pipeInput("k3", "B", 500L);
-            testInputTopic3.pipeInput("k2", "B", 100L);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers3 = makeHeaders("key", "k3");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "A", headers2, 1L));
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 10L));
+                testInputTopic.pipeInput(new TestRecord<>("k2", "A", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 100L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 200L));
+                testInputTopic2.pipeInput(new TestRecord<>("k1", "B", headers1, 1L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 500L));
+                testInputTopic3.pipeInput(new TestRecord<>("k1", "B", headers1, 500L));
+                testInputTopic3.pipeInput(new TestRecord<>("k2", "B", headers2, 500L));
+                testInputTopic3.pipeInput(new TestRecord<>("k3", "B", headers3, 500L));
+                testInputTopic3.pipeInput(new TestRecord<>("k2", "B", headers2, 100L));
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "A", 1);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AA", 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AAB", 100);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABB", 200);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAB", 10);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBB", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AABB", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBBB", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k3", "B", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", headers1, 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "A", headers2, 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AA", headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AAB", headers2, 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABB", headers2, 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAB", headers1, 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBB", headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AABB", headers1, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBBB", headers2, 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k3", "B", headers3, 500);
+            } else {
+                testInputTopic.pipeInput("k1", "A", 0L);
+                testInputTopic.pipeInput("k2", "A", 1L);
+                testInputTopic.pipeInput("k1", "A", 10L);
+                testInputTopic.pipeInput("k2", "A", 100L);
+                testInputTopic2.pipeInput("k2", "B", 100L);
+                testInputTopic2.pipeInput("k2", "B", 200L);
+                testInputTopic2.pipeInput("k1", "B", 1L);
+                testInputTopic2.pipeInput("k2", "B", 500L);
+                testInputTopic3.pipeInput("k1", "B", 500L);
+                testInputTopic3.pipeInput("k2", "B", 500L);
+                testInputTopic3.pipeInput("k3", "B", 500L);
+                testInputTopic3.pipeInput("k2", "B", 100L);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A", 0);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "A", 1);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AA", 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AA", 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AAB", 100);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABB", 200);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AAB", 10);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "AABB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "AABBBB", 500);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k3", "B", 500);
+            }
         }
     }
 
-    @Test
-    public void testCogroupWithKTableKTableInnerJoin() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void testCogroupWithKTableKTableInnerJoin(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KGroupedStream<String, String> grouped1 = builder.stream("one", stringConsumed).groupByKey();
@@ -1222,27 +1464,43 @@ public class CogroupedKStreamImplTest {
         final KTable<String, String> joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.with(Serdes.String(), Serdes.String()));
         joined.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
             final TestInputTopic<String, String> testInputTopic =
-                driver.createInputTopic("one", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
-                driver.createInputTopic("two", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("two", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic3 =
-                driver.createInputTopic("three", new StringSerializer(), new StringSerializer());
+                driver.createInputTopic("three", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
-            testInputTopic.pipeInput("k1", "A", 5L);
-            testInputTopic2.pipeInput("k2", "B", 6L);
+            if (storeFormat.equals("headers")) {
+                final Headers headers1 = makeHeaders("key", "k1");
+                final Headers headers2 = makeHeaders("key", "k2");
+                testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 5L));
+                testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 6L));
 
-            assertTrue(testOutputTopic.isEmpty());
+                assertTrue(testOutputTopic.isEmpty());
 
-            testInputTopic3.pipeInput("k1", "C", 0L);
-            testInputTopic3.pipeInput("k2", "D", 10L);
+                testInputTopic3.pipeInput(new TestRecord<>("k1", "C", headers1, 0L));
+                testInputTopic3.pipeInput(new TestRecord<>("k2", "D", headers2, 10L));
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A+C", 5L);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B+D", 10L);
-            assertTrue(testOutputTopic.isEmpty());
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A+C", headers1, 5L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B+D", headers2, 10L);
+                assertTrue(testOutputTopic.isEmpty());
+            } else {
+                testInputTopic.pipeInput("k1", "A", 5L);
+                testInputTopic2.pipeInput("k2", "B", 6L);
+
+                assertTrue(testOutputTopic.isEmpty());
+
+                testInputTopic3.pipeInput("k1", "C", 0L);
+                testInputTopic3.pipeInput("k2", "D", 10L);
+
+                assertOutputKeyValueTimestamp(testOutputTopic, "k1", "A+C", 5L);
+                assertOutputKeyValueTimestamp(testOutputTopic, "k2", "B+D", 10L);
+                assertTrue(testOutputTopic.isEmpty());
+            }
         }
     }
 
@@ -1262,5 +1520,25 @@ public class CogroupedKStreamImplTest {
         assertThat(
             outputTopic.readRecord(),
             equalTo(new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp)));
+    }
+
+    private void assertOutputKeyValueTimestamp(final TestOutputTopic<String, String> outputTopic,
+                                               final String expectedKey,
+                                               final String expectedValue,
+                                               final Headers expectedHeaders,
+                                               final long expectedTimestamp) {
+        assertThat(
+            outputTopic.readRecord(),
+            equalTo(new TestRecord<>(expectedKey, expectedValue, expectedHeaders, expectedTimestamp)));
+    }
+
+    private void assertOutputKeyValueTimestamp(final TestOutputTopic<String, Integer> outputTopic,
+                                               final String expectedKey,
+                                               final Integer expectedValue,
+                                               final Headers expectedHeaders,
+                                               final long expectedTimestamp) {
+        assertThat(
+            outputTopic.readRecord(),
+            equalTo(new TestRecord<>(expectedKey, expectedValue, expectedHeaders, expectedTimestamp)));
     }
 }
