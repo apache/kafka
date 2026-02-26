@@ -102,6 +102,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final int maxMessages;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private int consumedMessages = 0;
+    private boolean shutdownRequested = false;
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,
@@ -232,7 +233,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             printJson(new StartupComplete());
             consumer.subscribe(List.of(topic), this);
 
-            while (!isFinished()) {
+            while (!isFinished() && !shutdownRequested) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                 Map<TopicPartition, OffsetAndMetadata> offsets = onRecordsReceived(records);
 
@@ -259,6 +260,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void close() {
         boolean interrupted = false;
         try {
+            printJson(new ShutdownRequested());
+            shutdownRequested = true;
             consumer.wakeup();
             while (true) {
                 try {
@@ -292,6 +295,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @Override
         public String name() {
             return "startup_complete";
+        }
+    }
+
+    private static class ShutdownRequested extends ConsumerEvent {
+
+        @Override
+        public String name() {
+            return "shutdown_requested";
         }
     }
 
