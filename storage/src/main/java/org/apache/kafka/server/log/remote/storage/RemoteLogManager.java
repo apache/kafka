@@ -1161,7 +1161,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             metricTags.put("partition", Integer.toString(topicIdPartition.partition()));
         }
 
-        private void registerMetrics() {
+        // Visible for testing
+        void registerMetrics() {
             if (!metricsRegistered && !isCancelled()) {
                 metricsGroup.newGauge(RETENTION_SIZE_IN_PERCENT_METRIC.getName(), retentionSizeInPercentValue::get, metricTags);
                 metricsGroup.newGauge(LOCAL_RETENTION_SIZE_IN_PERCENT_METRIC.getName(), localRetentionSizeInPercentValue::get, metricTags);

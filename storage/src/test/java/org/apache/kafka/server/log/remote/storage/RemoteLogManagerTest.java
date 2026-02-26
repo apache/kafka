@@ -2271,34 +2271,51 @@ public class RemoteLogManagerTest {
         TreeMap<Integer, Long> epochEntries = new TreeMap<>();
         epochEntries.put(epochEntry0.epoch(), epochEntry0.startOffset());
 
+        // Register metrics to expose them via JMX
+        expirationTask.registerMetrics();
+
+        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+
         // Test case 1: Testing RetentionSizeInPercent metric (standard retention scenario)
         // retentionSize = 12288, onlyLocalLogSegmentsSize = 100, localLogSegmentsSize = 100
         // Each remote log segment size is 1024. There are 10 remote-log-segments. Total remote size = 10 * 1024 = 10240
-        // ((100 + 10240) * 100) / 12288 = 84%
+        // RetentionSizeInPercent = ((100 + 10240) * 100) / 12288 = 84%
+        // LocalRetentionSizeInPercent = (100 * 100) / 6144 = 1%
         expirationTask.buildRetentionSizeData(12288, 100, 100, 1000, epochEntries, 6144, 12288);
-        assertEquals(84, expirationTask.retentionSizeInPercent());
+        assertEquals(84, yammerMetricValue(retentionMetricName));
+        assertEquals(1, yammerMetricValue(localRetentionMetricName));
 
         // Test case 2: Testing LocalRetentionSizeInPercent metric (local retention scenario)
         // localRetentionBytes = 200, localLogSegmentsSize = 100, so percentage = (100 * 100) / 200 = 50%
         expirationTask.buildRetentionSizeData(12288, 100, 100, 1000, epochEntries, 200, 12288);
-        assertEquals(50, expirationTask.localRetentionSizeInPercent());
+        assertEquals(84, yammerMetricValue(retentionMetricName));
+        assertEquals(50, yammerMetricValue(localRetentionMetricName));
 
         // Test case 3: Test retentionSizeInPercent metric >= 100%
         // 10 * 1024 (remote) + 3000 = 13240 / 12288 = 107%
+        // LocalRetentionSizeInPercent = (4000 * 100) / 5000 = 80%
         expirationTask.buildRetentionSizeData(12288, 3000, 4000, 1000, epochEntries, 5000, 12288);
-        assertEquals(107, expirationTask.retentionSizeInPercent());
+        assertEquals(107, yammerMetricValue(retentionMetricName));
+        assertEquals(80, yammerMetricValue(localRetentionMetricName));
         assertFalse(expirationTask.isAllSegmentsValid());
 
         // Repeat test-case 3 with valid fullCopyFinishedSegmentSizeInBytes
         expirationTask.buildRetentionSizeData(12288, 3000, 4000, 1000, epochEntries, 5000, 10240);
-        assertEquals(107, expirationTask.retentionSizeInPercent());
+        assertEquals(107, yammerMetricValue(retentionMetricName));
+        assertEquals(80, yammerMetricValue(localRetentionMetricName));
         assertTrue(expirationTask.isAllSegmentsValid());
 
         // Repeat test-case 3, once all the segments are valid.
         // 10 * 1024 (remote) + 2048 = 12288 / 12288 = 100%
+        // LocalRetentionSizeInPercent = (3000 * 100) / 5000 = 60%
         expirationTask.buildRetentionSizeData(12288, 2048, 3000, 1000, epochEntries, 5000, 10240);
-        assertEquals(100, expirationTask.retentionSizeInPercent());
+        assertEquals(100, yammerMetricValue(retentionMetricName));
+        assertEquals(60, yammerMetricValue(localRetentionMetricName));
         assertTrue(expirationTask.isAllSegmentsValid());
+
+        // Cleanup metrics
+        expirationTask.cancel();
     }
 
     @Test
@@ -2318,15 +2335,25 @@ public class RemoteLogManagerTest {
 
         TreeMap<Integer, Long> epochEntries = new TreeMap<>();
         epochEntries.put(epochEntry0.epoch(), epochEntry0.startOffset());
+
+        // Register metrics to expose them via JMX
+        expirationTask.registerMetrics();
+
+        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+
+        // RetentionSizeInPercent = ((100 + 10240) * 100) / 12288 = 84%
+        // LocalRetentionSizeInPercent = (100 * 100) / 6144 = 1%
         expirationTask.buildRetentionSizeData(12288, 100, 100, 1000, epochEntries, 6144, 12288);
 
-        // Verify initial metrics are set
-        assertEquals(84, expirationTask.retentionSizeInPercent());
+        // Verify initial metrics are set via JMX
+        assertEquals(84, yammerMetricValue(retentionMetricName));
+        assertEquals(1, yammerMetricValue(localRetentionMetricName));
 
         // Cancel the task
         expirationTask.cancel();
 
-        // Verify metrics are reset to 0 on cancellation
+        // Verify metrics are reset to 0 on cancellation (check via accessor since JMX metrics are deregistered)
         assertEquals(0, expirationTask.retentionSizeInPercent());
         assertEquals(0, expirationTask.localRetentionSizeInPercent());
     }
@@ -2349,11 +2376,20 @@ public class RemoteLogManagerTest {
         TreeMap<Integer, Long> epochEntries = new TreeMap<>();
         epochEntries.put(epochEntry0.epoch(), epochEntry0.startOffset());
 
+        // Register metrics to expose them via JMX
+        expirationTask.registerMetrics();
+
+        String retentionMetricName = "name=RetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+        String localRetentionMetricName = "name=LocalRetentionSizeInPercent,partition=" + leaderTopicIdPartition.partition() + ",topic=" + leaderTopicIdPartition.topic();
+
         expirationTask.buildRetentionSizeData(0, 100, 100, 1000, epochEntries, 0, Long.MAX_VALUE);
 
         // Should be 0% when retention sizes are 0
-        assertEquals(0, expirationTask.retentionSizeInPercent());
-        assertEquals(0, expirationTask.localRetentionSizeInPercent());
+        assertEquals(0, yammerMetricValue(retentionMetricName));
+        assertEquals(0, yammerMetricValue(localRetentionMetricName));
+
+        // Cleanup metrics
+        expirationTask.cancel();
     }
 
     @Test
