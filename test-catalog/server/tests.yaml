@@ -119,6 +119,7 @@ org.apache.kafka.server.ClientMetricsManagerTest:
 - testUpdateSubscriptionWithPropertiesDeletion
 org.apache.kafka.server.CordonedLogDirsIntegrationTest:
 - testCordonUncordonLogDirs
+- testDecommissionBroker
 - testFeatureNotEnabled
 - testFeatureNotEnabledStaticConfig
 - testReassignWithCordonedLogDirs
