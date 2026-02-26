@@ -44,4 +44,13 @@ public interface SessionBytesStoreSupplier extends StoreSupplier<SessionStore<By
      * @return retentionPeriod
      */
     long retentionPeriod();
+
+    /**
+     * Whether the store supports headers.
+     *
+     * @return {@code true} if the store supports headers, {@code false} otherwise
+     */
+    default boolean withHeaders() {
+        return false;
+    }
 }
