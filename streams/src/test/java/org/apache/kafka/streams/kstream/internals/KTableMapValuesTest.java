@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -40,18 +39,16 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.StoreFormatTestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -63,38 +60,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class KTableMapValuesTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
 
-    /**
-     * Provides test parameters for different store formats.
-     */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties properties = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        properties.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
-        properties.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        return properties;
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
-
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
                               final String storeFormat,
                               final Properties props,
                               final MockApiProcessorSupplier<String, Integer, Void, Void> supplier) {
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersC = makeHeaders("key", "C");
-        final Headers headersD = makeHeaders("key", "D");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
+        final Headers headersD = StoreFormatTestUtils.makeHeaders("key", "D");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
@@ -123,9 +97,9 @@ public class KTableMapValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testKTable(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -139,9 +113,9 @@ public class KTableMapValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testQueryableKTable(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -229,9 +203,9 @@ public class KTableMapValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testQueryableValueGetter(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName2 = "store2";
@@ -260,9 +234,9 @@ public class KTableMapValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testNotSendingOldValue(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -274,9 +248,9 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersC = makeHeaders("key", "C");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final TestInputTopic<String, String> inputTopic1 =
@@ -330,9 +304,9 @@ public class KTableMapValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldEnableSendingOldValuesOnParentIfMapValuesNotMaterialized(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -350,9 +324,9 @@ public class KTableMapValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldNotEnableSendingOldValuesOnParentIfMapValuesMaterialized(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -382,9 +356,9 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         builder.build().addProcessor("proc", supplier, table2.name);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersC = makeHeaders("key", "C");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
@@ -452,7 +426,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void shouldPreserveHeadersThroughMultipleMapValues() {
-        final Properties props = getProps("headers");
+        final Properties props = StoreFormatTestUtils.getProps("headers", Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -464,9 +438,9 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table4.toStream().process(supplier);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersC = makeHeaders("key", "C");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -488,7 +462,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void shouldPreserveHeadersWithDifferentHeadersForSameKey() {
-        final Properties props = getProps("headers");
+        final Properties props = StoreFormatTestUtils.getProps("headers", Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -498,8 +472,8 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        final Headers headers1 = makeHeaders("version", "v1");
-        final Headers headers2 = makeHeaders("version", "v2");
+        final Headers headers1 = StoreFormatTestUtils.makeHeaders("version", "v1");
+        final Headers headers2 = StoreFormatTestUtils.makeHeaders("version", "v2");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -519,7 +493,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void shouldPreserveHeadersWithNullValue() {
-        final Properties props = getProps("headers");
+        final Properties props = StoreFormatTestUtils.getProps("headers", Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -531,8 +505,8 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -552,7 +526,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void shouldPreserveHeadersWithMaterializedMapValues() {
-        final Properties props = getProps("headers");
+        final Properties props = StoreFormatTestUtils.getProps("headers", Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -566,8 +540,8 @@ public class KTableMapValuesTest {
         final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic =
@@ -587,7 +561,7 @@ public class KTableMapValuesTest {
 
     @Test
     public void shouldPreserveHeadersWithMultipleHeaders() {
-        final Properties props = getProps("headers");
+        final Properties props = StoreFormatTestUtils.getProps("headers", Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 

@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -27,7 +25,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
@@ -57,13 +54,12 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
-import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.StoreFormatTestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -72,7 +68,6 @@ import org.mockito.quality.Strictness;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -102,29 +97,11 @@ public class KTableImplTest {
     /**
      * Provides both store format configurations for parameterized tests.
      */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties properties = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        properties.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        return properties;
-    }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testKTable(final String storeFormat) {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -145,10 +122,10 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersC = makeHeaders("key", "C");
-        final Headers headersD = makeHeaders("key", "D");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
+        final Headers headersD = StoreFormatTestUtils.makeHeaders("key", "D");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties)) {
             final TestInputTopic<String, String> inputTopic =
@@ -234,9 +211,9 @@ public class KTableImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testMaterializedKTable(final String storeFormat) {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -257,10 +234,10 @@ public class KTableImplTest {
         final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersC = makeHeaders("key", "C");
-        final Headers headersD = makeHeaders("key", "D");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
+        final Headers headersD = StoreFormatTestUtils.makeHeaders("key", "D");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties)) {
             final TestInputTopic<String, String> inputTopic =
@@ -464,9 +441,9 @@ public class KTableImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testStateStoreLazyEval(final String storeFormat) {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -483,9 +460,9 @@ public class KTableImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testStateStore(final String storeFormat) {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -535,9 +512,9 @@ public class KTableImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCreateSourceAndSinkNodesForRepartitioningTopic(final String storeFormat) throws Exception {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
@@ -711,9 +688,9 @@ public class KTableImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testJoinWithHeaders(final String storeFormat) {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -726,8 +703,8 @@ public class KTableImplTest {
         final KTable<String, String> joined = table1.join(table2, (v1, v2) -> v1 + "+" + v2);
         joined.toStream().process(supplier);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties)) {
             final TestInputTopic<String, String> inputTopic1 =
@@ -755,9 +732,9 @@ public class KTableImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testTransformValuesWithHeaders(final String storeFormat) {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -781,8 +758,8 @@ public class KTableImplTest {
         );
         transformed.toStream().process(supplier);
 
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties)) {
             final TestInputTopic<String, String> inputTopic =
@@ -806,9 +783,9 @@ public class KTableImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testSendingOldValues(final String storeFormat) {
-        final Properties properties = getProps(storeFormat);
+        final Properties properties = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -821,7 +798,7 @@ public class KTableImplTest {
 
         ((KTableImpl<String, String, String>) filtered).enableSendingOldValues(true);
 
-        final Headers headersA = makeHeaders("key", "A");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties)) {
             final TestInputTopic<String, String> inputTopic =

@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -48,10 +46,9 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StoreFormatTestUtils;
 
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.charset.StandardCharsets;
@@ -60,12 +57,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -78,30 +71,11 @@ public class KTableAggregateTest {
     /**
      * Provides both store format configurations for parameterized tests.
      */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties props = mkProperties(mkMap(
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
-        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        return props;
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testAggBasic(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
@@ -126,10 +100,10 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
-            final Headers headersC = makeHeaders("key", "C");
-            final Headers headersD = makeHeaders("key", "D");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+            final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
+            final Headers headersD = StoreFormatTestUtils.makeHeaders("key", "D");
 
             inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 10L));
             inputTopic.pipeInput(new TestRecord<>("B", "2", headersB, 15L));
@@ -169,9 +143,9 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testAggRepartition(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
@@ -205,10 +179,10 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
-            final Headers headersNull = makeHeaders("key", "null");
-            final Headers headersNULL = makeHeaders("key", "NULL");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+            final Headers headersNull = StoreFormatTestUtils.makeHeaders("key", "null");
+            final Headers headersNULL = StoreFormatTestUtils.makeHeaders("key", "NULL");
 
             inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 10L));
             inputTopic.pipeInput(new TestRecord<>("A", null, headersA, 15L));
@@ -252,9 +226,9 @@ public class KTableAggregateTest {
      * Only the aggregate store (table2) changes based on the DSL_STORE_FORMAT_CONFIG setting.
      */
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testAggOfVersionedStore(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
@@ -290,10 +264,10 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
-            final Headers headersNull = makeHeaders("key", "null");
-            final Headers headersNULL = makeHeaders("key", "NULL");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+            final Headers headersNull = StoreFormatTestUtils.makeHeaders("key", "null");
+            final Headers headersNULL = StoreFormatTestUtils.makeHeaders("key", "NULL");
 
             inputTopic.pipeInput(new TestRecord<>("A", "1", headersA, 10L));
             inputTopic.pipeInput(new TestRecord<>("A", null, headersA, 15L));
@@ -354,10 +328,10 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
-            final Headers headersC = makeHeaders("key", "C");
-            final Headers headersD = makeHeaders("key", "D");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+            final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
+            final Headers headersD = StoreFormatTestUtils.makeHeaders("key", "D");
 
             inputTopic.pipeInput(new TestRecord<>("A", "green", headersA, 10L));
             inputTopic.pipeInput(new TestRecord<>("B", "green", headersB, 9L));
@@ -391,16 +365,16 @@ public class KTableAggregateTest {
 
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testCount(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         testCountHelper(storeFormat, props, true);
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testCountWithInternalStore(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         testCountHelper(storeFormat, props, false);
     }
 
@@ -408,9 +382,9 @@ public class KTableAggregateTest {
     * Aggregate store: Created by .count() - will respect DSL_STORE_FORMAT_CONFIG
     */
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testCountOfVersionedStore(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
@@ -430,10 +404,10 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
-            final Headers headersC = makeHeaders("key", "C");
-            final Headers headersD = makeHeaders("key", "D");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+            final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
+            final Headers headersD = StoreFormatTestUtils.makeHeaders("key", "D");
 
             inputTopic.pipeInput(new TestRecord<>("A", "green", headersA, 10L));
             inputTopic.pipeInput(new TestRecord<>("B", "green", headersB, 9L));
@@ -467,9 +441,9 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testRemoveOldBeforeAddNew(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
@@ -498,8 +472,8 @@ public class KTableAggregateTest {
 
             final MockApiProcessor<String, String, Void, Void> proc = supplier.theCapturedProcessor();
 
-            final Headers headers11 = makeHeaders("key", "11");
-            final Headers headers12 = makeHeaders("key", "12");
+            final Headers headers11 = StoreFormatTestUtils.makeHeaders("key", "11");
+            final Headers headers12 = StoreFormatTestUtils.makeHeaders("key", "12");
 
             inputTopic.pipeInput(new TestRecord<>("11", "A", headers11, 10L));
             inputTopic.pipeInput(new TestRecord<>("12", "B", headers12, 8L));
@@ -553,7 +527,7 @@ public class KTableAggregateTest {
             final TestOutputTopic<String, Long> outputTopic =
                     driver.createOutputTopic(output, new StringDeserializer(), new LongDeserializer());
 
-            final Headers headers1 = makeHeaders("key", "1");
+            final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
 
             inputTopic.pipeInput(new TestRecord<>("1", "", headers1, 8L));
             inputTopic.pipeInput(new TestRecord<>("1", "", headers1, 9L));
@@ -575,12 +549,12 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testShouldSendTransientStateWhenUpgrading(final String storeFormat) {
-        final Properties upgradingConfig = getProps(storeFormat);
+        final Properties upgradingConfig = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         upgradingConfig.put(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_33);
 
-        final Headers headers1 = makeHeaders("key", "1");
+        final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
 
         testUpgradeFromConfig(
             upgradingConfig,
@@ -599,11 +573,11 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testShouldNotSendTransientStateIfNotUpgrading(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
 
-        final Headers headers1 = makeHeaders("key", "1");
+        final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
 
         testUpgradeFromConfig(
             props,
@@ -654,7 +628,7 @@ public class KTableAggregateTest {
             final KeyValueMapper<NoEqualsImpl, NoEqualsImpl, KeyValue<NoEqualsImpl, NoEqualsImpl>> keyValueMapper,
             final List<TestRecord<NoEqualsImpl, Long>> expected,
             final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "input-topic";
         final String output = "output-topic";
@@ -678,8 +652,8 @@ public class KTableAggregateTest {
             assertNotEquals(a, b);
             assertNotSame(a, b);
 
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
             inputTopic.pipeInput(new TestRecord<>(a, a, headersA, 8L));
             inputTopic.pipeInput(new TestRecord<>(b, b, headersB, 9L));
@@ -691,10 +665,10 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testNoEqualsAndNotSameObject(final String storeFormat) {
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
         testKeyWithNoEquals(
                 // key changes, different object reference (deserializer returns a new object reference)
@@ -709,10 +683,10 @@ public class KTableAggregateTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testNoEqualsAndSameObject(final String storeFormat) {
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
         testKeyWithNoEquals(
                 // key does not change, same object reference

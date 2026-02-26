@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -50,18 +48,17 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.StoreFormatTestUtils;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -90,29 +87,6 @@ public class CogroupedKStreamImplTest {
 
     private static final Initializer<Integer> SUM_INITIALIZER = () -> 0;
 
-    /**
-     * Provides test parameters for different store formats.
-     */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties properties = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        properties.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        // Disable caching to avoid ValueTimestampHeaders casting issues
-        properties.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
-        return properties;
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
 
     @BeforeEach
     public void setup() {
@@ -873,7 +847,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCogroupAndAggregateSingleKStreams(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -886,15 +860,15 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "B", headers2, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "B", headers2, 0L));
@@ -919,7 +893,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testCogroupHandleNullValues(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -932,15 +906,15 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, String> testOutputTopic =
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "B", headers2, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", null, headers2, 0L));
@@ -967,7 +941,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCogroupAndAggregateTwoKStreamsWithDistinctKeys(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -983,7 +957,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
@@ -992,8 +966,8 @@ public class CogroupedKStreamImplTest {
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 1L));
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 10L));
@@ -1042,7 +1016,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCogroupAndAggregateTwoKStreamsWithSharedKeys(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -1058,7 +1032,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1067,9 +1041,9 @@ public class CogroupedKStreamImplTest {
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
-                final Headers headers3 = makeHeaders("key", "k3");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
+                final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "k3");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "A", headers2, 1L));
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 10L));
@@ -1122,7 +1096,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldAllowDifferentOutputTypeInCoGroup(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -1141,7 +1115,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1150,9 +1124,9 @@ public class CogroupedKStreamImplTest {
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new IntegerDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
-                final Headers headers3 = makeHeaders("key", "k3");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
+                final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "k3");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 1L));
                 testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 10L));
@@ -1205,7 +1179,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCoGroupStreamsWithDifferentInputTypes(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<String, Integer> integerConsumed = Consumed.with(Serdes.String(), Serdes.Integer());
@@ -1225,15 +1199,15 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic = driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, Integer> testInputTopic2 = driver.createInputTopic("two", new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestOutputTopic<String, Integer> testOutputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new IntegerDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
-                final Headers headers3 = makeHeaders("key", "k3");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
+                final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "k3");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 1L));
                 testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 10L));
@@ -1290,7 +1264,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testCogroupKeyMixedAggregators(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -1309,7 +1283,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1318,8 +1292,8 @@ public class CogroupedKStreamImplTest {
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "1", headers2, 1L));
                 testInputTopic.pipeInput(new TestRecord<>("k1", "1", headers1, 10L));
@@ -1360,7 +1334,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testCogroupWithThreeGroupedStreams(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -1379,7 +1353,7 @@ public class CogroupedKStreamImplTest {
 
         customers.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1391,9 +1365,9 @@ public class CogroupedKStreamImplTest {
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
-                final Headers headers3 = makeHeaders("key", "k3");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
+                final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "k3");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 0L));
                 testInputTopic.pipeInput(new TestRecord<>("k2", "A", headers2, 1L));
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 10L));
@@ -1448,7 +1422,7 @@ public class CogroupedKStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testCogroupWithKTableKTableInnerJoin(final String storeFormat) {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -1464,7 +1438,7 @@ public class CogroupedKStreamImplTest {
         final KTable<String, String> joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.with(Serdes.String(), Serdes.String()));
         joined.toStream().to(OUTPUT);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             final TestInputTopic<String, String> testInputTopic =
                 driver.createInputTopic("one", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final TestInputTopic<String, String> testInputTopic2 =
@@ -1475,8 +1449,8 @@ public class CogroupedKStreamImplTest {
                 driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "k1");
-                final Headers headers2 = makeHeaders("key", "k2");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "k1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "k2");
                 testInputTopic.pipeInput(new TestRecord<>("k1", "A", headers1, 5L));
                 testInputTopic2.pipeInput(new TestRecord<>("k2", "B", headers2, 6L));
 

@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -26,7 +24,6 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -50,12 +47,12 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
+import org.apache.kafka.test.StoreFormatTestUtils;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
@@ -65,7 +62,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Properties;
-import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -84,29 +80,6 @@ public class KGroupedStreamImplTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    /**
-     * Provides test parameters for different store formats.
-     */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties properties = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        properties.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        // Disable caching to avoid ValueTimestampHeaders casting issues
-        properties.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
-        return properties;
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
 
     @BeforeEach
     public void before() {
@@ -626,11 +599,11 @@ public class KGroupedStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCountAndMaterializeResults(final String storeFormat) {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             processData(driver, storeFormat);
 
             if (storeFormat.equals("default")) {
@@ -651,9 +624,9 @@ public class KGroupedStreamImplTest {
             } else if (storeFormat.equals("headers")) {
                 {
                     final KeyValueStore<String, ValueTimestampHeaders<Long>> count = driver.getTimestampedKeyValueStoreWithHeaders("count");
-                    final Headers headers1 = makeHeaders("key", "1");
-                    final Headers headers2 = makeHeaders("key", "2");
-                    final Headers headers3 = makeHeaders("key", "3");
+                    final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
+                    final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "2");
+                    final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "3");
 
                     assertThat(count.get("1"), equalTo(ValueTimestampHeaders.make(3L, 10L, headers1)));
                     assertThat(count.get("2"), equalTo(ValueTimestampHeaders.make(1L, 1L, headers2)));
@@ -665,12 +638,12 @@ public class KGroupedStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldLogAndMeasureSkipsInAggregate(final String storeFormat) {
         groupedStream.count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count").withKeySerde(Serdes.String()));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamAggregate.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
 
             processData(driver, storeFormat);
 
@@ -683,7 +656,7 @@ public class KGroupedStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldReduceAndMaterializeResults(final String storeFormat) {
         groupedStream.reduce(
             MockReducer.STRING_ADDER,
@@ -691,7 +664,7 @@ public class KGroupedStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             processData(driver, storeFormat);
 
             if (storeFormat.equals("default")) {
@@ -712,9 +685,9 @@ public class KGroupedStreamImplTest {
             } else if (storeFormat.equals("headers")) {
                 {
                     final KeyValueStore<String, ValueTimestampHeaders<Long>> count = driver.getTimestampedKeyValueStoreWithHeaders("reduce");
-                    final Headers headers1 = makeHeaders("key", "1");
-                    final Headers headers2 = makeHeaders("key", "2");
-                    final Headers headers3 = makeHeaders("key", "3");
+                    final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
+                    final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "2");
+                    final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "3");
 
                     assertThat(count.get("1"), equalTo(ValueTimestampHeaders.make("A+C+D", 10L, headers1)));
                     assertThat(count.get("2"), equalTo(ValueTimestampHeaders.make("B", 1L, headers2)));
@@ -726,7 +699,7 @@ public class KGroupedStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldLogAndMeasureSkipsInReduce(final String storeFormat) {
         groupedStream.reduce(
             MockReducer.STRING_ADDER,
@@ -736,7 +709,7 @@ public class KGroupedStreamImplTest {
         );
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamReduce.class);
-             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+             final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
 
             processData(driver, storeFormat);
 
@@ -749,7 +722,7 @@ public class KGroupedStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldAggregateAndMaterializeResults(final String storeFormat) {
         groupedStream.aggregate(
             MockInitializer.STRING_INIT,
@@ -758,7 +731,7 @@ public class KGroupedStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             processData(driver, storeFormat);
 
             if (storeFormat.equals("default")) {
@@ -779,9 +752,9 @@ public class KGroupedStreamImplTest {
             } else if (storeFormat.equals("headers")) {
                 {
                     final KeyValueStore<String, ValueTimestampHeaders<Long>> count = driver.getTimestampedKeyValueStoreWithHeaders("aggregate");
-                    final Headers headers1 = makeHeaders("key", "1");
-                    final Headers headers2 = makeHeaders("key", "2");
-                    final Headers headers3 = makeHeaders("key", "3");
+                    final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
+                    final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "2");
+                    final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "3");
 
                     assertThat(count.get("1"), equalTo(ValueTimestampHeaders.make("0+A+C+D", 10L, headers1)));
                     assertThat(count.get("2"), equalTo(ValueTimestampHeaders.make("0+B", 1L, headers2)));
@@ -792,7 +765,7 @@ public class KGroupedStreamImplTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldAggregateWithDefaultSerdes(final String storeFormat) {
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         groupedStream
@@ -800,7 +773,7 @@ public class KGroupedStreamImplTest {
             .toStream()
             .process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), getProps(storeFormat))) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()))) {
             processData(driver, storeFormat);
 
             assertThat(
@@ -814,9 +787,9 @@ public class KGroupedStreamImplTest {
                 equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
 
             if (storeFormat.equals("headers")) {
-                final Headers headers1 = makeHeaders("key", "1");
-                final Headers headers2 = makeHeaders("key", "2");
-                final Headers headers3 = makeHeaders("key", "3");
+                final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
+                final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "2");
+                final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "3");
 
                 // Find the last record for each key and verify headers
                 final ArrayList<KeyValueTimestampHeaders<String, String>> processedRecords = supplier.theCapturedProcessor().processedWithHeaders();
@@ -851,9 +824,9 @@ public class KGroupedStreamImplTest {
                 driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
         if (storeFormat.equals("headers")) {
-            final Headers headers1 = makeHeaders("key", "1");
-            final Headers headers2 = makeHeaders("key", "2");
-            final Headers headers3 = makeHeaders("key", "3");
+            final Headers headers1 = StoreFormatTestUtils.makeHeaders("key", "1");
+            final Headers headers2 = StoreFormatTestUtils.makeHeaders("key", "2");
+            final Headers headers3 = StoreFormatTestUtils.makeHeaders("key", "3");
 
             inputTopic.pipeInput(new TestRecord<>("1", "A", headers1, 5L));
             inputTopic.pipeInput(new TestRecord<>("2", "B", headers2, 1L));

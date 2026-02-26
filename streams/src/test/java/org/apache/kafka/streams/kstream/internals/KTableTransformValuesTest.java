@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -26,7 +25,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -51,14 +49,13 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
-import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.StoreFormatTestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -70,9 +67,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -127,28 +122,6 @@ public class KTableTransformValuesTest {
         builder = new StreamsBuilder();
     }
 
-    /**
-     * Provides test parameters for different store formats.
-     */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties properties = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        properties.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
-        properties.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        return properties;
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
 
     @Test
     public void shouldThrowOnGetIfSupplierReturnsNull() {
@@ -346,11 +319,11 @@ public class KTableTransformValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldTransformValuesWithKey(final String storeFormat) {
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersD = makeHeaders("key", "D");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersD = StoreFormatTestUtils.makeHeaders("key", "D");
 
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
@@ -364,7 +337,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
+        driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -387,11 +360,11 @@ public class KTableTransformValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldTransformValuesWithKeyAndMaterialize(final String storeFormat) {
-        final Headers headersA = makeHeaders("key", "A");
-        final Headers headersB = makeHeaders("key", "B");
-        final Headers headersC = makeHeaders("key", "C");
+        final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+        final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+        final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
 
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
@@ -407,7 +380,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
+        driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
         inputTopic.pipeInput(new TestRecord<>("A", "a", headersA, 5L));
@@ -441,7 +414,7 @@ public class KTableTransformValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful(final String storeFormat) {
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
@@ -458,7 +431,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
+        driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -480,7 +453,7 @@ public class KTableTransformValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized(final String storeFormat) {
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
@@ -493,7 +466,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
+        driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()));
         final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
@@ -510,7 +483,7 @@ public class KTableTransformValuesTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName(final String storeFormat) {
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
@@ -525,7 +498,7 @@ public class KTableTransformValuesTest {
             .toStream()
             .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
+        driver = new TopologyTestDriver(builder.build(), StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String()));
         final TestInputTopic<String, String> inputTopic =
             driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 

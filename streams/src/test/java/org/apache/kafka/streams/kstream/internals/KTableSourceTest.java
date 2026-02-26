@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -29,7 +27,6 @@ import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
@@ -46,19 +43,18 @@ import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
+import org.apache.kafka.test.StoreFormatTestUtils;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -80,32 +76,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class KTableSourceTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
 
-    /**
-     * Provides both store format configurations for parameterized tests.
-     */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        return props;
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testKTable(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName = "ktable-store";
@@ -120,10 +95,10 @@ public class KTableSourceTest {
                     driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
 
             // Send records with headers to simulate realistic usage
-            final Headers headersA = makeHeaders("source", "test-A");
-            final Headers headersB = makeHeaders("source", "test-B");
-            final Headers headersC = makeHeaders("source", "test-C");
-            final Headers headersD = makeHeaders("source", "test-D");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("source", "test-A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("source", "test-B");
+            final Headers headersC = StoreFormatTestUtils.makeHeaders("source", "test-C");
+            final Headers headersD = StoreFormatTestUtils.makeHeaders("source", "test-D");
 
             inputTopic.pipeInput(new TestRecord<>("A", 1, headersA, 10L));
             inputTopic.pipeInput(new TestRecord<>("B", 2, headersB, 11L));
@@ -195,9 +170,9 @@ public class KTableSourceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void kTableShouldLogAndMeterOnSkippedRecords(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         builder.table(topic, stringConsumed);
@@ -215,7 +190,7 @@ public class KTableSourceTest {
                 );
 
             // Send a record with null key (should be skipped)
-            final Headers headers = makeHeaders("test", "header");
+            final Headers headers = StoreFormatTestUtils.makeHeaders("test", "header");
             inputTopic.pipeInput(new TestRecord<>(null, "value", headers));
 
             assertThat(
@@ -229,9 +204,9 @@ public class KTableSourceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void kTableShouldLogOnOutOfOrder(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         builder.table(topic, stringConsumed, Materialized.as("store"));
@@ -249,7 +224,7 @@ public class KTableSourceTest {
                 );
 
             // Send records with headers - second record has earlier timestamp (out of order)
-            final Headers headers = makeHeaders("test", "header");
+            final Headers headers = StoreFormatTestUtils.makeHeaders("test", "header");
             inputTopic.pipeInput(new TestRecord<>("key", "value", headers, 10L));
             inputTopic.pipeInput(new TestRecord<>("key", "value", headers, 5L));
 
@@ -264,9 +239,9 @@ public class KTableSourceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testValueGetter(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -293,9 +268,9 @@ public class KTableSourceTest {
             getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
 
             // Send records with unique headers for each key
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
-            final Headers headersC = makeHeaders("key", "C");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
+            final Headers headersC = StoreFormatTestUtils.makeHeaders("key", "C");
 
             inputTopic1.pipeInput(new TestRecord<>("A", "01", headersA, 10L));
             inputTopic1.pipeInput(new TestRecord<>("B", "01", headersB, 20L));
@@ -354,9 +329,9 @@ public class KTableSourceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testNotSendingOldValue(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -378,7 +353,7 @@ public class KTableSourceTest {
                 );
             final MockApiProcessor<String, Integer, Void, Void> proc1 = supplier.theCapturedProcessor();
 
-            final Headers headers = makeHeaders("test", "header");
+            final Headers headers = StoreFormatTestUtils.makeHeaders("test", "header");
             inputTopic1.pipeInput(new TestRecord<>("A", "01", headers, 10L));
             inputTopic1.pipeInput(new TestRecord<>("B", "01", headers, 20L));
             inputTopic1.pipeInput(new TestRecord<>("C", "01", headers, 15L));
@@ -446,9 +421,9 @@ public class KTableSourceTest {
      * This behavior should be the same regardless of store format.
      */
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testSendingOldValue(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -472,7 +447,7 @@ public class KTableSourceTest {
                 );
             final MockApiProcessor<String, Integer, Void, Void> proc1 = supplier.theCapturedProcessor();
 
-            final Headers headers = makeHeaders("test", "header");
+            final Headers headers = StoreFormatTestUtils.makeHeaders("test", "header");
             inputTopic1.pipeInput(new TestRecord<>("A", "01", headers, 10L));
             inputTopic1.pipeInput(new TestRecord<>("B", "01", headers, 20L));
             inputTopic1.pipeInput(new TestRecord<>("C", "01", headers, 15L));
@@ -536,9 +511,9 @@ public class KTableSourceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void testKTableAcceptsInputsWithHeaders(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName = "input-headers-store";
@@ -554,8 +529,8 @@ public class KTableSourceTest {
             final TestInputTopic<String, Integer> inputTopic =
                     driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer());
 
-            final Headers headers1 = makeHeaders("key1", "value1");
-            final Headers headers2 = makeHeaders("key2", "value2");
+            final Headers headers1 = StoreFormatTestUtils.makeHeaders("key1", "value1");
+            final Headers headers2 = StoreFormatTestUtils.makeHeaders("key2", "value2");
 
             inputTopic.pipeInput(new TestRecord<>("A", 1, headers1, 10L));
             inputTopic.pipeInput(new TestRecord<>("B", 2, headers2, 11L));
@@ -587,7 +562,7 @@ public class KTableSourceTest {
 
     @Test
     public void testDefaultFormatUsesTimestampedStore() {
-        final Properties props = getProps("default");
+        final Properties props = StoreFormatTestUtils.getProps("default", Serdes.String(), Serdes.String());
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName = "test-store";
@@ -598,7 +573,7 @@ public class KTableSourceTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
 
-            final Headers headers1 = makeHeaders("header-key-1", "header-value-1");
+            final Headers headers1 = StoreFormatTestUtils.makeHeaders("header-key-1", "header-value-1");
             inputTopic.pipeInput(new TestRecord<>("A", "value1", headers1, 10L));
 
             // Attempting to get a headers-aware store in default mode returns null (store type mismatch)

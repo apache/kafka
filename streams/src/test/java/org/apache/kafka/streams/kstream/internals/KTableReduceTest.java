@@ -17,14 +17,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.internals.RecordHeader;
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -40,11 +37,10 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.GenericInMemoryTimestampedKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StoreFormatTestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
@@ -52,41 +48,15 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class KTableReduceTest {
 
-    /**
-     * Provides both store format configurations for parameterized tests.
-     */
-    private static Stream<Arguments> storeFormats() {
-        return Stream.of(
-            Arguments.of("default"),
-            Arguments.of("headers")
-        );
-    }
-
-    private static Headers makeHeaders(final String key, final String value) {
-        final RecordHeaders headers = new RecordHeaders();
-        headers.add(new RecordHeader(key, value.getBytes()));
-        return headers;
-    }
-
-    private Properties getProps(final String storeFormat) {
-        final Properties props = mkProperties(mkMap(
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
-        props.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
-        return props;
-    }
 
     @Test
     public void shouldAddAndSubtract() {
@@ -115,9 +85,9 @@ public class KTableReduceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("storeFormats")
+    @MethodSource("org.apache.kafka.test.StoreFormatTestUtils#storeFormats")
     public void shouldReduceAndEmitLatestValue(final String storeFormat) {
-        final Properties props = getProps(storeFormat);
+        final Properties props = StoreFormatTestUtils.getProps(storeFormat, Serdes.String(), Serdes.String());
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
@@ -137,8 +107,8 @@ public class KTableReduceTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final Headers headersA = makeHeaders("key", "A");
-            final Headers headersB = makeHeaders("key", "B");
+            final Headers headersA = StoreFormatTestUtils.makeHeaders("key", "A");
+            final Headers headersB = StoreFormatTestUtils.makeHeaders("key", "B");
 
             inputTopic.pipeInput(new TestRecord<>("A", "a", headersA, 10L));
             inputTopic.pipeInput(new TestRecord<>("B", "b", headersB, 15L));
