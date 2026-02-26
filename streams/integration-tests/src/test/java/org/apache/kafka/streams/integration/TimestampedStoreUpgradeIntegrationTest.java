@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -39,7 +40,9 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
 
@@ -1267,7 +1270,7 @@ public class TimestampedStoreUpgradeIntegrationTest {
      * and can process new data with headers.
      */
     private static class TimestampedWindowedWithHeadersVerificationProcessor implements Processor<Integer, Integer, Void, Void> {
-        private org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders<Integer, Long> store;
+        private TimestampedWindowStoreWithHeaders<Integer, Long> store;
 
         @Override
         public void init(final ProcessorContext<Void, Void> context) {
@@ -1278,10 +1281,10 @@ public class TimestampedStoreUpgradeIntegrationTest {
         public void process(final Record<Integer, Integer> record) {
             // Verify migrated data (keys 1, 2, 3) have empty headers
             for (int key = 1; key <= 3; key++) {
-                final org.apache.kafka.streams.state.ValueTimestampHeaders<Long> value = store.fetch(key, 0L);
+                final ValueTimestampHeaders<Long> value = store.fetch(key, 0L);
                 if (value != null) {
                     // Verify that headers exist but are empty (migrated from v2)
-                    final org.apache.kafka.common.header.Headers headers = value.headers();
+                    final Headers headers = value.headers();
                     if (headers == null) {
                         throw new IllegalStateException("Expected non-null headers for migrated data (key=" + key + ")");
                     }
@@ -1292,12 +1295,12 @@ public class TimestampedStoreUpgradeIntegrationTest {
             }
 
             // Process the current record (with potential headers)
-            final org.apache.kafka.streams.state.ValueTimestampHeaders<Long> oldValue = store.fetch(record.key(), 0L);
+            final ValueTimestampHeaders<Long> oldValue = store.fetch(record.key(), 0L);
             final long newCount = oldValue == null ? 1L : oldValue.value() + 1L;
 
             store.put(
                 record.key(),
-                org.apache.kafka.streams.state.ValueTimestampHeaders.make(newCount, record.timestamp(), record.headers()),
+                ValueTimestampHeaders.make(newCount, record.timestamp(), record.headers()),
                 0L);
         }
     }
