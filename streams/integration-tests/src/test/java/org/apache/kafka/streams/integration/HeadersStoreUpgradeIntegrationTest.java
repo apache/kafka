@@ -485,8 +485,8 @@ public class HeadersStoreUpgradeIntegrationTest {
     }
 
     private void processWindowedKeyValueAndVerifyTimestamped(final String key,
-                                                              final String value,
-                                                              final long timestamp) throws Exception {
+                                                             final String value,
+                                                             final long timestamp) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputStream,
             singletonList(KeyValue.pair(key, value)),
@@ -755,5 +755,72 @@ public class HeadersStoreUpgradeIntegrationTest {
         if (!dataIsCorruptedOrUnreadable) {
             fail("Downgrade without cleanup should result in data corruption or read failure");
         }
+    }
+
+    @Test
+    public void shouldSuccessfullyDowngradeFromTimestampedWindowStoreWithHeadersAfterCleanup() throws Exception {
+        final StreamsBuilder headersBuilder = new StreamsBuilder();
+        headersBuilder.addStateStore(
+                Stores.timestampedWindowStoreWithHeadersBuilder(
+                    Stores.persistentTimestampedWindowStoreWithHeaders(WINDOW_STORE_NAME,
+                        Duration.ofMillis(RETENTION_MS),
+                        Duration.ofMillis(WINDOW_SIZE_MS),
+                        false),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedWithHeadersProcessor::new, WINDOW_STORE_NAME);
+
+        final Properties props = props();
+        kafkaStreams = new KafkaStreams(headersBuilder.build(), props);
+        kafkaStreams.start();
+
+        final long baseTime = CLUSTER.time.milliseconds();
+        final Headers headers = new RecordHeaders();
+        headers.add("source", "test".getBytes());
+
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair("key1", "value1")),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            headers,
+            baseTime + 100,
+            false);
+
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+            inputStream,
+            singletonList(KeyValue.pair("key2", "value2")),
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
+            headers,
+            baseTime + 200,
+            false);
+
+        // Wait for processing
+        Thread.sleep(3000);
+
+        kafkaStreams.close();
+        kafkaStreams.cleanUp();
+        kafkaStreams = null;
+
+        final StreamsBuilder downgradedBuilder = new StreamsBuilder();
+        downgradedBuilder.addStateStore(
+                Stores.timestampedWindowStoreBuilder(
+                    Stores.persistentTimestampedWindowStore(WINDOW_STORE_NAME,
+                        Duration.ofMillis(RETENTION_MS),
+                        Duration.ofMillis(WINDOW_SIZE_MS),
+                        false),
+                    Serdes.String(),
+                    Serdes.String()))
+            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
+            .process(TimestampedWindowedProcessor::new, WINDOW_STORE_NAME);
+
+        kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
+        kafkaStreams.start();
+
+        final long newTime = CLUSTER.time.milliseconds();
+        processWindowedKeyValueAndVerifyTimestamped("key3", "value3", newTime + 300);
+        processWindowedKeyValueAndVerifyTimestamped("key4", "value4", newTime + 400);
+
+        kafkaStreams.close();
     }
 }
