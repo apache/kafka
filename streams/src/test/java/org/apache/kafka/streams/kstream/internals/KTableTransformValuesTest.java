@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.KeyValueTimestampHeaders;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -44,28 +47,34 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -89,7 +98,6 @@ public class KTableTransformValuesTest {
     private static final Consumed<String, String> CONSUMED = Consumed.with(Serdes.String(), Serdes.String());
 
     private TopologyTestDriver driver;
-    private MockProcessorSupplier<String, String, Void, Void> capture;
     private StreamsBuilder builder;
     @Mock
     private KTableImpl<String, String, String> parent;
@@ -116,8 +124,30 @@ public class KTableTransformValuesTest {
 
     @BeforeEach
     public void setUp() {
-        capture = new MockProcessorSupplier<>();
         builder = new StreamsBuilder();
+    }
+
+    /**
+     * Provides test parameters for different store formats.
+     */
+    private static Stream<Arguments> storeFormats() {
+        return Stream.of(
+            Arguments.of("default"),
+            Arguments.of("headers")
+        );
+    }
+
+    private Properties getProps(final String storeFormat) {
+        final Properties properties = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        properties.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
+        properties.put(StreamsConfig.DSL_STORE_FORMAT_CONFIG, storeFormat);
+        return properties;
+    }
+
+    private static Headers makeHeaders(final String key, final String value) {
+        final RecordHeaders headers = new RecordHeaders();
+        headers.add(new RecordHeader(key, value.getBytes()));
+        return headers;
     }
 
     @Test
@@ -315,8 +345,15 @@ public class KTableTransformValuesTest {
         getter.close();
     }
 
-    @Test
-    public void shouldTransformValuesWithKey() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldTransformValuesWithKey(final String storeFormat) {
+        final Headers headersA = makeHeaders("key", "A");
+        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersD = makeHeaders("key", "D");
+
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+
         builder
             .addStateStore(storeBuilder(STORE_NAME))
             .addStateStore(storeBuilder(OTHER_STORE_NAME))
@@ -325,26 +362,39 @@ public class KTableTransformValuesTest {
                 new ExclamationValueTransformerSupplier(STORE_NAME, OTHER_STORE_NAME),
                 STORE_NAME, OTHER_STORE_NAME)
             .toStream()
-            .process(capture);
+            .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-        inputTopic.pipeInput("A", "a", 5L);
-        inputTopic.pipeInput("B", "b", 10L);
-        inputTopic.pipeInput("D", null, 15L);
+        inputTopic.pipeInput(new TestRecord<>("A", "a", headersA, 5L));
+        inputTopic.pipeInput(new TestRecord<>("B", "b", headersB, 10L));
+        inputTopic.pipeInput(new TestRecord<>("D", null, headersD, 15L));
 
-
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("D", "D->null!", 15)
-        ));
+        if (storeFormat.equals("default")) {
+            supplier.theCapturedProcessor().checkAndClearProcessResult(
+                    new KeyValueTimestamp<>("A", "A->a!", 5),
+                    new KeyValueTimestamp<>("B", "B->b!", 10),
+                    new KeyValueTimestamp<>("D", "D->null!", 15));
+        } else if (storeFormat.equals("headers")) {
+            supplier.theCapturedProcessor().checkAndClearProcessResultWithHeaders(
+                    new KeyValueTimestampHeaders<>("A", "A->a!", 5, headersA),
+                    new KeyValueTimestampHeaders<>("B", "B->b!", 10, headersB),
+                    new KeyValueTimestampHeaders<>("D", "D->null!", 15, headersD));
+        }
         assertNull(driver.getKeyValueStore(QUERYABLE_NAME), "Store should not be materialized");
     }
 
-    @Test
-    public void shouldTransformValuesWithKeyAndMaterialize() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldTransformValuesWithKeyAndMaterialize(final String storeFormat) {
+        final Headers headersA = makeHeaders("key", "A");
+        final Headers headersB = makeHeaders("key", "B");
+        final Headers headersC = makeHeaders("key", "C");
+
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+
         builder
             .addStateStore(storeBuilder(STORE_NAME))
             .table(INPUT_TOPIC, CONSUMED)
@@ -355,35 +405,46 @@ public class KTableTransformValuesTest {
                     .withValueSerde(Serdes.String()),
                 STORE_NAME)
             .toStream()
-            .process(capture);
+            .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
-        inputTopic.pipeInput("A", "a", 5L);
-        inputTopic.pipeInput("B", "b", 10L);
-        inputTopic.pipeInput("C", null, 15L);
+                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+        inputTopic.pipeInput(new TestRecord<>("A", "a", headersA, 5L));
+        inputTopic.pipeInput(new TestRecord<>("B", "b", headersB, 10L));
+        inputTopic.pipeInput(new TestRecord<>("C", null, headersC, 15L));
 
-        assertThat(output(), hasItems(new KeyValueTimestamp<>("A", "A->a!", 5),
-                new KeyValueTimestamp<>("B", "B->b!", 10),
-                new KeyValueTimestamp<>("C", "C->null!", 15)));
+        if (storeFormat.equals("default")) {
+            supplier.theCapturedProcessor().checkAndClearProcessResult(
+                    new KeyValueTimestamp<>("A", "A->a!", 5),
+                    new KeyValueTimestamp<>("B", "B->b!", 10),
+                    new KeyValueTimestamp<>("C", "C->null!", 15));
 
-        {
-            final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-            assertThat(keyValueStore.get("A"), is("A->a!"));
-            assertThat(keyValueStore.get("B"), is("B->b!"));
-            assertThat(keyValueStore.get("C"), is("C->null!"));
-        }
-        {
-            final KeyValueStore<String, ValueAndTimestamp<String>> keyValueStore = driver.getTimestampedKeyValueStore(QUERYABLE_NAME);
-            assertThat(keyValueStore.get("A"), is(ValueAndTimestamp.make("A->a!", 5L)));
-            assertThat(keyValueStore.get("B"), is(ValueAndTimestamp.make("B->b!", 10L)));
-            assertThat(keyValueStore.get("C"), is(ValueAndTimestamp.make("C->null!", 15L)));
+            {
+                final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
+                assertThat(keyValueStore.get("A"), is("A->a!"));
+                assertThat(keyValueStore.get("B"), is("B->b!"));
+                assertThat(keyValueStore.get("C"), is("C->null!"));
+            }
+            {
+                final KeyValueStore<String, ValueAndTimestamp<String>> keyValueStore = driver.getTimestampedKeyValueStore(QUERYABLE_NAME);
+                assertThat(keyValueStore.get("A"), is(ValueAndTimestamp.make("A->a!", 5L)));
+                assertThat(keyValueStore.get("B"), is(ValueAndTimestamp.make("B->b!", 10L)));
+                assertThat(keyValueStore.get("C"), is(ValueAndTimestamp.make("C->null!", 15L)));
+            }
+        } else if (storeFormat.equals("headers")) {
+            supplier.theCapturedProcessor().checkAndClearProcessResultWithHeaders(
+                    new KeyValueTimestampHeaders<>("A", "A->a!", 5, headersA),
+                    new KeyValueTimestampHeaders<>("B", "B->b!", 10, headersB),
+                    new KeyValueTimestampHeaders<>("C", "C->null!", 15, headersC));
         }
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful(final String storeFormat) {
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(
@@ -395,28 +456,34 @@ public class KTableTransformValuesTest {
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
             .mapValues(mapBackToStrings())
             .toStream()
-            .process(capture);
+            .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
         inputTopic.pipeInput("A", "ignored", 5L);
         inputTopic.pipeInput("A", "ignored1", 15L);
         inputTopic.pipeInput("A", "ignored2", 10L);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
+        supplier.theCapturedProcessor().checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
+                new KeyValueTimestamp<>("A", "3", 15));
 
-        final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-        assertThat(keyValueStore.get("A"), is(3));
+        if (storeFormat.equals("default")) {
+            final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
+            assertThat(keyValueStore.get("A"), is(3));
+        }
         assertThat(driver.getAllStateStores().keySet(),
             equalTo(Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized(final String storeFormat) {
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(new StatelessTransformerSupplier())
@@ -424,25 +491,29 @@ public class KTableTransformValuesTest {
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
             .mapValues(mapBackToStrings())
             .toStream()
-            .process(capture);
+            .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+                driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
+        supplier.theCapturedProcessor().checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", "1", 5),
                 new KeyValueTimestamp<>("A", "2", 15),
-                new KeyValueTimestamp<>("A", "3", 15))));
+                new KeyValueTimestamp<>("A", "3", 15));
         assertThat(driver.getAllStateStores().keySet(),
             equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
-    @Test
-    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName() {
+    @ParameterizedTest
+    @MethodSource("storeFormats")
+    public void shouldCalculateCorrectOldValuesIfNotStatefulEvenNotMaterializedNoQueryableName(final String storeFormat) {
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(new StatelessTransformerSupplier(),
@@ -452,25 +523,22 @@ public class KTableTransformValuesTest {
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
             .mapValues(mapBackToStrings())
             .toStream()
-            .process(capture);
+            .process(supplier);
 
-        driver = new TopologyTestDriver(builder.build(), props());
+        driver = new TopologyTestDriver(builder.build(), getProps(storeFormat));
         final TestInputTopic<String, String> inputTopic =
-            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(INPUT_TOPIC, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
         inputTopic.pipeInput("A", "a", 5L);
         inputTopic.pipeInput("A", "aa", 15L);
         inputTopic.pipeInput("A", "aaa", 10);
 
-        assertThat(output(), equalTo(Arrays.asList(new KeyValueTimestamp<>("A", "1", 5),
-            new KeyValueTimestamp<>("A", "2", 15),
-            new KeyValueTimestamp<>("A", "3", 15))));
+        supplier.theCapturedProcessor().checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", "1", 5),
+                new KeyValueTimestamp<>("A", "2", 15),
+                new KeyValueTimestamp<>("A", "3", 15));
         assertThat(driver.getAllStateStores().keySet(),
             equalTo(Set.of("inputTopic-STATE-STORE-0000000000", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
-    }
-
-    private ArrayList<KeyValueTimestamp<String, String>> output() {
-        return capture.capturedProcessors(1).get(0).processed();
     }
 
     private static KeyValueMapper<String, Integer, KeyValue<String, Integer>> toForceSendingOfOldValues() {
@@ -483,14 +551,6 @@ public class KTableTransformValuesTest {
 
     private static StoreBuilder<KeyValueStore<Long, Long>> storeBuilder(final String storeName) {
         return Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long());
-    }
-
-    public static Properties props() {
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-        props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
-        return props;
     }
 
     private static void throwIfStoresNotAvailable(final ProcessorContext context,
