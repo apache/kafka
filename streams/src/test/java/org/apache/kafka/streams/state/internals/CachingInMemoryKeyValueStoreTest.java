@@ -85,7 +85,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore(storeName);
         cacheFlushListener = new CacheFlushListenerStub<>(new StringDeserializer(), new StringDeserializer());
-        store = new CachingKeyValueStore(underlyingStore, false);
+        store = new CachingKeyValueStore(underlyingStore, CachingKeyValueStore.CacheType.KEY_VALUE_STORE);
         store.setFlushListener(cacheFlushListener, false);
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(null, null, null, null, cache);
@@ -110,7 +110,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldDelegateInit() {
         final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
+        final CachingKeyValueStore outer = new CachingKeyValueStore(inner, CachingKeyValueStore.CacheType.KEY_VALUE_STORE);
         when(inner.name()).thenReturn("store");
         outer.init(context, outer);
         verify(inner).init(context, outer);
@@ -179,7 +179,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     private void setUpCloseTests() {
         underlyingStore = mock(KeyValueStore.class);
         when(underlyingStore.name()).thenReturn("store-name");
-        store = new CachingKeyValueStore(underlyingStore, false);
+        store = new CachingKeyValueStore(underlyingStore, CachingKeyValueStore.CacheType.TIMESTAMPED_KEY_VALUE_STORE);
         cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
