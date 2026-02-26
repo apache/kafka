@@ -35,13 +35,13 @@ import java.util.List;
  * A persistent key-value store with headers support based on RocksDB.
  * <p>
  * This store provides a migration path from plain {@link RocksDBStore} (DEFAULT column family)
- * to a headers-aware column family ({@code keyValueWithHeaders}). It uses
+ * to a headers-aware column family ({@code sessionKeyValueWithHeaders}). It uses
  * {@link DualColumnFamilyAccessor} for lazy migration when legacy data exists in the DEFAULT CF.
  */
 public class RocksDBStoreWithHeaders extends RocksDBStore implements HeadersBytesStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBStoreWithHeaders.class);
 
-    static final byte[] HEADERS_VALUES_COLUMN_FAMILY_NAME = "keyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
+    static final byte[] SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME = "sessionKeyValueWithHeaders".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBStoreWithHeaders(final String name,
                                    final String metricsScope) {
@@ -60,7 +60,7 @@ public class RocksDBStoreWithHeaders extends RocksDBStore implements HeadersByte
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
             dbOptions,
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor(HEADERS_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
+            new ColumnFamilyDescriptor(SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
         final ColumnFamilyHandle noHeadersColumnFamily = columnFamilies.get(0);
         final ColumnFamilyHandle withHeadersColumnFamily = columnFamilies.get(1);
