@@ -42,6 +42,8 @@ type: docs
 
 ### Upgrading Servers to 4.2.0 from any version 3.3.x through 4.1.x
 
+  * If you wish to use share groups in a cluster with fewer than 3 brokers, you must set the broker configurations `share.coordinator.state.topic.replication.factor` and `share.coordinator.state.topic.min.isr` to 1 before you start using share groups. This is because share groups make use of a new internal topic called `__share_group_state` which is automatically created when you first use share groups. In common with the other internal topics, the default configuration uses 3 replicas and requires at least 3 brokers.
+
 ### Notable changes in 4.2.0
 
   * The `--max-partition-memory-bytes` option in `kafka-console-producer` is deprecated and will be removed in Kafka 5.0. Please use `--batch-size` instead. 
