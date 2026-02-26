@@ -55,6 +55,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
         new AggregationWithHeadersSerializer<>(new StringSerializer());
     private final AggregationWithHeadersDeserializer<String> aggDeserializer =
         new AggregationWithHeadersDeserializer<>(new StringDeserializer());
+    private final byte[] sessionStoreHeaderColumnFamilyName = RocksDBStoreWithHeaders.SESSION_STORE_HEADERS_VALUES_COLUMN_FAMILY_NAME;
 
     RocksDBStore getRocksDBStore() {
         return new RocksDBStoreWithHeaders(DB_NAME, METRICS_SCOPE);
@@ -97,7 +98,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -330,7 +331,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
@@ -418,7 +419,7 @@ public class RocksDBStoreWithHeadersTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor("keyValueWithHeaders".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+                new ColumnFamilyDescriptor(sessionStoreHeaderColumnFamilyName, columnFamilyOptions));
 
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
         RocksDB db = null;
