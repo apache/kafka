@@ -42,7 +42,6 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
 
     @Override
     public final void commit(final RocksDBStore.DBAccessor accessor, final Map<TopicPartition, Long> changelogOffsets) throws RocksDBException {
-        this.commit(accessor);
         for (final Map.Entry<TopicPartition, Long> entry : changelogOffsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final Long offset = entry.getValue();
@@ -50,7 +49,8 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
             final byte[] value = longSerde.serializer().serialize(null, offset);
             accessor.put(offsetColumnFamilyHandle, key, value);
         }
-        accessor.flush(offsetColumnFamilyHandle);
+        // We need to remove this flush call when implementing KAFKA-19712
+        this.flush(accessor, offsetColumnFamilyHandle);
     }
 
     @Override
@@ -70,9 +70,10 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     /**
      * Invokes commit in the underlying ColumnFamilyAccessor.
      * Subclasses should implement this method to define specific commit behavior.
+     * This method will be removed when implementing KAFKA-19712
      *
      * @param accessor the RocksDB accessor used to interact with the database
      * @throws RocksDBException if an error occurs during the commit operation
      */
-    protected abstract void commit(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
+    protected abstract void flush(final RocksDBStore.DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException;
 }

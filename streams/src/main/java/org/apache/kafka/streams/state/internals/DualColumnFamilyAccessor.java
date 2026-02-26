@@ -237,8 +237,8 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     @Override
-    public void commit(final DBAccessor accessor) throws RocksDBException {
-        accessor.flush(oldColumnFamily, newColumnFamily);
+    public void flush(final DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException {
+        accessor.flush(oldColumnFamily, newColumnFamily, offsetColumnFamilyHandle);
     }
 
     @Override

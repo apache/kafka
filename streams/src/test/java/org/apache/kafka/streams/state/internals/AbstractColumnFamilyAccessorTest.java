@@ -33,7 +33,6 @@ import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,8 +62,7 @@ abstract class AbstractColumnFamilyAccessorTest {
         final TopicPartition tp1 = new TopicPartition("testTopic", 1);
         final Map<TopicPartition, Long> changelogOffsets = Map.of(tp0, 10L, tp1, 20L);
         accessor.commit(dbAccessor, changelogOffsets);
-        verify(dbAccessor).flush(offsetsCF);
-        verify(dbAccessor, times(2)).flush(any(ColumnFamilyHandle[].class));
+        verify(dbAccessor).flush(any(ColumnFamilyHandle[].class));
         verify(dbAccessor).put(eq(offsetsCF), eq(topicSerializer.serialize(null, tp0.toString())), eq(offsetSerializer.serialize(null, 10L)));
         verify(dbAccessor).put(eq(offsetsCF), eq(topicSerializer.serialize(null, tp1.toString())), eq(offsetSerializer.serialize(null, 20L)));
     }

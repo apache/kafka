@@ -207,6 +207,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         userSpecifiedOptions.setCreateIfMissing(true);
         userSpecifiedOptions.setErrorIfExists(false);
         userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
+        // Supports offset managements: KAFKA-20212
+        userSpecifiedOptions.setAtomicFlush(true);
         // this is the recommended way to increase parallelism in RocksDb
         // note that the current implementation of setIncreaseParallelism affects the number
         // of compaction threads but not flush threads (the latter remains one). Also,
@@ -801,8 +803,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         public void flush(final ColumnFamilyHandle... columnFamilies) throws RocksDBException {
             if (columnFamilies.length == 0) {
                 db.flush(flushOptions);
-            } else if (columnFamilies.length == 1) {
-                db.flush(flushOptions, columnFamilies[0]);
             } else {
                 db.flush(flushOptions, Arrays.asList(columnFamilies));
             }
@@ -973,8 +973,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void commit(final DBAccessor accessor) throws RocksDBException {
-            accessor.flush(columnFamily);
+        public void flush(final DBAccessor accessor, final ColumnFamilyHandle offsetColumnFamilyHandle) throws RocksDBException {
+            accessor.flush(columnFamily, offsetColumnFamilyHandle);
         }
 
         @Override
