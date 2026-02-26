@@ -86,7 +86,7 @@ public class GroupConfigManager implements AutoCloseable {
         ShareGroupConfig shareGroupConfig
     ) {
         Properties combinedConfigs = new Properties();
-        combinedConfigs.putAll(groupCoordinatorConfig.extractConsumerGroupConfigMap());
+        combinedConfigs.putAll(groupCoordinatorConfig.extractGroupConfigMap(shareGroupConfig));
         combinedConfigs.putAll(newGroupConfig);
         GroupConfig.validate(combinedConfigs, groupCoordinatorConfig, shareGroupConfig);
     }
