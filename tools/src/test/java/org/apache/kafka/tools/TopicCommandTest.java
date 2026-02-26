@@ -1115,7 +1115,7 @@ public class TopicCommandTest {
                                         broker.metadataCache().getLeaderAndIsr(testTopicName, 0).orElseGet(null));
                                 return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
                             }
-                    ), CLUSTER_WAIT_MS, String.format("Meta data propogation fail in %s ms", CLUSTER_WAIT_MS));
+                    ), CLUSTER_WAIT_MS, String.format("Metadata propagation fail in %s ms", CLUSTER_WAIT_MS));
 
             String output = captureDescribeTopicStandardOut(clusterInstance, buildTopicCommandOptionsWithBootstrap(clusterInstance, "--describe", "--under-replicated-partitions"));
             String[] rows = output.split(System.lineSeparator());

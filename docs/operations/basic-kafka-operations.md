@@ -427,9 +427,61 @@ The --verify option can be used with the tool to check the status of the partiti
     Reassignment of partition [foo1,0] is completed
     Reassignment of partition [foo2,1] is completed
 
-## Decommissioning brokers
+## Decommissioning brokers and log directories
 
-The partition reassignment tool does not have the ability to automatically generate a reassignment plan for decommissioning brokers yet. As such, the admin has to come up with a reassignment plan to move the replica for all partitions hosted on the broker to be decommissioned, to the rest of the brokers. This can be relatively tedious as the reassignment needs to ensure that all the replicas are not moved from the decommissioned broker to only one other broker. To make this process effortless, we plan to add tooling support for decommissioning brokers in the future. 
+### Decommissioning brokers
+
+The first step to decommission brokers is to mark them as cordoned via the Admin API.
+
+For example to cordon broker 1:
+
+    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config cordoned.log.dirs="*" --entity-type brokers --entity-name 1
+    Completed updating config for broker 1.
+
+Then reassign all the partitions from that broker to other brokers in the cluster.
+The partition reassignment tool does not have the ability to automatically generate a reassignment plan for decommissioning brokers yet.
+As such, the admin has to come up with a reassignment plan to move the replica for all partitions hosted on the broker to be decommissioned, 
+to the rest of the brokers.
+
+Once all the reassignment is done, shutdown the broker and unregister it to remove it from the cluster.
+
+For example to unregister broker 1:
+
+    $ bin/kafka-cluster.sh unregister --bootstrap-server localhost:9092 --id 1
+
+### Decommissioning log directories
+
+The first step to decommission log directories is to mark them as cordoned via the Admin API.
+
+For example to cordon /data/dir1 from broker 1:
+
+    $ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config cordoned.log.dirs=/data/dir1 --entity-type brokers --entity-name 1
+    Completed updating config for broker 1.
+
+Then reassign all the partitions from the log directory to decommission to other log directories or brokers in the cluster.
+The partition reassignment tool does not have the ability to automatically generate a reassignment plan for decommissioning a log directory yet.
+As such, the admin has to come up with a reassignment plan to move the replica for all partitions hosted on the log directory to be decommissioned.
+
+Once all the reassignment is done, shutdown the broker.
+
+Then uncordon the log directory. Since the broker hosting that directory is offline, use --bootstrap-controller to do so.
+
+For example:
+
+    $ bin/kafka-configs.sh --bootstrap-controller localhost:9093 --alter --delete-config cordoned.log.dirs --entity-type brokers --entity-name 1
+    Completed updating config for broker 1.
+
+Update the configuration for the broker and remove the log directory to decommission from log.dir or log.dirs.
+
+For example if the broker configuration contained:
+
+    log.dirs=/data/dir1,/data/dir2
+
+Update it to:
+
+    log.dirs=/data/dir2
+
+Finally restart the broker.
 
 ## Increasing replication factor
 

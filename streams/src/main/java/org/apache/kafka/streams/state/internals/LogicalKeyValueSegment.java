@@ -53,7 +53,7 @@ import static org.apache.kafka.streams.state.internals.RocksDBStore.incrementWit
  * stores a key into a shared physical store by prepending the key with a prefix (unique to
  * the specific logical segment), and storing the combined key into the physical store.
  */
-class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segment, VersionedStoreSegment {
+class LogicalKeyValueSegment implements Segment, VersionedStoreSegment {
     private static final Logger log = LoggerFactory.getLogger(LogicalKeyValueSegment.class);
 
     private final long id;
@@ -76,11 +76,6 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     @Override
     public long id() {
         return id;
-    }
-
-    @Override
-    public int compareTo(final LogicalKeyValueSegment segment) {
-        return Long.compare(id, segment.id);
     }
 
     @Override
