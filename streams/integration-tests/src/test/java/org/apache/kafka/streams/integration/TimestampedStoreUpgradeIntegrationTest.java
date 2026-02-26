@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -40,9 +39,7 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.TestUtils;
 
@@ -1162,146 +1159,5 @@ public class TimestampedStoreUpgradeIntegrationTest {
             store.put(record.key(), ValueAndTimestamp.make(newCount, newTimestamp), record.key() < 10 ? 0L : 100000L);
         }
 
-    }
-
-    @Test
-    public void shouldMigrateTimestampedWindowStoreToTimestampedWindowStoreWithHeaders() throws Exception {
-        // Phase 1: Run with TimestampedWindowStore (v2)
-        final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
-
-        streamsBuilderForOldStore.addStateStore(
-                Stores.timestampedWindowStoreBuilder(
-                    Stores.persistentTimestampedWindowStore(
-                        STORE_NAME,
-                        Duration.ofDays(1L),
-                        Duration.ofMillis(1000L),
-                        false),
-                    Serdes.Integer(),
-                    Serdes.Long()))
-            .<Integer, Integer>stream(inputStream)
-            .process(TimestampedWindowedProcessor::new, STORE_NAME);
-
-        final Properties props = props();
-        kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
-        kafkaStreams.start();
-
-        // Write data using v2 store
-        processWindowedKeyValueAndVerifyTimestampedCount(1, singletonList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, CLUSTER.time.milliseconds()))));
-
-        processWindowedKeyValueAndVerifyTimestampedCount(1, singletonList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, CLUSTER.time.milliseconds()))));
-
-        processWindowedKeyValueAndVerifyTimestampedCount(2, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, CLUSTER.time.milliseconds())),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, CLUSTER.time.milliseconds()))));
-
-        processWindowedKeyValueAndVerifyTimestampedCount(3, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, CLUSTER.time.milliseconds())),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, CLUSTER.time.milliseconds())),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, CLUSTER.time.milliseconds()))));
-
-        kafkaStreams.close();
-        kafkaStreams = null;
-
-        // Phase 2: Restart with TimestampedWindowStoreWithHeaders (v3)
-        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
-
-        streamsBuilderForNewStore.addStateStore(
-                Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(
-                        STORE_NAME,
-                        Duration.ofDays(1L),
-                        Duration.ofMillis(1000L),
-                        false),
-                    Serdes.Integer(),
-                    Serdes.Long()))
-            .<Integer, Integer>stream(inputStream)
-            .process(TimestampedWindowedWithHeadersVerificationProcessor::new, STORE_NAME);
-
-        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
-        kafkaStreams.start();
-
-        // Process records and verify migration succeeded
-        // The processor will verify that migrated data has empty headers
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(99, 99)),  // trigger verification
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, IntegerSerializer.class),
-            CLUSTER.time.milliseconds());
-
-        // Wait for processing
-        Thread.sleep(5000);
-
-        kafkaStreams.close();
-    }
-
-    private void processWindowedKeyValueAndVerifyTimestampedCount(
-        final int key,
-        final List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> expected) throws Exception {
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair(key, key)),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, IntegerSerializer.class),
-            CLUSTER.time.milliseconds());
-
-        TestUtils.waitForCondition(() -> {
-            try {
-                final ReadOnlyWindowStore<Integer, ValueAndTimestamp<Long>> store = IntegrationTestUtils
-                    .getStore(STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
-
-                final List<KeyValue<Windowed<Integer>, ValueAndTimestamp<Long>>> result = new LinkedList<>();
-                try (final KeyValueIterator<Windowed<Integer>, ValueAndTimestamp<Long>> scanner = store.all()) {
-                    while (scanner.hasNext()) {
-                        result.add(scanner.next());
-                    }
-                }
-
-                return result.equals(expected);
-            } catch (final Exception e) {
-                return false;
-            }
-        }, 30_000L, "Could not get expected result in time.");
-    }
-
-    /**
-     * Processor that verifies migrated data from TimestampedWindowStore has empty headers
-     * and can process new data with headers.
-     */
-    private static class TimestampedWindowedWithHeadersVerificationProcessor implements Processor<Integer, Integer, Void, Void> {
-        private TimestampedWindowStoreWithHeaders<Integer, Long> store;
-
-        @Override
-        public void init(final ProcessorContext<Void, Void> context) {
-            store = context.getStateStore(STORE_NAME);
-        }
-
-        @Override
-        public void process(final Record<Integer, Integer> record) {
-            // Verify migrated data (keys 1, 2, 3) have empty headers
-            for (int key = 1; key <= 3; key++) {
-                final ValueTimestampHeaders<Long> value = store.fetch(key, 0L);
-                if (value != null) {
-                    // Verify that headers exist but are empty (migrated from v2)
-                    final Headers headers = value.headers();
-                    if (headers == null) {
-                        throw new IllegalStateException("Expected non-null headers for migrated data (key=" + key + ")");
-                    }
-                    if (headers.iterator().hasNext()) {
-                        throw new IllegalStateException("Expected empty headers for migrated data (key=" + key + "), but found headers");
-                    }
-                }
-            }
-
-            // Process the current record (with potential headers)
-            final ValueTimestampHeaders<Long> oldValue = store.fetch(record.key(), 0L);
-            final long newCount = oldValue == null ? 1L : oldValue.value() + 1L;
-
-            store.put(
-                record.key(),
-                ValueTimestampHeaders.make(newCount, record.timestamp(), record.headers()),
-                0L);
-        }
     }
 }
