@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
  * This store extends {@link RocksDBTimeOrderedSessionStore} and overrides
  * {@code query()} to disable IQv2 for header-aware stores.
  * <p>
- * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytesn]
+ * The storage format for values is: [headersSize(varint)][headersBytes][aggregationBytes]
  *
  * @see RocksDBTimeOrderedSessionStore
  */
