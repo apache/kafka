@@ -1879,6 +1879,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         try {
             final GroupMembershipOperation membershipOperation =
                 leaveGroupRequested.get() == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP ? LEAVE_GROUP : REMAIN_IN_GROUP;
+            if (membershipOperation == REMAIN_IN_GROUP && streamsRebalanceData.isPresent()) {
+                log.info("The consumer will leave the group since the streams group protocol is used");
+            }
             mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
@@ -1923,7 +1926,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void updateThreadMetadata(final Map<TaskId, Task> activeTasks,
-                                      final Map<TaskId, Task> standbyTasks) {
+                                      final Map<TaskId, StandbyTask> standbyTasks) {
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, Task> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadataImpl(
@@ -1935,7 +1938,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             ));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
-        for (final Map.Entry<TaskId, Task> task : standbyTasks.entrySet()) {
+        for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadataImpl(
                 task.getValue().id(),
                 task.getValue().inputPartitions(),

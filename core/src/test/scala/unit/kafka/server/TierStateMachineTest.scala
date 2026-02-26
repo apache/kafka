@@ -18,16 +18,17 @@
 package kafka.server
 
 import org.apache.kafka.common.errors.FencedLeaderEpochException
-import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.internal._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
 import org.junit.jupiter.api.Assertions._
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Optional
 import scala.collection.Map
 
 class TierStateMachineTest {
@@ -164,10 +165,12 @@ class TierStateMachineTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
       override def start(topicPartition: TopicPartition,
-                         currentFetchState: PartitionFetchState,
-                         fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
+                         topicId: Optional[Uuid],
+                         currentLeaderEpoch: Int,
+                         fetchStartOffsetAndEpoch: OffsetAndEpoch,
+                         leaderLogStartOffset: Long): PartitionFetchState = {
         isErrorHandled = true
-        throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
+        throw new FencedLeaderEpochException(s"Epoch ${currentLeaderEpoch} is fenced")
       }
     }
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions)

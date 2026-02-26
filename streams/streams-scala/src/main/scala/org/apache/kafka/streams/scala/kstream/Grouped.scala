@@ -19,6 +19,7 @@ package org.apache.kafka.streams.scala.kstream
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.kstream.{Grouped => GroupedJ}
 
+@deprecated("Use `org.apache.kafka.streams.kstream.Grouped` instead", "4.3.0")
 object Grouped {
 
   /**

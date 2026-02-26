@@ -477,18 +477,6 @@ public class OffsetMetadataManagerTest {
             ));
         }
 
-        public void deleteOffset(
-            String groupId,
-            String topic,
-            int partition
-        ) {
-            replay(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
-                groupId,
-                topic,
-                partition
-            ));
-        }
-
         private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
             if (apiMessageAndVersion == null) {
                 return null;
@@ -3034,7 +3022,7 @@ public class OffsetMetadataManagerTest {
             new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
         when(group.isSubscribedToTopic("foo")).thenReturn(false);
 
-        // foo-0 is expired, but the group is not deleted beacuse it has pending transactional offset commits.
+        // foo-0 is expired, but the group is not deleted because it has pending transactional offset commits.
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 0)
         );

@@ -23,7 +23,8 @@ import org.apache.kafka.streams.state.WindowStore;
 public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
     public enum WindowStoreTypes {
         DEFAULT_WINDOW_STORE,
-        TIMESTAMPED_WINDOW_STORE
+        TIMESTAMPED_WINDOW_STORE,
+        TIMESTAMPED_WINDOW_STORE_WITH_HEADERS
     }
 
     private final String name;
@@ -80,6 +81,16 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
             case TIMESTAMPED_WINDOW_STORE:
                 return new RocksDBTimestampedWindowStore(
                     new RocksDBTimestampedSegmentedBytesStore(
+                        name,
+                        metricsScope(),
+                        retentionPeriod,
+                        segmentInterval,
+                        new WindowKeySchema()),
+                    retainDuplicates,
+                    windowSize);
+            case TIMESTAMPED_WINDOW_STORE_WITH_HEADERS:
+                return new RocksDBTimestampedWindowStoreWithHeaders(
+                    new RocksDBTimestampedSegmentedBytesStoreWithHeaders(
                         name,
                         metricsScope(),
                         retentionPeriod,

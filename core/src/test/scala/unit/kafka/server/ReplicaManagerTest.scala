@@ -59,13 +59,14 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.KRaftConfigs
+import org.apache.kafka.server.LogAppendResult.LogAppendSummary
 import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition, TransactionVersion}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.PartitionFetchState
+import org.apache.kafka.server.{HostedPartition, PartitionFetchState}
 import org.apache.kafka.server.partition.AlterPartitionManager
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteFetch, DelayedRemoteListOffsets}
 import org.apache.kafka.server.share.SharePartitionKey
@@ -89,7 +90,7 @@ import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
@@ -1231,7 +1232,7 @@ class ReplicaManagerTest {
       val localLog = replicaManager.localLog(topicPartition)
       assertTrue(localLog.isDefined, "Log should be created for follower after applyDelta")
       val hostedPartition = replicaManager.getPartition(topicPartition)
-      assertTrue(hostedPartition.isInstanceOf[HostedPartition.Online])
+      assertTrue(hostedPartition.isInstanceOf[HostedPartition.Online[Partition]])
 
       // Make local partition a follower - because epoch increased by more than 1, truncation should
       // trigger even though leader does not change
@@ -4022,6 +4023,30 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testAlterReplicaLogDirsToCordonedDir(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val logMgr = Mockito.spy(TestUtils.createLogManager(config.logDirs.asScala.map(new File(_))))
+    when(logMgr.cordonedLogDirs()).thenReturn(config.logDirs.asScala.toSet)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logMgr,
+      quotaManagers = quotaManager,
+      metadataCache = new KRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val errors = replicaManager.alterReplicaLogDirs(Map(tp -> config.logDirs.get(0)))
+      assertEquals(Errors.INVALID_REPLICA_ASSIGNMENT, errors(tp))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
   def testPartitionMetadataFile(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
@@ -4030,7 +4055,7 @@ class ReplicaManagerTest {
       val leaderImage = imageFromTopics(leaderDelta.apply())
       replicaManager.applyDelta(leaderDelta, leaderImage)
 
-      assertTrue(replicaManager.getPartition(topicPartition).isInstanceOf[HostedPartition.Online])
+      assertTrue(replicaManager.getPartition(topicPartition).isInstanceOf[HostedPartition.Online[Partition]])
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
       val id = topicIds(topicPartition.topic)
       val log = replicaManager.localLog(topicPartition).get
@@ -4134,12 +4159,12 @@ class ReplicaManagerTest {
 
       val hostedPartition = replicaManager.getPartition(topicPartition)
       assertEquals(
-        classOf[HostedPartition.Offline],
+        classOf[HostedPartition.Offline[Partition]],
         hostedPartition.getClass
       )
       assertEquals(
         topicId,
-        hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
+        hostedPartition.asInstanceOf[HostedPartition.Offline[Partition]].partition.toScala.flatMap(p => p.topicId).get
       )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -4453,6 +4478,10 @@ class ReplicaManagerTest {
     }
   }
 
+  def getOnlinePartition(hostedPartition: HostedPartition[Partition]): Partition = {
+    hostedPartition.asInstanceOf[HostedPartition.Online[Partition]].partition()
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testDeltaFromLeaderToFollower(enableRemoteStorage: Boolean): Unit = {
@@ -4471,7 +4500,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
@@ -4503,7 +4532,7 @@ class ReplicaManagerTest {
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, followerResponse.get.error)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(1, followerPartition.getLeaderEpoch)
 
@@ -4535,7 +4564,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
 
@@ -4570,7 +4599,7 @@ class ReplicaManagerTest {
       )
       assertEquals(Errors.NONE, leaderResponse.get.error)
 
-      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(1, leaderPartition.getLeaderEpoch)
@@ -4599,7 +4628,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
 
@@ -4616,7 +4645,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check that the state stays the same
-      val HostedPartition.Online(noChangePartition) = replicaManager.getPartition(topicPartition)
+      val noChangePartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(noChangePartition.isLeader)
       assertEquals(0, noChangePartition.getLeaderEpoch)
 
@@ -4646,7 +4675,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
 
@@ -4671,7 +4700,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4694,7 +4723,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
 
@@ -4719,7 +4748,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4742,7 +4771,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
@@ -4766,7 +4795,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4789,7 +4818,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
@@ -4813,7 +4842,7 @@ class ReplicaManagerTest {
       }
 
       // Check that the partition was removed
-      assertEquals(HostedPartition.None, replicaManager.getPartition(topicPartition))
+      assertEquals(new HostedPartition.None[Partition], replicaManager.getPartition(topicPartition))
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
       assertEquals(None, replicaManager.logManager.getLog(topicPartition))
     } finally {
@@ -4838,7 +4867,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
@@ -4858,7 +4887,7 @@ class ReplicaManagerTest {
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(1, followerPartition.getLeaderEpoch)
 
@@ -4891,7 +4920,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(0, leaderPartition.getLeaderEpoch)
@@ -4919,7 +4948,7 @@ class ReplicaManagerTest {
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(1, followerPartition.getLeaderEpoch)
 
@@ -4960,12 +4989,12 @@ class ReplicaManagerTest {
 
       val hostedPartition = replicaManager.getPartition(topicPartition)
       assertEquals(
-        classOf[HostedPartition.Offline],
+        classOf[HostedPartition.Offline[Partition]],
         hostedPartition.getClass
       )
       assertEquals(
         FOO_UUID,
-        hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
+        hostedPartition.asInstanceOf[HostedPartition.Offline[Partition]].partition.toScala.flatMap(p => p.topicId).get
       )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -4999,7 +5028,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(0, followerPartition.localLogOrException.logEndOffset)
@@ -5027,7 +5056,8 @@ class ReplicaManagerTest {
         Set(topicPartition))
       ).thenAnswer { _ =>
         replicaManager.getPartition(topicPartition) match {
-          case HostedPartition.Online(partition) =>
+          case online: HostedPartition.Online[Partition] =>
+            val partition = online.partition()
             partition.appendRecordsToFollowerOrFutureReplica(
               records = MemoryRecords.withRecords(
                 Compression.NONE, 0,
@@ -5099,7 +5129,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
       // Check the state of that partition.
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(0, followerPartition.getPartitionEpoch)
@@ -5249,17 +5279,17 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(topicsDelta, metadataImage)
 
       // Check the state of the partitions.
-      val HostedPartition.Online(fooPartition0) = replicaManager.getPartition(foo0)
+      val fooPartition0 = getOnlinePartition(replicaManager.getPartition(foo0))
       assertFalse(fooPartition0.isLeader)
       assertEquals(0, fooPartition0.getLeaderEpoch)
       assertEquals(0, fooPartition0.getPartitionEpoch)
 
-      val HostedPartition.Online(fooPartition1) = replicaManager.getPartition(foo1)
+      val fooPartition1 = getOnlinePartition(replicaManager.getPartition(foo1))
       assertTrue(fooPartition1.isLeader)
       assertEquals(0, fooPartition1.getLeaderEpoch)
       assertEquals(0, fooPartition1.getPartitionEpoch)
 
-      val HostedPartition.Online(fooPartition2) = replicaManager.getPartition(foo2)
+      val fooPartition2 = getOnlinePartition(replicaManager.getPartition(foo2))
       assertFalse(fooPartition2.isLeader)
       assertEquals(0, fooPartition2.getLeaderEpoch)
       assertEquals(0, fooPartition2.getPartitionEpoch)
@@ -5626,6 +5656,7 @@ class ReplicaManagerTest {
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
         assertFalse(response.topics().isEmpty)
+        assertFalse(response.isCordoned)
         response.topics().forEach(t => assertFalse(t.partitions().isEmpty))
       }
     } finally {
@@ -5658,6 +5689,7 @@ class ReplicaManagerTest {
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
         assertTrue(response.topics().isEmpty)
+        assertFalse(response.isCordoned)
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -5703,7 +5735,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher.
-      val HostedPartition.Online(partition) = replicaManager.getPartition(topicPartition)
+      val partition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(partition.isLeader)
       assertEquals(Set(localId, otherId), partition.inSyncReplicaIds)
       assertEquals(0, partition.getLeaderEpoch)
@@ -5733,9 +5765,9 @@ class ReplicaManagerTest {
     topicIdPartition: TopicIdPartition
   ): Unit = {
     val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
-    assertTrue(partition.isInstanceOf[HostedPartition.Online],
+    assertTrue(partition.isInstanceOf[HostedPartition.Online[Partition]],
       s"Expected ${topicIdPartition} to be in state: HostedPartition.Online. But was in state: ${partition}")
-    val hostedPartition = partition.asInstanceOf[HostedPartition.Online]
+    val hostedPartition = partition.asInstanceOf[HostedPartition.Online[Partition]]
     assertTrue(hostedPartition.partition.log.isDefined,
       s"Expected ${topicIdPartition} to have a log set in ReplicaManager, but it did not.")
     assertTrue(hostedPartition.partition.log.get.topicId.isPresent,
@@ -5749,7 +5781,7 @@ class ReplicaManagerTest {
     topicIdPartition: TopicIdPartition
   ): Unit = {
     val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
-    assertEquals(HostedPartition.None, partition, s"Expected ${topicIdPartition} to be offline, but it was: ${partition}")
+    assertEquals(new HostedPartition.None[Partition], partition, s"Expected ${topicIdPartition} to be offline, but it was: ${partition}")
   }
 
   @Test
@@ -5820,7 +5852,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
 
       // Check the state of that partition and fetcher
-      val HostedPartition.Online(leaderPartition) = replicaManager.getPartition(topicPartition)
+      val leaderPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertTrue(leaderPartition.isLeader)
       assertEquals(0, leaderPartition.getLeaderEpoch)
       // On becoming follower listener should not be invoked yet.
@@ -5835,7 +5867,7 @@ class ReplicaManagerTest {
       listener.verify(expectedFollower = true)
 
       // Check the state of that partition.
-      val HostedPartition.Online(followerPartition) = replicaManager.getPartition(topicPartition)
+      val followerPartition = getOnlinePartition(replicaManager.getPartition(topicPartition))
       assertFalse(followerPartition.isLeader)
       assertEquals(1, followerPartition.getLeaderEpoch)
     } finally {
@@ -6032,13 +6064,13 @@ class ReplicaManagerTest {
 
       val fooResult = result(foo)
       assertEquals(Errors.NONE, fooResult.error)
-      assertEquals(0, fooResult.info.logStartOffset)
-      assertEquals(0, fooResult.info.firstOffset)
-      assertEquals(0, fooResult.info.lastOffset)
+      assertEquals(0, fooResult.logAppendSummary.logStartOffset)
+      assertEquals(0, fooResult.logAppendSummary.firstOffset)
+      assertEquals(0, fooResult.logAppendSummary.lastOffset)
 
       val barResult = result(bar)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, barResult.error)
-      assertEquals(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, barResult.info)
+      assertEquals(LogAppendSummary.fromAppendInfo(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO), barResult.logAppendSummary)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

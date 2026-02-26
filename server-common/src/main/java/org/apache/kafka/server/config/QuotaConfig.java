@@ -225,7 +225,7 @@ public class QuotaConfig {
                         ConfigDef.Importance.MEDIUM, QuotaConfig.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
     }
 
-    public static final Set<String> BROKER_QUOTA_CONFIGS = Set.copyOf(brokerQuotaConfigs().names()); 
+    public static final Set<String> BROKER_QUOTA_CONFIGS = Set.copyOf(brokerQuotaConfigs().names());
 
     public static ConfigDef userAndClientQuotaConfigs() {
         ConfigDef configDef = new ConfigDef();

@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoaderImpl, CoordinatorRecord}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService, NetworkPartitionMetadataClient, PartitionMetadataClient}
+import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
@@ -54,7 +54,7 @@ import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerSer
 import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
-import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
+import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler, NetworkPartitionMetadataClient, PartitionMetadataClient}
 import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, BrokerLifecycleManager, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, FetchManager, FetchSessionCacheShard, KRaftTopicCreator, NodeToControllerChannelManagerImpl, ProcessRole, RaftControllerNodeProvider}
 import org.apache.kafka.server.transaction.AddPartitionsToTxnManager
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
@@ -66,6 +66,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.locks.{Condition, ReentrantLock}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
+import java.util.stream.Collectors
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -219,11 +220,13 @@ class BrokerServer(
         brokerTopicStats,
         logDirFailureChannel)
 
-      lifecycleManager = new BrokerLifecycleManager(config,
+      lifecycleManager = new BrokerLifecycleManager(
+        config,
         time,
         s"broker-${config.nodeId}-",
         logManager.directoryIdsSet.asJava,
-        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
+        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start(),
+        () => metadataCache.metadataVersion().isCordonedLogDirsSupported)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -333,7 +336,13 @@ class BrokerServer(
 
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
-      }
+
+        override def handleCordoned(directoryIds: util.Set[Uuid]): Unit =
+          lifecycleManager.propagateDirectoryCordoned(directoryIds)
+
+        override def handleUncordoned(directoryIds: util.Set[Uuid]): Unit =
+          lifecycleManager.propagateDirectoryUncordoned(directoryIds)
+}
 
       /**
        * TODO: move this action queue to handle thread so we can simplify concurrency handling
@@ -412,13 +421,17 @@ class BrokerServer(
         s"broker-${config.nodeId}-",
         config.brokerHeartbeatIntervalMs
       )
+      val initialCordonedLogDirs: util.Set[Uuid] = config.cordonedLogDirs().stream()
+        .map(dir => logManager.directoryId(dir).get)
+        .collect(Collectors.toSet())
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
         clusterId,
         listenerInfo.toBrokerRegistrationRequest,
         featuresRemapped,
-        logManager.readBrokerEpochFromCleanShutdownFiles()
+        logManager.readBrokerEpochFromCleanShutdownFiles(),
+        initialCordonedLogDirs
       )
 
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
