@@ -749,7 +749,7 @@ public class ShareFetchUtilsTest {
     }
 
     @Test
-    void testIsRenewAcknowledgeEnabledWithGroupConfig() {
+    void testIsNewAcknowledgeDisabledWithGroupConfig() {
         GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         GroupConfig groupConfig = mock(GroupConfig.class);
         when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);

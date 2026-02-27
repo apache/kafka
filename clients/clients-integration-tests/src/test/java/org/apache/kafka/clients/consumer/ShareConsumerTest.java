@@ -2959,7 +2959,6 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testRenewAcknowledgementOnPoll() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareRenewAcknowledgeEnable("group1", true);
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                  "group1",
@@ -3005,7 +3004,6 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testRenewAcknowledgementOnCommitSync() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareRenewAcknowledgeEnable("group1", true);
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                  "group1",
@@ -3058,7 +3056,6 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testRenewAcknowledgementInvalidStateRecord() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareRenewAcknowledgeEnable("group1", true);
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                  "group1",
@@ -3124,7 +3121,6 @@ public class ShareConsumerTest {
     )
     public void testRenewAcknowledgementNoResultInPoll() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareRenewAcknowledgeEnable("group1", true);
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                  "group1",
