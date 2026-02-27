@@ -16,12 +16,21 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.utils.internals.BytesUtils;
+
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
 
 /**
- * Utility class that handles immutable byte arrays.
+ * An immutable wrapper for a byte array.
+ *
+ * <p>This class provides a convenient way to work with byte arrays in Kafka APIs,
+ * particularly in Kafka Streams state stores and serialization. It implements
+ * {@link Comparable} to enable ordering of byte arrays.
+ *
+ * <p>The class caches the hashCode for improved performance when used as keys
+ * in hash-based data structures.
  */
 public class Bytes implements Comparable<Bytes> {
 
@@ -34,6 +43,14 @@ public class Bytes implements Comparable<Bytes> {
     // cache the hash code for the string, default to 0
     private int hashCode;
 
+    /**
+     * Creates a Bytes instance wrapping the given byte array.
+     *
+     * <p>The provided array becomes the backing storage for the object.
+     *
+     * @param bytes the byte array to wrap, or null
+     * @return a new Bytes instance, or null if the input is null
+     */
     public static Bytes wrap(byte[] bytes) {
         if (bytes == null)
             return null;
@@ -94,7 +111,7 @@ public class Bytes implements Comparable<Bytes> {
 
     @Override
     public int compareTo(Bytes that) {
-        return BYTES_LEXICO_COMPARATOR.compare(this.bytes, that.bytes);
+        return BytesUtils.BYTES_LEXICO_COMPARATOR.compare(this.bytes, that.bytes);
     }
 
     @Override
@@ -146,7 +163,10 @@ public class Bytes implements Comparable<Bytes> {
      *
      * @param input - The byte array to increment
      * @return A new copy of the incremented byte array.
+     * @deprecated This method is not part of the public API and will be removed in version 5.0.
+     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils#increment(Bytes)} instead.
      */
+    @Deprecated
     public static Bytes increment(Bytes input) throws IndexOutOfBoundsException {
         byte[] inputArr = input.get();
         byte[] ret = new byte[inputArr.length];
@@ -168,9 +188,19 @@ public class Bytes implements Comparable<Bytes> {
 
     /**
      * A byte array comparator based on lexicograpic ordering.
+     * @deprecated This field is not part of the public API and will be removed in version 5.0.
+     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils#BYTES_LEXICO_COMPARATOR} instead.
      */
+    @Deprecated
     public static final ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
 
+    /**
+     * A byte array comparator interface.
+     *
+     * @deprecated This interface is not part of the public API and will be removed in version 5.0.
+     *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils.ByteArrayComparator} instead.
+     */
+    @Deprecated
     public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
 
         int compare(final byte[] buffer1, int offset1, int length1,
