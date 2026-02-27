@@ -39,7 +39,7 @@ plugins {
 
   id "com.github.spotbugs" version '6.4.4' apply false
   id 'org.scoverage' version '8.1' apply false
-  id 'com.gradleup.shadow' version '8.3.9' apply false
+  id 'com.gradleup.shadow' version '9.3.1' apply false
   id 'com.diffplug.spotless' version "8.0.0"
 }
 
@@ -2503,6 +2503,7 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':storage')
+    implementation project(':storage:storage-api')
     implementation project(':server')
     implementation project(':server-common')
     implementation project(':connect:runtime')

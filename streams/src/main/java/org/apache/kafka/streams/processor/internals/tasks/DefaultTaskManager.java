@@ -102,10 +102,10 @@ public final class DefaultTaskManager implements TaskManager {
             }
 
             // the most naive scheduling algorithm for now: give the next unlocked, unassigned, and  processable task
-            for (final Task task : tasks.activeInitializedTasks()) {
+            for (final StreamTask task : tasks.activeInitializedTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
-                    canProgress((StreamTask) task, time.milliseconds()) &&
+                    canProgress(task, time.milliseconds()) &&
                     !hasUncaughtException(task.id())
                 ) {
 
@@ -113,7 +113,7 @@ public final class DefaultTaskManager implements TaskManager {
 
                     log.debug("Assigned task {} to executor {}", task.id(), executor.name());
 
-                    return (StreamTask) task;
+                    return task;
                 }
             }
 
@@ -126,10 +126,10 @@ public final class DefaultTaskManager implements TaskManager {
     @Override
     public void awaitProcessableTasks(final Supplier<Boolean> isShuttingDown) throws InterruptedException {
         final boolean interrupted = returnWithTasksLocked(() -> {
-            for (final Task task : tasks.activeInitializedTasks()) {
+            for (final StreamTask task : tasks.activeInitializedTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
-                    canProgress((StreamTask) task, time.milliseconds()) &&
+                    canProgress(task, time.milliseconds()) &&
                     !hasUncaughtException(task.id())
                 ) {
                     log.debug("Await unblocked: returning early from await since a processable task {} was found", task.id());
@@ -270,7 +270,7 @@ public final class DefaultTaskManager implements TaskManager {
     public void add(final Set<StreamTask> tasksToAdd) {
         executeWithTasksLocked(() -> {
             for (final StreamTask task : tasksToAdd) {
-                tasks.addTask(task);
+                tasks.addActiveTask(task);
             }
             log.debug("Waking up task executors");
             tasksCondition.signalAll();

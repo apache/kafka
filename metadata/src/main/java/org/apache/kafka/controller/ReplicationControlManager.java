@@ -1531,6 +1531,35 @@ public class ReplicationControlManager {
         }
     }
 
+    /**
+     * Generates the appropriate record to handle a list of directories that are cordoned.
+     *
+     * @param brokerId     The broker id.
+     * @param brokerEpoch  The broker epoch.
+     * @param cordonedDirs The list of directories that are cordoned.
+     * @param records      The record list to append to.
+     */
+    void handleDirectoriesCordoned(
+            int brokerId,
+            long brokerEpoch,
+            List<Uuid> cordonedDirs,
+            List<ApiMessageAndVersion> records
+    ) {
+        BrokerRegistration registration = clusterControl.registration(brokerId);
+        List<Uuid> newCordonedDirs = registration.directoryIntersection(cordonedDirs);
+        if (!newCordonedDirs.isEmpty()) {
+            records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+                    setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
+                    setCordonedLogDirs(newCordonedDirs),
+                    (short) 3));
+            if (log.isDebugEnabled()) {
+                List<Uuid> newUncordonedDirs = registration.directoryDifference(newCordonedDirs);
+                log.debug("Directories {} in broker {} marked cordoned, uncordoned directories: {}",
+                        newCordonedDirs, brokerId, newUncordonedDirs);
+            }
+        }
+    }
+
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
         ElectionType electionType = electionType(request.electionType());
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -1666,6 +1695,10 @@ public class ReplicationControlManager {
             request.currentMetadataOffset());
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
+        }
+        if (featureControl.metadataVersionOrThrow().isCordonedLogDirsSupported()) {
+            clusterControl.updateCordonedLogDirs(brokerId, request.cordonedLogDirs());
+            handleDirectoriesCordoned(brokerId, brokerEpoch, request.cordonedLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
         BrokerHeartbeatReply reply = new BrokerHeartbeatReply(isCaughtUp,

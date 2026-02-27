@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 
 import java.util.Collection;
 import java.util.Set;
@@ -36,8 +37,16 @@ public interface ChangelogRegister {
     void register(final Set<TopicPartition> partitions, final ProcessorStateManager stateManager);
 
     /**
-     * Unregisters and removes the passed in partitions from the set of changelogs
+     * Unregisters and removes the passed in partitions from the set of changelogs.
+     * Defaults to {@link StandbyUpdateListener.SuspendReason#MIGRATED} for the standby suspend reason.
      * @param removedPartitions the set of partitions to remove
      */
     void unregister(final Collection<TopicPartition> removedPartitions);
+
+    /**
+     * Unregisters and removes the passed in partitions from the set of changelogs.
+     * @param removedPartitions the set of partitions to remove
+     * @param reason the reason for suspending standby update, passed to the standby update listener
+     */
+    void unregister(final Collection<TopicPartition> removedPartitions, final StandbyUpdateListener.SuspendReason reason);
 }
