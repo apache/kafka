@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 
 import com.dynatrace.hash4j.hashing.Hashing;
 
@@ -27,10 +28,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -234,5 +238,44 @@ public class UtilsTest {
             FOO_TOPIC_NAME, 123L
         );
         assertNotEquals(Utils.computeGroupHash(map1), Utils.computeGroupHash(map2));
+    }
+
+    @Test
+    void testAssignmentFromTopicPartitionsWithNegativeDefaultEpoch() {
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions = List.of(
+            new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(FOO_TOPIC_ID)
+                .setPartitions(Arrays.asList(0, 1, 2))
+        );
+
+        Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
+            topicPartitions,
+            LEAVE_GROUP_STATIC_MEMBER_EPOCH // -2
+        );
+
+        // Verify epoch is adjusted to 0
+        assertEquals(Map.of(
+            FOO_TOPIC_ID, Map.of(0, 0, 1, 0, 2, 0)
+        ), result);
+    }
+
+    @Test
+    void testAssignmentFromTopicPartitionsWithEpochsProvided() {
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions = List.of(
+            new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(FOO_TOPIC_ID)
+                .setPartitions(Arrays.asList(0, 1, 2))
+                .setAssignmentEpochs(Arrays.asList(5, 6, 7))
+        );
+
+        Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(
+            topicPartitions,
+            LEAVE_GROUP_STATIC_MEMBER_EPOCH  // -2
+        );
+
+        // Verify assignment epochs are used
+        assertEquals(Map.of(
+            FOO_TOPIC_ID, Map.of(0, 5, 1, 6, 2, 7)
+        ), result);
     }
 }

@@ -302,7 +302,7 @@ public class CurrentAssignmentBuilder {
 
         // Reuse the original map if no topics need to be removed.
         Map<Uuid, Map<Integer, Integer>> newAssignedPartitionsWithEpochs;
-        Map<Uuid, Map<Integer, Integer>> newPartitionsPendingRevocationWithEpochs;
+        Map<Uuid, Map<Integer, Integer>> newPartitionsPendingRevocationWithEpochs = Map.of();
 
         if (subscribedTopicIds.isEmpty() && member.partitionsPendingRevocation().isEmpty()) {
             newAssignedPartitionsWithEpochs = Map.of();
@@ -310,11 +310,11 @@ public class CurrentAssignmentBuilder {
             newPartitionsPendingRevocationWithEpochs = memberAssignedPartitionsWithEpochs;
         } else {
             newAssignedPartitionsWithEpochs = memberAssignedPartitionsWithEpochs;
-            newPartitionsPendingRevocationWithEpochs = new HashMap<>(member.partitionsPendingRevocation());
             for (Map.Entry<Uuid, Map<Integer, Integer>> entry : memberAssignedPartitionsWithEpochs.entrySet()) {
                 if (!subscribedTopicIds.contains(entry.getKey())) {
-                    if (newAssignedPartitionsWithEpochs == member.assignedPartitions()) {
-                        newAssignedPartitionsWithEpochs = new HashMap<>(member.assignedPartitions());
+                    if (newAssignedPartitionsWithEpochs == memberAssignedPartitionsWithEpochs) {
+                        newAssignedPartitionsWithEpochs = new HashMap<>(memberAssignedPartitionsWithEpochs);
+                        newPartitionsPendingRevocationWithEpochs = new HashMap<>(member.partitionsPendingRevocation());
                     }
                     newAssignedPartitionsWithEpochs.remove(entry.getKey());
                     newPartitionsPendingRevocationWithEpochs.merge(
@@ -330,7 +330,7 @@ public class CurrentAssignmentBuilder {
             }
         }
 
-        if (newAssignedPartitionsWithEpochs == member.assignedPartitions()) {
+        if (newAssignedPartitionsWithEpochs == memberAssignedPartitionsWithEpochs) {
             // If no partitions were removed, we can return the member as is.
             return member;
         }

@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.toEpochsAssignment;
@@ -247,6 +248,33 @@ public class ConsumerGroupMemberTest {
         assertEquals(9, member.previousMemberEpoch());
         assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 10), member.assignedPartitions());
         assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 10), member.partitionsPendingRevocation());
+    }
+
+    @Test
+    public void testUpdateWithConsumerGroupCurrentMemberAssignmentValueWithNegativeEpoch() {
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH) // -2
+            .setPreviousMemberEpoch(5)
+            .setAssignedPartitions(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(topicId1)
+                .setPartitions(Arrays.asList(0, 1, 2))))
+            .setPartitionsPendingRevocation(List.of(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(topicId2)
+                .setPartitions(Arrays.asList(3, 4, 5))));
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
+            .updateWith(record)
+            .build();
+
+        assertEquals(-2, member.memberEpoch());
+        assertEquals(5, member.previousMemberEpoch());
+
+        // Partition epoch should be 0, not -2.
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), 0), member.assignedPartitions());
+        assertEquals(toEpochsAssignment(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), 0), member.partitionsPendingRevocation());
     }
 
     @ParameterizedTest(name = "{displayName}.withClassicMemberMetadata={0}")
