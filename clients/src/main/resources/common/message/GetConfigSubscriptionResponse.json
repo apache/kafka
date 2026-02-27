@@ -1,0 +1,17 @@
+{
+  "apiKey": 93,
+  "type": "response",
+  "name": "GetConfigSubscriptionResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The top-level error code."},
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+", "ignorable": true,
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota."},
+    { "name": "SubscriptionId", "type": "int32", "versions": "0+",
+      "about": "Unique identifier for the current subscription set for this client instance."},
+    { "name": "ConfigNames", "type": "[]string", "versions": "0+",
+      "about": "The client configuration names the server wants the client to send."}
+  ]
+}

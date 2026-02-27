@@ -1,0 +1,16 @@
+{
+  "apiKey": 93,
+  "type": "request",
+  "listeners": ["broker"],
+  "name": "GetConfigSubscriptionRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ClientSoftwareName", "type": "string", "versions": "0+",
+      "ignorable": false, "about": "The name of the client."},
+    { "name": "ClientSoftwareVersion", "type": "string", "versions": "0+",
+      "ignorable": false, "about": "The version of the client."},
+    { "name": "ClientSoftwareRole", "type": "string", "versions": "0+",
+      "ignorable": true, "about": "The role the client is serving."}
+  ]
+}
