@@ -44,7 +44,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.state.internals.SessionStoreWrapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,9 +110,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     private class KStreamSessionWindowAggregateProcessor extends
         ContextualProcessor<KIn, VIn, Windowed<KIn>, Change<VAgg>> {
 
-        private SessionStore<KIn, VAgg> store;
-        private SessionStore<KIn, AggregationWithHeaders<VAgg>> headersStore;
-        private boolean supportsHeaders;
+        private SessionStoreWrapper<KIn, VAgg> storeWrapper;
         private TimestampedTupleForwarder<Windowed<KIn>, VAgg> tupleForwarder;
         private Sensor droppedRecordsSensor;
         private Sensor emittedRecordsSensor;
@@ -135,11 +133,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
             emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(), processorName, metrics);
             emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(), processorName, metrics);
-            store = context.getStateStore(storeName);
-            supportsHeaders = WrappedStateStore.isHeadersAware(store);
-            if (supportsHeaders) {
-                headersStore = context.getStateStore(storeName);
-            }
+            storeWrapper = new SessionStoreWrapper<>(context, storeName);
 
             if (emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
                 // Restore last emit close time for ON_WINDOW_CLOSE strategy
@@ -157,7 +151,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 tupleForwarder = new TimestampedTupleForwarder<>(context, sendOldValues);
             } else {
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    storeWrapper.store(),
                     context,
                     new SessionCacheFlushListener<>(context),
                     sendOldValues);
@@ -177,35 +171,53 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long windowCloseTime = observedStreamTime - windows.gracePeriodMs() - windows.inactivityGap();
 
-            if (supportsHeaders) {
-                processWithHeaders(record, timestamp, windowCloseTime);
-            } else {
-                processWithoutHeaders(record, timestamp, windowCloseTime);
-            }
+            processRecord(record, timestamp, windowCloseTime);
 
             maybeForwardFinalResult(record, windowCloseTime);
         }
 
-        private void processWithoutHeaders(final Record<KIn, VIn> record,
-                                            final long timestamp,
-                                            final long windowCloseTime) {
+        private void processRecord(final Record<KIn, VIn> record,
+                                    final long timestamp,
+                                    final long windowCloseTime) {
             final List<KeyValue<Windowed<KIn>, VAgg>> merged = new ArrayList<>();
+            List<KeyValue<Windowed<KIn>, AggregationWithHeaders<VAgg>>> mergedWithHeaders = null;
             final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
             SessionWindow mergedWindow = newSessionWindow;
             VAgg agg = initializer.apply();
 
-            try (
-                final KeyValueIterator<Windowed<KIn>, VAgg> iterator = store.findSessions(
-                    record.key(),
-                    timestamp - windows.inactivityGap(),
-                    timestamp + windows.inactivityGap()
-                )
-            ) {
-                while (iterator.hasNext()) {
-                    final KeyValue<Windowed<KIn>, VAgg> next = iterator.next();
-                    merged.add(next);
-                    agg = sessionMerger.apply(record.key(), agg, next.value);
-                    mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
+            if (storeWrapper.supportsHeaders()) {
+                mergedWithHeaders = new ArrayList<>();
+                try (
+                    final KeyValueIterator<Windowed<KIn>, AggregationWithHeaders<VAgg>> iterator =
+                        storeWrapper.findSessionsWithHeaders(
+                            record.key(),
+                            timestamp - windows.inactivityGap(),
+                            timestamp + windows.inactivityGap()
+                        )
+                ) {
+                    while (iterator.hasNext()) {
+                        final KeyValue<Windowed<KIn>, AggregationWithHeaders<VAgg>> next = iterator.next();
+                        mergedWithHeaders.add(next);
+                        final VAgg value = AggregationWithHeaders.getAggregationOrNull(next.value);
+                        merged.add(new KeyValue<>(next.key, value));
+                        agg = sessionMerger.apply(record.key(), agg, value);
+                        mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
+                    }
+                }
+            } else {
+                try (
+                    final KeyValueIterator<Windowed<KIn>, VAgg> iterator = storeWrapper.findSessions(
+                        record.key(),
+                        timestamp - windows.inactivityGap(),
+                        timestamp + windows.inactivityGap()
+                    )
+                ) {
+                    while (iterator.hasNext()) {
+                        final KeyValue<Windowed<KIn>, VAgg> next = iterator.next();
+                        merged.add(next);
+                        agg = sessionMerger.apply(record.key(), agg, next.value);
+                        mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
+                    }
                 }
             }
 
@@ -214,7 +226,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             } else {
                 if (!mergedWindow.equals(newSessionWindow)) {
                     for (final KeyValue<Windowed<KIn>, VAgg> session : merged) {
-                        store.remove(session.key);
+                        storeWrapper.remove(session.key);
 
                         maybeForwardUpdate(session.key, session.value, null);
                     }
@@ -222,50 +234,13 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
                 agg = aggregator.apply(record.key(), record.value(), agg);
                 final Windowed<KIn> sessionKey = new Windowed<>(record.key(), mergedWindow);
-                store.put(sessionKey, agg);
 
-                maybeForwardUpdate(sessionKey, null, agg);
-            }
-        }
-
-        private void processWithHeaders(final Record<KIn, VIn> record,
-                                         final long timestamp,
-                                         final long windowCloseTime) {
-            final List<KeyValue<Windowed<KIn>, AggregationWithHeaders<VAgg>>> merged = new ArrayList<>();
-            final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
-            SessionWindow mergedWindow = newSessionWindow;
-            VAgg agg = initializer.apply();
-
-            try (
-                final KeyValueIterator<Windowed<KIn>, AggregationWithHeaders<VAgg>> iterator = headersStore.findSessions(
-                    record.key(),
-                    timestamp - windows.inactivityGap(),
-                    timestamp + windows.inactivityGap()
-                )
-            ) {
-                while (iterator.hasNext()) {
-                    final KeyValue<Windowed<KIn>, AggregationWithHeaders<VAgg>> next = iterator.next();
-                    merged.add(next);
-                    agg = sessionMerger.apply(record.key(), agg, AggregationWithHeaders.getAggregationOrNull(next.value));
-                    mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
+                if (storeWrapper.supportsHeaders()) {
+                    final Headers combinedHeaders = combineHeaders(mergedWithHeaders, record.headers());
+                    storeWrapper.put(sessionKey, agg, combinedHeaders);
+                } else {
+                    storeWrapper.put(sessionKey, agg);
                 }
-            }
-
-            if (mergedWindow.end() < windowCloseTime) {
-                logSkippedRecordForExpiredWindow(timestamp, windowCloseTime, mergedWindow);
-            } else {
-                if (!mergedWindow.equals(newSessionWindow)) {
-                    for (final KeyValue<Windowed<KIn>, AggregationWithHeaders<VAgg>> session : merged) {
-                        headersStore.remove(session.key);
-
-                        maybeForwardUpdate(session.key, AggregationWithHeaders.getAggregationOrNull(session.value), null);
-                    }
-                }
-
-                agg = aggregator.apply(record.key(), record.value(), agg);
-                final Windowed<KIn> sessionKey = new Windowed<>(record.key(), mergedWindow);
-                final Headers combinedHeaders = combineHeaders(merged, record.headers());
-                headersStore.put(sessionKey, AggregationWithHeaders.make(agg, combinedHeaders));
 
                 maybeForwardUpdate(sessionKey, null, agg);
             }
@@ -360,41 +335,21 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
 
             int emittedCount = 0;
 
-            if (supportsHeaders) {
-                // Only time ordered (indexed) session store should have implemented
-                // this function, otherwise a not-supported exception would throw
-                try (final KeyValueIterator<Windowed<KIn>, AggregationWithHeaders<VAgg>> windowToEmit = headersStore
-                        .findSessions(emitRangeLowerBound, emitRangeUpperBound)) {
+            // Only time ordered (indexed) session store should have implemented
+            // this function, otherwise a not-supported exception would throw
+            try (final KeyValueIterator<Windowed<KIn>, VAgg> windowToEmit =
+                     storeWrapper.findSessions(emitRangeLowerBound, emitRangeUpperBound)) {
 
-                    while (windowToEmit.hasNext()) {
-                        emittedCount++;
-                        final KeyValue<Windowed<KIn>, AggregationWithHeaders<VAgg>> kv = windowToEmit.next();
+                while (windowToEmit.hasNext()) {
+                    emittedCount++;
+                    final KeyValue<Windowed<KIn>, VAgg> kv = windowToEmit.next();
 
-                        tupleForwarder.maybeForward(
-                            record.withKey(kv.key)
-                                .withValue(new Change<>(AggregationWithHeaders.getAggregationOrNull(kv.value), null))
-                                // set the timestamp as the window end timestamp
-                                .withTimestamp(kv.key.window().end())
-                                .withHeaders(record.headers()));
-                    }
-                }
-            } else {
-                // Only time ordered (indexed) session store should have implemented
-                // this function, otherwise a not-supported exception would throw
-                try (final KeyValueIterator<Windowed<KIn>, VAgg> windowToEmit = store
-                        .findSessions(emitRangeLowerBound, emitRangeUpperBound)) {
-
-                    while (windowToEmit.hasNext()) {
-                        emittedCount++;
-                        final KeyValue<Windowed<KIn>, VAgg> kv = windowToEmit.next();
-
-                        tupleForwarder.maybeForward(
-                            record.withKey(kv.key)
-                                .withValue(new Change<>(kv.value, null))
-                                // set the timestamp as the window end timestamp
-                                .withTimestamp(kv.key.window().end())
-                                .withHeaders(record.headers()));
-                    }
+                    tupleForwarder.maybeForward(
+                        record.withKey(kv.key)
+                            .withValue(new Change<>(kv.value, null))
+                            // set the timestamp as the window end timestamp
+                            .withTimestamp(kv.key.window().end())
+                            .withHeaders(record.headers()));
                 }
             }
             emittedRecordsSensor.record(emittedCount);
