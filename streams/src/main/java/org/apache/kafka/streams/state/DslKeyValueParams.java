@@ -50,7 +50,7 @@ public class DslKeyValueParams {
      */
     public DslKeyValueParams(final String name, final DslStoreFormat dslStoreFormat) {
         Objects.requireNonNull(name);
-        this.name = name;
+        this.name =  Objects.requireNonNull(name);
         this.dslStoreFormat = Objects.requireNonNull(dslStoreFormat);
         this.isTimestamped = dslStoreFormat == DslStoreFormat.TIMESTAMPED;
     }
