@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -43,11 +45,13 @@ class TimestampedCacheFlushListenerWithHeaders<KOut, VOut> implements CacheFlush
             final VOut newValue = record.value().newValue != null ? record.value().newValue.value() : null;
             final VOut oldValue = record.value().oldValue != null ? record.value().oldValue.value() : null;
             final long timestamp = record.value().newValue != null ? record.value().newValue.timestamp() : record.timestamp();
+            final Headers headers = record.headers() != null ? record.headers() : new RecordHeaders();
 
             context.forward(
                 record
                     .withValue(new Change<>(newValue, oldValue, record.value().isLatest))
                     .withTimestamp(timestamp)
+                    .withHeaders(headers)
             );
         } finally {
             context.setCurrentNode(prev);

@@ -109,20 +109,11 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                 context.taskId().toString(), metrics);
             if (queryableName != null) {
                 store = new KeyValueStoreWrapper<>(context, queryableName);
-                // Use headers-aware cache flush listener if the store supports headers
-                if (store.supportsHeaders()) {
-                    tupleForwarder = new TimestampedTupleForwarder<>(
-                        store.store(),
-                        context,
-                        new TimestampedCacheFlushListenerWithHeaders<>(context),
-                        sendOldValues);
-                } else {
-                    tupleForwarder = new TimestampedTupleForwarder<>(
-                        store.store(),
-                        context,
-                        new TimestampedCacheFlushListener<>(context),
-                        sendOldValues);
-                }
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store.store(),
+                    context,
+                    new TimestampedCacheFlushListenerWithHeaders<>(context),
+                    sendOldValues);
             }
         }
 
@@ -176,11 +167,11 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
                     oldValue = null;
                 }
                 final long putReturnCode;
-                if (store.supportsHeaders()) {
-                    putReturnCode = store.put(record.key(), record.value(), record.timestamp(), record.headers());
-                } else {
-                    putReturnCode = store.put(record.key(), record.value(), record.timestamp());
-                }
+//                if (store.supportsHeaders()) {
+                putReturnCode = store.put(record.key(), record.value(), record.timestamp(), record.headers());
+//                } else {
+//                    putReturnCode = store.put(record.key(), record.value(), record.timestamp());
+//                }
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(record.value(), oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
