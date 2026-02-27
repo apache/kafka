@@ -38,36 +38,36 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
 
     public KeyValueStoreMaterializer(
-            final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
     ) {
         super(materialized);
     }
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() != null ? dslStoreFormat() : DslStoreFormat.DEFAULT;
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
-                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
-                : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
+            ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
+            : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
         if (supplier instanceof VersionedBytesStoreSupplier) {
             builder = Stores.versionedKeyValueStoreBuilder(
-                    (VersionedBytesStoreSupplier) supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-        } else if (storeFormat.equals(DslStoreFormat.HEADERS)) {
-            builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-        } else if (storeFormat.equals(DslStoreFormat.DEFAULT)) {
-            builder = Stores.timestampedKeyValueStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
+                (VersionedBytesStoreSupplier) supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
         } else {
-            throw new IllegalArgumentException("Unsupported store format: " + storeFormat);
+            if (storeFormat == DslStoreFormat.HEADERS) {
+                builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+            } else {
+                builder = Stores.timestampedKeyValueStoreBuilder(
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+            }
         }
 
         if (materialized.loggingEnabled()) {
@@ -91,14 +91,14 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     @Override
     public long retentionPeriod() {
         throw new IllegalStateException(
-                "retentionPeriod is not supported when not a window store");
+            "retentionPeriod is not supported when not a window store");
     }
 
     @Override
     public long historyRetention() {
         if (!(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier)) {
             throw new IllegalStateException(
-                    "historyRetention is not supported when not a versioned store");
+                "historyRetention is not supported when not a versioned store");
         }
         return ((VersionedBytesStoreSupplier) materialized.storeSupplier()).historyRetentionMs();
     }
