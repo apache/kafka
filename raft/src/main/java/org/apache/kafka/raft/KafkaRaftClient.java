@@ -1893,6 +1893,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             leaderState.epoch(),
             leaderState.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L),
             leaderState.voterStates().values(),
+            leaderState.committedVoterStates().values(),
             leaderState.observerStates(currentTimeMs).values(),
             currentTimeMs
         );

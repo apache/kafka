@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -46,6 +47,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
 
 public class LeaderStateTest {
     private final VoterSet.VoterNode localVoterNode = VoterSetTest.voterNode(ReplicaKey.of(0, Uuid.randomUuid()));
@@ -55,6 +58,7 @@ public class LeaderStateTest {
     private final int fetchTimeoutMs = 2000;
     private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     private final int beginQuorumEpochTimeoutMs = fetchTimeoutMs / 2;
+    private final KRaftControlRecordStateMachine partitionState = mock(KRaftControlRecordStateMachine.class);
 
     private LeaderState<?> newLeaderState(
         VoterSet voters,
@@ -65,7 +69,7 @@ public class LeaderStateTest {
             voters,
             epochStartOffset,
             kraftVersion,
-            Mockito.mock(BatchAccumulator.class)
+            mock(BatchAccumulator.class)
         );
     }
 
@@ -75,6 +79,12 @@ public class LeaderStateTest {
         KRaftVersion kraftVersion,
         BatchAccumulator<?> accumulator
     ) {
+        Mockito
+            .when(partitionState.voterSetAtOffset(anyLong()))
+            .thenReturn(Optional.of(voters));
+        Mockito
+            .when(partitionState.staticVoterSet())
+            .thenReturn(voters);
         return new LeaderState<>(
             time,
             localVoterNode,
@@ -87,7 +97,8 @@ public class LeaderStateTest {
             accumulator,
             fetchTimeoutMs,
             logContext,
-            new KafkaRaftMetrics(new Metrics(), "raft")
+            new KafkaRaftMetrics(new Metrics(), "raft"),
+            partitionState
         );
     }
 
@@ -138,7 +149,8 @@ public class LeaderStateTest {
                 null,
                 fetchTimeoutMs,
                 logContext,
-                new KafkaRaftMetrics(new Metrics(), "raft")
+                new KafkaRaftMetrics(new Metrics(), "raft"),
+                partitionState
             )
         );
     }

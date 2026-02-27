@@ -3313,7 +3313,7 @@ class KafkaRaftClientTest {
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1));
-        context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, expectedVoterStates, List.of());
     }
 
     @ParameterizedTest
@@ -3370,7 +3370,7 @@ class KafkaRaftClientTest {
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1));
-        context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, expectedVoterStates, List.of());
 
         context.time.sleep(100);
         long fetchOffset = withBootstrapSnapshot ? 3L : 1L;
@@ -3398,7 +3398,7 @@ class KafkaRaftClientTest {
             .setLogEndOffset(fetchOffset)
             .setLastFetchTimestamp(followerFetchTime1)
             .setLastCaughtUpTimestamp(followerFetchTime1);
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, List.of());
 
         // After follower2 catches up to leader
         context.time.sleep(100);
@@ -3419,13 +3419,13 @@ class KafkaRaftClientTest {
             .setLogEndOffset(nextFetchOffset)
             .setLastFetchTimestamp(followerFetchTime2)
             .setLastCaughtUpTimestamp(followerFetchTime2);
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, List.of());
 
         // Describe quorum returns error if leader loses leadership
         context.time.sleep(context.checkQuorumTimeoutMs);
         context.deliverRequest(context.describeQuorumRequest());
         context.pollUntilResponse();
-        context.assertSentDescribeQuorumResponse(Errors.NOT_LEADER_OR_FOLLOWER, 0, 0, 0, List.of(), List.of());
+        context.assertSentDescribeQuorumResponse(Errors.NOT_LEADER_OR_FOLLOWER, 0, 0, 0, List.of(), List.of(), List.of());
     }
 
     @ParameterizedTest
@@ -3498,7 +3498,7 @@ class KafkaRaftClientTest {
                 .setLogEndOffset(0L)
                 .setLastFetchTimestamp(observerFetchTime)
                 .setLastCaughtUpTimestamp(-1L));
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedObserverStates);
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, expectedObserverStates);
 
         // Update observer fetch state
         context.time.sleep(100);
@@ -3518,7 +3518,7 @@ class KafkaRaftClientTest {
             .setLogEndOffset(fetchOffset)
             .setLastFetchTimestamp(observerFetchTime)
             .setLastCaughtUpTimestamp(observerFetchTime);
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedObserverStates);
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, expectedObserverStates);
 
         // Observer falls behind
         context.time.sleep(100);
@@ -3534,7 +3534,7 @@ class KafkaRaftClientTest {
             .setLogEndOffset(fetchOffset + records.size())
             .setLastFetchTimestamp(context.time.milliseconds())
             .setLastCaughtUpTimestamp(context.time.milliseconds());
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedObserverStates);
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, expectedObserverStates);
 
         // Observer is removed due to inactivity
         long timeToSleep = LeaderState.OBSERVER_SESSION_TIMEOUT_MS;
@@ -3556,7 +3556,7 @@ class KafkaRaftClientTest {
             .setLastCaughtUpTimestamp(context.time.milliseconds());
         expectedVoterStates.get(1)
             .setLastFetchTimestamp(followerFetchTime);
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, List.of());
 
         // No-op for negative node id
         context.deliverRequest(context.fetchRequest(epoch, ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID), 0L, 0, 0));
@@ -3568,7 +3568,7 @@ class KafkaRaftClientTest {
         expectedVoterStates.get(0)
             .setLastFetchTimestamp(context.time.milliseconds())
             .setLastCaughtUpTimestamp(context.time.milliseconds());
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, List.of());
     }
 
     @ParameterizedTest
@@ -3625,7 +3625,7 @@ class KafkaRaftClientTest {
                 .setLogEndOffset(fetchOffset)
                 .setLastFetchTimestamp(followerFetchTime)
                 .setLastCaughtUpTimestamp(followerFetchTime));
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, List.of());
 
         // Follower crashes and disk is lost. It fetches an earlier offset to rebuild state.
         // The leader will report an error in the logs, but will not let the high watermark rewind
@@ -3644,7 +3644,7 @@ class KafkaRaftClientTest {
         expectedVoterStates.get(1)
             .setLogEndOffset(fetchOffset - batch.size())
             .setLastFetchTimestamp(followerFetchTime);
-        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, expectedHW, expectedVoterStates, expectedVoterStates, List.of());
     }
 
     @ParameterizedTest
@@ -3688,7 +3688,7 @@ class KafkaRaftClientTest {
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1));
-        context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, List.of());
+        context.assertSentDescribeQuorumResponse(localId, epoch, -1L, expectedVoterStates, expectedVoterStates, List.of());
     }
 
 

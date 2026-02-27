@@ -273,6 +273,7 @@ public class MetadataQuorumCommand {
             "\nMaxFollowerLag:         " + maxFollowerLag +
             "\nMaxFollowerLagTimeMs:   " + maxFollowerLagTimeMs +
             "\nCurrentVoters:          " + printVoterState(quorumInfo) +
+            "\nCommittedVoters:        " + printCommittedVoterState(quorumInfo) +
             "\nCurrentObservers:       " + printObserverState(quorumInfo)
         );
     }
@@ -283,7 +284,14 @@ public class MetadataQuorumCommand {
         return printReplicaState(quorumInfo, quorumInfo.voters());
     }
 
+    // Constructs the CommittedVoters string
+    // CommittedVoters: [{"id": 0, "directoryId": "UUID1", "endpoints": ["C://controller-0:1234"]}]
+    private static String printCommittedVoterState(QuorumInfo quorumInfo) {
+        return printReplicaState(quorumInfo, quorumInfo.committedVoters());
+    }
+
     // Constructs the CurrentObservers string
+    // CurrentObservers: [{"id": 0, "directoryId": "UUID1", "endpoints": ["C://controller-0:1234"]}]
     private static String printObserverState(QuorumInfo quorumInfo) {
         return printReplicaState(quorumInfo, quorumInfo.observers());
     }

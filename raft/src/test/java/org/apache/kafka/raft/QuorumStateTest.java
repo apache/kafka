@@ -48,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
 
 public class QuorumStateTest {
     private final int localId = 0;
@@ -74,6 +75,12 @@ public class QuorumStateTest {
         Mockito
             .when(mockPartitionState.lastVoterSetOffset())
             .thenReturn(kraftVersion.isReconfigSupported() ? OptionalLong.of(0) : OptionalLong.empty());
+        Mockito
+            .when(mockPartitionState.voterSetAtOffset(anyLong()))
+            .thenReturn(Optional.of(voterSet));
+        Mockito
+            .when(mockPartitionState.lastVoterSet())
+            .thenReturn(voterSet);
         Mockito
             .when(mockPartitionState.lastKraftVersion())
             .thenReturn(kraftVersion);

@@ -119,13 +119,18 @@ class MetadataQuorumCommandTest {
                 "\"endpoints\":\\s+\\[\"\\S+://\\[?\\S+]?:\\d+\",?.*]"),
             describeOutput
         );
+        assertTrue(
+            outputs[7].matches("CommittedVoters:\\s+\\[\\{\"id\":\\s+\\d+,\\s+" +
+                    "\"endpoints\":\\s+\\[\"\\S+://\\[?\\S+]?:\\d+\",?.*]"),
+            describeOutput
+        );
 
         // There are no observers if we have fewer brokers than controllers
         if (cluster.type() == Type.CO_KRAFT && cluster.config().numBrokers() <= cluster.config().numControllers()) {
-            assertTrue(outputs[7].matches("CurrentObservers:\\s+\\[]"), describeOutput);
+            assertTrue(outputs[8].matches("CurrentObservers:\\s+\\[]"), describeOutput);
         } else {
             assertTrue(
-                outputs[7].matches("CurrentObservers:\\s+\\[\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+}" +
+                outputs[8].matches("CurrentObservers:\\s+\\[\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+}" +
                     "(,\\s+\\{\"id\":\\s+\\d+,\\s+\"directoryId\":\\s+\\S+})*]"),
                 describeOutput
             );

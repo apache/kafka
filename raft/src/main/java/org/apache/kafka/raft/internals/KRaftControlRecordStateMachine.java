@@ -202,6 +202,10 @@ public final class KRaftControlRecordStateMachine {
         }
     }
 
+    public VoterSet staticVoterSet() {
+        return staticVoterSet;
+    }
+
     /**
      * Returns the finalized kraft version at a given offset.
      *
