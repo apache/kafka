@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 
 import java.time.Duration;
@@ -34,8 +35,10 @@ public class DslWindowParams {
     private final EmitStrategy emitStrategy;
     private final boolean isSlidingWindow;
     private final boolean isTimestamped;
+    private final DslStoreFormat dslStoreFormat;
 
     /**
+     * @deprecated Since 4.3. Use {@link #DslWindowParams(String, Duration, Duration, boolean, EmitStrategy, boolean, DslStoreFormat)} Params(String, DslStoreFormat)} instead.
      * @param name             name of the store (cannot be {@code null})
      * @param retentionPeriod  length of time to retain data in the store (cannot be negative)
      *                         (note that the retention period must be at least long enough to contain the
@@ -48,6 +51,7 @@ public class DslWindowParams {
      * @param isSlidingWindow  whether the requested store is a sliding window
      * @param isTimestamped    whether the requested store should be timestamped (see {@link TimestampedWindowStore}
      */
+    @Deprecated
     public DslWindowParams(
             final String name,
             final Duration retentionPeriod,
@@ -58,13 +62,46 @@ public class DslWindowParams {
             final boolean isTimestamped
     ) {
         this.isTimestamped = isTimestamped;
-        Objects.requireNonNull(name);
-        this.name = name;
+        this.name = Objects.requireNonNull(name);
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
         this.emitStrategy = emitStrategy;
         this.isSlidingWindow = isSlidingWindow;
+        // If isTimestamped is false and the user is still calling the old deprecated constructor, we should assume they mean plain.
+        this.dslStoreFormat = isTimestamped ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.PLAIN;
+    }
+
+    /**
+     * @param name             name of the store (cannot be {@code null})
+     * @param retentionPeriod  length of time to retain data in the store (cannot be negative)
+     *                         (note that the retention period must be at least long enough to contain the
+     *                         windowed data's entire life cycle, from window-start through window-end,
+     *                         and for the entire grace period)
+     * @param windowSize       size of the windows (cannot be negative)
+     * @param retainDuplicates whether to retain duplicates. Turning this on will automatically disable
+     *                         caching and means that null values will be ignored.
+     * @param emitStrategy     defines how to emit results
+     * @param isSlidingWindow  whether the requested store is a sliding window
+     * @param dslStoreFormat   indicate the dsl store format (see {@link DslStoreFormat}
+     */
+    public DslWindowParams(
+            final String name,
+            final Duration retentionPeriod,
+            final Duration windowSize,
+            final boolean retainDuplicates,
+            final EmitStrategy emitStrategy,
+            final boolean isSlidingWindow,
+            final DslStoreFormat dslStoreFormat
+    ) {
+        this.name = Objects.requireNonNull(name);
+        this.retentionPeriod = retentionPeriod;
+        this.windowSize = windowSize;
+        this.retainDuplicates = retainDuplicates;
+        this.emitStrategy = emitStrategy;
+        this.isSlidingWindow = isSlidingWindow;
+        this.isTimestamped = dslStoreFormat == DslStoreFormat.TIMESTAMPED;
+        this.dslStoreFormat = dslStoreFormat;
     }
 
     public String name() {
@@ -91,8 +128,22 @@ public class DslWindowParams {
         return isSlidingWindow;
     }
 
+    /**
+     * @deprecated Since 4.3. Use {@link #dslStoreFormat()} instead to check the store format.
+     * @return {@code true} if the store format is {@link DslStoreFormat#TIMESTAMPED}, {@code false} otherwise
+     */
+    @Deprecated
     public boolean isTimestamped() {
-        return isTimestamped;
+        return dslStoreFormat == DslStoreFormat.TIMESTAMPED;
+    }
+
+    /**
+     * Returns the store format for this window store.
+     *`
+     * @return the {@link DslStoreFormat} specifying whether to use plain, timestamped, or headers-aware stores
+     */
+    public DslStoreFormat dslStoreFormat() {
+        return dslStoreFormat;
     }
 
     @Override
@@ -110,7 +161,8 @@ public class DslWindowParams {
                 && Objects.equals(windowSize, that.windowSize)
                 && Objects.equals(emitStrategy, that.emitStrategy)
                 && Objects.equals(isSlidingWindow, that.isSlidingWindow)
-                && Objects.equals(isTimestamped, that.isTimestamped);
+                && Objects.equals(isTimestamped, that.isTimestamped)
+                && Objects.equals(dslStoreFormat, that.dslStoreFormat);
     }
 
     @Override
@@ -122,7 +174,8 @@ public class DslWindowParams {
                 retainDuplicates,
                 emitStrategy,
                 isSlidingWindow,
-                isTimestamped
+                isTimestamped,
+                dslStoreFormat
         );
     }
 
@@ -136,6 +189,7 @@ public class DslWindowParams {
                 ", emitStrategy=" + emitStrategy +
                 ", isSlidingWindow=" + isSlidingWindow +
                 ", isTimestamped=" + isTimestamped +
+                ", dslStoreFormat=" + dslStoreFormat +
                 '}';
     }
 }
