@@ -22,4 +22,4 @@ pywinrm
 ipaddress 
 debugpy 
 psutil
-ducktape==0.12.0
+ducktape==0.13.0

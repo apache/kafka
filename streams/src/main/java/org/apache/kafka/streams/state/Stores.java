@@ -440,13 +440,38 @@ public final class Stores {
      */
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
+        return persistentSessionStore(name, retentionPeriod, false);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier} with support for record headers.
+     * <p>
+     * Note that it is not safe to change the value of {@code retentionPeriod} between
+     * application restarts without clearing local state from application instances,
+     * as this may cause incorrect values to be read from the state store if it impacts
+     * the underlying storage format.
+     *
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
+     *                          (note that the retention period must be at least as long enough to
+     *                          contain the inactivity gap of the session and the entire grace period.)
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier persistentSessionStoreWithHeaders(final String name,
+                                                                              final Duration retentionPeriod) {
+        return persistentSessionStore(name, retentionPeriod, true);
+    }
+
+    private static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                    final Duration retentionPeriod,
+                                                                    final boolean withHeaders) {
         Objects.requireNonNull(name, "name cannot be null");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionPeriodMs = validateMillisecondDuration(retentionPeriod, msgPrefix);
         if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs, withHeaders);
     }
 
     /**
