@@ -144,14 +144,14 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             if self.intermediate_stats:
                 try:
                     self.stats[idx-1].append(self.parse_stats(line))
-                except:
+                except Exception:
                     # Sometimes there are extraneous log messages
                     pass
 
             last = line
         try:
             self.results[idx-1] = self.parse_stats(last)
-        except:
+        except Exception:
             raise Exception("Unable to parse aggregate performance statistics on node %d: %s" % (idx, last))
 
     def parse_stats(self, line):
