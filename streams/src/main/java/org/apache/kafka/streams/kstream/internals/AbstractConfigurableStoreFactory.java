@@ -42,15 +42,11 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
                 config.originals()
             );
         }
-        if (dslStoreFormat == null) {
-            final String dslStoreFormatValue = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
-            if (dslStoreFormatValue.equalsIgnoreCase("HEADERS")) {
-                dslStoreFormat = DslStoreFormat.HEADERS;
-            } else { // DEFAULT
-                dslStoreFormat = DslStoreFormat.TIMESTAMPED;
-            }
+        final String dslStoreFormatValue = config.getString(StreamsConfig.DSL_STORE_FORMAT_CONFIG);
+        if (dslStoreFormatValue.equalsIgnoreCase(StreamsConfig.DSL_STORE_FORMAT_HEADERS)) {
+            dslStoreFormat = DslStoreFormat.HEADERS;
         }
-
+        // else dslStoreFormat remains null and the lower layers decide between PLAIN and TIMESTAMPED
     }
 
     @Override

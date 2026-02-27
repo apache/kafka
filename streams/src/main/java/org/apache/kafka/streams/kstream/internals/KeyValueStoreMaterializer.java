@@ -45,7 +45,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() != null ? dslStoreFormat() : DslStoreFormat.TIMESTAMPED;
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
                 : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
@@ -56,23 +56,18 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                     (VersionedBytesStoreSupplier) supplier,
                     materialized.keySerde(),
                     materialized.valueSerde());
-        } else if (storeFormat.equals(DslStoreFormat.HEADERS)) {
-            builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-        } else if (storeFormat.equals(DslStoreFormat.TIMESTAMPED)) {
-            builder = Stores.timestampedKeyValueStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-        } else if (storeFormat.equals(DslStoreFormat.PLAIN)) {
-            builder = Stores.keyValueStoreBuilder(
-                supplier,
-                materialized.keySerde(),
-                materialized.valueSerde());
         } else {
-            throw new IllegalArgumentException("Unsupported store format: " + storeFormat);
+            if (storeFormat == DslStoreFormat.HEADERS) {
+                builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+            } else {
+                builder = Stores.timestampedKeyValueStoreBuilder(
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
+            }
         }
 
         if (materialized.loggingEnabled()) {

@@ -27,11 +27,11 @@ import java.util.Objects;
 public class DslKeyValueParams {
 
     private final String name;
-    @Deprecated
     private final boolean isTimestamped;
     private final DslStoreFormat dslStoreFormat;
 
     /**
+     * @deprecated Since 4.3. Use {@link #DslKeyValueParams(String, DslStoreFormat)} instead.
      * @param name          the name of the store (cannot be {@code null})
      * @param isTimestamped whether the returned stores should be timestamped, see ({@link TimestampedKeyValueStore}
      */
@@ -40,7 +40,8 @@ public class DslKeyValueParams {
         Objects.requireNonNull(name);
         this.name = name;
         this.isTimestamped = isTimestamped;
-        this.dslStoreFormat = DslStoreFormat.TIMESTAMPED;
+        // If isTimestamped is false and the user is still calling the old deprecated constructor, we should assume they mean plain.
+        this.dslStoreFormat = isTimestamped ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.PLAIN;
     }
 
     /**
@@ -50,19 +51,28 @@ public class DslKeyValueParams {
     public DslKeyValueParams(final String name, final DslStoreFormat dslStoreFormat) {
         Objects.requireNonNull(name);
         this.name = name;
-        this.dslStoreFormat = dslStoreFormat;
-        this.isTimestamped = true;
+        this.dslStoreFormat = Objects.requireNonNull(dslStoreFormat);
+        this.isTimestamped = dslStoreFormat == DslStoreFormat.TIMESTAMPED;
     }
 
     public String name() {
         return name;
     }
 
+    /**
+     * @deprecated Since 4.3. Use {@link #dslStoreFormat()} instead to check the store format.
+     * @return {@code true} if the store format is {@link DslStoreFormat#TIMESTAMPED}, {@code false} otherwise
+     */
     @Deprecated
     public boolean isTimestamped() {
-        return isTimestamped;
+        return dslStoreFormat == DslStoreFormat.TIMESTAMPED;
     }
 
+    /**
+     * Returns the store format for this key-value store.
+     *
+     * @return the {@link DslStoreFormat} specifying whether to use plain, timestamped, or headers-aware stores
+     */
     public DslStoreFormat dslStoreFormat() {
         return dslStoreFormat;
     }
@@ -77,7 +87,7 @@ public class DslKeyValueParams {
         }
         final DslKeyValueParams that = (DslKeyValueParams) o;
         return isTimestamped == that.isTimestamped
-                && Objects.equals(dslStoreFormat, that.dslStoreFormat)
+                && dslStoreFormat == that.dslStoreFormat
                 && Objects.equals(name, that.name);
     }
 
