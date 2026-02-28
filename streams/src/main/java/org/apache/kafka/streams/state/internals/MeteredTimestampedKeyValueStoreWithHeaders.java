@@ -102,12 +102,12 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
-        throw new UnsupportedOperationException("Querying is not supported for " + getClass().getSimpleName());
+        throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped key-value stores with headers yet.");
     }
 
     @Override
     public Position getPosition() {
-        throw new UnsupportedOperationException("Position is not supported for " + getClass().getSimpleName());
+        throw new UnsupportedOperationException("Position is not supported by timestamped key-value stores with headers yet.");
     }
 
     protected Bytes keyBytes(final K key, final Headers headers) {

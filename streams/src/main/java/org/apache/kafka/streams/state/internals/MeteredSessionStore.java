@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -63,24 +64,24 @@ public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
     implements SessionStore<K, V>, MeteredStateStore {
 
-    private final String metricsScope;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Time time;
-    private StateSerdes<K, V> serdes;
-    private StreamsMetricsImpl streamsMetrics;
-    private Sensor putSensor;
-    private Sensor fetchSensor;
-    private Sensor flushSensor;
-    private Sensor removeSensor;
-    private Sensor e2eLatencySensor;
-    private Sensor iteratorDurationSensor;
-    private InternalProcessorContext<?, ?> internalContext;
-    private TaskId taskId;
-    private Sensor restoreSensor;
+    protected final String metricsScope;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valueSerde;
+    protected final Time time;
+    protected StateSerdes<K, V> serdes;
+    protected StreamsMetricsImpl streamsMetrics;
+    protected Sensor putSensor;
+    protected Sensor fetchSensor;
+    protected Sensor flushSensor;
+    protected Sensor removeSensor;
+    protected Sensor e2eLatencySensor;
+    protected Sensor iteratorDurationSensor;
+    protected InternalProcessorContext<?, ?> internalContext;
+    protected TaskId taskId;
+    protected Sensor restoreSensor;
 
-    private final LongAdder numOpenIterators = new LongAdder();
-    private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
+    protected final LongAdder numOpenIterators = new LongAdder();
+    protected final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
@@ -161,8 +162,8 @@ public class MeteredSessionStore<K, V>
                 record -> listener.apply(
                     record.withKey(SessionKeySchema.from(record.key(), serdes.keyDeserializer(), record.headers(), serdes.topic()))
                         .withValue(new Change<>(
-                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue) : null,
-                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue) : null,
+                            record.value().newValue != null ? serdes.valueFrom(record.value().newValue, record.headers()) : null,
+                            record.value().oldValue != null ? serdes.valueFrom(record.value().oldValue, record.headers()) : null,
                             record.value().isLatest
                         ))
                 ),
@@ -244,7 +245,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -259,7 +260,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -275,7 +276,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -290,7 +291,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -312,7 +313,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -334,7 +335,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -358,7 +359,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -373,7 +374,7 @@ public class MeteredSessionStore<K, V>
                 fetchSensor,
                 iteratorDurationSensor,
                 streamsMetrics,
-                serdes::keyFrom,
+                bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                 serdes::valueFrom,
                 time,
                 numOpenIterators,
@@ -397,7 +398,7 @@ public class MeteredSessionStore<K, V>
             fetchSensor,
             iteratorDurationSensor,
             streamsMetrics,
-            serdes::keyFrom,
+            bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
             serdes::valueFrom,
             time,
             numOpenIterators,
@@ -470,7 +471,7 @@ public class MeteredSessionStore<K, V>
                         fetchSensor,
                         iteratorDurationSensor,
                         streamsMetrics,
-                        serdes::keyFrom,
+                        bytes -> serdes.keyFrom(bytes, new RecordHeaders()),
                         StoreQueryUtils.deserializeValue(serdes, wrapped()),
                         time,
                         numOpenIterators,
@@ -498,10 +499,10 @@ public class MeteredSessionStore<K, V>
     }
 
     private Bytes keyBytes(final K key) {
-        return key == null ? null : Bytes.wrap(serdes.rawKey(key));
+        return key == null ? null : Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
     }
 
-    private void maybeRecordE2ELatency() {
+    void maybeRecordE2ELatency() {
         // Context is null if the provided context isn't an implementation of InternalProcessorContext.
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && internalContext != null) {

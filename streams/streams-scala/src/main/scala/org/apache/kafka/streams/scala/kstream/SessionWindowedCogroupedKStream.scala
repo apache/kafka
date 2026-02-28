@@ -28,6 +28,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{InitializerFro
  * @param inner The underlying Java abstraction for SessionWindowedCogroupedKStream
  * @see `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream`
  */
+@deprecated("Use `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream` instead", "4.3.0")
 class SessionWindowedCogroupedKStream[K, V](val inner: SessionWindowedCogroupedKStreamJ[K, V]) {
 
   /**
