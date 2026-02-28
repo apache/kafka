@@ -24,10 +24,12 @@ import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.LogDirDescription;
+import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -43,8 +45,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -100,7 +105,7 @@ public class CordonedLogDirsIntegrationTest {
             assertCordonedLogDirs(admin, List.of());
             // 3. we can't dynamically configure cordoned.log.dirs
             Throwable ee = assertThrows(ExecutionException.class, () ->
-                admin.incrementalAlterConfigs(cordonedDirsConfig("")).all().get());
+                admin.incrementalAlterConfigs(cordonedDirsConfig("", BROKER_0)).all().get());
             assertInstanceOf(InvalidConfigurationException.class, ee.getCause());
 
             // Update the metadata version to support cordoning log dirs
@@ -118,7 +123,7 @@ public class CordonedLogDirsIntegrationTest {
             if (initialCordonedLogDirs.isEmpty()) {
                 // if no initial cordoned log dirs, this has not changed, and we can cordon log dirs
                 assertCordonedLogDirs(admin, List.of());
-                setCordonedLogDirs(admin, logDirsBroker0);
+                setCordonedLogDirs(admin, logDirsBroker0, BROKER_0);
                 initialCordonedLogDirs = logDirsBroker0;
             }
             // The statically or dynamically configured log dirs are now marked as cordoned
@@ -136,7 +141,7 @@ public class CordonedLogDirsIntegrationTest {
             assertInstanceOf(InvalidReplicationFactorException.class, ee.getCause());
 
             // After uncordoning log dirs, we can create topics and partitions again
-            setCordonedLogDirs(admin, List.of());
+            setCordonedLogDirs(admin, List.of(), BROKER_0);
             admin.createTopics(newTopics).all().get();
             admin.createPartitions(newPartitions).all().get();
         }
@@ -152,7 +157,7 @@ public class CordonedLogDirsIntegrationTest {
             admin.createTopics(newTopic(TOPIC1)).all().get();
 
             // Cordon all log dirs
-            setCordonedLogDirs(admin, logDirsBroker0);
+            setCordonedLogDirs(admin, logDirsBroker0, BROKER_0);
             assertCordonedLogDirs(admin, logDirsBroker0);
 
             // We can't create new topics or partitions
@@ -168,7 +173,7 @@ public class CordonedLogDirsIntegrationTest {
             assertInstanceOf(InvalidReplicationFactorException.class, ee.getCause());
 
             // Uncordon all log dirs
-            setCordonedLogDirs(admin, List.of(logDirsBroker0.get(0)));
+            setCordonedLogDirs(admin, List.of(logDirsBroker0.get(0)), BROKER_0);
             assertCordonedLogDirs(admin, List.of(logDirsBroker0.get(0)));
 
             // We can create topics and partitions again
@@ -192,7 +197,7 @@ public class CordonedLogDirsIntegrationTest {
             assertInstanceOf(InvalidReplicationFactorException.class, ee.getCause());
 
             // Uncordon log dirs
-            setCordonedLogDirs(admin, List.of());
+            setCordonedLogDirs(admin, List.of(), BROKER_0);
 
             // We can't create topics again
             admin.createTopics(newTopics).all().get();
@@ -214,7 +219,7 @@ public class CordonedLogDirsIntegrationTest {
             }, 10_000, "Unable to find logdir for topic " + replica.topic());
             assertNotNull(logDir.get());
             String otherLogDir = logDirsBroker0.stream().filter(dir -> !dir.equals(logDir.get())).findFirst().get();
-            setCordonedLogDirs(admin, List.of(otherLogDir));
+            setCordonedLogDirs(admin, List.of(otherLogDir), BROKER_0);
 
             // We can't move the replica to the now cordoned log dir
             Throwable ee = assertThrows(ExecutionException.class, () ->
@@ -223,30 +228,119 @@ public class CordonedLogDirsIntegrationTest {
             assertInstanceOf(InvalidReplicaAssignmentException.class, ee.getCause());
 
             // After uncordoning the log dir, we can move the replica on it
-            setCordonedLogDirs(admin, List.of());
+            setCordonedLogDirs(admin, List.of(), BROKER_0);
             admin.alterReplicaLogDirs(Map.of(replica, otherLogDir)).all().get();
         }
     }
 
-    private Map<ConfigResource, Collection<AlterConfigOp>> cordonedDirsConfig(String value) {
+    @ClusterTest(
+            brokers = 2,
+            controllers = 1
+    )
+    public void testDecommissionBroker() throws ExecutionException, InterruptedException {
+        // Make sure we don't try to decommission the controller
+        int brokerId = clusterInstance.brokerIds().stream().filter(id -> !clusterInstance.controllerIds().contains(id)).findFirst().get();
+        try (Admin admin = clusterInstance.admin()) {
+            // Create 10 topics
+            for (int i = 0; i < 10; i++) {
+                admin.createTopics(newTopic("topic" + i, (short) 1)).all().get();
+            }
+
+            // Check the 10 topics have been created and find the partitions on brokerId
+            Set<TopicPartition> partitionsToMove = new HashSet<>();
+            TestUtils.waitForCondition(() -> {
+                int found = 0;
+                Map<Integer, Map<String, LogDirDescription>> logDescriptionsPerBroker = admin.describeLogDirs(clusterInstance.brokerIds()).allDescriptions().get();
+                for (Map.Entry<Integer, Map<String, LogDirDescription>> entry : logDescriptionsPerBroker.entrySet()) {
+                    for (LogDirDescription logDirDescription : entry.getValue().values()) {
+                        assertFalse(logDirDescription.replicaInfos().isEmpty());
+                        found += logDirDescription.replicaInfos().size();
+                        if (entry.getKey() == brokerId) {
+                            logDirDescription.replicaInfos().forEach((tp, replicaInfo) ->
+                                partitionsToMove.add(tp)
+                            );
+                        }
+                    }
+                }
+                return found == 10;
+            }, 10_000, "Unable to find 10 partitions");
+
+            // Cordon brokerId and move all its partitions to the other broker
+            List<String> logDirs = clusterInstance.brokers().get(brokerId).config().logDirs();
+            setCordonedLogDirs(admin, logDirs, new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(brokerId)));
+            int target = clusterInstance.brokerIds().stream().filter(id -> id != brokerId).findFirst().get();
+            movePartitions(admin, partitionsToMove, brokerId, Optional.empty(), target);
+
+            // Create another 10 topics
+            for (int i = 10; i < 20; i++) {
+                admin.createTopics(newTopic("topic" + i, (short) 1)).all().get();
+            }
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get().size() == 20, 10_000, "Topics 10-19 were not created");
+
+            // Check only the other broker has replicas
+            Map<Integer, Map<String, LogDirDescription>> logDescriptionsPerBroker = admin.describeLogDirs(clusterInstance.brokerIds()).allDescriptions().get();
+            for (Map.Entry<Integer, Map<String, LogDirDescription>> entry : logDescriptionsPerBroker.entrySet()) {
+                entry.getValue().forEach((logDir, logDirDescription) -> {
+                    if (entry.getKey() == brokerId) {
+                        assertTrue(logDirDescription.replicaInfos().isEmpty());
+                    } else {
+                        assertFalse(logDirDescription.replicaInfos().isEmpty());
+                    }
+                });
+            }
+
+            // Decommission brokerId
+            clusterInstance.brokers().get(brokerId).shutdown();
+            clusterInstance.brokers().get(brokerId).awaitShutdown();
+            admin.unregisterBroker(brokerId).all().get();
+            TestUtils.waitForCondition(() -> admin.describeCluster().nodes().get().size() == 1, 10_000, "Unable to unregister " + brokerId);
+        }
+    }
+
+    private void movePartitions(Admin admin, Set<TopicPartition> partitions, int source, Optional<String> logDir, int target) throws ExecutionException, InterruptedException {
+        Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            reassignments.put(partition, Optional.of(new NewPartitionReassignment(List.of(target))));
+        }
+        admin.alterPartitionReassignments(reassignments).all().get();
+        TestUtils.waitForCondition(() ->
+                admin.listPartitionReassignments().reassignments().get().isEmpty(), 10_000, "Unable to complete partition reassignments");
+
+        TestUtils.waitForCondition(() -> {
+            int replicas = 0;
+            Map<Integer, Map<String, LogDirDescription>> logDescriptionsPerBroker = admin.describeLogDirs(List.of(source)).allDescriptions().get();
+            for (Map.Entry<String, LogDirDescription> entry : logDescriptionsPerBroker.get(source).entrySet()) {
+                if (logDir.isEmpty() || entry.getKey().equals(logDir.get())) {
+                    replicas += entry.getValue().replicaInfos().size();
+                }
+            }
+            return replicas == 0;
+        }, 10_000, "Some replicas were not moved from " + source + " to " + target);
+    }
+
+    private Map<ConfigResource, Collection<AlterConfigOp>> cordonedDirsConfig(String value, ConfigResource cr) {
         return Map.of(
-                BROKER_0,
+                cr,
                 Set.of(new AlterConfigOp(new ConfigEntry(CORDONED_LOG_DIRS_CONFIG, value), AlterConfigOp.OpType.SET))
         );
     }
 
-    private void setCordonedLogDirs(Admin admin, List<String> logDirs) throws ExecutionException, InterruptedException {
+    private void setCordonedLogDirs(Admin admin, List<String> logDirs, ConfigResource cr) throws ExecutionException, InterruptedException {
         String logDirsStr = String.join(",", logDirs);
-        admin.incrementalAlterConfigs(cordonedDirsConfig(logDirsStr)).all().get();
+        admin.incrementalAlterConfigs(cordonedDirsConfig(logDirsStr, cr)).all().get();
         TestUtils.waitForCondition(() -> {
-            Map<ConfigResource, Config> describeConfigs = admin.describeConfigs(Set.of(BROKER_0)).all().get();
-            Config config = describeConfigs.get(BROKER_0);
+            Map<ConfigResource, Config> describeConfigs = admin.describeConfigs(Set.of(cr)).all().get();
+            Config config = describeConfigs.get(cr);
             return logDirsStr.equals(config.get(CORDONED_LOG_DIRS_CONFIG).value());
-        }, 10_000, "Unable to set the " + CORDONED_LOG_DIRS_CONFIG + " configuration.");
+        }, 10_000, "Unable to set the " + CORDONED_LOG_DIRS_CONFIG + " configuration on " + cr + ".");
     }
 
     private Set<NewTopic> newTopic(String name) {
-        return Set.of(new NewTopic(name, 1, (short) clusterInstance.brokers().size()));
+        return newTopic(name, (short) clusterInstance.brokers().size());
+    }
+
+    private Set<NewTopic> newTopic(String name, short replicationFactor) {
+        return Set.of(new NewTopic(name, 1, replicationFactor));
     }
 
     private void assertCordonedLogDirs(Admin admin, List<String> expectedCordoned) throws ExecutionException, InterruptedException {

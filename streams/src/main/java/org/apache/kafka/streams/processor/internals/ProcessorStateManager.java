@@ -176,6 +176,7 @@ public class ProcessorStateManager implements StateManager {
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
     private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
+    private final StateDirectory stateDirectory;
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
 
@@ -211,6 +212,7 @@ public class ProcessorStateManager implements StateManager {
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
+        this.stateDirectory = stateDirectory;
 
         log.debug("Created state store manager for task {}", taskId);
     }
@@ -299,6 +301,8 @@ public class ProcessorStateManager implements StateManager {
                               store.stateStore.name());
                 }
             }
+
+            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
 
             if (!loadedCheckpoints.isEmpty()) {
                 log.warn("Some loaded checkpoint offsets cannot find their corresponding state stores: {}", loadedCheckpoints);
@@ -462,10 +466,13 @@ public class ProcessorStateManager implements StateManager {
             }
 
             storeMetadata.setOffset(batchEndOffset);
+
             // If null means the lag for this partition is not known yet
             if (optionalLag.isPresent()) {
                 storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
             }
+
+            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
         }
     }
 
@@ -647,6 +654,8 @@ public class ProcessorStateManager implements StateManager {
                         store.stateStore.name(), store.offset, store.changelogPartition);
             }
         }
+
+        stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
     }
 
     @Override
