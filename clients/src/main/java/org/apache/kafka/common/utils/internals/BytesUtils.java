@@ -69,7 +69,7 @@ public final class BytesUtils {
                     final byte[] buffer2, int offset2, int length2);
     }
 
-    private static class LexicographicByteArrayComparator implements ByteArrayComparator {
+    public static class LexicographicByteArrayComparator implements ByteArrayComparator {
 
         @Override
         public int compare(byte[] buffer1, byte[] buffer2) {
