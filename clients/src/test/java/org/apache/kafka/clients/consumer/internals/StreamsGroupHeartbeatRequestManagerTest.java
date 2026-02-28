@@ -1225,6 +1225,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         value = Errors.class,
         names = {
             "INVALID_REQUEST",
+            "UNRELEASED_INSTANCE_ID",
             "GROUP_MAX_SIZE_REACHED",
             "UNSUPPORTED_VERSION",
             "STREAMS_INVALID_TOPOLOGY",

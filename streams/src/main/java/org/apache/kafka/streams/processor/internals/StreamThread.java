@@ -1880,7 +1880,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             final GroupMembershipOperation membershipOperation =
                 leaveGroupRequested.get() == org.apache.kafka.streams.CloseOptions.GroupMembershipOperation.LEAVE_GROUP ? LEAVE_GROUP : REMAIN_IN_GROUP;
             if (membershipOperation == REMAIN_IN_GROUP && streamsRebalanceData.isPresent()) {
-                log.info("The consumer will leave the group since the streams group protocol is used");
+                log.info("The consumer will not leave the group since the streams group protocol is used and membershipOperation is REMAIN_IN_GROUP.");
             }
             mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {

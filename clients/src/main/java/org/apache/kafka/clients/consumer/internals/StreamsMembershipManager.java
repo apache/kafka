@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
@@ -53,6 +54,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.unmodifiableList;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 
 /**
  * Tracks the state of a single member in relationship to a group:
@@ -198,7 +201,7 @@ public class StreamsMembershipManager implements RequestManager {
     /**
      * Group instance ID to be used by a static member, provided when creating the current membership manager.
      */
-    private final Optional<String> groupInstanceId = Optional.empty();
+    private final Optional<String> groupInstanceId;
 
     /**
      * Current epoch of the member. It will be set to 0 by the member, and provided to the server
@@ -282,6 +285,14 @@ public class StreamsMembershipManager implements RequestManager {
     private boolean isPollTimerExpired;
 
     /**
+     * Indicate the operation on streams group membership that the consumer will perform when leaving the group.
+     * The property should remain {@code GroupMembershipOperation.DEFAULT} until the consumer is closing.
+     *
+     * @see CloseOptions.GroupMembershipOperation
+     */
+    protected CloseOptions.GroupMembershipOperation leaveGroupOperation = CloseOptions.GroupMembershipOperation.DEFAULT;
+
+    /**
      * Constructs the Streams membership manager.
      *
      * @param groupId                The ID of the group.
@@ -293,6 +304,7 @@ public class StreamsMembershipManager implements RequestManager {
      * @param metrics                The metrics.
      */
     public StreamsMembershipManager(final String groupId,
+                                    final Optional<String> groupInstanceId,
                                     final StreamsRebalanceData streamsRebalanceData,
                                     final SubscriptionState subscriptionState,
                                     final BackgroundEventHandler backgroundEventHandler,
@@ -302,6 +314,7 @@ public class StreamsMembershipManager implements RequestManager {
         log = logContext.logger(StreamsMembershipManager.class);
         this.state = MemberState.UNSUBSCRIBED;
         this.groupId = groupId;
+        this.groupInstanceId = groupInstanceId;
         this.backgroundEventHandler = backgroundEventHandler;
         this.streamsRebalanceData = streamsRebalanceData;
         this.subscriptionState = subscriptionState;
@@ -449,8 +462,23 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     private void finalizeLeaving() {
-        updateMemberEpoch(StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH);
+        updateMemberEpoch(leaveGroupEpoch());
         clearCurrentTaskAssignment();
+    }
+    
+    public int leaveGroupEpoch() {
+        boolean isStaticMember = groupInstanceId.isPresent();
+        // Currently, the server doesn't have a mechanism for static members to permanently leave the group.
+        // Therefore, we use LEAVE_GROUP_MEMBER_EPOCH to force the GroupMetadataManager to fence
+        // this member, effectively removing it from the group.
+        if (LEAVE_GROUP == leaveGroupOperation) {
+            return StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        }
+
+        if (isStaticMember && REMAIN_IN_GROUP == leaveGroupOperation) {
+            return StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+        } 
+        return StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
 
     /**
@@ -892,6 +920,11 @@ public class StreamsMembershipManager implements RequestManager {
      * @return future that will complete when the heartbeat to leave the group has been sent out.
      */
     public CompletableFuture<Void> leaveGroupOnClose() {
+        return leaveGroup(true);
+    }
+
+    public CompletableFuture<Void> leaveGroupOnClose(CloseOptions.GroupMembershipOperation membershipOperation) {
+        this.leaveGroupOperation = membershipOperation;
         return leaveGroup(true);
     }
 

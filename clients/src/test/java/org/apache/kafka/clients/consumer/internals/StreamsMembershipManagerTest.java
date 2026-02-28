@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
@@ -124,6 +125,7 @@ public class StreamsMembershipManagerTest {
     public void setup() {
         membershipManager = new StreamsMembershipManager(
             GROUP_ID,
+            Optional.empty(),
             streamsRebalanceData, subscriptionState, backgroundEventHandler,
             new LogContext("test"),
             time,
@@ -1143,6 +1145,58 @@ public class StreamsMembershipManagerTest {
         onTasksAssignedCallbackExecuted.complete(null);
 
         assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+    }
+    
+    @Test
+    public void testStaticMemberRemainInGroupUsesStaticLeaveEpochOnClose() {
+        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
+        MemberState expectedState = MemberState.LEAVING;
+        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
+    }
+
+    @Test
+    public void testStaticMemberDefaultUsesLeaveGroupEpochOnClose() {
+        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.DEFAULT;
+        MemberState expectedState = MemberState.LEAVING;
+        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
+    }
+
+    @Test
+    public void testStaticMemberLeaveGroupUsesLeaveGroupEpochOnClose() {
+        CloseOptions.GroupMembershipOperation operation = CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+        MemberState expectedState = MemberState.LEAVING;
+        int expectedEpoch = StreamsGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        verifyStaticMemberLeaveOnClose(operation, expectedState, expectedEpoch);
+    }
+    
+    private void verifyStaticMemberLeaveOnClose(
+            CloseOptions.GroupMembershipOperation membershipOperation,
+            MemberState expectedMemberState,
+            int expectedMemberEpoch
+    ) {
+        final Metrics localMetrics = new Metrics(time);
+        StreamsMembershipManager membershipManagerWithStaticMember = new StreamsMembershipManager(
+                GROUP_ID,
+                Optional.of("instance-1"),
+                streamsRebalanceData,
+                subscriptionState,
+                backgroundEventHandler,
+                new LogContext("test"),
+                time,
+                localMetrics
+        );
+        membershipManagerWithStaticMember.registerStateListener(memberStateListener);
+        joining(membershipManagerWithStaticMember);
+
+        // WHEN
+        CompletableFuture<Void> onGroupLeft = membershipManagerWithStaticMember.leaveGroupOnClose(membershipOperation);
+
+        // THEN        
+        assertEquals(expectedMemberState, membershipManagerWithStaticMember.state());
+        assertEquals(expectedMemberEpoch, membershipManagerWithStaticMember.memberEpoch());
+        assertFalse(onGroupLeft.isDone());
     }
 
     @Test
@@ -2486,6 +2540,12 @@ public class StreamsMembershipManagerTest {
         membershipManager.onSubscriptionUpdated();
         membershipManager.onConsumerPoll();
         verifyInStateJoining(membershipManager);
+    }
+
+    private void joining(StreamsMembershipManager givenMembershipManager) {
+        givenMembershipManager.onSubscriptionUpdated();
+        givenMembershipManager.onConsumerPoll();
+        verifyInStateJoining(givenMembershipManager);
     }
 
     private void reconcile(final StreamsGroupHeartbeatResponse response) {
