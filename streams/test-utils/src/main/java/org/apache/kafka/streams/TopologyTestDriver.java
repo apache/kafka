@@ -445,6 +445,7 @@ public class TopologyTestDriver implements Closeable {
                 globalProcessorContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
+                null,
                 mockWallClockTime,
                 streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
             );
