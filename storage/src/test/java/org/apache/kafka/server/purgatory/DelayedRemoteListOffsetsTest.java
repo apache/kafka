@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.purgatory;
 
+import kafka.utils.TestUtils;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
@@ -50,8 +52,6 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
-import kafka.utils.TestUtils;
 
 @SuppressWarnings("unchecked")
 public class DelayedRemoteListOffsetsTest {
