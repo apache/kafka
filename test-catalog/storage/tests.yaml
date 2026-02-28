@@ -204,6 +204,10 @@ org.apache.kafka.server.log.remote.storage.RemoteLogManagerTest:
 - testRemoteSizeTime
 - testRemoteStorageManagerWithUserDefinedConfigs
 - testRemoveMetricsOnClose
+- testRetentionSizeInPercentMetrics
+- testRetentionSizeInPercentMetricsTaskCancellation
+- testRetentionSizeInPercentMetricsWithNegativeRetention
+- testRetentionSizeInPercentMetricsWithZeroRetention
 - testStopPartitionsWithDeletion
 - testStopPartitionsWithoutDeletion
 - testTierLagResetsToZeroOnBecomingFollower
