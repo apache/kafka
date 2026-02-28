@@ -1484,6 +1484,58 @@ Serde for the inner class of a windowed record. Must implement the `Serde` inter
 >         }
 >     }
 
+>**Note: The example above demonstrates manual production to a DLQ topic. The following example shows the recommended approach using the built-in DLQ support.**
+> A custom processing exception handler can decide whether to continue or fail processing when user logic throws an exception. If DLQ behavior is required, return DLQ records from the handler response.
+>
+> **Custom Exception Handler Implementation**
+>
+> The following example forwards failed records to a configured DLQ topic:
+>
+> ```java
+> public class DlqProcessingExceptionHandler implements ProcessingExceptionHandler {
+>
+>     private String deadLetterQueueTopic;
+>
+>     @Override
+>     public Response handleError(final ErrorHandlerContext context,
+>                                 final Record<?, ?> record,
+>                                 final Exception exception) {
+>
+>         return Response.resume(
+>             ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords(
+>                 deadLetterQueueTopic,
+>                 context.sourceRawKey(),
+>                 context.sourceRawValue(),
+>                 context,
+>                 exception
+>             )
+>         );
+>     }
+>
+>     @Override
+>     public void configure(final Map<String, ?> configs) {
+>         deadLetterQueueTopic = (String) configs.get(
+>             StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG
+>         );
+>     }
+> }
+> ```
+> To enable the custom exception handler and configure the DLQ topic:
+>
+> ```java
+> Properties props = new Properties();
+>
+> props.put(
+>     StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
+>     DlqProcessingExceptionHandler.class
+> );
+>
+> props.put(
+>     StreamsConfig.ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
+>     "dlq-topic"
+> );
+> ```
+
 ### processing.guarantee
 
 > The processing guarantee that should be used. Possible values are `"at_least_once"` (default) and `"exactly_once_v2"` (for EOS version 2). Deprecated config options are `"exactly_once"` (for EOS alpha), and `"exactly_once_beta"` (for EOS version 2). Using `"exactly_once_v2"` (or the deprecated `"exactly_once_beta"`) requires broker version 2.5 or newer, while using the deprecated `"exactly_once"` requires broker version 0.11.0 or newer. Note that if exactly-once processing is enabled, the default for parameter `commit.interval.ms` changes to 100ms. Additionally, consumers are configured with `isolation.level="read_committed"` and producers are configured with `enable.idempotence=true` per default. Note that by default exactly-once processing requires a cluster of at least three brokers what is the recommended setting for production. For development, you can change this configuration by adjusting broker setting `transaction.state.log.replication.factor` and `transaction.state.log.min.isr` to the number of brokers you want to use. For more details see [Processing Guarantees](../core-concepts#streams_processing_guarantee). 
