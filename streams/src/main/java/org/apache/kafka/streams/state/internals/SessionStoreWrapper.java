@@ -78,17 +78,6 @@ public class SessionStoreWrapper<K, VAgg> {
     }
 
     /**
-     * Find sessions for the given key, returning raw {@link AggregationWithHeaders} values.
-     * Only callable when {@link #supportsHeaders()} is {@code true}.
-     */
-    public KeyValueIterator<Windowed<K>, AggregationWithHeaders<VAgg>> findSessionsWithHeaders(
-            final K key,
-            final long earliestSessionEndTime,
-            final long latestSessionStartTime) {
-        return headersStore().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
-    }
-
-    /**
      * Put a value without headers.
      */
     public void put(final Windowed<K> sessionKey, final VAgg aggregate) {

@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -968,57 +967,34 @@ public class KStreamAggregationIntegrationTest {
             (ReadOnlySessionStore<String, AggregationWithHeaders<String>>) (ReadOnlySessionStore<?, ?>)
                 IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.sessionStore());
 
-        // bob [t1,t1] = "start" — single record from t1, should have t1 headers (2 headers)
+        // bob: [t1,t1] = "start", [t3,t4] = "pause:resume"
         try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> bob = sessionStore.fetch("bob")) {
-            final KeyValue<Windowed<String>, AggregationWithHeaders<String>> first = bob.next();
-            assertThat(first.key, equalTo(new Windowed<>("bob", new SessionWindow(t1, t1))));
-            assertThat(first.value.aggregation(), equalTo("start"));
-            assertHeaderCount(first.value.headers(), 2);
-            assertHeaderContains(first.value.headers(), "batch", "t1");
-            assertHeaderContains(first.value.headers(), "source", "test");
-
-            // bob [t3,t4] = "pause:resume" — merged from t3 + t4, should have combined headers (4 headers)
-            final KeyValue<Windowed<String>, AggregationWithHeaders<String>> second = bob.next();
-            assertThat(second.key, equalTo(new Windowed<>("bob", new SessionWindow(t3, t4))));
-            assertThat(second.value.aggregation(), equalTo("pause:resume"));
-            assertHeaderCount(second.value.headers(), 4);
-            assertHeaderContains(second.value.headers(), "batch", "t3");
-            assertHeaderContains(second.value.headers(), "batch", "t4");
-
+            assertAggregationWithEmptyHeaders(bob.next(), new Windowed<>("bob", new SessionWindow(t1, t1)), "start");
+            assertAggregationWithEmptyHeaders(bob.next(), new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume");
             assertFalse(bob.hasNext());
         }
 
-        // emily [t1,t2] = "pause:resume" — merged from t1 + t2, should have combined headers (4 headers)
+        // emily: [t1,t2] = "pause:resume"
         try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> emily = sessionStore.fetch("emily")) {
-            final KeyValue<Windowed<String>, AggregationWithHeaders<String>> emilySession = emily.next();
-            assertThat(emilySession.key, equalTo(new Windowed<>("emily", new SessionWindow(t1, t2))));
-            assertThat(emilySession.value.aggregation(), equalTo("pause:resume"));
-            assertHeaderCount(emilySession.value.headers(), 4);
-            assertHeaderContains(emilySession.value.headers(), "batch", "t1");
-            assertHeaderContains(emilySession.value.headers(), "batch", "t2");
-
+            assertAggregationWithEmptyHeaders(emily.next(), new Windowed<>("emily", new SessionWindow(t1, t2)), "pause:resume");
             assertFalse(emily.hasNext());
         }
 
-        // jo has two sessions:
-        //   [t1,t1] = "pause" — single from t1
-        //   [t5,t4] = "resume:late" — merged from t4 + t5
+        // jo: [t1,t1] = "pause", [t5,t4] = "resume:late"
         try (final KeyValueIterator<Windowed<String>, AggregationWithHeaders<String>> jo = sessionStore.fetch("jo")) {
-            final KeyValue<Windowed<String>, AggregationWithHeaders<String>> joFirst = jo.next();
-            assertThat(joFirst.key, equalTo(new Windowed<>("jo", new SessionWindow(t1, t1))));
-            assertThat(joFirst.value.aggregation(), equalTo("pause"));
-            assertHeaderCount(joFirst.value.headers(), 2);
-            assertHeaderContains(joFirst.value.headers(), "batch", "t1");
-
-            final KeyValue<Windowed<String>, AggregationWithHeaders<String>> joSecond = jo.next();
-            assertThat(joSecond.key, equalTo(new Windowed<>("jo", new SessionWindow(t5, t4))));
-            assertThat(joSecond.value.aggregation(), equalTo("resume:late"));
-            assertHeaderCount(joSecond.value.headers(), 4);
-            assertHeaderContains(joSecond.value.headers(), "batch", "t4");
-            assertHeaderContains(joSecond.value.headers(), "batch", "t5");
-
+            assertAggregationWithEmptyHeaders(jo.next(), new Windowed<>("jo", new SessionWindow(t1, t1)), "pause");
+            assertAggregationWithEmptyHeaders(jo.next(), new Windowed<>("jo", new SessionWindow(t5, t4)), "resume:late");
             assertFalse(jo.hasNext());
         }
+    }
+
+    private static <V> void assertAggregationWithEmptyHeaders(
+            final KeyValue<Windowed<String>, AggregationWithHeaders<V>> actual,
+            final Windowed<String> expectedKey,
+            final V expectedValue) {
+        assertThat(actual.key, equalTo(expectedKey));
+        assertThat(actual.value.aggregation(), equalTo(expectedValue));
+        assertHeaderCount(actual.value.headers(), 0);
     }
 
     private void verifySessionStoreIQ(final String storeName,
@@ -1037,15 +1013,6 @@ public class KStreamAggregationIntegrationTest {
         assertThat("header count", headers.toArray().length, equalTo(expectedCount));
     }
 
-    private static void assertHeaderContains(final Headers headers, final String key, final String expectedValue) {
-        final byte[] expectedBytes = expectedValue.getBytes(StandardCharsets.UTF_8);
-        for (final Header header : headers) {
-            if (header.key().equals(key) && Arrays.equals(header.value(), expectedBytes)) {
-                return;
-            }
-        }
-        throw new AssertionError("Expected header with key='" + key + "' and value='" + expectedValue + "' not found in " + headers);
-    }
 
     @Test
     public void shouldCountUnlimitedWindows() throws Exception {
