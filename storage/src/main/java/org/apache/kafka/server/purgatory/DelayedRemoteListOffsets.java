@@ -40,9 +40,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-
 public class DelayedRemoteListOffsets extends DelayedOperation {
 
     private static final Logger LOG = LoggerFactory.getLogger(DelayedRemoteListOffsets.class);
@@ -189,13 +186,13 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
         PARTITION_EXPIRATION_METERS.computeIfAbsent(partition, tp -> METRICS_GROUP.newMeter("ExpiresPerSec",
                 "requests",
                 TimeUnit.SECONDS,
-                mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))).mark();
+                Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition())))).mark();
     }
 
     public static void removePartitionMetrics(TopicPartition partition) {
         if (PARTITION_EXPIRATION_METERS.remove(partition) != null) {
             METRICS_GROUP.removeMetric("ExpiresPerSec",
-                    mkMap(mkEntry("topic", partition.topic()), mkEntry("partition", String.valueOf(partition.partition()))));
+                    Map.of("topic", partition.topic(), "partition", String.valueOf(partition.partition())));
         }
     }
 }

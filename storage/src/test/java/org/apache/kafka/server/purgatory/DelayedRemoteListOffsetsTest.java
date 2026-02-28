@@ -51,6 +51,8 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import kafka.utils.TestUtils;
+
 @SuppressWarnings("unchecked")
 public class DelayedRemoteListOffsetsTest {
 
@@ -63,6 +65,7 @@ public class DelayedRemoteListOffsetsTest {
     @AfterEach
     public void afterEach() throws Exception {
         purgatory.shutdown();
+        TestUtils.clearYammerMetrics();
     }
 
     @Test
