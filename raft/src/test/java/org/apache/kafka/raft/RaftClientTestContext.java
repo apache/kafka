@@ -423,18 +423,6 @@ public final class RaftClientTestContext {
             configMap.put(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE_CONFIG, autoJoin);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
 
-            List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
-                if (isStartingVotersStatic) {
-                    return List.of();
-                } else {
-                    return startingVoters
-                        .voterNodes(startingVoters.voterIds().stream(), channel.listenerName())
-                        .stream()
-                        .map(node -> InetSocketAddress.createUnresolved(node.host(), node.port()))
-                        .collect(Collectors.toList());
-                }
-            });
-
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 localId,
                 localDirectoryId,
@@ -448,7 +436,6 @@ public final class RaftClientTestContext {
                 FETCH_MAX_WAIT_MS,
                 canBecomeVoter,
                 clusterId,
-                computedBootstrapServers,
                 localListeners,
                 Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,

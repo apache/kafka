@@ -108,7 +108,6 @@ class KRaftQuorumImplementation(
       time,
       new Metrics(),
       controllerQuorumVotersFuture,
-      controllerQuorumVotersFuture.get().values(),
       faultHandlerFactory,
       ServerSocketFactory.INSTANCE,
     )
@@ -303,7 +302,6 @@ abstract class QuorumTestHarness extends Logging {
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      util.List.of,
       faultHandlerFactory,
       ServerSocketFactory.INSTANCE,
     )

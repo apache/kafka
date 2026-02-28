@@ -896,7 +896,6 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 true,
                 clusterId,
-                List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
                 Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
