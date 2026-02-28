@@ -18,7 +18,9 @@ package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.utils.internals.BytesUtils;
 
+import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Comparator;
 
 /**
  * An immutable wrapper for a byte array.
@@ -175,7 +177,7 @@ public class Bytes implements Comparable<Bytes> {
      *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils#BYTES_LEXICO_COMPARATOR} instead.
      */
     @Deprecated(since = "4.3", forRemoval = true)
-    public static final BytesUtils.ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
+    public static final ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
 
     /**
      * A byte array comparator interface.
@@ -184,9 +186,13 @@ public class Bytes implements Comparable<Bytes> {
      *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils.ByteArrayComparator} instead.
      */
     @Deprecated(since = "4.3", forRemoval = true)
-    public interface ByteArrayComparator extends BytesUtils.ByteArrayComparator {
+    public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
+
+        int compare(final byte[] buffer1, int offset1, int length1,
+                    final byte[] buffer2, int offset2, int length2);
     }
 
-    private static class LexicographicByteArrayComparator extends BytesUtils.LexicographicByteArrayComparator {
+    private static class LexicographicByteArrayComparator extends BytesUtils.LexicographicByteArrayComparator implements ByteArrayComparator {
+        // Empty - inherits implementation from BytesUtils, but explicitly declares it implements the local interface
     }
 }
