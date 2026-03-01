@@ -771,7 +771,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code state.cleanup.dir.max.age} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG = "state.cleanup.dir.max.age.ms";
-    private static final String STATE_CLEANUP_DIR_MAX_AGE_MS_DOC = "Time-based threshold for purging local state directories and checkpoint files during application startup. Only state directories that have not been modified for at least <code>state.cleanup.dir.max.age.ms</code> will be removed";
+    private static final String STATE_CLEANUP_DIR_MAX_AGE_MS_DOC = "Time-based threshold for purging local state directories and checkpoint files during application startup. State directories that have not been modified for at least <code>" + STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG + "</code> will be removed.";
 
     /** {@code state.dir} */
     @SuppressWarnings("WeakerAccess")
@@ -1257,7 +1257,7 @@ public class StreamsConfig extends AbstractConfig {
                     10 * 60 * 1000L,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
-                .define(STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG,
+            .define(STATE_CLEANUP_DIR_MAX_AGE_MS_CONFIG,
                     Type.LONG,
                     STATE_CLEANUP_DIR_MAX_AGE_MS_DISABLED,
                     Importance.LOW,

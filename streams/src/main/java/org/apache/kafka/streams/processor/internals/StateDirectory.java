@@ -663,28 +663,19 @@ public class StateDirectory implements AutoCloseable {
     }
 
     private void cleanStateAndTaskDirectoriesOnStartup(final long dirMaxAgeMs) throws Exception {
-        if (!lockedTasksToOwner.isEmpty()) {
-            log.warn("Found some still-locked task directories when cleaning outdated directories");
-        }
         final AtomicReference<Exception> firstException = new AtomicReference<>();
         for (final TaskDirectory taskDir : listAllTaskDirectories()) {
             final String dirName = taskDir.file().getName();
-            final TaskId id = parseTaskDirectoryName(dirName, taskDir.namedTopology());
             try {
                 final long now = time.milliseconds();
                 final long lastModifiedMs = taskDir.file().lastModified();
                 if (now - dirMaxAgeMs > lastModifiedMs) {
-                    log.info("{} Deleting outdated state directory {} for {} as {}ms has elapsed (max directory age is {}ms).",
-                            logPrefix(), dirName, id, now - lastModifiedMs, dirMaxAgeMs);
-
-                    if (lockedTasksToOwner.containsKey(id)) {
-                        log.warn("{} Task {} in state directory {} was still locked by {}",
-                                logPrefix(), dirName, id, lockedTasksToOwner.get(id));
-                    }
+                    log.info("Deleting outdated state directory {} as {}ms has elapsed from last update (max directory age is {}ms).",
+                            dirName, now - lastModifiedMs, dirMaxAgeMs);
                     Utils.delete(taskDir.file());
                 }
             } catch (final IOException exception) {
-                log.error("{} Failed to delete task directory {} for {} with exception:", logPrefix(), dirName, id, exception);
+                log.error("Failed to delete task directory {} with exception:", dirName, exception);
                 firstException.compareAndSet(null, exception);
             }
         }
