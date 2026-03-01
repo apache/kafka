@@ -35,6 +35,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -46,6 +48,8 @@ public class TableSourceNodeTest {
 
     private static final String STORE_NAME = "store-name";
     private static final String TOPIC = "input-topic";
+    private static final String SOURCE_NAME = "source-name";
+    private static final String PROCESSOR_NAME = "processor-name";
 
     private InternalTopologyBuilder topologyBuilder = mock(InternalTopologyBuilder.class);
 
@@ -59,7 +63,18 @@ public class TableSourceNodeTest {
     public void shouldConnectStateStoreToInputTopicIfInputTopicIsUsedAsChangelog() {
         final boolean shouldReuseSourceTopicForChangelog = true;
         buildTableSourceNode(shouldReuseSourceTopicForChangelog);
-        verify(topologyBuilder).connectSourceStoreAndTopic(STORE_NAME, TOPIC);
+        verify(topologyBuilder).addReadOnlyStateStore(
+                any(),
+                argThat(store -> STORE_NAME.equals(store.name())),
+                eq(SOURCE_NAME),
+                any(),
+                any(),
+                any(),
+                eq(TOPIC),
+                eq(PROCESSOR_NAME),
+                any()
+        );
+        verify(topologyBuilder, never()).connectSourceStoreAndTopic(any(), any());
     }
 
     @Test
@@ -67,6 +82,7 @@ public class TableSourceNodeTest {
         final boolean shouldReuseSourceTopicForChangelog = false;
         buildTableSourceNode(shouldReuseSourceTopicForChangelog);
         verify(topologyBuilder, never()).connectSourceStoreAndTopic(STORE_NAME, TOPIC);
+        verify(topologyBuilder, never()).addReadOnlyStateStore(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     private void buildTableSourceNode(final boolean shouldReuseSourceTopicForChangelog) {
@@ -75,9 +91,10 @@ public class TableSourceNodeTest {
                 materializedInternal = new MaterializedInternal<>(Materialized.as(STORE_NAME));
         final TableSourceNode<String, String> tableSourceNode = tableSourceNodeBuilder
             .withTopic(TOPIC)
+            .withSourceName(SOURCE_NAME)
             .withConsumedInternal(new ConsumedInternal<>(Consumed.as("node-name")))
             .withProcessorParameters(
-                    new ProcessorParameters<>(new KTableSource<>(materializedInternal), null))
+                    new ProcessorParameters<>(new KTableSource<>(materializedInternal), PROCESSOR_NAME))
             .build();
         tableSourceNode.reuseSourceTopicForChangeLog(shouldReuseSourceTopicForChangelog);
 

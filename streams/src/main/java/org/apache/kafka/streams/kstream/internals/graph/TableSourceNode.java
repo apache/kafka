@@ -98,21 +98,25 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                 false
             );
         } else {
+            // if the KTableSource should not be materialized, stores will be null or empty
             final KTableSource<K, V> tableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
             if (tableSource.stores() != null && shouldReuseSourceTopicForChangelog) {
                 // The DSL topology uses a serial pipeline, 
                 // whereas the PAPI optimization assumes a parallel structure.
                 // We use a wildcard supplier to support the DSL's forwarding behavior.
                 final ProcessorSupplier<K, V, ?, ?> stateUpdater = 
-                        processorParameters.wrappedProcessSupplier(topologyBuilder);
+                        processorParameters.wrappedProcessorSupplier(topologyBuilder);
 
-                // TableSourceNode is backed by KTableSource, which maintains a single state store. 
-                // Therefore, we are guaranteed to have exactly one store.
-                assert tableSource.stores().size() == 1;
+                final Set<StoreBuilder<?>> stores = stateUpdater.stores();
+                if (stores.size() != 1) {
+                    // TableSourceNode is backed by KTableSource, which maintains a single state store. 
+                    // Therefore, we are guaranteed to have exactly one store.
+                    throw new IllegalStateException("Expected exactly one store for optimized KTable source");
+                }
 
                 topologyBuilder.addReadOnlyStateStore(
                         consumedInternal().offsetResetPolicy(),
-                        tableSource.stores().iterator().next(),
+                        stores.iterator().next(),
                         sourceName,
                         consumedInternal().timestampExtractor(),
                         consumedInternal().keyDeserializer(),
