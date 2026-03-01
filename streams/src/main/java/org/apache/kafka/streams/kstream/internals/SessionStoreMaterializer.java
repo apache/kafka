@@ -65,20 +65,11 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
                         emitStrategy))
                 : (SessionBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<?> builder;
-        if (supplier.withHeaders()) {
-            builder = Stores.sessionStoreBuilderWithHeaders(
+        final StoreBuilder<?> builder = Stores.sessionStoreBuilderWithHeaders(
                     supplier,
                     materialized.keySerde(),
                     materialized.valueSerde()
             );
-        } else {
-            builder = Stores.sessionStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde()
-            );
-        }
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());
