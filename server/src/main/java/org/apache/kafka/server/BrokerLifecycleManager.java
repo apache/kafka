@@ -78,6 +78,7 @@ public class BrokerLifecycleManager {
     private final Time time;
     private final Set<Uuid> logDirs;
     private final Runnable shutdownHook;
+    private final Supplier<Boolean> cordonedLogDirsSupported;
 
     /**
      * The broker id.
@@ -144,7 +145,13 @@ public class BrokerLifecycleManager {
      * to the Controller.
      * This variable can only be read or written from the event queue thread.
      */
-    private Map<Uuid, Boolean> offlineDirs = new HashMap<>();
+    private final Map<Uuid, Boolean> offlineDirs = new HashMap<>();
+
+    /**
+     * Map of cordoned log directories. The value is true if the directory is cordoned.
+     * This variable can only be read or written from the event queue thread.
+     */
+    private final Map<Uuid, Boolean> cordonedLogDirs = new HashMap<>();
 
     /**
      * True if we sent an event queue to the active controller requesting controlled
@@ -211,7 +218,7 @@ public class BrokerLifecycleManager {
             Time time,
             String threadNamePrefix,
             Set<Uuid> logDirs) {
-        this(config, time, threadNamePrefix, logDirs, () -> { });
+        this(config, time, threadNamePrefix, logDirs, () -> { }, () -> false);
     }
 
     public BrokerLifecycleManager(
@@ -219,11 +226,13 @@ public class BrokerLifecycleManager {
             Time time,
             String threadNamePrefix,
             Set<Uuid> logDirs,
-            Runnable shutdownHook) {
+            Runnable shutdownHook,
+            Supplier<Boolean> cordonedLogDirsSupported) {
         this.config = config;
         this.time = time;
         this.logDirs = logDirs;
         this.shutdownHook = shutdownHook;
+        this.cordonedLogDirsSupported = cordonedLogDirsSupported;
         LogContext logContext = new LogContext("[BrokerLifecycleManager id=" + this.config.nodeId() + "] ");
         this.logger = logContext.logger(BrokerLifecycleManager.class);
         this.nodeId = config.nodeId();
@@ -251,8 +260,14 @@ public class BrokerLifecycleManager {
                String clusterId,
                ListenerCollection advertisedListeners,
                Map<String, VersionRange> supportedFeatures,
-               OptionalLong previousBrokerEpoch) {
+               OptionalLong previousBrokerEpoch,
+               Set<Uuid> cordonedLogDirs) {
         this.previousBrokerEpoch = previousBrokerEpoch;
+        if (!cordonedLogDirs.isEmpty()) {
+            // At this point we don't have fresh metadata yet so we don't know if the cordoned log dirs feature is supported.
+            // Queue an event, it will be ignored by the controller handling the broker registration if the feature is disabled.
+            eventQueue.append(new CordonedDirEvent(cordonedLogDirs));
+        }
         eventQueue.append(new StartupEvent(highestMetadataOffsetProvider,
                 channelManager, clusterId, advertisedListeners, supportedFeatures));
     }
@@ -273,6 +288,26 @@ public class BrokerLifecycleManager {
         eventQueue.scheduleDeferred("offlineDirFailure",
                 new EventQueue.DeadlineFunction(time.nanoseconds() + MILLISECONDS.toNanos(timeout)),
                 new OfflineDirBrokerFailureEvent(directory));
+    }
+
+    /**
+     * Propagate directory cordoned to the controller.
+     * @param directories The IDs for the directories that is cordoned.
+     */
+    public void propagateDirectoryCordoned(Set<Uuid> directories) {
+        if (cordonedLogDirsSupported.get()) {
+            eventQueue.append(new CordonedDirEvent(directories));
+        }
+    }
+
+    /**
+     * Propagate directory uncordoned to the controller.
+     * @param directories The IDs for the directories that is uncordoned.
+     */
+    public void propagateDirectoryUncordoned(Set<Uuid> directories) {
+        if (cordonedLogDirsSupported.get()) {
+            eventQueue.append(new UncordonedDirEvent(directories));
+        }
     }
 
     public void resendBrokerRegistration() {
@@ -397,6 +432,44 @@ public class BrokerLifecycleManager {
         }
     }
 
+    private class CordonedDirEvent implements EventQueue.Event {
+
+        private final Set<Uuid> dirs;
+
+        CordonedDirEvent(Set<Uuid> dirs) {
+            this.dirs = dirs;
+        }
+
+        @Override
+        public void run() {
+            for (Uuid dir : dirs) {
+                cordonedLogDirs.put(dir, true);
+            }
+            if (registered) {
+                scheduleNextCommunicationImmediately();
+            }
+        }
+    }
+
+    private class UncordonedDirEvent implements EventQueue.Event {
+
+        private final Set<Uuid> dirs;
+
+        UncordonedDirEvent(Set<Uuid> dirs) {
+            this.dirs = dirs;
+        }
+
+        @Override
+        public void run() {
+            for (Uuid dir : dirs) {
+                cordonedLogDirs.put(dir, false);
+            }
+            if (registered) {
+                scheduleNextCommunicationImmediately();
+            }
+        }
+    }
+
     private class StartupEvent implements EventQueue.Event {
 
         private final Supplier<Long> highestMetadataOffsetProvider;
@@ -453,7 +526,8 @@ public class BrokerLifecycleManager {
             .setListeners(advertisedListeners)
             .setRack(rack.orElse(null))
             .setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L))
-            .setLogDirs(sortedLogDirs);
+            .setLogDirs(sortedLogDirs)
+            .setCordonedLogDirs(cordonedLogDirs.entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey).toList());
         if (logger.isDebugEnabled()) {
             logger.debug("Sending broker registration {}", data);
         }
@@ -531,7 +605,8 @@ public class BrokerLifecycleManager {
             .setCurrentMetadataOffset(metadataOffset)
             .setWantFence(!readyToUnfence)
             .setWantShutDown(state == BrokerState.PENDING_CONTROLLED_SHUTDOWN)
-            .setOfflineLogDirs(new ArrayList<>(offlineDirs.keySet()));
+            .setOfflineLogDirs(new ArrayList<>(offlineDirs.keySet()))
+            .setCordonedLogDirs(cordonedLogDirs.entrySet().stream().filter(Map.Entry::getValue).map(Map.Entry::getKey).toList());
         if (logger.isTraceEnabled()) {
             logger.trace("Sending broker heartbeat {}", data);
         }

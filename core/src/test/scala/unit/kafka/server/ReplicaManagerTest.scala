@@ -89,7 +89,7 @@ import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
-import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import java.io.{ByteArrayInputStream, File}
 import java.net.InetAddress
@@ -4022,6 +4022,30 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testAlterReplicaLogDirsToCordonedDir(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
+    val logMgr = Mockito.spy(TestUtils.createLogManager(config.logDirs.asScala.map(new File(_))))
+    when(logMgr.cordonedLogDirs()).thenReturn(config.logDirs.asScala.toSet)
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = new MockScheduler(time),
+      logManager = logMgr,
+      quotaManagers = quotaManager,
+      metadataCache = new KRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterPartitionManager)
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val errors = replicaManager.alterReplicaLogDirs(Map(tp -> config.logDirs.get(0)))
+      assertEquals(Errors.INVALID_REPLICA_ASSIGNMENT, errors(tp))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
   def testPartitionMetadataFile(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
@@ -5631,6 +5655,7 @@ class ReplicaManagerTest {
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
         assertFalse(response.topics().isEmpty)
+        assertFalse(response.isCordoned)
         response.topics().forEach(t => assertFalse(t.partitions().isEmpty))
       }
     } finally {
@@ -5663,6 +5688,7 @@ class ReplicaManagerTest {
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
         assertTrue(response.topics().isEmpty)
+        assertFalse(response.isCordoned)
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)

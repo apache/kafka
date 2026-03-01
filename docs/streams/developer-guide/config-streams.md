@@ -1566,7 +1566,24 @@ We recommend listing specific optimizations in the config for production code so
 
 These optimizations include moving/reducing repartition topics and reusing the source topic as the changelog for source KTables. These optimizations will save on network traffic and storage in Kafka without changing the semantics of your applications. Enabling them is recommended. 
 
-Note that you need to do two things to enable optimizations. In addition to setting this config to `StreamsConfig.OPTIMIZE`, you'll need to pass in your configuration properties when building your topology by using the overloaded `StreamsBuilder.build(Properties)` method. For example `KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)`. 
+**Important:** Enabling optimizations requires two steps. Both are necessary — setting the config alone is not enough:
+
+1. Set `topology.optimization` to `StreamsConfig.OPTIMIZE` (or a comma-separated list of specific optimizations) in your `Properties` object.
+2. Pass the same `Properties` object to the overloaded `StreamsBuilder.build(Properties)` method when building your topology.
+
+For example:
+
+```java
+Properties properties = new Properties();
+properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+
+// Step 2: pass properties to build() — this is required for optimizations to take effect
+Topology topology = streamsBuilder.build(properties);
+
+KafkaStreams myStream = new KafkaStreams(topology, properties);
+```
+
+If you call `streamsBuilder.build()` without passing the `Properties` object, optimizations will **not** be applied even if the config is set. 
  
  #### upgrade.from
 

@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.logger.StateChangeLogger
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, PartitionRegistration}
+import org.apache.kafka.server.LogDeleteRecordsResult
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager
@@ -1531,9 +1532,7 @@ class Partition(val topicPartition: TopicPartition,
           throw new OffsetOutOfRangeException(s"The offset $convertedOffset for partition $topicPartition is not valid")
 
         leaderLog.maybeIncrementLogStartOffset(convertedOffset, LogStartOffsetIncrementReason.ClientRecordDeletion)
-        LogDeleteRecordsResult(
-          requestedOffset = convertedOffset,
-          lowWatermark = lowWatermarkIfLeader)
+        new LogDeleteRecordsResult(convertedOffset, lowWatermarkIfLeader, Optional.empty())
       case None =>
         throw new NotLeaderOrFollowerException(s"Leader not local for partition $topicPartition on broker $localBrokerId")
     }

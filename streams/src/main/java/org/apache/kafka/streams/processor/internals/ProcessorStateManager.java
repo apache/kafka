@@ -176,6 +176,7 @@ public class ProcessorStateManager implements StateManager {
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
     private final FixedOrderMap<String, StateStore> globalStores = new FixedOrderMap<>();
 
+    private final StateDirectory stateDirectory;
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
 
@@ -211,6 +212,7 @@ public class ProcessorStateManager implements StateManager {
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
+        this.stateDirectory = stateDirectory;
 
         log.debug("Created state store manager for task {}", taskId);
     }
@@ -227,19 +229,6 @@ public class ProcessorStateManager implements StateManager {
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
         return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
-    }
-
-    /**
-     * Standby tasks initialized for local state on-startup are only partially initialized, because they are not yet
-     * assigned to a StreamThread. Once assigned to a StreamThread, we complete their initialization here using the
-     * assigned StreamThread's context.
-     */
-    void assignToStreamThread(final LogContext logContext,
-                              final Collection<TopicPartition> sourcePartitions) {
-        this.sourcePartitions.clear();
-        this.log = logContext.logger(ProcessorStateManager.class);
-        this.logPrefix = logContext.logPrefix();
-        this.sourcePartitions.addAll(sourcePartitions);
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
@@ -312,6 +301,8 @@ public class ProcessorStateManager implements StateManager {
                               store.stateStore.name());
                 }
             }
+
+            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
 
             if (!loadedCheckpoints.isEmpty()) {
                 log.warn("Some loaded checkpoint offsets cannot find their corresponding state stores: {}", loadedCheckpoints);
@@ -475,10 +466,13 @@ public class ProcessorStateManager implements StateManager {
             }
 
             storeMetadata.setOffset(batchEndOffset);
+
             // If null means the lag for this partition is not known yet
             if (optionalLag.isPresent()) {
                 storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
             }
+
+            stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
         }
     }
 
@@ -660,6 +654,8 @@ public class ProcessorStateManager implements StateManager {
                         store.stateStore.name(), store.offset, store.changelogPartition);
             }
         }
+
+        stateDirectory.updateTaskOffsets(taskId, changelogOffsets());
     }
 
     @Override
