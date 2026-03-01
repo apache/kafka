@@ -906,9 +906,9 @@ public class KStreamAggregationIntegrationTest {
 
         // verify can query data via IQ
         if (withHeaders) {
-            verifySessionStoreWithHeadersIQ(userSessionsStore, t1, t2, t3, t4, t5);
+            verifySessionStoreWithHeaders(userSessionsStore, t1, t2, t3, t4, t5);
         } else {
-            verifySessionStoreIQ(userSessionsStore, t1, t3, t4);
+            verifySessionStore(userSessionsStore, t1, t3, t4);
         }
     }
 
@@ -960,9 +960,9 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @SuppressWarnings("unchecked")
-    private void verifySessionStoreWithHeadersIQ(final String storeName,
-                                                  final long t1, final long t2,
-                                                  final long t3, final long t4, final long t5) throws Exception {
+    private void verifySessionStoreWithHeaders(final String storeName,
+                                               final long t1, final long t2,
+                                               final long t3, final long t4, final long t5) throws Exception {
         final ReadOnlySessionStore<String, AggregationWithHeaders<String>> sessionStore =
             (ReadOnlySessionStore<String, AggregationWithHeaders<String>>) (ReadOnlySessionStore<?, ?>)
                 IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.sessionStore());
@@ -997,8 +997,8 @@ public class KStreamAggregationIntegrationTest {
         assertHeaderCount(actual.value.headers(), 0);
     }
 
-    private void verifySessionStoreIQ(final String storeName,
-                                       final long t1, final long t3, final long t4) throws Exception {
+    private void verifySessionStore(final String storeName,
+                                    final long t1, final long t3, final long t4) throws Exception {
         final ReadOnlySessionStore<String, String> sessionStore =
             IntegrationTestUtils.getStore(storeName, kafkaStreams, QueryableStoreTypes.sessionStore());
 
