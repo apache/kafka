@@ -102,6 +102,10 @@ public class ListOffsetsResponse extends AbstractResponse {
         return version >= 3;
     }
 
+    public static boolean useTopicIds(short version) {
+        return version >= 12;
+    }
+
     public static ListOffsetsTopicResponse singletonListOffsetsTopicResponse(TopicPartition tp, Errors error, long timestamp, long offset, int epoch) {
         return new ListOffsetsTopicResponse()
                  .setName(tp.topic())
@@ -112,4 +116,6 @@ public class ListOffsetsResponse extends AbstractResponse {
                          .setOffset(offset)
                          .setLeaderEpoch(epoch)));
     }
+
+
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.Batched;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -43,6 +44,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -54,18 +56,24 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     private final Logger log;
     private final AdminApiLookupStrategy<TopicPartition> lookupStrategy;
     private final int defaultApiTimeoutMs;
+    private final Map<String, Uuid> topicIdByName;
+    private final Map<Uuid, String> topicNameById;
 
     public ListOffsetsHandler(
         Map<TopicPartition, Long> offsetTimestampsByPartition,
         ListOffsetsOptions options,
         LogContext logContext,
-        int defaultApiTimeoutMs
+        int defaultApiTimeoutMs,
+        Map<String, Uuid> topicIdByName,
+        Map<Uuid, String> topicNameById
     ) {
         this.offsetTimestampsByPartition = offsetTimestampsByPartition;
         this.options = options;
         this.log = logContext.logger(ListOffsetsHandler.class);
         this.lookupStrategy = new PartitionLeaderStrategy(logContext, false);
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
+        this.topicIdByName = topicIdByName;
+        this.topicNameById = topicNameById;
     }
 
     @Override
@@ -82,7 +90,8 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
     ListOffsetsRequest.Builder buildBatchedRequest(int brokerId, Set<TopicPartition> keys) {
         Map<String, ListOffsetsTopic> topicsByName = CollectionUtils.groupPartitionsByTopic(
             keys,
-            topicName -> new ListOffsetsTopic().setName(topicName),
+            topicName -> new ListOffsetsTopic().setName(topicName)
+                    .setTopicId(topicIdByName.getOrDefault(topicName, Uuid.ZERO_UUID)),
             (listOffsetsTopic, partitionId) -> {
                 TopicPartition topicPartition = new TopicPartition(listOffsetsTopic.name(), partitionId);
                 long offsetTimestamp = offsetTimestampsByPartition.get(topicPartition);
@@ -91,6 +100,15 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
                         .setPartitionIndex(partitionId)
                         .setTimestamp(offsetTimestamp));
             });
+
+        // Only allow topicId-based protocol (v12) if ALL topics have valid topicIds
+        // If any topic has ZERO_UUID, we must restrict to name-based protocol (v11 or lower)
+        // This is because in a given protocol version, we can only use topicId OR topicName, not both
+        boolean canUseTopicIds = !topicsByName.isEmpty() && topicsByName.values().stream()
+                .filter(Objects::nonNull)
+                .map(ListOffsetsTopic::topicId)
+                .allMatch(topicId -> topicId != null && !topicId.equals(Uuid.ZERO_UUID));
+
         boolean supportsMaxTimestamp = keys
             .stream()
             .anyMatch(key -> offsetTimestampsByPartition.get(key) == ListOffsetsRequest.MAX_TIMESTAMP);
@@ -113,7 +131,8 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
                         supportsMaxTimestamp,
                         requireEarliestLocalTimestamp,
                         requireTieredStorageTimestamp,
-                        requireEarliestPendingUploadTimestamp)
+                        requireEarliestPendingUploadTimestamp,
+                        canUseTopicIds)
                 .setTargetTimes(new ArrayList<>(topicsByName.values()))
                 .setTimeoutMs(timeoutMs);
     }
@@ -132,7 +151,18 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
 
         for (ListOffsetsTopicResponse topic : response.topics()) {
             for (ListOffsetsPartitionResponse partition : topic.partitions()) {
-                TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
+                // Determine topic name based on response version:
+                // Version 12+: uses topicId (name will be null/empty)
+                // Version < 12: uses name (topicId will be null or ZERO_UUID)
+                TopicPartition topicPartition;
+                if (topic.topicId() != null && !topic.topicId().equals(Uuid.ZERO_UUID)) {
+                    // Version 12+: resolve topicName from topicId
+                    String topicName = topicNameById.get(topic.topicId());
+                    topicPartition = new TopicPartition(topicName, partition.partitionIndex());
+                } else {
+                    // Version < 12: use topicName directly
+                    topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
+                }
                 Errors error = Errors.forCode(partition.errorCode());
                 if (!offsetTimestampsByPartition.containsKey(topicPartition)) {
                     log.warn("ListOffsets response includes unknown topic partition {}", topicPartition);
@@ -177,7 +207,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         List<TopicPartition> unmapped,
         Set<TopicPartition> retriable
     ) {
-        if (error == Errors.NOT_LEADER_OR_FOLLOWER || error == Errors.LEADER_NOT_AVAILABLE) {
+        if (error == Errors.NOT_LEADER_OR_FOLLOWER || error == Errors.LEADER_NOT_AVAILABLE || error == Errors.UNKNOWN_TOPIC_ID) {
             log.debug(
                 "ListOffsets lookup request for topic partition {} will be retried due to invalid leader metadata {}",
                 topicPartition,

@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListOffsetsRequestData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsTopic;
@@ -37,7 +40,10 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ListOffsetsRequestTest {
 
@@ -61,22 +67,27 @@ public class ListOffsetsRequestTest {
 
     @Test
     public void testGetErrorResponse() {
+        Uuid topicId = Uuid.randomUuid();
         for (short version = 1; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
+            // For version >= 12, we need to use topic IDs
+            boolean useTopicIds = version >= 12;
             List<ListOffsetsTopic> topics = Collections.singletonList(
                     new ListOffsetsTopic()
                         .setName("topic")
+                        .setTopicId(useTopicIds ? topicId : Uuid.ZERO_UUID)
                         .setPartitions(Collections.singletonList(
                                 new ListOffsetsPartition()
                                     .setPartitionIndex(0))));
             ListOffsetsRequest request = ListOffsetsRequest.Builder
-                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED, useTopicIds)
                     .setTargetTimes(topics)
                     .build(version);
             ListOffsetsResponse response = (ListOffsetsResponse) request.getErrorResponse(0, Errors.NOT_LEADER_OR_FOLLOWER.exception());
-    
+
             List<ListOffsetsTopicResponse> v = Collections.singletonList(
                     new ListOffsetsTopicResponse()
                         .setName("topic")
+                        .setTopicId(useTopicIds ? topicId : Uuid.ZERO_UUID)
                         .setPartitions(Collections.singletonList(
                                 new ListOffsetsPartitionResponse()
                                     .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
@@ -95,6 +106,10 @@ public class ListOffsetsRequestTest {
 
     @Test
     public void testToListOffsetsTopics() {
+        Uuid topicId = Uuid.randomUuid();
+        ConsumerMetadata metadata = mock(ConsumerMetadata.class);
+        when(metadata.getTopicIdByName("topic")).thenReturn(topicId);
+
         ListOffsetsPartition lop0 = new ListOffsetsPartition()
                 .setPartitionIndex(0)
                 .setCurrentLeaderEpoch(1)
@@ -106,10 +121,11 @@ public class ListOffsetsRequestTest {
         Map<TopicPartition, ListOffsetsPartition> timestampsToSearch = new HashMap<>();
         timestampsToSearch.put(new TopicPartition("topic", 0), lop0);
         timestampsToSearch.put(new TopicPartition("topic", 1), lop1);
-        List<ListOffsetsTopic> listOffsetTopics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch);
+        List<ListOffsetsTopic> listOffsetTopics = ListOffsetsRequest.toListOffsetsTopics(timestampsToSearch, metadata);
         assertEquals(1, listOffsetTopics.size());
         ListOffsetsTopic topic = listOffsetTopics.get(0);
         assertEquals("topic", topic.name());
+        assertEquals(topicId, topic.topicId());
         assertEquals(2, topic.partitions().size());
         assertTrue(topic.partitions().contains(lop0));
         assertTrue(topic.partitions().contains(lop1));
@@ -145,5 +161,99 @@ public class ListOffsetsRequestTest {
         assertEquals((short) 8, requireEarliestLocalTimestampRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 9, requireTieredStorageTimestampRequestBuilder.oldestAllowedVersion());
         assertEquals((short) 11, requireEarliestPendingUploadTimestampRequestBuilder.oldestAllowedVersion());
+    }
+
+    @Test
+    public void testBuildWithTopicIdsForVersion12() {
+        Uuid topicId = Uuid.randomUuid();
+        List<ListOffsetsTopic> topics = Collections.singletonList(
+                new ListOffsetsTopic()
+                        .setName("topic")
+                        .setTopicId(topicId)
+                        .setPartitions(Collections.singletonList(
+                                new ListOffsetsPartition()
+                                        .setPartitionIndex(0)
+                                        .setTimestamp(123L))));
+
+        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
+                .forConsumer(true, IsolationLevel.READ_COMMITTED, true)
+                .setTargetTimes(topics);
+
+        // Version 12 should succeed with topic IDs
+        ListOffsetsRequest request = builder.build((short) 12);
+        assertEquals(1, request.data().topics().size());
+        assertEquals(topicId, request.data().topics().get(0).topicId());
+    }
+
+    @Test
+    public void testBuildWithTopicNamesForVersion11() {
+        List<ListOffsetsTopic> topics = Collections.singletonList(
+                new ListOffsetsTopic()
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new ListOffsetsPartition()
+                                        .setPartitionIndex(0)
+                                        .setTimestamp(123L))));
+
+        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
+                .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
+                .setTargetTimes(topics);
+
+        // Version 11 should succeed with topic names
+        ListOffsetsRequest request = builder.build((short) 11);
+        assertEquals(1, request.data().topics().size());
+        assertEquals("topic", request.data().topics().get(0).name());
+    }
+
+    @Test
+    public void testBuildVersion12RequiresTopicIds() {
+        // Version 12 without topic ID should throw exception
+        List<ListOffsetsTopic> topics = Collections.singletonList(
+                new ListOffsetsTopic()
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new ListOffsetsPartition()
+                                        .setPartitionIndex(0)
+                                        .setTimestamp(123L))));
+
+        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
+                .forConsumer(true, IsolationLevel.READ_COMMITTED, true)
+                .setTargetTimes(topics);
+
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 12));
+    }
+
+    @Test
+    public void testBuildVersion11RequiresTopicNames() {
+        // Version 11 without topic name should throw exception
+        Uuid topicId = Uuid.randomUuid();
+        List<ListOffsetsTopic> topics = Collections.singletonList(
+                new ListOffsetsTopic()
+                        .setTopicId(topicId)
+                        .setPartitions(Collections.singletonList(
+                                new ListOffsetsPartition()
+                                        .setPartitionIndex(0)
+                                        .setTimestamp(123L))));
+
+        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
+                .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
+                .setTargetTimes(topics);
+
+        assertThrows(UnsupportedVersionException.class, () -> builder.build((short) 11));
+    }
+
+    @Test
+    public void testCanUseTopicIdsLimitsMaxVersion() {
+        // When canUseTopicIds is false, maxVersion should be limited to 11
+        ListOffsetsRequest.Builder builder = ListOffsetsRequest.Builder
+                .forConsumer(true, IsolationLevel.READ_COMMITTED, false);
+
+        assertEquals((short) 11, builder.latestAllowedVersion());
+
+        // When canUseTopicIds is true, maxVersion should be the latest
+        ListOffsetsRequest.Builder builderWithTopicIds = ListOffsetsRequest.Builder
+                .forConsumer(true, IsolationLevel.READ_COMMITTED, true);
+
+        assertEquals(ApiKeys.LIST_OFFSETS.latestVersion(), builderWithTopicIds.latestAllowedVersion());
     }
 }

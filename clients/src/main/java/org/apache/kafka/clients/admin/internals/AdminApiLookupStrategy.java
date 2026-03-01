@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -113,6 +114,10 @@ public interface AdminApiLookupStrategy<T> {
         // phase. The driver will not attempt lookup or fulfillment for failed keys.
         public final Map<K, Throwable> failedKeys;
 
+        public final Map<String, Uuid> topicIdByName;
+
+        public final Map<Uuid, String> topicNameById;
+
         public LookupResult(
             Map<K, Throwable> failedKeys,
             Map<K, Integer> mappedKeys
@@ -121,13 +126,34 @@ public interface AdminApiLookupStrategy<T> {
         }
 
         public LookupResult(
+                Map<K, Throwable> failedKeys,
+                Map<K, Integer> mappedKeys,
+                Map<String, Uuid> topicIdByName,
+                Map<Uuid, String> topicNameById
+        ) {
+            this(Collections.emptyList(), failedKeys, mappedKeys, topicIdByName, topicNameById);
+        }
+
+        public LookupResult(
             List<K> completedKeys,
             Map<K, Throwable> failedKeys,
             Map<K, Integer> mappedKeys
         ) {
+            this(completedKeys, failedKeys, mappedKeys, Collections.emptyMap(), Collections.emptyMap());
+        }
+
+        public LookupResult(
+                List<K> completedKeys,
+                Map<K, Throwable> failedKeys,
+                Map<K, Integer> mappedKeys,
+                Map<String, Uuid> topicIdByName,
+                Map<Uuid, String> topicNameById
+        ) {
             this.completedKeys = Collections.unmodifiableList(completedKeys);
             this.failedKeys = Collections.unmodifiableMap(failedKeys);
             this.mappedKeys = Collections.unmodifiableMap(mappedKeys);
+            this.topicIdByName = Collections.unmodifiableMap(topicIdByName);
+            this.topicNameById = Collections.unmodifiableMap(topicNameById);
         }
 
         static <K> LookupResult<K> empty() {

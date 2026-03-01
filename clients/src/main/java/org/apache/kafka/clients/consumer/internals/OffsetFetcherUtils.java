@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
@@ -110,8 +111,13 @@ class OffsetFetcherUtils {
         Set<String> unauthorizedTopics = new HashSet<>();
 
         for (ListOffsetsResponseData.ListOffsetsTopicResponse topic : listOffsetsResponse.topics()) {
+            String topicName = topic.name();
+            if (topic.topicId() != null && topic.topicId() != Uuid.ZERO_UUID) {
+                topicName = metadata.getTopicNameById(topic.topicId());
+            }
+
             for (ListOffsetsResponseData.ListOffsetsPartitionResponse partition : topic.partitions()) {
-                TopicPartition topicPartition = new TopicPartition(topic.name(), partition.partitionIndex());
+                TopicPartition topicPartition = new TopicPartition(topicName, partition.partitionIndex());
                 Errors error = Errors.forCode(partition.errorCode());
                 switch (error) {
                     case NONE:
