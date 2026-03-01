@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.AbstractMap.SimpleImmutableEntry
 import java.util.{Collections, Properties}
 import java.util.Map.Entry
@@ -29,7 +30,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.common.message.BrokerRegistrationRequestData
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
@@ -270,8 +271,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   }
 
   private def registerBroker(id: Int): Unit = {
-    val listeners = new ListenerCollection()
-    listeners.add(new Listener().setName(PLAINTEXT.name).setHost("localhost").setPort(9092 + id))
+    val listeners = util.List.of(new Listener().setName(PLAINTEXT.name).setHost("localhost").setPort(9092 + id))
     val features = new BrokerRegistrationRequestData.FeatureCollection()
     features.add(new BrokerRegistrationRequestData.Feature()
       .setName(MetadataVersion.FEATURE_NAME)

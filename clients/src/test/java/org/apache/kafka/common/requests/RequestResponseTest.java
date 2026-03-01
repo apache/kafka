@@ -3539,8 +3539,7 @@ public class RequestResponseTest {
                 .setRack("1")
                 .setFeatures(new BrokerRegistrationRequestData.FeatureCollection(singletonList(
                         new BrokerRegistrationRequestData.Feature()).iterator()))
-                .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
-                        new BrokerRegistrationRequestData.Listener()).iterator()))
+                .setListeners(singletonList(new BrokerRegistrationRequestData.Listener()))
                 .setIncarnationId(Uuid.randomUuid())
                 .setLogDirs(singletonList(Uuid.fromString("qaJjNJ05Q36kEgeTBDcj0Q")))
                 .setPreviousBrokerEpoch(123L);

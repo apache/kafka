@@ -34,7 +34,7 @@
       "about": "The incarnation id of the broker process." },
     { "name": "Listeners", "type": "[]Listener",
       "about": "The listeners of this broker.", "versions": "0+", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+      { "name": "Name", "type": "string", "versions": "0+",
         "about": "The name of the endpoint." },
       { "name": "Host", "type": "string", "versions": "0+",
         "about": "The hostname." },

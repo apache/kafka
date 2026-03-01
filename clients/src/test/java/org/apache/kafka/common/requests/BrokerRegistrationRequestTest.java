@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -57,7 +58,7 @@ class BrokerRegistrationRequestTest {
             .setClusterId("test")
             .setFeatures(new BrokerRegistrationRequestData.FeatureCollection())
             .setIncarnationId(incarnationId)
-            .setListeners(new BrokerRegistrationRequestData.ListenerCollection())
+            .setListeners(List.of())
             .setRack("a")
             .setPreviousBrokerEpoch(1L);
         BrokerRegistrationRequestData data2 = readSerializedRequest(version, data);
@@ -102,7 +103,7 @@ class BrokerRegistrationRequestTest {
                             setMaxSupportedVersion((short) 1)
                     ).iterator())).
                 setIncarnationId(Uuid.fromString("EfIEKywJSaWl5yWDwlop1Q")).
-                setListeners(new BrokerRegistrationRequestData.ListenerCollection()).
+                setListeners(List.of()).
                 setPreviousBrokerEpoch(1L));
         assertEquals(1, data.brokerId());
         assertNull(data.rack());

@@ -134,7 +134,7 @@ public final class ListenerInfo {
      * @return              The ListenerInfo object.
      */
     public static ListenerInfo fromBrokerRegistrationRequest(
-        BrokerRegistrationRequestData.ListenerCollection collection
+        List<BrokerRegistrationRequestData.Listener> collection
     ) {
         LinkedHashMap<String, Endpoint> listeners = new LinkedHashMap<>();
         collection.forEach(listener -> {
@@ -331,19 +331,16 @@ public final class ListenerInfo {
         return collection;
     }
 
-    public BrokerRegistrationRequestData.ListenerCollection toBrokerRegistrationRequest() {
-        BrokerRegistrationRequestData.ListenerCollection collection =
-                new BrokerRegistrationRequestData.ListenerCollection();
-        listeners.values().forEach(endpoint -> {
+    public List<BrokerRegistrationRequestData.Listener> toBrokerRegistrationRequest() {
+        return listeners.values().stream().map(endpoint -> {
             checkPortIsSerializable(endpoint.port());
             checkHostIsSerializable(endpoint.host());
-            collection.add(new BrokerRegistrationRequestData.Listener().
+            return new BrokerRegistrationRequestData.Listener().
                 setHost(endpoint.host()).
                 setName(endpoint.listener()).
                 setPort(endpoint.port()).
-                setSecurityProtocol(endpoint.securityProtocol().id));
-        });
-        return collection;
+                setSecurityProtocol(endpoint.securityProtocol().id);
+        }).toList();
     }
 
     public RegisterBrokerRecord.BrokerEndpointCollection toBrokerRegistrationRecord() {

@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys.{BROKER_HEARTBEAT, BROKER_REGISTRATION, CONTROLLER_REGISTRATION}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -64,14 +64,13 @@ class RegistrationTestContext(
   val mockChannelManager = new MockNodeToControllerChannelManager(mockClient,
     time, controllerNodeProvider, nodeApiVersions)
   val clusterId = "x4AJGXQSRnephtTZzujw4w"
-  val advertisedListeners = new ListenerCollection()
-  val controllerEpoch = new AtomicInteger(123)
-  config.effectiveAdvertisedBrokerListeners.foreach { ep =>
-    advertisedListeners.add(new Listener().setHost(ep.host).
+  val advertisedListeners: java.util.List[Listener] = config.effectiveAdvertisedBrokerListeners.map { ep =>
+    new Listener().setHost(ep.host).
       setName(ep.listener).
       setPort(ep.port.shortValue()).
-      setSecurityProtocol(ep.securityProtocol.id))
-  }
+      setSecurityProtocol(ep.securityProtocol.id)
+  }.asJava
+  val controllerEpoch = new AtomicInteger(123)
 
   def poll(): Unit = {
     mockClient.wakeup()

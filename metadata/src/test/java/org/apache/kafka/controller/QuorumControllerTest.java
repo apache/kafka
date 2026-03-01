@@ -32,7 +32,6 @@ import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
@@ -271,8 +270,7 @@ public class QuorumControllerTest {
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            List<Listener> listeners = List.of(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
             Map<Integer, Long> brokerEpochs = new HashMap<>();
 
@@ -389,8 +387,7 @@ public class QuorumControllerTest {
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
                 build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            List<Listener> listeners = List.of(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
             Map<Integer, Long> brokerEpochs = new HashMap<>();
             BrokerRegistrationRequestData.FeatureCollection features =
@@ -528,8 +525,7 @@ public class QuorumControllerTest {
                 .setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV0, "test-provided bootstrap ELR not supported"))
                 .build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            List<Listener> listeners = List.of(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
             Map<Integer, Long> brokerEpochs = new HashMap<>();
             BrokerRegistrationRequestData.FeatureCollection features =
@@ -622,8 +618,7 @@ public class QuorumControllerTest {
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_4_0_IV1, "test-provided bootstrap ELR enabled")).
                 build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            List<Listener> listeners = List.of(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
             Map<Integer, Long> brokerEpochs = new HashMap<>();
 
@@ -753,8 +748,7 @@ public class QuorumControllerTest {
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
+            List<Listener> listeners = List.of(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
             Map<Integer, Long> brokerEpochs = new HashMap<>();
 
@@ -892,8 +886,6 @@ public class QuorumControllerTest {
                 ).
                 build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
 
             MockRaftClient mockRaftClient = clientEnv
@@ -936,9 +928,7 @@ public class QuorumControllerTest {
                 setBootstrapMetadata(SIMPLE_BOOTSTRAP).
                 build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").
-                setHost("localhost").setPort(9092));
+            List<Listener> listeners = List.of(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
             BrokerRegistrationRequestData.FeatureCollection brokerFeatures = new BrokerRegistrationRequestData.FeatureCollection();
             brokerFeatures.add(new BrokerRegistrationRequestData.Feature()
@@ -986,9 +976,7 @@ public class QuorumControllerTest {
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(clientEnv).
                 build()
         ) {
-            ListenerCollection listeners = new ListenerCollection();
-            listeners.add(new Listener().setName("PLAINTEXT").
-                setHost("localhost").setPort(9092));
+            List<Listener> listeners = List.of(new Listener().setName("PLAINTEXT").setHost("localhost").setPort(9092));
             QuorumController active = controlEnv.activeController();
             CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                 ANONYMOUS_CONTEXT,
@@ -1100,9 +1088,9 @@ public class QuorumControllerTest {
                         setClusterId(active.clusterId()).
                         setFeatures(brokerFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
-                        setListeners(new ListenerCollection(List.of(new Listener().
+                        setListeners(List.of(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092 + i)).iterator()))).get();
+                            setPort(9092 + i)))).get();
                 brokerEpochs.put(i, reply.epoch());
             }
             for (int i = 0; i < numBrokers - 1; i++) {

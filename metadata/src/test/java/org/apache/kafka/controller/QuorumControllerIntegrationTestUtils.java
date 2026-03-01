@@ -21,7 +21,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
@@ -122,15 +121,12 @@ public class QuorumControllerIntegrationTestUtils {
                     .setLogDirs(List.of(
                         Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
                     ))
-                    .setListeners(new ListenerCollection(
-                        List.of(
-                            new Listener()
-                                .setName("PLAINTEXT")
-                                .setHost("localhost")
-                                .setPort(9092 + brokerId)
-                            ).iterator()
-                        )
-                    )
+                    .setListeners(List.of(
+                        new Listener()
+                            .setName("PLAINTEXT")
+                            .setHost("localhost")
+                            .setPort(9092 + brokerId)
+                    ))
             ).get();
             brokerEpochs.put(brokerId, reply.epoch());
 

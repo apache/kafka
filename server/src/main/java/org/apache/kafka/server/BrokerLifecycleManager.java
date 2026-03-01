@@ -21,7 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerHeartbeatResponseData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.BrokerHeartbeatRequest;
 import org.apache.kafka.common.requests.BrokerHeartbeatResponse;
@@ -194,7 +194,7 @@ public class BrokerLifecycleManager {
      * The listeners which this broker advertises.  This variable can only be read or
      * written from the event queue thread.
      */
-    private ListenerCollection advertisedListeners;
+    private List<Listener> advertisedListeners;
 
     /**
      * The features supported by this broker.  This variable can only be read or written
@@ -258,7 +258,7 @@ public class BrokerLifecycleManager {
     public void start(Supplier<Long> highestMetadataOffsetProvider,
                NodeToControllerChannelManager channelManager,
                String clusterId,
-               ListenerCollection advertisedListeners,
+               List<Listener> advertisedListeners,
                Map<String, VersionRange> supportedFeatures,
                OptionalLong previousBrokerEpoch,
                Set<Uuid> cordonedLogDirs) {
@@ -475,13 +475,13 @@ public class BrokerLifecycleManager {
         private final Supplier<Long> highestMetadataOffsetProvider;
         private final NodeToControllerChannelManager channelManager;
         private final String clusterId;
-        private final ListenerCollection advertisedListeners;
+        private final List<Listener> advertisedListeners;
         private final Map<String, VersionRange> supportedFeatures;
 
         StartupEvent(Supplier<Long> highestMetadataOffsetProvider,
                      NodeToControllerChannelManager channelManager,
                      String clusterId,
-                     ListenerCollection advertisedListeners,
+                     List<Listener> advertisedListeners,
                      Map<String, VersionRange> supportedFeatures) {
             this.highestMetadataOffsetProvider = highestMetadataOffsetProvider;
             this.channelManager = channelManager;
@@ -497,7 +497,7 @@ public class BrokerLifecycleManager {
             BrokerLifecycleManager.this.channelManager.start();
             state = BrokerState.STARTING;
             BrokerLifecycleManager.this.clusterId = clusterId;
-            BrokerLifecycleManager.this.advertisedListeners = advertisedListeners.duplicate();
+            BrokerLifecycleManager.this.advertisedListeners = List.copyOf(advertisedListeners);
             BrokerLifecycleManager.this.supportedFeatures = Map.copyOf(supportedFeatures);
             eventQueue.scheduleDeferred("initialRegistrationTimeout",
                     new EventQueue.DeadlineFunction(time.nanoseconds() + initialTimeoutNs),
