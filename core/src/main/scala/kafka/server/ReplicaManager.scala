@@ -58,6 +58,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.partition.PartitionListener
+import org.apache.kafka.server.purgatory.DelayedProduce.PartitionStatusValidator.Result
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedProduce, DelayedRemoteFetch, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
@@ -71,7 +72,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, Fetc
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
-import java.lang.{Boolean => JBoolean, Long => JLong}
+import java.lang.{Long => JLong}
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
@@ -882,7 +883,7 @@ class ReplicaManager(val config: KafkaConfig,
       //
       // This delegate is invoked by DelayedProduce to verify if the produce operation can be completed.
       // Defined here to provide access to ReplicaManager#getPartitionOrError, which is otherwise inaccessible to the caller.
-      def delegate(tp: TopicPartition, requiredOffset: Long) : util.Map.Entry[JBoolean, Errors] = {
+      def delegate(tp: TopicPartition, requiredOffset: Long) : Result = {
         val (hasEnough, error) = getPartitionOrError(tp).fold(
             // Please refer to the documentation in `DelayedProduce#tryComplete` for a comprehensive description of these cases.
             // Case A or Case B
@@ -891,7 +892,7 @@ class ReplicaManager(val config: KafkaConfig,
             // Case B or Case C
             partition => partition.checkEnoughReplicasReachOffset(requiredOffset))
 
-        util.Map.entry(hasEnough, error)
+        new Result(hasEnough, error)
       }
 
       val delayedProduce = new DelayedProduce(timeoutMs, initialProduceStatus.asJava, delegate, responseCallback.asJava)

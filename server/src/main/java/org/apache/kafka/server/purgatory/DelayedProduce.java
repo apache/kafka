@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -63,7 +62,7 @@ public class DelayedProduce extends DelayedOperation {
             return responseStatus;
         }
 
-        public void setAcksPending(boolean acksPending) {
+        private void setAcksPending(boolean acksPending) {
             this.acksPending = acksPending;
         }
 
@@ -77,34 +76,20 @@ public class DelayedProduce extends DelayedOperation {
                     requiredOffset
             );
         }
-
-        @Override
-        public boolean equals(Object o) {
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            final ProducePartitionStatus that = (ProducePartitionStatus) o;
-            return requiredOffset == that.requiredOffset && acksPending == that.acksPending && Objects.equals(responseStatus, that.responseStatus);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(requiredOffset, responseStatus, acksPending);
-        }
     }
 
     @FunctionalInterface
     public interface PartitionStatusValidator {
+        record Result(boolean hasEnough, Errors error) { }
         /**
          * Validates the status of a partition and its replicas to determine
          * if a delayed produce operation can be completed.
          *
          * @param topicPartition The partition to check.
          * @param requiredOffset The offset that replicas must reach.
-         * @return An entry where the key is a Boolean (hasEnoughReplicas)
-         * and the value is the Error code.
+         * @return A result with a Boolean (hasEnoughReplicas) and the Error code.
          */
-        Map.Entry<Boolean, Errors> validate(TopicPartition topicPartition, long requiredOffset);
+        Result validate(TopicPartition topicPartition, long requiredOffset);
     }
 
     private final Map<TopicIdPartition, ProducePartitionStatus> produceStatus;
@@ -159,12 +144,11 @@ public class DelayedProduce extends DelayedOperation {
             if (status.acksPending) {
                 // Delegate to `ReplicaManager#maybeAddDelayedProduce`
                 // Validate Cases A, B, or C
-                Map.Entry<Boolean, Errors> result = statusValidator.validate(topicIdPartition.topicPartition(), status.requiredOffset);
+                PartitionStatusValidator.Result result = statusValidator.validate(topicIdPartition.topicPartition(), status.requiredOffset);
 
                 // Update the partition status to reflect Case A, B, or C:
-                boolean hasEnough = result.getKey();
-                Errors errors = result.getValue();
-                if (errors != Errors.NONE || hasEnough) {
+                Errors errors = result.error;
+                if (errors != Errors.NONE || result.hasEnough()) {
                     status.setAcksPending(false);
                     status.responseStatus.error = errors;
                 }
