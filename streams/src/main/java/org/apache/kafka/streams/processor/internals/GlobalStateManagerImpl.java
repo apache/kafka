@@ -29,8 +29,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -85,6 +88,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
+    private ProcessingExceptionHandler processingExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -123,6 +127,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
         deserializationExceptionHandler = config.deserializationExceptionHandler();
+        processingExceptionHandler = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) ? config.processingExceptionHandler() : null;
     }
 
     @Override
@@ -311,33 +316,84 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             record.headers());
                     globalProcessorContext.setRecordContext(recordContext);
 
-                    try {
-                        if (record.key() != null) {
-                            source.process(new Record(
+                    if (record.key() != null) {
+                        // Deserialization phase
+                        final Record<?, ?> deserializedRecord;
+                        try {
+                            deserializedRecord = new Record<>(
                                 reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
                                 reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
                                 record.timestamp(),
-                                record.headers()));
+                                record.headers());
+                        } catch (final Exception deserializationException) {
+                            // while Java distinguishes checked vs unchecked exceptions, other languages
+                            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                            // (instead of `RuntimeException`) to work well with those languages
+                            handleDeserializationFailure(
+                                deserializationExceptionHandler,
+                                globalProcessorContext,
+                                deserializationException,
+                                record,
+                                log,
+                                droppedRecordsSensor(
+                                    Thread.currentThread().getName(),
+                                    globalProcessorContext.taskId().toString(),
+                                    globalProcessorContext.metrics()
+                                ),
+                                null
+                            );
+                            continue; // Skip this record
+                        }
+
+                        // Processing phase
+                        try {
+                            @SuppressWarnings("unchecked")
+                            final Processor<Object, Object, Object, Object> typedSource = 
+                                (Processor<Object, Object, Object, Object>) source;
+                            @SuppressWarnings("unchecked")
+                            final Record<Object, Object> typedRecord = (Record<Object, Object>) deserializedRecord;
+                            typedSource.process(typedRecord);
                             restoreCount++;
                             batchRestoreCount++;
+                        } catch (final Exception processingException) {
+                            // while Java distinguishes checked vs unchecked exceptions, other languages
+                            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                            // (instead of `RuntimeException`) to work well with those languages
+                            if (processingExceptionHandler != null) {
+                                final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
+                                    globalProcessorContext,
+                                    record.topic(),
+                                    record.partition(),
+                                    record.offset(),
+                                    record.headers(),
+                                    storeName,
+                                    globalProcessorContext.taskId(),
+                                    record.timestamp(),
+                                    record.key(),
+                                    record.value()
+                                );
+                                final ProcessingExceptionHandler.Response response = 
+                                    processingExceptionHandler.handleError(
+                                        errorHandlerContext,
+                                        deserializedRecord,
+                                        processingException
+                                    );
+                                
+                                if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
+                                    log.error("Processing exception handler chose to fail for record at offset {}", record.offset());
+                                    throw processingException;
+                                }
+                                // RESUME - log and continue
+                                log.warn("Processing exception handler chose to resume for record at offset {}", record.offset(), processingException);
+                                droppedRecordsSensor(
+                                    Thread.currentThread().getName(),
+                                    globalProcessorContext.taskId().toString(),
+                                    globalProcessorContext.metrics()
+                                ).record();
+                            } else {
+                                throw processingException;
+                            }
                         }
-                    } catch (final Exception deserializationException) {
-                        // while Java distinguishes checked vs unchecked exceptions, other languages
-                        // like Scala or Kotlin do not, and thus we need to catch `Exception`
-                        // (instead of `RuntimeException`) to work well with those languages
-                        handleDeserializationFailure(
-                            deserializationExceptionHandler,
-                            globalProcessorContext,
-                            deserializationException,
-                            record,
-                            log,
-                            droppedRecordsSensor(
-                                Thread.currentThread().getName(),
-                                globalProcessorContext.taskId().toString(),
-                                globalProcessorContext.metrics()
-                            ),
-                            null
-                        );
                     }
                 }
 

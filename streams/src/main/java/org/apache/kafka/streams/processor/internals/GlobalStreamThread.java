@@ -395,7 +395,7 @@ public class GlobalStreamThread extends Thread {
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
             final StreamsThreadMetricsDelegatingReporter globalMetricsReporter = new StreamsThreadMetricsDelegatingReporter(globalConsumer, getName(), Optional.empty());
             streamsMetrics.metricsRegistry().addReporter(globalMetricsReporter);
-            ProcessingExceptionHandler processingExceptionHandler = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) ? config.processingExceptionHandler() : null;
+            final ProcessingExceptionHandler processingExceptionHandler = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) ? config.processingExceptionHandler() : null;
             stateConsumer = new StateConsumer(
                 logContext,
                 globalConsumer,
