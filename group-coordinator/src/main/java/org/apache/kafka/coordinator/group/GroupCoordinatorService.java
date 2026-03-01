@@ -80,7 +80,6 @@ import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -142,7 +141,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 
@@ -262,8 +260,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 coordinatorRuntimeMetrics
             );
 
-            AtomicInteger backgroundThreadId = new AtomicInteger(0);
-
             CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime =
                 new CoordinatorRuntime.Builder<GroupCoordinatorShard, CoordinatorRecord>()
                     .withTime(time)
@@ -282,11 +278,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withAppendLingerMs(config.appendLingerMs())
                     .withExecutorService(Executors.newFixedThreadPool(
                         config.numBackgroundThreads(),
-                        runnable -> new KafkaThread(
-                            "group-coordinator-background-" + backgroundThreadId.getAndIncrement(),
-                            runnable,
-                            false
-                        )
+                        Thread.ofPlatform()
+                            .name("group-coordinator-background-", 0)
+                            .factory()
                     ))
                     .withCachedBufferMaxBytesSupplier(config::cachedBufferMaxBytes)
                     .build();
