@@ -84,8 +84,8 @@ public class GroupCoordinatorConfig {
     public static final int GROUP_COORDINATOR_NUM_THREADS_DEFAULT = 4;
 
     public static final String GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG = "group.coordinator.background.threads";
-    public static final String GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DOC = "The number of background threads used by the group coordinator for " +
-        "updating the list of topics for regex subscriptions and metadata changes and offloaded assignments.";
+    public static final String GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DOC = "The number of threads used by the group coordinator for " +
+        "processing background tasks (e.g. updating regular expression subscriptions and offloaded assignments).";
     public static final int GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DEFAULT = 2;
 
     public static final String OFFSETS_LOAD_BUFFER_SIZE_CONFIG = "offsets.load.buffer.size";
