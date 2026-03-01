@@ -158,11 +158,11 @@ public class Bytes implements Comparable<Bytes> {
     }
 
     /**
-     * Increment the underlying byte array by adding 1. Throws an IndexOutOfBoundsException if incrementing would cause
-     * the underlying input byte array to overflow.
+     * Increment the underlying byte array by adding 1.
      *
      * @param input - The byte array to increment
      * @return A new copy of the incremented byte array.
+     * @throws IndexOutOfBoundsException if incrementing causes the underlying input byte array to overflow.
      * @deprecated This method is not part of the public API and will be removed in version 5.0.
      *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils#increment(Bytes)} instead.
      */
