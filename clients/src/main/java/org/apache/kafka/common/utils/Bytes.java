@@ -172,7 +172,7 @@ public class Bytes implements Comparable<Bytes> {
     }
 
     /**
-     * A byte array comparator based on lexicograpic ordering.
+     * A byte array comparator based on lexicographic ordering.
      * @deprecated This field is not part of the public API and will be removed in version 5.0.
      *             Internal Kafka code should use {@link org.apache.kafka.common.utils.internals.BytesUtils#BYTES_LEXICO_COMPARATOR} instead.
      */
@@ -193,6 +193,5 @@ public class Bytes implements Comparable<Bytes> {
     }
 
     private static class LexicographicByteArrayComparator extends BytesUtils.LexicographicByteArrayComparator implements ByteArrayComparator {
-        // Empty - inherits implementation from BytesUtils, but explicitly declares it implements the local interface
     }
 }

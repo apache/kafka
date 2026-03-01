@@ -33,11 +33,11 @@ public final class BytesUtils {
     }
 
     /**
-     * Increment the underlying byte array by adding 1. Throws an IndexOutOfBoundsException if incrementing would cause
-     * the underlying input byte array to overflow.
+     * Increment the underlying byte array by adding 1.
      *
      * @param input - The byte array to increment
-     * @return A new copy of the incremented byte array.
+     * @return A new copy of the incremented byte array
+     * @throws IndexOutOfBoundsException if incrementing causes the underlying input byte array to overflow
      */
     public static Bytes increment(Bytes input) throws IndexOutOfBoundsException {
         byte[] inputArr = input.get();
@@ -59,7 +59,7 @@ public final class BytesUtils {
     }
 
     /**
-     * A byte array comparator based on lexicograpic ordering.
+     * A byte array comparator based on lexicographic ordering.
      */
     public static final ByteArrayComparator BYTES_LEXICO_COMPARATOR = new LexicographicByteArrayComparator();
 
