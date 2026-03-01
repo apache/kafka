@@ -182,43 +182,47 @@ public final class MessageTest {
         testAllMessageRoundTripsFromVersion((short) 5, newRequest.get().setGroupInstanceId("instanceId"));
     }
 
-    @Test
-    public void testListOffsetsRequestVersions() throws Exception {
-        List<ListOffsetsTopic> v = Collections.singletonList(new ListOffsetsTopic()
-                .setName("topic")
-                .setPartitions(Collections.singletonList(new ListOffsetsPartition()
-                        .setPartitionIndex(0)
-                        .setTimestamp(123L))));
-        Supplier<ListOffsetsRequestData> newRequest = () -> new ListOffsetsRequestData()
-                .setTopics(v)
-                .setReplicaId(0);
-        testAllMessageRoundTrips(newRequest.get());
-        testAllMessageRoundTripsFromVersion((short) 2, newRequest.get().setIsolationLevel(IsolationLevel.READ_COMMITTED.id()));
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.LIST_OFFSETS)
+    public void testListOffsetsRequestVersions(short version) throws Exception {
+        ListOffsetsRequestData request = new ListOffsetsRequestData()
+            .setReplicaId(0)
+            .setIsolationLevel(version >= 2 ? IsolationLevel.READ_COMMITTED.id() : 0)
+            .setTopics(singletonList(
+                new ListOffsetsTopic()
+                    .setTopicId(version >= 12 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 12 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new ListOffsetsPartition()
+                            .setPartitionIndex(0)
+                            .setCurrentLeaderEpoch(version >= 4 ? 10 : -1)
+                            .setTimestamp(123L)
+                    ))
+            ));
+
+        testMessageRoundTrip(version, request, request);
     }
 
-    @Test
-    public void testListOffsetsResponseVersions() throws Exception {
-        ListOffsetsPartitionResponse partition = new ListOffsetsPartitionResponse()
-                .setErrorCode(Errors.NONE.code())
-                .setPartitionIndex(0);
-        List<ListOffsetsTopicResponse> topics = Collections.singletonList(new ListOffsetsTopicResponse()
-                .setName("topic")
-                .setPartitions(Collections.singletonList(partition)));
-        Supplier<ListOffsetsResponseData> response = () -> new ListOffsetsResponseData()
-                .setTopics(topics);
-        for (short version = ApiKeys.LIST_OFFSETS.oldestVersion(); version <= ApiKeys.LIST_OFFSETS.latestVersion(); ++version) {
-            ListOffsetsResponseData responseData = response.get();
-            responseData.topics().get(0).partitions().get(0)
-                .setOffset(456L)
-                .setTimestamp(123L);
-            if (version > 1) {
-                responseData.setThrottleTimeMs(1000);
-            }
-            if (version > 3) {
-                partition.setLeaderEpoch(1);
-            }
-            testEquivalentMessageRoundTrip(version, responseData);
-        }
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.LIST_OFFSETS)
+    public void testListOffsetsResponseVersions(short version) throws Exception {
+        ListOffsetsResponseData response = new ListOffsetsResponseData()
+            .setThrottleTimeMs(version >= 2 ? 1000 : 0)
+            .setTopics(singletonList(
+                new ListOffsetsTopicResponse()
+                    .setTopicId(version >= 12 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 12 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new ListOffsetsPartitionResponse()
+                            .setPartitionIndex(0)
+                            .setErrorCode(Errors.NONE.code())
+                            .setTimestamp(123L)
+                            .setOffset(456L)
+                            .setLeaderEpoch(version >= 4 ? 1 : -1)
+                    ))
+            ));
+
+        testMessageRoundTrip(version, response, response);
     }
 
     @Test

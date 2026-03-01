@@ -110,21 +110,34 @@ class RemoteLeaderEndPoint(logPrefix: String,
   }
 
   private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, timestamp: Long): OffsetAndEpoch = {
-    val topic = new ListOffsetsTopic()
-      .setName(topicPartition.topic)
-      .setPartitions(Collections.singletonList(
-        new ListOffsetsPartition()
-          .setPartitionIndex(topicPartition.partition)
-          .setCurrentLeaderEpoch(currentLeaderEpoch)
-          .setTimestamp(timestamp)))
     val metadataVersion = metadataVersionSupplier()
+    val topicIdPartition = replicaManager.topicIdPartition(topicPartition)
+    val topicId = if (topicIdPartition != null) topicIdPartition.topicId() else Uuid.ZERO_UUID
+    val useTopicId = metadataVersion.listOffsetRequestVersion >= 12 && topicId != Uuid.ZERO_UUID
+
+    val topic = new ListOffsetsTopic()
+    if (useTopicId) {
+      topic.setTopicId(topicId)
+    } else {
+      topic.setName(topicPartition.topic)
+    }
+    topic.setPartitions(Collections.singletonList(
+      new ListOffsetsPartition()
+        .setPartitionIndex(topicPartition.partition)
+        .setCurrentLeaderEpoch(currentLeaderEpoch)
+        .setTimestamp(timestamp)))
+
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
 
     val clientResponse = blockingSender.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetsResponse]
-    val responsePartition = response.topics.asScala.find(_.name == topicPartition.topic).get
-      .partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
+    val responseTopic = if (useTopicId) {
+      response.topics.asScala.find(_.topicId == topicId).get
+    } else {
+      response.topics.asScala.find(_.name == topicPartition.topic).get
+    }
+    val responsePartition = responseTopic.partitions.asScala.find(_.partitionIndex == topicPartition.partition).get
 
     Errors.forCode(responsePartition.errorCode) match {
       case Errors.NONE => new OffsetAndEpoch(responsePartition.offset, responsePartition.leaderEpoch)
