@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.util;
 
 import org.apache.kafka.common.utils.internals.BytesUtils;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
