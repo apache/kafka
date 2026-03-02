@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.internals.SecurityManagerCompatibility;
-import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.components.Versioned;
 
 import org.slf4j.Logger;
@@ -197,10 +196,6 @@ public abstract class PluginScanner {
         try {
             if (pluginImpl instanceof Versioned) {
                 return ((Versioned) pluginImpl).version();
-            }
-
-            if (pluginImpl instanceof ConnectPlugin) {
-                return ((ConnectPlugin) pluginImpl).version();
             }
         } catch (Throwable t) {
             log.error("Failed to get plugin version for {}", pluginImpl.getClass(), t);

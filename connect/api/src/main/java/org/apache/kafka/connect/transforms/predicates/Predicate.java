@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.transforms.predicates;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
@@ -40,13 +39,6 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  */
 public interface Predicate<R extends ConnectRecord<R>> extends Configurable, AutoCloseable, ConnectPlugin {
 
-    /**
-     * Configuration specification for this predicate.
-     *
-     * @return the configuration definition for this predicate; never null
-     */
-    @Override
-    ConfigDef config();
 
     /**
      * Get the version of this component.

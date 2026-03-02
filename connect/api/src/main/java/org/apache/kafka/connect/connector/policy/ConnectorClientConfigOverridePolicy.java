@@ -61,5 +61,17 @@ public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoC
      * @return the configuration definition for this policy override; never null
      */
     @Override
-    default ConfigDef config() { return new ConfigDef();}
+    default ConfigDef config() {
+        return new ConfigDef();
+    }
+
+    /**
+     * Get the version of this component.
+     *
+     * @return the version, formatted as a String. The version may not be {@code null} or empty.
+     */
+    @Override
+    default String version() {
+        return "undefined";
+    }
 }

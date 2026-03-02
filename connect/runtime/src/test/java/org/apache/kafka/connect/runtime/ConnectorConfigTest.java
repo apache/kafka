@@ -378,11 +378,6 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         public TestPredicate() { }
 
         @Override
-        public String version() {
-            return "";
-        }
-
-        @Override
         public ConfigDef config() {
             return new ConfigDef().define("int", ConfigDef.Type.INT, 80, ConfigDef.Range.atLeast(80), ConfigDef.Importance.MEDIUM,
                     "A test parameter");

@@ -68,5 +68,7 @@ public interface ConnectRestExtension extends Configurable, ConnectPlugin, Close
      * @return the configuration definition for this rest extension; never null
      */
     @Override
-    default ConfigDef config() { return new ConfigDef();}
+    default ConfigDef config() {
+        return new ConfigDef();
+    }
 }

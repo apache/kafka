@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.components.ConnectPlugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 
@@ -54,10 +53,6 @@ public interface Transformation<R extends ConnectRecord<R>> extends Configurable
      * @return the transformed record; may be null to indicate that the record should be dropped
      */
     R apply(R record);
-
-    /** Configuration specification for this transformation. */
-    @Override
-    ConfigDef config();
 
     /**
      * Get the version of this component.

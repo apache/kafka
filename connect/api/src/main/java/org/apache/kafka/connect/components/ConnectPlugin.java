@@ -28,7 +28,6 @@ import org.apache.kafka.common.config.ConfigDef;
  * <p>Components implementing this interface declare their version and configuration requirements
  * through a {@link ConfigDef} object, which describes the configuration properties
  * including their names, types, default values, validators, and documentation.
-
  *
  */
 public interface ConnectPlugin extends Versioned {
