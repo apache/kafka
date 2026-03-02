@@ -990,7 +990,7 @@ The size of a partition on disk, measured in bytes.
 <tr>  
 <td>
 
-Partition size as a percentage of retention limit
+Partition size as a percentage of retention bytes limit
 </td>  
 <td>
 
@@ -998,7 +998,7 @@ kafka.log:type=Log,name=RetentionSizeInPercent,topic=([-.\w]+),partition=([0-9]+
 </td>  
 <td>
 
-The partition size expressed as a percentage of the configured retention.bytes limit. Returns 0 for topics with tiered storage enabled (where the metric is reported by RemoteLogManager) or when retention is unlimited. May exceed 100% if retention cleanup is delayed.
+The partition size expressed as a percentage of the configured retention.bytes limit. Returns 0 for topics with tiered storage enabled (where the metric is reported by RemoteLogManager) or when retention bytes is unlimited. May exceed 100% if retention cleanup is delayed.
 </td> </tr>  
 <tr>  
 <td>
@@ -1853,7 +1853,7 @@ Retention Size In Percent
 </td>  
 <td>
 
-Total partition size (local + remote) as a percentage of the configured retention.bytes limit. Available for tiered storage topics. May exceed 100% if retention cleanup is delayed. Returns 0 when retention is unlimited.
+Total partition size (local + remote) as a percentage of the configured retention.bytes limit. Available for tiered storage topics. May exceed 100% if retention cleanup is delayed. Returns 0 when retention bytes is unlimited.
 </td>  
 <td>
 
@@ -1866,7 +1866,7 @@ Local Retention Size In Percent
 </td>  
 <td>
 
-Local log size as a percentage of the configured local.retention.bytes limit. Available for tiered storage topics. Helps operators monitor pressure on local disks independently of remote storage. May exceed 100% if retention cleanup is delayed. Returns 0 when local retention is unlimited.
+Local log size as a percentage of the configured local.retention.bytes limit. Available for tiered storage topics. Helps operators monitor pressure on local disks independently of remote storage. May exceed 100% if retention cleanup is delayed. Returns 0 when local retention bytes is unlimited.
 </td>  
 <td>
 
