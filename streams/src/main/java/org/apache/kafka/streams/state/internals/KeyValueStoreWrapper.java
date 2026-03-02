@@ -51,12 +51,10 @@ public class KeyValueStoreWrapper<K, V> implements StateStore {
     private TimestampedKeyValueStoreWithHeaders<K, V> headersStore = null;
     private VersionedKeyValueStore<K, V> versionedStore = null;
 
-    // same as either timestampedStore or versionedStore above. kept merely as a convenience
-    // to simplify implementation for methods which do not depend on store type.
     private StateStore store;
 
     public KeyValueStoreWrapper(final ProcessorContext<?, ?> context, final String storeName) {
-        // Try headers-aware store first, then regular timestamped store, then versioned store
+        // Try headers-aware store first, then versioned store
         try {
             // first try headers-aware timestamped store
             headersStore = context.getStateStore(storeName);
