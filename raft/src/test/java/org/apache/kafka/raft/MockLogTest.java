@@ -214,7 +214,11 @@ public class MockLogTest {
         assertEquals(1, log.endOffset().offset());
         assertEquals(currentEpoch, log.lastFetchedEpoch());
 
-        Records records = log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = log.read(
+                0,
+                Isolation.UNCOMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        ).records;
         for (RecordBatch batch : records.batches()) {
             assertTrue(batch.isControlBatch());
         }
@@ -249,7 +253,11 @@ public class MockLogTest {
         assertEquals(initialOffset + 1, log.endOffset().offset());
         assertEquals(3, log.lastFetchedEpoch());
 
-        Records records = log.read(5L, Isolation.UNCOMMITTED).records;
+        Records records = log.read(
+                5L,
+                Isolation.UNCOMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        ).records;
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
             extractRecords.add(record.value());
@@ -275,7 +283,11 @@ public class MockLogTest {
 
         appendAsLeader(List.of(recordOne, recordTwo), epoch);
 
-        Records records = log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = log.read(
+                0,
+                Isolation.UNCOMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        ).records;
 
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
@@ -297,11 +309,23 @@ public class MockLogTest {
         assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(30L, Isolation.UNCOMMITTED));
         assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(33L, Isolation.UNCOMMITTED));
         assertEquals(Optional.empty(), readOffsets(60L, Isolation.UNCOMMITTED));
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(61L, Isolation.UNCOMMITTED));
+        assertThrows(OffsetOutOfRangeException.class,
+                () -> log.read(
+                    61L,
+                            Isolation.UNCOMMITTED,
+                            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                )
+        );
 
         // Verify range after truncation
         log.truncateTo(20L);
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(21L, Isolation.UNCOMMITTED));
+        assertThrows(OffsetOutOfRangeException.class,
+                () -> log.read(
+                        21L,
+                        Isolation.UNCOMMITTED,
+                        KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                )
+        );
     }
 
     @Test
@@ -336,7 +360,13 @@ public class MockLogTest {
         assertEquals(Optional.of(new OffsetRange(30, 59L)), readOffsets(30L, Isolation.COMMITTED));
         assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(50L, Isolation.COMMITTED));
         assertEquals(Optional.empty(), readOffsets(60L, Isolation.COMMITTED));
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(61L, Isolation.COMMITTED));
+        assertThrows(OffsetOutOfRangeException.class,
+                () -> log.read(
+                        61L,
+                        Isolation.COMMITTED,
+                        KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                )
+        );
     }
 
     @Test
@@ -345,7 +375,11 @@ public class MockLogTest {
         appendBatch(5, 1);
         appendBatch(5, 1);
 
-        LogFetchInfo readInfo = log.read(5, Isolation.UNCOMMITTED);
+        LogFetchInfo readInfo = log.read(
+                5,
+                Isolation.UNCOMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        );
         assertEquals(5L, readInfo.startOffsetMetadata.offset());
         assertTrue(readInfo.startOffsetMetadata.metadata().isPresent());
 
@@ -359,7 +393,11 @@ public class MockLogTest {
                 Optional.of(new MockLog.MockOffsetMetadata(98230980L)))));
 
         // Ensure we can update the high watermark to the end offset
-        LogFetchInfo readFromEndInfo = log.read(15L, Isolation.UNCOMMITTED);
+        LogFetchInfo readFromEndInfo = log.read(
+                15L,
+                Isolation.UNCOMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        );
         assertEquals(15, readFromEndInfo.startOffsetMetadata.offset());
         assertTrue(readFromEndInfo.startOffsetMetadata.metadata().isPresent());
         log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
@@ -369,7 +407,11 @@ public class MockLogTest {
         log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
 
         // Check handling of a fetch from the middle of a batch
-        LogFetchInfo readFromMiddleInfo = log.read(16L, Isolation.UNCOMMITTED);
+        LogFetchInfo readFromMiddleInfo = log.read(
+                16L,
+                Isolation.UNCOMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        );
         assertEquals(readFromEndInfo.startOffsetMetadata, readFromMiddleInfo.startOffsetMetadata);
     }
 
@@ -484,11 +526,19 @@ public class MockLogTest {
 
         assertThrows(
             OffsetOutOfRangeException.class,
-            () -> log.read(log.startOffset() - 1, Isolation.UNCOMMITTED)
+            () -> log.read(
+                    log.startOffset() - 1,
+                    Isolation.UNCOMMITTED,
+                    KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            )
         );
         assertThrows(
             OffsetOutOfRangeException.class,
-            () -> log.read(log.endOffset().offset() + 1, Isolation.UNCOMMITTED)
+            () -> log.read(
+                    log.endOffset().offset() + 1,
+                    Isolation.UNCOMMITTED,
+                    KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            )
         );
     }
 
@@ -1002,7 +1052,11 @@ public class MockLogTest {
         while (foundRecord) {
             foundRecord = false;
 
-            Records records = log.read(currentStart, isolation).records;
+            Records records = log.read(
+                    currentStart,
+                    isolation,
+                    KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            ).records;
             for (Record record : records.records()) {
                 foundRecord = true;
 
@@ -1055,7 +1109,11 @@ public class MockLogTest {
 
         int currentOffset = 0;
         while (currentOffset < log.endOffset().offset()) {
-            Records records = log.read(currentOffset, Isolation.UNCOMMITTED).records;
+            Records records = log.read(
+                    currentOffset,
+                    Isolation.UNCOMMITTED,
+                    KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            ).records;
             List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
 
             assertFalse(batches.isEmpty());

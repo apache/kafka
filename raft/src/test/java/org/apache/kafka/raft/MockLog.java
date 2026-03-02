@@ -68,7 +68,6 @@ public class MockLog implements RaftLog {
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
     private long firstUnflushedOffset = 0;
     private boolean flushedSinceLastChecked = false;
-    private Optional<Integer> maybeExpectedMaxTotalRecordsSizeBytes = Optional.empty();
 
     public MockLog(
         TopicPartition topicPartition,
@@ -419,29 +418,9 @@ public class MockLog implements RaftLog {
         }
     }
 
-    public void setExpectedMaxTotalRecordsSizeBytes(int maxBytesReadFromLog) {
-        this.maybeExpectedMaxTotalRecordsSizeBytes = Optional.of(maxBytesReadFromLog);
-    }
-
-    private void maybeVerifyMaxBytesForLogRead(int actualSizeBytes) {
-        maybeExpectedMaxTotalRecordsSizeBytes.ifPresent(expectedSizeBytes -> {
-            if (actualSizeBytes != expectedSizeBytes) {
-                throw new IllegalStateException(
-                        String.format("Expected maxTotalRecordsSizeBytes %d but got %d (bytes)",
-                                expectedSizeBytes, actualSizeBytes));
-            }
-        });
-    }
-
-    @Override
-    public int defaultReadMaxBatchSizeBytes() {
-        return KafkaRaftClient.MAX_FETCH_SIZE_BYTES;
-    }
-
     @Override
     public LogFetchInfo read(long startOffset, Isolation isolation, int maxTotalBatchSizeBytes) {
         verifyOffsetInRange(startOffset);
-        maybeVerifyMaxBytesForLogRead(maxTotalBatchSizeBytes);
 
         long maxOffset = isolation == Isolation.COMMITTED ? highWatermark.offset() : endOffset().offset();
         if (startOffset >= maxOffset) {
@@ -449,7 +428,8 @@ public class MockLog implements RaftLog {
                 startOffset, metadataForOffset(startOffset)));
         }
 
-        ByteBuffer buffer = ByteBuffer.allocate(512);
+        int bufferSizeBytes = 512;
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSizeBytes);
         int batchCount = 0;
         LogOffsetMetadata batchStartOffset = null;
 
@@ -465,7 +445,11 @@ public class MockLog implements RaftLog {
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
-            if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset && !batch.entries.isEmpty()) {
+            //
+            if (batch.lastOffset() >= startOffset
+                    && batch.lastOffset() < maxOffset
+                    && !batch.entries.isEmpty()
+                    && (bufferSizeBytes - buffer.remaining()) < maxTotalBatchSizeBytes) {
                 buffer = batch.writeTo(buffer);
 
                 if (batchStartOffset == null) {
@@ -534,7 +518,11 @@ public class MockLog implements RaftLog {
             );
         }
 
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        long baseOffset = read(
+                snapshotId.offset(),
+                Isolation.COMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        ).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                 String.format(

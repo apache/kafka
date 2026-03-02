@@ -113,7 +113,7 @@ public class QuorumConfig {
     public static final int DEFAULT_QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES = 1048576;
 
     public static final String QUORUM_FETCH_SIZE_MAX_BYTES_CONFIG = QUORUM_PREFIX + "fetch.max.bytes";
-    public static final String QUORUM_FETCH_SIZE_MAX_BYTES_DOC = "Maximum amount of data to retrieve for each Fetch request. Always returns at least one record if a new one is available.";
+    public static final String QUORUM_FETCH_SIZE_MAX_BYTES_DOC = "Maximum amount of data to retrieve for each Fetch request. Always returns at least one batch even if it is greater than QUORUM_FETCH_SIZE_MAX_BYTES_CONFIG.";
     public static final int DEFAULT_QUORUM_FETCH_SIZE_MAX_BYTES = 1048576;
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
@@ -126,8 +126,8 @@ public class QuorumConfig {
             .define(QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS, atLeast(0), MEDIUM, QUORUM_REQUEST_TIMEOUT_MS_DOC)
             .define(QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, DEFAULT_QUORUM_RETRY_BACKOFF_MS, atLeast(0), LOW, QUORUM_RETRY_BACKOFF_MS_DOC)
             .define(QUORUM_AUTO_JOIN_ENABLE_CONFIG, BOOLEAN, DEFAULT_QUORUM_AUTO_JOIN_ENABLE, LOW, QUORUM_AUTO_JOIN_ENABLE_DOC)
-            .define(QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES, atLeast(0), LOW, QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES_DOC)
-            .define(QUORUM_FETCH_SIZE_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_SIZE_MAX_BYTES, atLeast(0), LOW, QUORUM_FETCH_SIZE_MAX_BYTES_DOC);
+            .define(QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_SNAPSHOT_SIZE_MAX_BYTES_DOC)
+            .define(QUORUM_FETCH_SIZE_MAX_BYTES_CONFIG, INT, DEFAULT_QUORUM_FETCH_SIZE_MAX_BYTES, atLeast(1), LOW, QUORUM_FETCH_SIZE_MAX_BYTES_DOC);
 
     private final List<String> voters;
     private final List<String> bootstrapServers;

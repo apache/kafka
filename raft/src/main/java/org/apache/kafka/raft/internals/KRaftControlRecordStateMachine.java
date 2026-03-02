@@ -24,6 +24,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.raft.Isolation;
+import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.RaftLog;
 import org.apache.kafka.raft.VoterSet;
@@ -233,7 +234,11 @@ public final class KRaftControlRecordStateMachine {
 
     private void maybeLoadLog() {
         while (log.endOffset().offset() > nextOffset) {
-            LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED, maxBatchSizeBytes);
+            LogFetchInfo info = log.read(
+                    nextOffset,
+                    Isolation.UNCOMMITTED,
+                    KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            );
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
                     info.records,
                     serde,

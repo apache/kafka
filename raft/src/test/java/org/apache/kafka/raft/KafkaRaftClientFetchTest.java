@@ -21,10 +21,11 @@ import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.internal.ArbitraryMemoryRecords;
-import org.apache.kafka.common.record.internal.InvalidMemoryRecordsProvider;
-import org.apache.kafka.common.record.internal.MemoryRecords;
-import org.apache.kafka.common.record.internal.SimpleRecord;
+import org.apache.kafka.common.record.ArbitraryMemoryRecords;
+import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import net.jqwik.api.AfterFailureMode;
@@ -44,6 +45,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public final class KafkaRaftClientFetchTest {
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -125,14 +127,20 @@ public final class KafkaRaftClientFetchTest {
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
         var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
         var localMaxSizeBytes = 1024;
-        var remoteMaxSizeBytes = 512;
+        // There are two batches with 3 records each. The first batch is at least larger than 1 byte.
+        // The behaviour is to always return 1 or more batches until we have gone larger than maxSizeBytes.
+        var remoteMaxSizeBytes = 1;
+        var batch1 = List.of("a", "a", "a");
+        var batch2 = List.of("b", "b", "b");
+        var batch3 = List.of("c", "c", "c");
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
                 localKey.id(),
                 localKey.directoryId().get()
         )
-                .appendToLog(epoch, List.of("a", "b", "c"))
-                .appendToLog(epoch, List.of("d", "e", "f"))
+                .appendToLog(epoch, batch1)
+                .appendToLog(epoch, batch2)
+                .appendToLog(epoch, batch3)
                 .withStartingVoters(
                         VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
                 )
@@ -143,10 +151,6 @@ public final class KafkaRaftClientFetchTest {
         context.unattachedToLeader();
         epoch = context.currentEpoch();
 
-        // The next read from MockLog will be intended for a fetch request.
-        // We wish to assert that it uses the value supplied from the fetch.
-        context.log.setExpectedMaxTotalRecordsSizeBytes(remoteMaxSizeBytes);
-
         // Send a fetch request with max bytes that are different from the configured value.
         FetchRequestData request = context.fetchRequest(epoch, remoteKey, 1L, epoch, 500);
         request.setMaxBytes(remoteMaxSizeBytes);
@@ -154,8 +158,13 @@ public final class KafkaRaftClientFetchTest {
 
         context.pollUntilResponse();
         FetchResponseData.PartitionData partitionData = context.assertSentFetchPartitionResponse();
-        // Hint: Exceptions which fail this test may be logged to standard output.
         assertEquals(Errors.NONE.code(), partitionData.errorCode());
+        MemoryRecords records = (MemoryRecords) FetchResponse.recordsOrFail(partitionData);
+        var iterator = records.batchIterator();
+        var firstBatch = iterator.next();
+        assertEquals(0, firstBatch.baseOffset());
+        assertEquals(3, firstBatch.nextOffset());
+        assertFalse(iterator.hasNext(), "maxSize=1 implies a single batch is retrieved");
     }
 
 

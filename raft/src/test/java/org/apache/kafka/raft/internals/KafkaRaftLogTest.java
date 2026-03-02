@@ -92,8 +92,7 @@ public class KafkaRaftLogTest {
             10 * 1000,
             100 * 1024,
             60 * 1000,
-            KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-            KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+            KafkaRaftClient.MAX_BATCH_SIZE_BYTES
     );
 
     private final MockTime mockTime = new MockTime();
@@ -722,8 +721,7 @@ public class KafkaRaftLogTest {
                 DEFAULT_METADATA_LOG_CONFIG.logSegmentMillis(),
                 DEFAULT_METADATA_LOG_CONFIG.retentionMaxBytes(),
                 DEFAULT_METADATA_LOG_CONFIG.retentionMillis(),
-                maxBatchSizeInBytes,
-                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+                maxBatchSizeInBytes
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -932,8 +930,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 256,
                 60 * 1000,
-                512,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                512
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -967,8 +964,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 1024,
                 60 * 1000,
-                100,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                100
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -999,8 +995,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 10240,
                 60 * 1000,
-                100,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                100
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -1047,8 +1042,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 10240,
                 60 * 1000,
-                200,
-                DEFAULT_METADATA_LOG_CONFIG.internalMaxFetchSizeInBytes()
+                200
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
 
@@ -1087,28 +1081,6 @@ public class KafkaRaftLogTest {
         );
     }
 
-    @Test
-    public void testReadRespectsDefaultInternalMaxFetchSize() throws IOException {
-        int defaultMaxToReadBytes = 1;
-        MetadataLogConfig config = createMetadataLogConfig(
-                10240,
-                10 * 1000,
-                10240,
-                60 * 1000,
-                128,
-                defaultMaxToReadBytes
-        );
-        KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
-        // Append twice to ensure we have 2 batches.
-        append(log, 2, 1);
-        append(log, 1, 1);
-
-        LogFetchInfo info = log.read(0, Isolation.UNCOMMITTED);
-
-        // There are 2 batches. The 1st has 2 records and will be larger than 1 Byte in size.
-        // read implementation will return at least 1 batch.
-        assertRecordBatches(info, 2, 2);
-    }
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3})
@@ -1120,8 +1092,7 @@ public class KafkaRaftLogTest {
                 10 * 1000,
                 10240,
                 60 * 1000,
-                magicMaxBatchSizeBytes,
-                1
+                magicMaxBatchSizeBytes
         );
         KafkaRaftLog log = buildMetadataLog(tempDir, mockTime, config);
         int recordsPerBatch = 5;
@@ -1130,29 +1101,29 @@ public class KafkaRaftLogTest {
         append(log, recordsPerBatch, 1);
         append(log, recordsPerBatch, 1);
 
-        LogFetchInfo info = log.read(0,
+        LogFetchInfo info = log.read(
+                0,
                 Isolation.UNCOMMITTED,
-                magicMaxBatchSizeBytes * expectedBatches);
-        assertRecordBatches(info, recordsPerBatch * expectedBatches, recordsPerBatch);
-
-    }
-
-    private static void assertRecordBatches(LogFetchInfo info, int numberExpected, int recordsPerBatch) {
+                magicMaxBatchSizeBytes * expectedBatches
+        );
         // Asserts that we have exactly B * R records. Further there must be B batches of SimpleRecords each with a value of
         // [0..R-1] converted to an utf-8 string with empty keys and headers.
         int count = 0;
         for (Record record : info.records.records()) {
             byte[] expectedValue = String.valueOf(count % recordsPerBatch).getBytes(StandardCharsets.UTF_8);
             SimpleRecord expected = new SimpleRecord(expectedValue);
-            SimpleRecord actual = new SimpleRecord(record.timestamp(),
-                        record.key(),
-                        record.value(),
-                        record.headers());
+            SimpleRecord actual = new SimpleRecord(
+                    record.timestamp(),
+                    record.key(),
+                    record.value(),
+                    record.headers()
+            );
 
             assertEquals(expected, actual);
             count += 1;
         }
-        assertEquals(numberExpected, count);
+        assertEquals(recordsPerBatch * expectedBatches, count);
+
     }
 
     private static MetadataLogConfig createMetadataLogConfig(
@@ -1160,8 +1131,7 @@ public class KafkaRaftLogTest {
             long logSegmentMillis,
             long retentionMaxBytes,
             long retentionMillis,
-            int internalMaxBatchSizeInBytes, //: Int = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-            int internalMaxFetchSizeInBytes //: Int = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+            int internalMaxBatchSizeInBytes
     ) {
         Map<String, ?> config = Map.of(
                 MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, internalLogSegmentBytes,
@@ -1169,9 +1139,8 @@ public class KafkaRaftLogTest {
                 MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG, retentionMaxBytes,
                 MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG, retentionMillis,
                 MetadataLogConfig.INTERNAL_METADATA_MAX_BATCH_SIZE_IN_BYTES_CONFIG, internalMaxBatchSizeInBytes,
-                MetadataLogConfig.INTERNAL_METADATA_MAX_FETCH_SIZE_IN_BYTES_CONFIG, internalMaxFetchSizeInBytes,
                 MetadataLogConfig.INTERNAL_METADATA_DELETE_DELAY_MILLIS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
-                );
+        );
         return new MetadataLogConfig(new AbstractConfig(MetadataLogConfig.CONFIG_DEF, config, false));
     }
 

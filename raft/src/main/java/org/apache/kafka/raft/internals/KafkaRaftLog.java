@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Isolation;
+import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.LogAppendInfo;
 import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.LogOffsetMetadata;
@@ -118,11 +119,6 @@ public class KafkaRaftLog implements RaftLog {
     }
 
     @Override
-    public int defaultReadMaxBatchSizeBytes() {
-        return config.internalMaxFetchSizeInBytes();
-    }
-
-    @Override
     public LogFetchInfo read(long startOffset, Isolation readIsolation, int maxTotalBatchSizeBytes) {
         FetchIsolation isolation = switch (readIsolation) {
             case COMMITTED -> FetchIsolation.HIGH_WATERMARK;
@@ -130,10 +126,12 @@ public class KafkaRaftLog implements RaftLog {
         };
 
         try {
-            FetchDataInfo fetchInfo = log.read(startOffset,
+            FetchDataInfo fetchInfo = log.read(
+                    startOffset,
                     maxTotalBatchSizeBytes,
                     isolation,
-                    true);
+                    true
+            );
             return new LogFetchInfo(
                     fetchInfo.records,
                     new LogOffsetMetadata(
@@ -367,7 +365,12 @@ public class KafkaRaftLog implements RaftLog {
           fetches from this offset, the returned batch will start at offset (X - M), and the
           follower will be unable to append it since (X - M) < (X).
          */
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        long baseOffset = read(
+                snapshotId.offset(),
+                Isolation.COMMITTED,
+                KafkaRaftClient.MAX_FETCH_SIZE_BYTES
+        ).startOffsetMetadata.offset();
+
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                     "Cannot create snapshot at offset (" + snapshotId.offset() + ") because it is not batch aligned. " +

@@ -434,7 +434,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // Re-read the expected offset in case the snapshot had to be reloaded
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < highWatermark) {
-                    LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
+                    LogFetchInfo readInfo = log.read(
+                            nextExpectedOffset,
+                            Isolation.COMMITTED,
+                            MAX_FETCH_SIZE_BYTES
+                    );
                     listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
                 }
             });
@@ -1517,8 +1521,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             requestMetadata.apiVersion(),
             replicaKey,
             fetchPartition,
-            currentTimeMs,
-            request.maxBytes()
+            request.maxBytes(),
+            currentTimeMs
         );
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
@@ -1588,8 +1592,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     requestMetadata.apiVersion(),
                     replicaKey,
                     fetchPartition,
-                    completionTimeMs,
-                    request.maxBytes()
+                    request.maxBytes(),
+                    completionTimeMs
                 );
             }
         });
@@ -1600,8 +1604,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         short apiVersion,
         ReplicaKey replicaKey,
         FetchRequestData.FetchPartition request,
-        long currentTimeMs,
-        int maxSizeBytes
+        int maxSizeBytes,
+        long currentTimeMs
     ) {
         try {
             Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.currentLeaderEpoch());

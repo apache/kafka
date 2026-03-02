@@ -58,22 +58,15 @@ public interface RaftLog extends AutoCloseable {
 
     /**
      * Read a set of records within a range of offsets.
-     * maxTotalBatchSizeBytes specifies a "soft" max for total byte size of the record batches to read.
+     *
+     * @param startOffsetInclusive Records later than this offset will be returned.
+     * @param isolation Whether to read committed (up to high watermark) or uncommitted data.
+     * @param maxTotalBatchSizeBytes Soft max for number of bytes to retrieve. Will stop returning batches once the
+     *                               size of previously returned batches exceeds maxTotalBatchSizeBytes
+     * @return List or records and start offset information wrapped in a LogFetchInfo
      */
     LogFetchInfo read(long startOffsetInclusive, Isolation isolation, int maxTotalBatchSizeBytes);
 
-    /**
-     * Configures a soft max for total size of bytes read for {@link #read(long, Isolation)}.
-     */
-    int defaultReadMaxBatchSizeBytes();
-
-    /**
-     * Read a set of records within a range of offsets. Implementors set a "soft" max for the number of bytes to read
-     * by implementing defaultLocalReadMaxRecordsSizeBytes.
-     */
-    default LogFetchInfo read(long startOffsetInclusive, Isolation isolation) {
-        return read(startOffsetInclusive, isolation, defaultReadMaxBatchSizeBytes());
-    }
 
     /**
      * Return the latest epoch. For an empty log, the latest epoch is defined
