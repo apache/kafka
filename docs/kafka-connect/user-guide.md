@@ -713,3 +713,104 @@ You should then verify that your manifests are correct by using the verification
 ## Security
 
 It's important to understand the security concerns inherent to Connect. First, Connect allows running custom plugins. These plugins can run arbitrary code, so you must trust them before installing them in your Connect clusters. By default, the REST API is unsecured and allows anyone that can access it to start and stop connectors. You should only directly expose the REST API to trusted users, otherwise it's easy to gain arbitrary code execution on Connect workers. By default, connectors can also override the configurations of the Kafka clients that Connect uses internally. Since Kafka 4.2.0, it's recommended to set `connector.client.config.override.policy` to `Allowlist`, this will be the default from Kafka 5.0.0, and explicitly only allow configurations that you need to override. Keep in mind that configurations that can load classes such as `sasl.jaas.config` or `sasl.login.class` should only be allowed if only trusted users can access the REST API as they, by design, enable executing code on the Connect worker.
+
+### ACL requirements
+
+The principal for each Connect worker requires the following ACLs:
+
+<table>
+<tr>
+<th>Operation</th>
+<th>Resource Type</th>
+<th>Resource Name</th>
+<th>Note</th>
+</tr>
+<tr><td>Read</td><td>Group</td><td>
+
+`group.id` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Read</td><td>Topic</td><td>
+
+`config.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`config.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>
+
+`config.storage.topic` of the Connect cluster
+</td><td>Only necessary if the config topic for Connect does not exist yet</td></tr>
+<tr><td>Read</td><td>Topic</td><td>
+
+`offset.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`offset.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>
+
+`offset.storage.topic` of the Connect cluster
+</td><td>Only necessary if the offsets topic for Connect does not exist yet</td></tr>
+<tr><td>Read</td><td>Topic</td><td>
+
+`status.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`status.storage.topic` of the Connect cluster
+</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>
+
+`status.storage.topic` of the Connect cluster
+</td><td>Only necessary if the status topic for Connect does not exist yet</td></tr>
+</table>
+
+To support Source connectors, the principal for each individual connector will require the following ACLs:
+
+<table>
+<tr>
+<th>Operation</th>
+<th>Resource Type</th>
+<th>Resource Name</th>
+<th>Note</th>
+</tr>
+<tr><td>Write</td><td>Topic</td><td>topic(s) used as the destination</td><td> </td></tr>
+<tr><td>Create</td><td>Topic</td><td>topic(s) used as the destination</td><td>
+
+Only necessary if `topic.creation.enable` is `true` and the topic(s) do not exist yet
+</td></tr>
+</table>
+
+To support Sink connectors, the principal for each individual connector will require the following ACLs:
+
+<table>
+<tr>
+<th>Operation</th>
+<th>Resource Type</th>
+<th>Resource Name</th>
+<th>Note</th>
+</tr>
+<tr><td>Read</td><td>Group</td><td>
+
+`connect-${connector}` where `${connector}` is the name of the connector,
+or the value of `consumer.group.id` if present in the Connect configuration,
+or the value of `consumer.overrides.group.id` if present in the Connector configuration
+</td><td> </td></tr>
+<tr><td>Read</td><td>Topic</td><td>sink topic(s) that the connector will consume from</td><td>
+
+These will be identified by the `topics` or `topics.regex` option of the connector
+</td></tr>
+<tr><td>Write</td><td>Topic</td><td>
+
+`errors.deadletterqueue.topic.name` of the connector
+</td><td>
+
+Only necessary if `errors.deadletterqueue.topic.name` is set to a non-empty value
+</td></tr>
+</table>
+
+Some connectors make additional use of Kafka topics that is not managed by the Kafka Connect framework (for example, change data capture connectors may use additional topics to store schema history). Refer to Connector documentation for details of any additional ACLs that are required. These can be added to the principal for the individual connector.
+
+Additional ACLs are required if exactly-once support is enabled. These are detailed in [Exactly-once support](#exactly-once-support).
