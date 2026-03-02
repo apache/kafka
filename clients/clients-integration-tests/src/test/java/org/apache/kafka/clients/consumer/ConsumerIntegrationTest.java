@@ -436,7 +436,6 @@ public class ConsumerIntegrationTest {
             // Verify that tp0 offset was committed
             var offsets = admin.listConsumerGroupOffsets(groupId)
                 .partitionsToOffsetAndMetadata().get();
-            System.out.printf("offsets: %s\n", offsets);
             assertTrue(offsets.containsKey(tp0) && offsets.get(tp0) != null,
                 "tp0 offset should have been auto-committed on reassignment, but no committed offset found. ");
         }
