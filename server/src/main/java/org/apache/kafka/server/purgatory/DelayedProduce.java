@@ -201,4 +201,12 @@ public class DelayedProduce extends DelayedOperation {
                         Map.of("topic", key.topic(), "partition", String.valueOf(key.partition())))
         ).mark();
     }
+
+    public static void removePartitionMetrics(TopicPartition partition) {
+        if (PARTITION_EXPIRATION_METERS.remove(partition) != null) {
+            METRICS_GROUP.removeMetric("ExpiresPerSec",
+                    Map.of("topic", partition.topic(),
+                            "partition", String.valueOf(partition.partition())));
+        }
+    }
 }
