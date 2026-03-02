@@ -598,6 +598,9 @@ org.apache.kafka.storage.internals.log.UnifiedLogTest:
 - testLogDeletionAfterClose
 - testLogDeletionAfterDeleteRecords
 - testOffsetFromProducerSnapshotFile
+- testRetentionSizeInPercentMetric
+- testRetentionSizeInPercentMetricUpdatedOnDeletionError
+- testRetentionSizeInPercentWithInfiniteRetention
 org.apache.kafka.storage.internals.log.VerificationGuardTest:
 - testEqualsAndHashCode
 - testVerify
