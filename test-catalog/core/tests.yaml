@@ -1755,6 +1755,9 @@ kafka.server.DelayedFetchTest:
 - testDivergingEpoch
 - testFetchWithFencedEpoch
 - testNotLeaderOrFollower
+kafka.server.DelayedProduceTest:
+- testRemovePartitionMetrics
+- testRemovePartitionMetricsForNonExistentPartition
 kafka.server.DelegationTokenRequestsOnPlainTextTest:
 - testDelegationTokenRequests
 kafka.server.DelegationTokenRequestsTest:
