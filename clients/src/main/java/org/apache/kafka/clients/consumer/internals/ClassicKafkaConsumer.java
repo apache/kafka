@@ -596,7 +596,6 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (partitions == null) {
                 throw new IllegalArgumentException("Topic partition collection to assign to cannot be null");
             } else if (partitions.isEmpty()) {
-                // FIXME: i think this should commmit autocommitoffset
                 this.unsubscribe();
             } else {
                 for (TopicPartition tp : partitions) {
