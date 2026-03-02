@@ -1965,7 +1965,7 @@ public class UnifiedLog implements AutoCloseable {
      * not deletion is enabled, delete any local log segments that are before the log start offset
      */
     public int deleteOldSegments() throws IOException {
-        int deletedSegments = 0;
+        int deletedSegments;
         try {
             if (config().delete) {
                 deletedSegments = deleteLogStartOffsetBreachedSegments() +
@@ -1986,13 +1986,13 @@ public class UnifiedLog implements AutoCloseable {
                     deletedSegments = deleteLogStartOffsetBreachedSegments();
                 }
             }
-            return deletedSegments;
         } finally {
             // Calculate retentionSizeInPercent in finally block to ensure the metric is updated
             // even when log deletion encounters errors. This also saves CPU cycles by only
             // calculating when the log-cleaner thread runs.
             retentionSizeInPercentValue.set(calculateRetentionSizeInPercent());
         }
+        return deletedSegments;
     }
 
     public interface DeletionCondition {

@@ -56,7 +56,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
@@ -776,8 +775,11 @@ public class UnifiedLogTest {
         // Remote storage disabled (remoteLogCopyDisable is ignored): metric should be calculated (100%)
         "false, true, 100"
     })
-    public void testRetentionSizeInPercentMetric(boolean remoteLogStorageEnable, 
-        boolean remoteLogCopyDisable, int expectedSizeInPercent) throws IOException {
+    public void testRetentionSizeInPercentMetric(
+            boolean remoteLogStorageEnable,
+            boolean remoteLogCopyDisable,
+            int expectedSizeInPercent
+    ) throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         int recordSize = records.get().sizeInBytes();
         LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
