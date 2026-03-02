@@ -56,6 +56,8 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
@@ -845,11 +847,11 @@ public class UnifiedLogTest {
 
     /**
      * Test that verifies the RetentionSizeInPercent metric is always updated in the finally block
-     * of deleteOldSegments(). This ensures the metric is calculated even when log deletion
-     * encounters errors. The finally block guarantees metric updates regardless of success or failure.
+     * of deleteOldSegments(), even when an exception is thrown during deletion.
+     * This ensures the metric is calculated even when log deletion encounters errors.
      */
     @Test
-    public void testRetentionSizeInPercentMetricAlwaysUpdatedInFinallyBlock() throws IOException {
+    public void testRetentionSizeInPercentMetricUpdatedOnDeletionError() throws IOException {
         Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
         int recordSize = records.get().sizeInBytes();
 
@@ -867,44 +869,37 @@ public class UnifiedLogTest {
         for (int i = 0; i < 15; i++) {
             log.appendAsLeader(records.get(), 0);
         }
-        assertEquals(3, log.numberOfSegments(), "Should have 3 segments before deletion");
+        assertEquals(3, log.numberOfSegments(), "Should have 3 segments");
 
         log.updateHighWatermark(log.logEndOffset());
 
-        // Before deleteOldSegments: Total size = 15 * recordSize, retention = 10 * recordSize
-        // Percentage = (15 * 100) / 10 = 150%
-        assertEquals(150, log.calculateRetentionSizeInPercent());
-
-        // Metric should not be exposed via JMX until deleteOldSegments() runs
-        // (since calculateRetentionSizeInPercent is only called internally via deleteOldSegments)
-
-        // Call deleteOldSegments - the finally block should always update the metric
+        // First call to initialize the metric normally
         log.deleteOldSegments();
+        assertEquals(100, yammerMetricValue(metricName), "Metric should be 100% after initial deletion");
 
-        // After deletion: 1 segment deleted, remaining = 2 segments = 10 records
-        // Percentage = (10 * 100) / 10 = 100%
-        assertEquals(100, yammerMetricValue(metricName),
-                "Metric must be updated via finally block after deleteOldSegments");
-        assertEquals(2, log.numberOfSegments(), "Should have 2 segments after deletion");
-
-        // Append more data to increase the percentage again
+        // Add more data to change the metric value
         for (int i = 0; i < 10; i++) {
             log.appendAsLeader(records.get(), 0);
         }
         log.updateHighWatermark(log.logEndOffset());
 
-        // Before second deleteOldSegments call, metric should still show old value (100)
-        // because we haven't called deleteOldSegments yet
-        assertEquals(100, yammerMetricValue(metricName));
+        // Create a spy and make config() throw on first call, but work normally on subsequent calls
+        // This simulates an error in the try block while allowing the finally block to succeed
+        // The config() method is called in both the try block and calculateRetentionSizeInPercent()
+        UnifiedLog spyLog = spy(log);
+        doThrow(new RuntimeException("Simulated error during deletion"))
+                .doCallRealMethod()  // Allow subsequent calls to work (for finally block)
+                .when(spyLog).config();
 
-        // Call deleteOldSegments again - finally block should update metric with new value
-        log.deleteOldSegments();
+        // Call deleteOldSegments on the spy - it should throw due to config() error
+        // But the finally block should still execute and update the metric
+        assertThrows(RuntimeException.class, spyLog::deleteOldSegments);
 
-        // After second deletion, verify metric is updated
-        // The metric value depends on how many segments were deleted
-        int updatedMetricValue = (Integer) yammerMetricValue(metricName);
-        assertTrue(updatedMetricValue > 0,
-                "Metric should be recalculated in finally block on every deleteOldSegments call");
+        // Verify the metric was still updated in the finally block despite the exception
+        // After adding 10 more records (2 more segments), total = 4 segments = 20 records
+        // Percentage = (20 * 100) / 10 = 200%
+        assertEquals(200, yammerMetricValue(metricName),
+                "Metric should be updated in finally block even when exception occurs");
     }
 
     @SuppressWarnings("unchecked")
