@@ -37,7 +37,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * ConsumerGroupMember contains all the information related to a member
@@ -193,15 +192,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
             return this;
         }
 
-        public Builder setAssignedPartitions(Map<Uuid, Set<Integer>> assignedPartitions, int assignmentEpoch) {
-            this.assignedPartitions = assignedPartitions.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> e.getValue().stream().collect(Collectors.toMap(p -> p, p -> assignmentEpoch))
-                ));
-            return this;
-        }
-
         public Builder setAssignedPartitions(Map<Uuid, Map<Integer, Integer>> assignedPartitions) {
             this.assignedPartitions = assignedPartitions;
             return this;
@@ -302,21 +292,22 @@ public class ConsumerGroupMember extends ModernGroupMember {
     private final String serverAssignorName;
 
     /**
-     * The classic member metadata if the consumer uses the classic protocol.
-     */
-    private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
-
-    /**
-     * The epoch at which each partition was assigned to this member.
-     * Map: topicId -> partitionId -> assignmentEpoch
+     * The partitions assigned to this member and their assignment epochs.
+     * A map of topic ids to partitions to assignment epochs.
      */
     private final Map<Uuid, Map<Integer, Integer>> assignedPartitions;
 
     /**
-     * The epoch at which each partition pending revocation was assigned.
-     * Map: topicId -> partitionId -> assignmentEpoch
+     * The partitions awaiting revocation from this member and their assignment epochs.
+     * A map of topic ids to partitions to assignment epochs.
      */
     private final Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocation;
+
+    /**
+     * The classic member metadata if the consumer uses the classic protocol.
+     */
+    private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
+
 
     private ConsumerGroupMember(
         String memberId,
@@ -376,14 +367,15 @@ public class ConsumerGroupMember extends ModernGroupMember {
     }
 
     /**
-     * @return The epoch-annotated assigned partitions map.
+     * @return The partitions assigned to this member and their assignment epochs.
      */
     public Map<Uuid, Map<Integer, Integer>> assignedPartitions() {
         return assignedPartitions;
     }
 
     /**
-     * @return The epoch-annotated pending revocation partitions map.
+     * @return The partitions awaiting revocation from this member and their assignment epochs.
+     *
      */
     public Map<Uuid, Map<Integer, Integer>> partitionsPendingRevocation() {
         return partitionsPendingRevocation;
@@ -400,7 +392,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
     }
 
     /**
-     * Gets the assignment epoch for a specific partition.
+     * Gets the assignment epoch for an assigned partition.
      *
      * @param topicId     The topic UUID.
      * @param partitionId The partition index.
@@ -487,9 +479,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromEpochMap(assignedPartitions, image)))
+                .setTopicPartitions(topicPartitionsFromAssignmentWithoutEpochs(
+                    Utils.toAssignmentWithoutEpochs(assignedPartitions), image)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromPartitionSet(
+                .setTopicPartitions(topicPartitionsFromAssignmentWithoutEpochs(
                     targetAssignment != null ? targetAssignment.partitions() : Map.of(),
                     image
                 )))
@@ -502,21 +495,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setMemberType(useClassicProtocol() ? (byte) 0 : (byte) 1);
     }
 
-    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromEpochMap(
-        Map<Uuid, Map<Integer, Integer>> partitions,
-        CoordinatorMetadataImage image
-    ) {
-        List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
-        partitions.forEach((topicId, partitionEpochMap) -> {
-            image.topicMetadata(topicId).ifPresent(topicMetadata -> topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
-                .setTopicId(topicId)
-                .setTopicName(topicMetadata.name())
-                .setPartitions(new ArrayList<>(partitionEpochMap.keySet()))));
-        });
-        return topicPartitions;
-    }
-
-    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromPartitionSet(
+    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromAssignmentWithoutEpochs(
         Map<Uuid, Set<Integer>> partitions,
         CoordinatorMetadataImage image
     ) {

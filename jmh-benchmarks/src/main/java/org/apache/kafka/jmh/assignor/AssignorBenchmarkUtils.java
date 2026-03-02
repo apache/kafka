@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.KRaftCoordinatorMetadataImage;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -131,16 +132,12 @@ public class AssignorBenchmarkUtils {
         for (Map.Entry<String, ConsumerGroupMember> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
             ConsumerGroupMember member = memberEntry.getValue();
-            Map<Uuid, Set<Integer>> partitions = new HashMap<>();
-            member.assignedPartitions().forEach((topicId, partitionEpochMap) ->
-                partitions.put(topicId, partitionEpochMap.keySet())
-            );
 
             memberSpecs.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.ofNullable(member.rackId()),
                 Optional.ofNullable(member.instanceId()),
                 new TopicIds(member.subscribedTopicNames(), topicResolver),
-                new Assignment(partitions)
+                new Assignment(Utils.toAssignmentWithoutEpochs(member.assignedPartitions()))
             ));
         }
 

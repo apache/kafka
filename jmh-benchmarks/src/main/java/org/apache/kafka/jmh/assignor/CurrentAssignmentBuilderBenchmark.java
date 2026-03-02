@@ -102,8 +102,8 @@ public class CurrentAssignmentBuilderBenchmark {
 
         ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder("member")
             .setState(MemberState.STABLE)
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(10)
+            .setMemberEpoch(memberEpoch)
+            .setPreviousMemberEpoch(memberEpoch)
             .setSubscribedTopicNames(topicNames)
             .setAssignedPartitions(assignedPartitions);
 
