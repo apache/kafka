@@ -187,6 +187,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // initialize the default rocksdb options
 
         final DBOptions dbOptions = new DBOptions();
+        // Defaults to true. Supports offset managements: KAFKA-20212
+        dbOptions.setAtomicFlush(true);
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
 
@@ -207,8 +209,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         userSpecifiedOptions.setCreateIfMissing(true);
         userSpecifiedOptions.setErrorIfExists(false);
         userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
-        // Supports offset managements: KAFKA-20212
-        userSpecifiedOptions.setAtomicFlush(true);
         // this is the recommended way to increase parallelism in RocksDb
         // note that the current implementation of setIncreaseParallelism affects the number
         // of compaction threads but not flush threads (the latter remains one). Also,
