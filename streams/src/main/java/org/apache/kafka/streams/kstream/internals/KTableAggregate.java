@@ -27,13 +27,13 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import java.util.Collections;
 import java.util.Set;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
 import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
@@ -87,7 +87,7 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store.store(),
                 context,
-                new TimestampedCacheFlushListener<>(context),
+                new TimestampedCacheFlushListenerWithHeaders<>(context),
                 sendOldValues);
         }
 
@@ -101,7 +101,7 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");
             }
 
-            final ValueAndTimestamp<VAgg> oldAggAndTimestamp = store.get(record.key());
+            final ValueTimestampHeaders<VAgg> oldAggAndTimestamp = store.get(record.key());
             final VAgg oldAgg = getValueOrNull(oldAggAndTimestamp);
             final VAgg intermediateAgg;
             long newTimestamp = record.timestamp();
@@ -133,7 +133,7 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
             }
 
             // update the store with the new value
-            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp);
+            final long putReturnCode = store.put(record.key(), newAgg, newTimestamp, record.headers());
             // if not put to store, do not forward downstream either
             if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                 tupleForwarder.maybeForward(

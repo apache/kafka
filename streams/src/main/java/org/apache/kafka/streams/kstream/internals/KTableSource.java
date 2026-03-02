@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import org.slf4j.Logger;
@@ -138,7 +138,7 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
             }
 
             if (queryableName != null) {
-                final ValueAndTimestamp<VIn> oldValueAndTimestamp = store.get(record.key());
+                final ValueTimestampHeaders<VIn> oldValueAndTimestamp = store.get(record.key());
                 final VIn oldValue;
                 if (oldValueAndTimestamp != null) {
                     oldValue = oldValueAndTimestamp.value();

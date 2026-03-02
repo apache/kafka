@@ -125,7 +125,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store.store(),
                     context,
-                    new TimestampedCacheFlushListener<>(context),
+                    new TimestampedCacheFlushListenerWithHeaders<>(context),
                     sendOldValues);
             }
         }
@@ -133,7 +133,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         @Override
         public void process(final Record<K, Change<V>> record) {
             if (queryableName != null) {
-                final long putReturnCode = store.put(record.key(), record.value().newValue, record.timestamp());
+                final long putReturnCode = store.put(record.key(), record.value().newValue, record.timestamp(), record.headers());
                 // if not put to store, do not forward downstream either
                 if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
                     tupleForwarder.maybeForward(record.withValue(new Change<>(record.value().newValue, record.value().oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));

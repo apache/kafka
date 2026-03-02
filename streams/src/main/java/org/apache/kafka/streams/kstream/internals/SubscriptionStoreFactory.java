@@ -1,4 +1,3 @@
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
@@ -49,7 +48,7 @@ public class SubscriptionStoreFactory<K> extends AbstractConfigurableStoreFactor
     public StoreBuilder<?> builder() {
         StoreBuilder<?> builder;
         final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
-        builder = Stores.timestampedKeyValueStoreBuilder(
+        builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
             dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name, storeFormat)),
             new Serdes.BytesSerde(),
             subscriptionWrapperSerde

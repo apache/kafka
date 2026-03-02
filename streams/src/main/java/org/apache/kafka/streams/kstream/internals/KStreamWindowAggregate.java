@@ -32,8 +32,9 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -210,7 +211,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
     }
 
     private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<KIn>, VAgg> {
-        private TimestampedWindowStore<KIn, VAgg> windowStore;
+        private TimestampedWindowStoreWithHeaders<KIn, VAgg> windowStore;
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
@@ -219,7 +220,7 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
         @SuppressWarnings("unchecked")
         @Override
-        public ValueAndTimestamp<VAgg> get(final Windowed<KIn> windowedKey) {
+        public ValueTimestampHeaders<VAgg> get(final Windowed<KIn> windowedKey) {
             final KIn key = windowedKey.key();
             final W window = (W) windowedKey.window();
             return windowStore.fetch(key, window.start());

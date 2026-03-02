@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
@@ -39,7 +40,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -389,10 +390,11 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         @Override
-        public ValueAndTimestamp<VAgg> get(final Windowed<KIn> key) {
-            return ValueAndTimestamp.make(
+        public ValueTimestampHeaders<VAgg> get(final Windowed<KIn> key) {
+            return ValueTimestampHeaders.make(
                 store.fetchSession(key.key(), key.window().start(), key.window().end()),
-                key.window().end());
+                key.window().end(),
+                new RecordHeaders());
         }
 
         @Override

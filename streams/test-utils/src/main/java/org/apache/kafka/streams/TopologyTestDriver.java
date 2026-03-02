@@ -997,6 +997,10 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+            log.warn("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStoreWithHeaders.");
+            return new KeyValueStoreFacadeWithHeaders<>((TimestampedKeyValueStoreWithHeaders<K, V>) store);
+        }
         if (store instanceof TimestampedKeyValueStore) {
             log.warn("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStore.");
             return new KeyValueStoreFacade<>((TimestampedKeyValueStore<K, V>) store);
@@ -1025,6 +1029,9 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("unchecked")
     public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedKeyValueStoreWithHeaders) {
+            return new TimestampedKeyValueStoreFacadeForHeaders<>((TimestampedKeyValueStoreWithHeaders<K, V>) store);
+        }
         return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
     }
 
@@ -1300,6 +1307,268 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public Position getPosition() {
             return inner.getPosition();
+        }
+    }
+
+    static class KeyValueStoreFacadeWithHeaders<K, V> implements KeyValueStore<K, V> {
+        private final TimestampedKeyValueStoreWithHeaders<K, V> inner;
+
+        public KeyValueStoreFacadeWithHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public V get(final K key) {
+            return ValueTimestampHeaders.getValueOrNull(inner.get(key));
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @Override
+        public void put(final K key, final V value) {
+            inner.put(key, ValueTimestampHeaders.make(value, ConsumerRecord.NO_TIMESTAMP, null));
+        }
+
+        @Override
+        public V putIfAbsent(final K key, final V value) {
+            return ValueTimestampHeaders.getValueOrNull(inner.putIfAbsent(key, ValueTimestampHeaders.make(value, ConsumerRecord.NO_TIMESTAMP, null)));
+        }
+
+        @Override
+        public void putAll(final List<KeyValue<K, V>> entries) {
+            for (final KeyValue<K, V> entry : entries) {
+                inner.put(entry.key, ValueTimestampHeaders.make(entry.value, ConsumerRecord.NO_TIMESTAMP, null));
+            }
+        }
+
+        @Override
+        public V delete(final K key) {
+            return ValueTimestampHeaders.getValueOrNull(inner.delete(key));
+        }
+
+        @Override
+        public KeyValueIterator<K, V> range(final K from, final K to) {
+            return new KeyValueIteratorFacadeWithHeaders<>(inner.range(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseRange(final K from, final K to) {
+            return new KeyValueIteratorFacadeWithHeaders<>(inner.reverseRange(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<K, V> all() {
+            return new KeyValueIteratorFacadeWithHeaders<>(inner.all());
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseAll() {
+            return new KeyValueIteratorFacadeWithHeaders<>(inner.reverseAll());
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
+            return new KeyValueIteratorFacadeWithHeaders<>(inner.prefixScan(prefix, prefixKeySerializer));
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return inner.approximateNumEntries();
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+    }
+
+    static class KeyValueIteratorFacadeWithHeaders<K, V> implements KeyValueIterator<K, V> {
+        private final KeyValueIterator<K, ValueTimestampHeaders<V>> innerIterator;
+
+        public KeyValueIteratorFacadeWithHeaders(final KeyValueIterator<K, ValueTimestampHeaders<V>> iterator) {
+            innerIterator = iterator;
+        }
+
+        @Override
+        public void close() {
+            innerIterator.close();
+        }
+
+        @Override
+        public K peekNextKey() {
+            return innerIterator.peekNextKey();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return innerIterator.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, V> next() {
+            final KeyValue<K, ValueTimestampHeaders<V>> next = innerIterator.next();
+            return KeyValue.pair(next.key, ValueTimestampHeaders.getValueOrNull(next.value));
+        }
+    }
+
+    static class TimestampedKeyValueStoreFacadeForHeaders<K, V> implements KeyValueStore<K, ValueAndTimestamp<V>> {
+        private final TimestampedKeyValueStoreWithHeaders<K, V> inner;
+
+        public TimestampedKeyValueStoreFacadeForHeaders(final TimestampedKeyValueStoreWithHeaders<K, V> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public ValueAndTimestamp<V> get(final K key) {
+            final ValueTimestampHeaders<V> vth = inner.get(key);
+            return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @Override
+        public void put(final K key, final ValueAndTimestamp<V> value) {
+            inner.put(key, ValueTimestampHeaders.make(value.value(), value.timestamp(), null));
+        }
+
+        @Override
+        public ValueAndTimestamp<V> putIfAbsent(final K key, final ValueAndTimestamp<V> value) {
+            final ValueTimestampHeaders<V> result = inner.putIfAbsent(key, ValueTimestampHeaders.make(value.value(), value.timestamp(), null));
+            return result == null ? null : ValueAndTimestamp.make(result.value(), result.timestamp());
+        }
+
+        @Override
+        public void putAll(final List<KeyValue<K, ValueAndTimestamp<V>>> entries) {
+            for (final KeyValue<K, ValueAndTimestamp<V>> entry : entries) {
+                inner.put(entry.key, ValueTimestampHeaders.make(entry.value.value(), entry.value.timestamp(), null));
+            }
+        }
+
+        @Override
+        public ValueAndTimestamp<V> delete(final K key) {
+            final ValueTimestampHeaders<V> result = inner.delete(key);
+            return result == null ? null : ValueAndTimestamp.make(result.value(), result.timestamp());
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from, final K to) {
+            return new TimestampedKeyValueIteratorFacadeForHeaders<>(inner.range(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> reverseRange(final K from, final K to) {
+            return new TimestampedKeyValueIteratorFacadeForHeaders<>(inner.reverseRange(from, to));
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> all() {
+            return new TimestampedKeyValueIteratorFacadeForHeaders<>(inner.all());
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> reverseAll() {
+            return new TimestampedKeyValueIteratorFacadeForHeaders<>(inner.reverseAll());
+        }
+
+        @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, ValueAndTimestamp<V>> prefixScan(final P prefix, final PS prefixKeySerializer) {
+            return new TimestampedKeyValueIteratorFacadeForHeaders<>(inner.prefixScan(prefix, prefixKeySerializer));
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return inner.approximateNumEntries();
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+    }
+
+    static class TimestampedKeyValueIteratorFacadeForHeaders<K, V> implements KeyValueIterator<K, ValueAndTimestamp<V>> {
+        private final KeyValueIterator<K, ValueTimestampHeaders<V>> innerIterator;
+
+        public TimestampedKeyValueIteratorFacadeForHeaders(final KeyValueIterator<K, ValueTimestampHeaders<V>> iterator) {
+            innerIterator = iterator;
+        }
+
+        @Override
+        public void close() {
+            innerIterator.close();
+        }
+
+        @Override
+        public K peekNextKey() {
+            return innerIterator.peekNextKey();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return innerIterator.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, ValueAndTimestamp<V>> next() {
+            final KeyValue<K, ValueTimestampHeaders<V>> next = innerIterator.next();
+            final ValueTimestampHeaders<V> vth = next.value;
+            return KeyValue.pair(next.key, vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp()));
         }
     }
 

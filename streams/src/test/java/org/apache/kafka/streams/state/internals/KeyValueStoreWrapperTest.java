@@ -25,8 +25,8 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 
@@ -54,11 +54,11 @@ public class KeyValueStoreWrapperTest {
 
     private static final String STORE_NAME = "kvStore";
     private static final String KEY = "k";
-    private static final ValueAndTimestamp<String> VALUE_AND_TIMESTAMP
-        = ValueAndTimestamp.make("v", 8L);
+    private static final ValueTimestampHeaders<String> VALUE_TIMESTAMP_HEADERS
+        = ValueTimestampHeaders.make("v", 8L, null);
 
     @Mock
-    private TimestampedKeyValueStore<String, String> timestampedStore;
+    private TimestampedKeyValueStoreWithHeaders<String, String> headersStore;
     @Mock
     private VersionedKeyValueStore<String, String> versionedStore;
     @Mock
@@ -77,18 +77,18 @@ public class KeyValueStoreWrapperTest {
     private KeyValueStoreWrapper<String, String> wrapper;
 
     @Test
-    public void shouldThrowOnNonTimestampedOrVersionedStore() {
+    public void shouldThrowOnNonHeadersOrVersionedStore() {
         when(context.getStateStore(STORE_NAME)).thenReturn(mock(KeyValueStore.class));
 
         assertThrows(InvalidStateStoreException.class, () -> new KeyValueStoreWrapper<>(context, STORE_NAME));
     }
 
     @Test
-    public void shouldGetFromTimestampedStore() {
-        givenWrapperWithTimestampedStore();
-        when(timestampedStore.get(KEY)).thenReturn(VALUE_AND_TIMESTAMP);
+    public void shouldGetFromHeadersStore() {
+        givenWrapperWithHeadersStore();
+        when(headersStore.get(KEY)).thenReturn(VALUE_TIMESTAMP_HEADERS);
 
-        assertThat(wrapper.get(KEY), equalTo(VALUE_AND_TIMESTAMP));
+        assertThat(wrapper.get(KEY), equalTo(VALUE_TIMESTAMP_HEADERS));
     }
 
     @Test
@@ -96,17 +96,17 @@ public class KeyValueStoreWrapperTest {
         givenWrapperWithVersionedStore();
         when(versionedStore.get(KEY)).thenReturn(
             new VersionedRecord<>(
-                VALUE_AND_TIMESTAMP.value(),
-                VALUE_AND_TIMESTAMP.timestamp())
+                VALUE_TIMESTAMP_HEADERS.value(),
+                VALUE_TIMESTAMP_HEADERS.timestamp())
         );
 
-        assertThat(wrapper.get(KEY), equalTo(VALUE_AND_TIMESTAMP));
+        assertThat(wrapper.get(KEY), equalTo(VALUE_TIMESTAMP_HEADERS));
     }
 
     @Test
-    public void shouldGetNullFromTimestampedStore() {
-        givenWrapperWithTimestampedStore();
-        when(timestampedStore.get(KEY)).thenReturn(null);
+    public void shouldGetNullFromHeadersStore() {
+        givenWrapperWithHeadersStore();
+        when(headersStore.get(KEY)).thenReturn(null);
 
         assertThat(wrapper.get(KEY), nullValue());
     }
@@ -120,50 +120,50 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldPutToTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldPutToHeadersStore() {
+        givenWrapperWithHeadersStore();
 
-        final long putReturnCode = wrapper.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, VALUE_TIMESTAMP_HEADERS.value(), VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
         assertThat(putReturnCode, equalTo(PUT_RETURN_CODE_IS_LATEST));
-        verify(timestampedStore).put(KEY, VALUE_AND_TIMESTAMP);
+        verify(headersStore).put(KEY, VALUE_TIMESTAMP_HEADERS);
     }
 
     @Test
     public void shouldPutToVersionedStore() {
         givenWrapperWithVersionedStore();
-        when(versionedStore.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp())).thenReturn(12L);
+        when(versionedStore.put(KEY, VALUE_TIMESTAMP_HEADERS.value(), VALUE_TIMESTAMP_HEADERS.timestamp())).thenReturn(12L);
 
-        final long putReturnCode = wrapper.put(KEY, VALUE_AND_TIMESTAMP.value(), VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, VALUE_TIMESTAMP_HEADERS.value(), VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
         assertThat(putReturnCode, equalTo(12L));
     }
 
     @Test
-    public void shouldPutNullToTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldPutNullToHeadersStore() {
+        givenWrapperWithHeadersStore();
 
-        final long putReturnCode = wrapper.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, null, VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
         assertThat(putReturnCode, equalTo(PUT_RETURN_CODE_IS_LATEST));
-        verify(timestampedStore).put(KEY, null);
+        verify(headersStore).put(KEY, null);
     }
 
     @Test
     public void shouldPutNullToVersionedStore() {
         givenWrapperWithVersionedStore();
-        when(versionedStore.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp())).thenReturn(12L);
+        when(versionedStore.put(KEY, null, VALUE_TIMESTAMP_HEADERS.timestamp())).thenReturn(12L);
 
-        final long putReturnCode = wrapper.put(KEY, null, VALUE_AND_TIMESTAMP.timestamp());
+        final long putReturnCode = wrapper.put(KEY, null, VALUE_TIMESTAMP_HEADERS.timestamp(), VALUE_TIMESTAMP_HEADERS.headers());
 
         assertThat(putReturnCode, equalTo(12L));
     }
 
     @Test
-    public void shouldGetTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldGetHeadersStore() {
+        givenWrapperWithHeadersStore();
 
-        assertThat(wrapper.store(), equalTo(timestampedStore));
+        assertThat(wrapper.store(), equalTo(headersStore));
     }
 
     @Test
@@ -174,9 +174,9 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldGetNameForTimestampedStore() {
-        givenWrapperWithTimestampedStore();
-        when(timestampedStore.name()).thenReturn(STORE_NAME);
+    public void shouldGetNameForHeadersStore() {
+        givenWrapperWithHeadersStore();
+        when(headersStore.name()).thenReturn(STORE_NAME);
 
         assertThat(wrapper.name(), equalTo(STORE_NAME));
     }
@@ -190,13 +190,13 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldInitTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldInitHeadersStore() {
+        givenWrapperWithHeadersStore();
         final StateStoreContext mockContext = mock(StateStoreContext.class);
 
         wrapper.init(mockContext, wrapper);
 
-        verify(timestampedStore).init(mockContext, wrapper);
+        verify(headersStore).init(mockContext, wrapper);
     }
 
     @Test
@@ -210,12 +210,12 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldCommitTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldCommitHeadersStore() {
+        givenWrapperWithHeadersStore();
 
         wrapper.commit(Map.of());
 
-        verify(timestampedStore).commit(Map.of());
+        verify(headersStore).commit(Map.of());
     }
 
     @Test
@@ -228,12 +228,12 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldCloseTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldCloseHeadersStore() {
+        givenWrapperWithHeadersStore();
 
         wrapper.close();
 
-        verify(timestampedStore).close();
+        verify(headersStore).close();
     }
 
     @Test
@@ -246,15 +246,15 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldReturnPersistentForTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldReturnPersistentForHeadersStore() {
+        givenWrapperWithHeadersStore();
 
         // test "persistent = true"
-        when(timestampedStore.persistent()).thenReturn(true);
+        when(headersStore.persistent()).thenReturn(true);
         assertThat(wrapper.persistent(), equalTo(true));
 
         // test "persistent = false"
-        when(timestampedStore.persistent()).thenReturn(false);
+        when(headersStore.persistent()).thenReturn(false);
         assertThat(wrapper.persistent(), equalTo(false));
     }
 
@@ -272,15 +272,15 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldReturnIsOpenForTimestampedStore() {
-        givenWrapperWithTimestampedStore();
+    public void shouldReturnIsOpenForHeadersStore() {
+        givenWrapperWithHeadersStore();
 
         // test "isOpen = true"
-        when(timestampedStore.isOpen()).thenReturn(true);
+        when(headersStore.isOpen()).thenReturn(true);
         assertThat(wrapper.isOpen(), equalTo(true));
 
         // test "isOpen = false"
-        when(timestampedStore.isOpen()).thenReturn(false);
+        when(headersStore.isOpen()).thenReturn(false);
         assertThat(wrapper.isOpen(), equalTo(false));
     }
 
@@ -299,9 +299,9 @@ public class KeyValueStoreWrapperTest {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
-    public void shouldQueryTimestampedStore() {
-        givenWrapperWithTimestampedStore();
-        when(timestampedStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
+    public void shouldQueryHeadersStore() {
+        givenWrapperWithHeadersStore();
+        when(headersStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
 
         assertThat(wrapper.query(query, positionBound, queryConfig), equalTo(result));
     }
@@ -316,9 +316,9 @@ public class KeyValueStoreWrapperTest {
     }
 
     @Test
-    public void shouldGetPositionForTimestampedStore() {
-        givenWrapperWithTimestampedStore();
-        when(timestampedStore.getPosition()).thenReturn(position);
+    public void shouldGetPositionForHeadersStore() {
+        givenWrapperWithHeadersStore();
+        when(headersStore.getPosition()).thenReturn(position);
 
         assertThat(wrapper.getPosition(), equalTo(position));
     }
@@ -331,8 +331,8 @@ public class KeyValueStoreWrapperTest {
         assertThat(wrapper.getPosition(), equalTo(position));
     }
 
-    private void givenWrapperWithTimestampedStore() {
-        when(context.getStateStore(STORE_NAME)).thenReturn(timestampedStore);
+    private void givenWrapperWithHeadersStore() {
+        when(context.getStateStore(STORE_NAME)).thenReturn(headersStore);
         wrapper = new KeyValueStoreWrapper<>(context, STORE_NAME);
     }
 

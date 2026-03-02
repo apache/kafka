@@ -57,17 +57,10 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                 materialized.keySerde(),
                 materialized.valueSerde());
         } else {
-            if (storeFormat == DslStoreFormat.HEADERS) {
-                builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-            } else {
-                builder = Stores.timestampedKeyValueStoreBuilder(
-                    supplier,
-                    materialized.keySerde(),
-                    materialized.valueSerde());
-            }
+            builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde());
         }
 
         if (materialized.loggingEnabled()) {

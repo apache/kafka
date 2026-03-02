@@ -32,8 +32,9 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import org.slf4j.Logger;
@@ -497,7 +498,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
     }
 
     private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<KIn>, VAgg> {
-        private TimestampedWindowStore<KIn, VAgg> windowStore;
+        private TimestampedWindowStoreWithHeaders<KIn, VAgg> windowStore;
 
         @Override
         public void init(final ProcessorContext<?, ?> context) {
@@ -505,7 +506,7 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         @Override
-        public ValueAndTimestamp<VAgg> get(final Windowed<KIn> windowedKey) {
+        public ValueTimestampHeaders<VAgg> get(final Windowed<KIn> windowedKey) {
             final KIn key = windowedKey.key();
             return windowStore.fetch(key, windowedKey.window().start());
         }
