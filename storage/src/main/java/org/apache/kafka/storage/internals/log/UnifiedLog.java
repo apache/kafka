@@ -1965,29 +1965,34 @@ public class UnifiedLog implements AutoCloseable {
      * not deletion is enabled, delete any local log segments that are before the log start offset
      */
     public int deleteOldSegments() throws IOException {
-        int deletedSegments;
-        if (config().delete) {
-            deletedSegments = deleteLogStartOffsetBreachedSegments() +
-                    deleteRetentionSizeBreachedSegments() +
-                    deleteRetentionMsBreachedSegments();
-        } else if (config().compact) {
-            deletedSegments = deleteLogStartOffsetBreachedSegments();
-        } else {
-            // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
-            // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
-            if (remoteLogEnabledAndRemoteCopyEnabled()) {
+        int deletedSegments = 0;
+        try {
+            if (config().delete) {
                 deletedSegments = deleteLogStartOffsetBreachedSegments() +
                         deleteRetentionSizeBreachedSegments() +
                         deleteRetentionMsBreachedSegments();
-            } else {
-                // If cleanup.policy is empty and remote storage is disabled, we should not delete any local log segments 
-                // unless the log start offset advances through deleteRecords
+            } else if (config().compact) {
                 deletedSegments = deleteLogStartOffsetBreachedSegments();
+            } else {
+                // If cleanup.policy is empty and remote storage is enabled, the local log segments will 
+                // be cleaned based on the values of log.local.retention.bytes and log.local.retention.ms
+                if (remoteLogEnabledAndRemoteCopyEnabled()) {
+                    deletedSegments = deleteLogStartOffsetBreachedSegments() +
+                            deleteRetentionSizeBreachedSegments() +
+                            deleteRetentionMsBreachedSegments();
+                } else {
+                    // If cleanup.policy is empty and remote storage is disabled, we should not delete any local log segments 
+                    // unless the log start offset advances through deleteRecords
+                    deletedSegments = deleteLogStartOffsetBreachedSegments();
+                }
             }
+            return deletedSegments;
+        } finally {
+            // Calculate retentionSizeInPercent in finally block to ensure the metric is updated
+            // even when log deletion encounters errors. This also saves CPU cycles by only
+            // calculating when the log-cleaner thread runs.
+            retentionSizeInPercentValue.set(calculateRetentionSizeInPercent());
         }
-        // To save CPU cycles, calculate retentionSizeInPercent only when the log-cleaner thread runs
-        retentionSizeInPercentValue.set(calculateRetentionSizeInPercent());
-        return deletedSegments;
     }
 
     public interface DeletionCondition {
