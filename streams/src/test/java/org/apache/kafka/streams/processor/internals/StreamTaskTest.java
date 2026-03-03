@@ -143,6 +143,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -770,7 +771,8 @@ public class StreamTaskTest {
     public void shouldRecordE2ELatencyOnSourceNodeAndTerminalNodes() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        time = new MockTime(0L, 0L, 0L);
+        // Start at 10ms to match first wallClockTime (terminal nodes now use live clock)
+        time = new MockTime(0L, 10L, 0L);
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         // Create a processor that only forwards even keys to test the metrics at the source and terminal nodes
@@ -821,6 +823,7 @@ public class StreamTaskTest {
 
 
         // e2e latency = 15
+        time.setCurrentTimeMs(15L); // Sync MockTime with wallClockTime
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(1, 0L)));
         task.process(15L);
 
@@ -835,6 +838,7 @@ public class StreamTaskTest {
 
 
         // e2e latency = 23
+        time.setCurrentTimeMs(23L);
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(2, 0L)));
         task.process(23L);
 
@@ -849,8 +853,8 @@ public class StreamTaskTest {
 
 
         // e2e latency = 5
-        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(3, 0L)));
-        task.process(5L);
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(3, 18L)));
+        task.process(23L);
 
         assertThat(sourceAvg.metricValue(), equalTo(13.25));
         assertThat(sourceMin.metricValue(), equalTo(5.0));
@@ -860,6 +864,43 @@ public class StreamTaskTest {
         assertThat(terminalAvg.metricValue(), equalTo(16.5));
         assertThat(terminalMin.metricValue(), equalTo(10.0));
         assertThat(terminalMax.metricValue(), equalTo(23.0));
+    }
+
+    @Test
+    public void shouldIncludeProcessingDelayInE2ELatencyAtTerminalNode() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        time = new MockTime(0L, 10L, 0L);
+        metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
+
+        final MockSourceNode<Integer, Integer> delayingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
+            InternalProcessorContext<Integer, Integer> context;
+
+            @Override
+            public void init(final InternalProcessorContext<Integer, Integer> context) {
+                this.context = context;
+                super.init(context);
+            }
+
+            @Override
+            public void process(final Record<Integer, Integer> record) {
+                time.sleep(3000);
+                context.forward(record);
+            }
+        };
+
+        task = createStatelessTaskWithForwardingTopology(delayingSourceNode);
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        final Metric terminalMax = getProcessorMetric(
+            "record-e2e-latency", "%s-max", task.id().toString(), processorStreamTime.name());
+
+        task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(0, 0L)));
+        task.process(10L);
+
+        // Should include 3000ms processing delay + 10ms = 3010ms
+        assertThat(terminalMax.metricValue(), equalTo(3010.0));
     }
 
     @Test

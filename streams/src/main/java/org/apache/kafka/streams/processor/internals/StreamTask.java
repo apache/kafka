@@ -1305,6 +1305,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
+    long currentWallClockTimeMs() {
+        return time.milliseconds();
+    }
+
     /**
      * Request committing the current task's state
      */
