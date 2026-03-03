@@ -111,7 +111,7 @@ public final class KafkaRaftClientFetchTest {
             )
             .withElectedLeader(epoch, electedLeader.id())
             // Explicitly change the configuration here.
-            .withFetchMaxSizeBytes(1024)
+            .withFetchMaxBytes(1024)
             .build();
 
         context.pollUntilRequest();
@@ -126,26 +126,23 @@ public final class KafkaRaftClientFetchTest {
         var id = KafkaRaftClientTest.randomReplicaId();
         var localKey = KafkaRaftClientTest.replicaKey(id, true);
         var remoteKey = KafkaRaftClientTest.replicaKey(id + 1, true);
-        var localMaxSizeBytes = 1024;
-        // There are two batches with 3 records each. The first batch is at least larger than 1 byte.
-        // The behaviour is to always return 1 or more batches until we have gone larger than maxSizeBytes.
+        // There are two batches with 3 records each. The first batch is always at least larger than 1 byte.
+        // If remoteMaxSizeBytes = 1 then the MockLog will return exactly 1 batch.
+        // If localMaxSizeBytes is used then MockLog will return two batches
         var remoteMaxSizeBytes = 1;
-        var batch1 = List.of("a", "a", "a");
-        var batch2 = List.of("b", "b", "b");
-        var batch3 = List.of("c", "c", "c");
+        var localMaxSizeBytes = 1024;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
                 localKey.id(),
                 localKey.directoryId().get()
         )
-                .appendToLog(epoch, batch1)
-                .appendToLog(epoch, batch2)
-                .appendToLog(epoch, batch3)
+                .appendToLog(epoch, List.of("a", "a", "a"))
+                .appendToLog(epoch, List.of("b", "b", "b"))
                 .withStartingVoters(
                         VoterSetTest.voterSet(Stream.of(localKey, remoteKey)), KRaftVersion.KRAFT_VERSION_1
                 )
                 .withUnknownLeader(epoch)
-                .withFetchMaxSizeBytes(localMaxSizeBytes)
+                .withFetchMaxBytes(localMaxSizeBytes)
                 .build();
 
         context.unattachedToLeader();

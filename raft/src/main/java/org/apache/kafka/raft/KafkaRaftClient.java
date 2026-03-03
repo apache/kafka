@@ -2996,7 +2996,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
 
         return request
-            .setMaxBytes(quorumConfig.fetchMaxSizeBytes())
+            .setMaxBytes(quorumConfig.fetchMaxBytes())
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
             .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(quorum.localIdOrSentinel()));
@@ -3020,7 +3020,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             log.topicPartition(),
             quorum.epoch(),
             snapshotId,
-            quorumConfig.fetchSnapshotSizeMaxBytes(),
+            quorumConfig.fetchSnapshotMaxBytes(),
             snapshotSize
         );
     }
