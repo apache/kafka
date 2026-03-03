@@ -435,220 +435,6 @@ If a source connector supports exactly-once semantics, you must configure your C
 
 For new Connect clusters, set the `exactly.once.source.support` property to `enabled` in the worker config for each node in the cluster. For existing clusters, two rolling upgrades are necessary. During the first upgrade, the `exactly.once.source.support` property should be set to `preparing`, and during the second, it should be set to `enabled`.
 
-#### ACL requirements
-
-With exactly-once source support enabled, or with `exactly.once.source.support` set to `preparing`, the principal for each Connect worker will require the following ACLs:  
-  
-<table>  
-<tr>  
-<th>
-
-Operation
-</th>  
-<th>
-
-Resource Type
-</th>  
-<th>
-
-Resource Name
-</th>  
-<th>
-
-Note
-</th> </tr>  
-<tr>  
-<td>
-
-Write
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Describe
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-IdempotentWrite
-</td>  
-<td>
-
-Cluster
-</td>  
-<td>
-
-ID of the Kafka cluster that hosts the worker's config topic
-</td>  
-<td>
-
-The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
-</td> </tr> </table>
-
-And with exactly-once source enabled (but not if `exactly.once.source.support` is set to `preparing`), the principal for each individual connector will require the following ACLs:  
-  
-<table>  
-<tr>  
-<th>
-
-Operation
-</th>  
-<th>
-
-Resource Type
-</th>  
-<th>
-
-Resource Name
-</th>  
-<th>
-
-Note
-</th> </tr>  
-<tr>  
-<td>
-
-Write
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
-</td>  
-<td>
-
-A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
-</td> </tr>  
-<tr>  
-<td>
-
-Describe
-</td>  
-<td>
-
-TransactionalId
-</td>  
-<td>
-
-`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
-</td>  
-<td>
-
-A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
-</td> </tr>  
-<tr>  
-<td>
-
-Write
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Read
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Describe
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-
-</td> </tr>  
-<tr>  
-<td>
-
-Create
-</td>  
-<td>
-
-Topic
-</td>  
-<td>
-
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided, or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
-</td>  
-<td>
-
-Only necessary if the offsets topic for the connector does not exist yet
-</td> </tr>  
-<tr>  
-<td>
-
-IdempotentWrite
-</td>  
-<td>
-
-Cluster
-</td>  
-<td>
-
-ID of the Kafka cluster that the source connector writes to
-</td>  
-<td>
-
-The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
-</td> </tr> </table>
-
 ## Plugin Discovery
 
 Plugin discovery is the name for the strategy which the Connect worker uses to find plugin classes and make them accessible to configure and run in connectors. This is controlled by the plugin.discovery worker configuration, and has a significant impact on worker startup time. `service_load` is the fastest strategy, but care should be taken to verify that plugins are compatible before setting this configuration to `service_load`.
@@ -765,6 +551,22 @@ The principal for each Connect worker requires the following ACLs:
 
 `status.storage.topic` of the Connect cluster
 </td><td>Only necessary if the status topic for Connect does not exist yet</td></tr>
+<tr><td>Write</td><td>TransactionalId</td><td>
+
+`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
+</td><td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled
+or if `exactly.once.source.support` is set to `preparing`.
+</td> </tr>
+<tr><td>Describe</td><td>TransactionalId</td><td>
+
+`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
+</td><td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled
+or if `exactly.once.source.support` is set to `preparing`.
+</td> </tr>
 </table>
 
 To support Source connectors, the principal for each individual connector will require the following ACLs:
@@ -780,6 +582,33 @@ To support Source connectors, the principal for each individual connector will r
 <tr><td>Create</td><td>Topic</td><td>topic(s) used as the destination</td><td>
 
 Only necessary if `topic.creation.enable` is `true` and the topic(s) do not exist yet
+</td></tr>
+<tr><td>Describe</td><td>Topic</td>
+<td>
+
+Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided,
+or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
+</td>
+<td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+</td> </tr>
+<tr><td>Write</td><td>TransactionalId</td><td>
+
+`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
+</td><td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
+</td></tr>
+<tr><td>Describe</td><td>TransactionalId</td><td>
+
+`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
+</td>
+<td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
 </td></tr>
 </table>
 
@@ -812,5 +641,3 @@ Only necessary if `errors.deadletterqueue.topic.name` is set to a non-empty valu
 </table>
 
 Some connectors make additional use of Kafka topics that is not managed by the Kafka Connect framework (for example, change data capture connectors may use additional topics to store schema history). Refer to Connector documentation for details of any additional ACLs that are required. These can be added to the principal for the individual connector.
-
-Additional ACLs are required if exactly-once support is enabled. These are detailed in [Exactly-once support](#exactly-once-support).
