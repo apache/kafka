@@ -63,7 +63,7 @@ public class BuiltInDslStoreSuppliers {
             }
 
             if (params.isTimestamped()) {
-                return Stores.persistentTimestampedWindowStore(
+                return Stores.persistentTimestampedWindowStoreWithHeaders(
                         params.name(),
                         params.retentionPeriod(),
                         params.windowSize(),

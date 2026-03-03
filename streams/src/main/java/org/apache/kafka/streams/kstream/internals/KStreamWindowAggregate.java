@@ -33,7 +33,6 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
 import org.slf4j.Logger;
@@ -43,7 +42,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
 
 public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements KStreamAggProcessorSupplier<KIn, VIn, Windowed<KIn>, VAgg> {
 
@@ -134,8 +133,8 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                 final Long windowStart = entry.getKey();
                 final long windowEnd = entry.getValue().end();
                 if (windowEnd > windowCloseTime) {
-                    final ValueAndTimestamp<VAgg> oldAggAndTimestamp = windowStore.fetch(record.key(), windowStart);
-                    VAgg oldAgg = getValueOrNull(oldAggAndTimestamp);
+                    final ValueTimestampHeaders<VAgg> oldAggTimestampHeaders = windowStore.fetch(record.key(), windowStart);
+                    VAgg oldAgg = getValueOrNull(oldAggTimestampHeaders);
 
                     final VAgg newAgg;
                     final long newTimestamp;
@@ -144,13 +143,13 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
                         oldAgg = initializer.apply();
                         newTimestamp = record.timestamp();
                     } else {
-                        newTimestamp = Math.max(record.timestamp(), oldAggAndTimestamp.timestamp());
+                        newTimestamp = Math.max(record.timestamp(), oldAggTimestampHeaders.timestamp());
                     }
 
                     newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
                     // update the store with the new value
-                    windowStore.put(record.key(), ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
+                    windowStore.put(record.key(), ValueTimestampHeaders.make(newAgg, newTimestamp, record.headers()), windowStart);
                     maybeForwardUpdate(record, entry.getValue(), oldAgg, newAgg, newTimestamp);
                 } else {
                     final String windowString = "[" + windowStart + "," + windowEnd + ")";

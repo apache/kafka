@@ -33,9 +33,9 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.slf4j.Logger;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
@@ -52,7 +52,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     protected final TimeTracker timeTracker = new TimeTracker();
 
     private TimestampedTupleForwarder<Windowed<KIn>, VAgg> tupleForwarder;
-    protected TimestampedWindowStore<KIn, VAgg> windowStore;
+    protected TimestampedWindowStoreWithHeaders<KIn, VAgg> windowStore;
     protected Sensor droppedRecordsSensor;
     protected Sensor emittedRecordsSensor;
     protected Sensor emitFinalLatencySensor;
@@ -201,13 +201,13 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
                               final long emitRangeUpperBound) {
         final long startMs = time.milliseconds();
 
-        try (final KeyValueIterator<Windowed<KIn>, ValueAndTimestamp<VAgg>> windowToEmit
+        try (final KeyValueIterator<Windowed<KIn>, ValueTimestampHeaders<VAgg>> windowToEmit
                  = windowStore.fetchAll(emitRangeLowerBound, emitRangeUpperBound)) {
 
             int emittedCount = 0;
             while (windowToEmit.hasNext()) {
                 emittedCount++;
-                final KeyValue<Windowed<KIn>, ValueAndTimestamp<VAgg>> kv = windowToEmit.next();
+                final KeyValue<Windowed<KIn>, ValueTimestampHeaders<VAgg>> kv = windowToEmit.next();
 
                 tupleForwarder.maybeForward(
                     record.withKey(kv.key)
