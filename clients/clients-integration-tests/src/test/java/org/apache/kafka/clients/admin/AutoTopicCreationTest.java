@@ -88,6 +88,19 @@ public class AutoTopicCreationTest {
         }
     }
 
+    @ClusterTest
+    public void testAutoCreateTopicWithDefaultConfig(ClusterInstance cluster) throws Exception {
+        String topic = "default-config-topic";
+        triggerAutoCreateTopic(cluster, topic);
+        try (Admin admin = cluster.admin()) {
+            TopicDescription desc = admin.describeTopics(List.of(topic)).allTopicNames().get().get(topic);
+            assertEquals(1, desc.partitions().size(),
+                "Default num.partitions of 1 should be used when neither broker nor controller sets it");
+            assertEquals(1, desc.partitions().get(0).replicas().size(),
+                "Default default.replication.factor of 1 should be used when neither broker nor controller sets it");
+        }
+    }
+
     private void triggerAutoCreateTopic(ClusterInstance cluster, String topic) throws Exception {
         // Sends a produce request to a non-existent topic so that auto topic creation is triggered.
         try (Producer<byte[], byte[]> producer = cluster.producer()) {
