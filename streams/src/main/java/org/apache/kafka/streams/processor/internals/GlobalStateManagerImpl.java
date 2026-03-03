@@ -369,7 +369,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                     record.partition(),
                                     record.offset(),
                                     record.headers(),
-                                    globalProcessorContext.currentNode().name(),
+                                    storeName,
                                     globalProcessorContext.taskId(),
                                     record.timestamp(),
                                     record.key(),
@@ -382,7 +382,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                                     deserializedRecord,
                                                     processingException
                                             ), "Invalid ProcessingExceptionHandler response");
-                                     if(!response.deadLetterQueueRecords().isEmpty()) {
+                                     if (!response.deadLetterQueueRecords().isEmpty()) {
                                          log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
                                                          "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
                                                  errorHandlerContext);

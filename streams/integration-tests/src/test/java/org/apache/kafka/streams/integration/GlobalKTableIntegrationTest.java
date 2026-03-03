@@ -367,7 +367,7 @@ public class GlobalKTableIntegrationTest {
                 () -> new ContextualProcessor<Long, String, Void, Void>() {
                     @Override
                     public void process(final Record<Long, String> record) {
-                        if (record.key() == 2L) {
+                        if (record.key().equals( 2L)) {
                             throw new RuntimeException("Test processing exception");
                         }
                     }
@@ -390,6 +390,7 @@ public class GlobalKTableIntegrationTest {
 
         assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
     }
+
     @Test
     public void testProcessingExceptionHandlerFailEnabledRestorationPhase() throws Exception {
         createBuilderWithFailedProcessor();
@@ -406,10 +407,11 @@ public class GlobalKTableIntegrationTest {
         assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
 
     }
+
     @Test
     public void testProcessingExceptionHandlerDisabledRestorationPhase() throws Exception {
         createBuilderWithFailedProcessor();
-        // enable processing exception handler invoked config
+        // disable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = false;
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
@@ -422,6 +424,7 @@ public class GlobalKTableIntegrationTest {
         assertFalse(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
 
     }
+
     @Test
     public void testProcessingExceptionHandlerContinueEnabledRunTimePhase() throws Exception {
         createBuilderWithFailedProcessor();
@@ -441,6 +444,7 @@ public class GlobalKTableIntegrationTest {
             "Handler was not invoked for key 2L"
         );
     }
+
     @Test
     public void testProcessingExceptionHandlerFailEnabledRunTimePhase() throws Exception {
         createBuilderWithFailedProcessor();
@@ -455,10 +459,11 @@ public class GlobalKTableIntegrationTest {
         waitForApplicationState(singletonList(kafkaStreams), State.ERROR, Duration.ofSeconds(30));
         assertTrue(TestGlobalProcessingExceptionHandler.handlerInvoked.get());
     }
+
     @Test
     public void testProcessingExceptionHandlerDisabledRunTimePhase() throws Exception {
         createBuilderWithFailedProcessor();
-        // enable processing exception handler invoked config
+        // disable processing exception handler invoked config
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
