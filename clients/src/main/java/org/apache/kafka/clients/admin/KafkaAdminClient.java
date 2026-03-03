@@ -900,6 +900,7 @@ public class KafkaAdminClient extends AdminClient {
          * @param now       The current time in milliseconds.
          * @param throwable The failure exception.
          */
+        @SuppressWarnings("NPathComplexity")
         final void fail(long now, Throwable throwable) {
             if (curNode != null) {
                 runnable.nodeReadyDeadlines.remove(curNode);
@@ -921,6 +922,11 @@ public class KafkaAdminClient extends AdminClient {
             }
             nextAllowedTryMs = now + retryBackoff.backoff(tries++);
 
+            // Don't mask OutOfMemoryError as TimeoutException - propagate it directly
+            if (throwable instanceof OutOfMemoryError) {
+                handleFailure(throwable);
+                return;
+            }
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) <= 0) {
                 handleTimeoutFailure(now, throwable);
@@ -956,10 +962,7 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
                     new Exception(prettyPrintException(cause)));
             }
-            // Don't mask OutOfMemoryError as TimeoutException - propagate it directly
-            if (cause instanceof OutOfMemoryError) {
-                handleFailure(cause);
-            } else if (cause instanceof TimeoutException) {
+            if (cause instanceof TimeoutException) {
                 handleFailure(cause);
             } else {
                 handleFailure(new TimeoutException(this + " timed out at " + now
