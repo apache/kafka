@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.ControllerRegistrationResponseData
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ControllerRegistrationResponse
-import org.apache.kafka.common.utils.{ExponentialBackoff, Time}
+import org.apache.kafka.common.utils.ExponentialBackoff
 import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
@@ -72,7 +72,7 @@ class ControllerRegistrationManagerTest {
   ): ControllerRegistrationManager = {
     new ControllerRegistrationManager(context.config.nodeId,
       context.clusterId,
-      Time.SYSTEM,
+      context.time,
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
@@ -263,6 +263,41 @@ class ControllerRegistrationManagerTest {
         context.mockChannelManager.poll()
         assertEquals((false, 1, 0), rpcStats(manager))
       })
+    } finally {
+      manager.close()
+    }
+  }
+
+  @Test
+  def testRetransmitRegistrationAfterTimeout(): Unit = {
+    val context = new RegistrationTestContext(configProperties)
+    val manager = newControllerRegistrationManager(context)
+    try {
+      context.controllerNodeProvider.node.set(controller1)
+
+      // send a ControllerRegistrationRequest after learning the MV
+      manager.start(context.mockChannelManager)
+      assertFalse(registeredInLog(manager))
+      assertEquals((false, 0, 0), rpcStats(manager))
+      doMetadataUpdate(MetadataImage.EMPTY,
+        manager,
+        MetadataVersion.IBP_3_7_IV0,
+        r => if (r.controllerId() == 1) None else Some(r))
+      // pendingRpc = true, successfulRpcs = 0, failedRpcs = 0
+      assertEquals((true, 0, 0), rpcStats(manager))
+
+      // time out the request before polling
+      context.time.sleep(context.mockChannelManager.getTimeoutMs * 2)
+      TestUtils.retryOnExceptionWithTimeout(30000, () => {
+        context.mockChannelManager.poll()
+        // pendingRpc = false, successfulRpcs = 0, failedRpcs = 1
+        assertEquals((false, 0, 1), rpcStats(manager))
+      })
+
+      // the timeout callback should schedule a request retry after a delay
+      context.time.sleep(1000)
+      // pendingRpc = true, successfulRpcs = 0, failedRpcs = 1
+      assertEquals((true, 0, 1), rpcStats(manager))
     } finally {
       manager.close()
     }
