@@ -55,10 +55,10 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     }
 
     public OuterStreamJoinStoreFactory(
-        final String name,
-        final StreamJoinedInternal<K, V1, V2> streamJoined,
-        final JoinWindows windows,
-        final Type type
+            final String name,
+            final StreamJoinedInternal<K, V1, V2> streamJoined,
+            final JoinWindows windows,
+            final Type type
     ) {
         super(streamJoined.dslStoreSuppliers());
 
@@ -89,8 +89,8 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         }
         if (windowSizeMs > retentionMs) {
             throw new IllegalArgumentException("The retention period of the window store "
-                + name + " must be no smaller than its window size. Got size=["
-                + windowSizeMs + "], retention=[" + retentionMs + "]");
+                    + name + " must be no smaller than its window size. Got size=["
+                    + windowSizeMs + "], retention=[" + retentionMs + "]");
         }
 
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
@@ -122,12 +122,12 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         }
 
         final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>
-            builder =
-            new ListValueStoreBuilder<>(
-                supplier,
-                timestampedKeyAndJoinSideSerde,
-                leftOrRightValueSerde,
-                Time.SYSTEM
+                builder =
+                new ListValueStoreBuilder<>(
+                    supplier,
+                    timestampedKeyAndJoinSideSerde,
+                    leftOrRightValueSerde,
+                    Time.SYSTEM
             );
 
         if (loggingEnabled) {
@@ -147,7 +147,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     @Override
     public long historyRetention() {
         throw new IllegalStateException(
-            "historyRetention is not supported when not a versioned store");
+                "historyRetention is not supported when not a versioned store");
     }
 
     @Override
@@ -190,13 +190,13 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     @Override
     public boolean isCompatibleWith(final StoreFactory storeFactory) {
         return (storeFactory instanceof OuterStreamJoinStoreFactory)
-            && ((OuterStreamJoinStoreFactory<?, ?, ?>) storeFactory).streamJoined.equals(streamJoined);
+                && ((OuterStreamJoinStoreFactory<?, ?, ?>) storeFactory).streamJoined.equals(streamJoined);
     }
 
     private static <K, V1, V2> String buildOuterJoinWindowStoreName(
-        final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
-        final String joinThisGeneratedName,
-        final Type type
+            final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
+            final String joinThisGeneratedName,
+            final Type type
     ) {
         final String outerJoinSuffix = (type == Type.RIGHT) ? "-outer-shared-join" : "-left-shared-join";
 
@@ -206,10 +206,10 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             return streamJoinedInternal.storeName() + outerJoinSuffix;
         } else {
             return KStreamImpl.OUTERSHARED_NAME
-                + joinThisGeneratedName.substring(
-                type == Type.RIGHT
-                    ? KStreamImpl.OUTERTHIS_NAME.length()
-                    : KStreamImpl.JOINTHIS_NAME.length());
+                    + joinThisGeneratedName.substring(
+                    type == Type.RIGHT
+                        ? KStreamImpl.OUTERTHIS_NAME.length()
+                        : KStreamImpl.JOINTHIS_NAME.length());
         }
     }
 }

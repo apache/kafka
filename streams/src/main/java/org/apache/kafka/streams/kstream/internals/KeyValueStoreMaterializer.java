@@ -45,22 +45,22 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
 
     @Override
     public StoreBuilder<?> builder() {
-        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : DslStoreFormat.HEADERS;
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.TIMESTAMPED : dslStoreFormat();
         final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
-            ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
-            : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
+                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName(), storeFormat))
+                : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
         if (supplier instanceof VersionedBytesStoreSupplier) {
             builder = Stores.versionedKeyValueStoreBuilder(
-                (VersionedBytesStoreSupplier) supplier,
-                materialized.keySerde(),
-                materialized.valueSerde());
+                    (VersionedBytesStoreSupplier) supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
         } else {
             builder = Stores.timestampedKeyValueStoreBuilderWithHeaders(
-                supplier,
-                materialized.keySerde(),
-                materialized.valueSerde());
+                    supplier,
+                    materialized.keySerde(),
+                    materialized.valueSerde());
         }
 
         if (materialized.loggingEnabled()) {
@@ -76,8 +76,6 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                 builder.withCachingEnabled();
             }
         }
-
-
         return builder;
     }
 

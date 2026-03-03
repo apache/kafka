@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
@@ -36,32 +37,43 @@ public class BuiltInDslStoreSuppliers {
 
         @Override
         public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {
-            return Stores.persistentTimestampedKeyValueStoreWithHeaders(params.name());
+            final DslStoreFormat storeFormat = params.dslStoreFormat();
+            switch (storeFormat) {
+                case HEADERS:
+                    return Stores.persistentTimestampedKeyValueStoreWithHeaders(params.name());
+                case TIMESTAMPED:
+                    return Stores.persistentTimestampedKeyValueStore(params.name());
+                case PLAIN:
+                    return Stores.persistentKeyValueStore(params.name());
+                default:
+                    throw new IllegalArgumentException("Unsupported DslStoreFormat: " + storeFormat +
+                        ". Expected one of: HEADERS, TIMESTAMPED, or PLAIN");
+            }
         }
 
         @Override
         public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
                 return RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
-                    params.name(),
-                    params.retentionPeriod(),
-                    params.windowSize(),
-                    params.retainDuplicates(),
-                    params.isSlidingWindow());
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates(),
+                        params.isSlidingWindow());
             }
 
             if (params.isTimestamped()) {
                 return Stores.persistentTimestampedWindowStore(
-                    params.name(),
-                    params.retentionPeriod(),
-                    params.windowSize(),
-                    params.retainDuplicates());
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates());
             } else {
                 return Stores.persistentWindowStore(
-                    params.name(),
-                    params.retentionPeriod(),
-                    params.windowSize(),
-                    params.retainDuplicates());
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates());
             }
         }
 
@@ -69,9 +81,9 @@ public class BuiltInDslStoreSuppliers {
         public SessionBytesStoreSupplier sessionStore(final DslSessionParams params) {
             if (params.emitStrategy().type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
                 return new RocksDbTimeOrderedSessionBytesStoreSupplier(
-                    params.name(),
-                    params.retentionPeriod().toMillis(),
-                    true);
+                        params.name(),
+                        params.retentionPeriod().toMillis(),
+                        true);
             }
 
             return Stores.persistentSessionStore(params.name(), params.retentionPeriod());
@@ -91,10 +103,10 @@ public class BuiltInDslStoreSuppliers {
         @Override
         public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
             return Stores.inMemoryWindowStore(
-                params.name(),
-                params.retentionPeriod(),
-                params.windowSize(),
-                params.retainDuplicates()
+                    params.name(),
+                    params.retentionPeriod(),
+                    params.windowSize(),
+                    params.retainDuplicates()
             );
         }
 

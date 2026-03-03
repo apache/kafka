@@ -421,9 +421,9 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code acceptable.recovery.lag} */
     public static final String ACCEPTABLE_RECOVERY_LAG_CONFIG = "acceptable.recovery.lag";
     private static final String ACCEPTABLE_RECOVERY_LAG_DOC = "The maximum acceptable lag (number of offsets to catch up) for a client to be considered caught-up enough" +
-        " to receive an active task assignment. Upon assignment, it will still restore the rest of the changelog" +
-        " before processing. To avoid a pause in processing during rebalances, this config" +
-        " should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
+                                                                  " to receive an active task assignment. Upon assignment, it will still restore the rest of the changelog" +
+                                                                  " before processing. To avoid a pause in processing during rebalances, this config" +
+                                                                  " should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.";
 
     /** {@code allow.os.group.write.access} */
     @SuppressWarnings("WeakerAccess")
@@ -587,8 +587,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG = "errors.dead.letter.queue.topic.name";
 
     private static final String ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC = "If not null, the default exception handler will build and send a Dead Letter Queue record to the topic with the provided name if an error occurs.\n" +
-        "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.\n" +
-        "Note: This configuration applies only to regular stream processing tasks. It does not apply to global state store updates (global threads).";
+            "If a custom deserialization/production or processing exception handler is set, this parameter is ignored for this handler.\n" +
+            "Note: This configuration applies only to regular stream processing tasks. It does not apply to global state store updates (global threads).";
 
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
@@ -615,12 +615,12 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
     private static final String MAX_WARMUP_REPLICAS_DOC = "The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping " +
-        " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
-        " traffic and cluster state can be used for high availability. Must be at least 1." +
-        "Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup replica can only be promoted to an active task " +
-        "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the <code>probing.rebalance.interval.ms</code> config). This means " +
-        "that the maximum rate at which active tasks can be migrated from one Kafka Streams Instance to another instance can be determined by " +
-        "(<code>max.warmup.replicas</code> / <code>probing.rebalance.interval.ms</code>).";
+                                                              " the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker " +
+                                                              " traffic and cluster state can be used for high availability. Must be at least 1." +
+                                                              "Note that one warmup replica corresponds to one Stream Task. Furthermore, note that each warmup replica can only be promoted to an active task " +
+                                                              "during a rebalance (normally during a so-called probing rebalance, which occur at a frequency specified by the <code>probing.rebalance.interval.ms</code> config). This means " +
+                                                              "that the maximum rate at which active tasks can be migrated from one Kafka Streams Instance to another instance can be determined by " +
+                                                              "(<code>max.warmup.replicas</code> / <code>probing.rebalance.interval.ms</code>).";
 
     /** {@code metadata.max.age.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -667,8 +667,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG = "processing.exception.handler";
     @Deprecated
     public static final String PROCESSING_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProcessingExceptionHandler</code> interface. " +
-        "Note: This handler applies only to regular stream processing tasks. It does not apply to global state store updates (global threads). " +
-        "Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.";
+            "Note: This handler applies only to regular stream processing tasks. It does not apply to global state store updates (global threads). " +
+            "Exceptions occurring in global threads will bubble up to the configured uncaught exception handler.";
 
     /** {@code processing.guarantee} */
     @SuppressWarnings("WeakerAccess")
@@ -716,8 +716,8 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_TAGS_CONFIG = "rack.aware.assignment.tags";
     private static final String RACK_AWARE_ASSIGNMENT_TAGS_DOC = "List of client tag keys used to distribute standby replicas across Kafka Streams instances." +
-        " When configured, Kafka Streams will make a best-effort to distribute" +
-        " the standby tasks over each client tag dimension.";
+                                                                 " When configured, Kafka Streams will make a best-effort to distribute" +
+                                                                 " the standby tasks over each client tag dimension.";
 
     /** {@code rack.aware.assignment.traffic_cost} */
     @SuppressWarnings("WeakerAccess")
@@ -858,413 +858,413 @@ public class StreamsConfig extends AbstractConfig {
             // HIGH
 
             .define(APPLICATION_ID_CONFIG, // required with no default value
-                Type.STRING,
-                Importance.HIGH,
-                APPLICATION_ID_DOC)
+                    Type.STRING,
+                    Importance.HIGH,
+                    APPLICATION_ID_DOC)
             .define(BOOTSTRAP_SERVERS_CONFIG, // required with no default value
-                Type.LIST,
-                NO_DEFAULT_VALUE,
-                ConfigDef.ValidList.anyNonDuplicateValues(false, false),
-                Importance.HIGH,
-                CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+                    Type.LIST,
+                    NO_DEFAULT_VALUE,
+                    ConfigDef.ValidList.anyNonDuplicateValues(false, false),
+                    Importance.HIGH,
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
-                Type.INT,
-                0,
-                Importance.HIGH,
-                NUM_STANDBY_REPLICAS_DOC)
+                    Type.INT,
+                    0,
+                    Importance.HIGH,
+                    NUM_STANDBY_REPLICAS_DOC)
             .define(STATE_DIR_CONFIG,
-                Type.STRING,
-                System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
-                Importance.HIGH,
-                STATE_DIR_DOC,
-                "${java.io.tmpdir}")
+                    Type.STRING,
+                    System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
+                    Importance.HIGH,
+                    STATE_DIR_DOC,
+                    "${java.io.tmpdir}")
             .define(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG,
-                Type.BOOLEAN,
-                false,
-                Importance.HIGH,
-                ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC)
+                    Type.BOOLEAN,
+                    false,
+                    Importance.HIGH,
+                    ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC)
 
             // MEDIUM
 
             .define(ACCEPTABLE_RECOVERY_LAG_CONFIG,
-                Type.LONG,
-                10_000L,
-                atLeast(0),
-                Importance.MEDIUM,
-                ACCEPTABLE_RECOVERY_LAG_DOC)
+                    Type.LONG,
+                    10_000L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    ACCEPTABLE_RECOVERY_LAG_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
-                Type.LONG,
-                10 * 1024 * 1024L,
-                atLeast(0),
-                Importance.MEDIUM,
-                CACHE_MAX_BYTES_BUFFERING_DOC)
+                    Type.LONG,
+                    10 * 1024 * 1024L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    CACHE_MAX_BYTES_BUFFERING_DOC)
             .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                Type.LONG,
-                10 * 1024 * 1024L,
-                atLeast(0),
-                Importance.MEDIUM,
-                STATESTORE_CACHE_MAX_BYTES_DOC)
+                    Type.LONG,
+                    10 * 1024 * 1024L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    STATESTORE_CACHE_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
-                Type.STRING,
-                "",
-                Importance.MEDIUM,
-                CLIENT_ID_DOC,
-                "<code>&lt;application.id&gt-&lt;random-UUID&gt</code>")
+                    Type.STRING,
+                    "",
+                    Importance.MEDIUM,
+                    CLIENT_ID_DOC,
+                    "<code>&lt;application.id&gt-&lt;random-UUID&gt</code>")
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                LogAndFailExceptionHandler.class.getName(),
-                Importance.MEDIUM,
-                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+                    Type.CLASS,
+                    LogAndFailExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
-                Type.CLASS,
-                null,
-                Importance.MEDIUM,
-                DEFAULT_KEY_SERDE_CLASS_DOC)
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    DEFAULT_KEY_SERDE_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
-                Type.CLASS,
-                null,
-                Importance.MEDIUM,
-                CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
-                Type.CLASS,
-                null,
-                Importance.MEDIUM,
-                CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
-                Type.CLASS,
-                null,
-                Importance.MEDIUM,
-                CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
             .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
-                Type.CLASS,
-                null,
-                Importance.MEDIUM,
-                CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
             .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                DefaultProductionExceptionHandler.class.getName(),
-                Importance.MEDIUM,
-                PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
+                    Type.CLASS,
+                    DefaultProductionExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                Type.CLASS,
-                FailOnInvalidTimestamp.class.getName(),
-                Importance.MEDIUM,
-                DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+                    Type.CLASS,
+                    FailOnInvalidTimestamp.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
             .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
-                Type.CLASS,
-                null,
-                Importance.MEDIUM,
-                DEFAULT_VALUE_SERDE_CLASS_DOC)
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM,
+                    DEFAULT_VALUE_SERDE_CLASS_DOC)
             .define(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                LogAndFailExceptionHandler.class.getName(),
-                Importance.MEDIUM,
-                DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
+                    Type.CLASS,
+                    LogAndFailExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_CONFIG,
-                Type.STRING,
-                null,
-                Importance.MEDIUM,
-                ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC)
+                    Type.STRING,
+                    null,
+                    Importance.MEDIUM,
+                    ERRORS_DEAD_LETTER_QUEUE_TOPIC_NAME_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
-                Type.LONG,
-                0L,
-                Importance.MEDIUM,
-                MAX_TASK_IDLE_MS_DOC)
+                    Type.LONG,
+                    0L,
+                    Importance.MEDIUM,
+                    MAX_TASK_IDLE_MS_DOC)
             .define(MAX_WARMUP_REPLICAS_CONFIG,
-                Type.INT,
-                2,
-                atLeast(1),
-                Importance.MEDIUM,
-                MAX_WARMUP_REPLICAS_DOC)
+                    Type.INT,
+                    2,
+                    atLeast(1),
+                    Importance.MEDIUM,
+                    MAX_WARMUP_REPLICAS_DOC)
             .define(NUM_STREAM_THREADS_CONFIG,
-                Type.INT,
-                1,
-                Importance.MEDIUM,
-                NUM_STREAM_THREADS_DOC)
+                    Type.INT,
+                    1,
+                    Importance.MEDIUM,
+                    NUM_STREAM_THREADS_DOC)
             .define(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                LogAndFailProcessingExceptionHandler.class.getName(),
-                Importance.MEDIUM,
-                PROCESSING_EXCEPTION_HANDLER_CLASS_DOC)
+                    Type.CLASS,
+                    LogAndFailProcessingExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    PROCESSING_EXCEPTION_HANDLER_CLASS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
-                Type.STRING,
-                AT_LEAST_ONCE,
-                in(AT_LEAST_ONCE, EXACTLY_ONCE_V2),
-                Importance.MEDIUM,
-                PROCESSING_GUARANTEE_DOC)
+                    Type.STRING,
+                    AT_LEAST_ONCE,
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE_V2),
+                    Importance.MEDIUM,
+                    PROCESSING_GUARANTEE_DOC)
             .define(PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                DefaultProductionExceptionHandler.class.getName(),
-                Importance.MEDIUM,
-                PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
+                    Type.CLASS,
+                    DefaultProductionExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(TASK_ASSIGNOR_CLASS_CONFIG,
-                Type.STRING,
-                null,
-                Importance.MEDIUM,
-                TASK_ASSIGNOR_CLASS_DOC)
+                    Type.STRING,
+                    null,
+                    Importance.MEDIUM,
+                    TASK_ASSIGNOR_CLASS_DOC)
             .define(REPLICATION_FACTOR_CONFIG,
-                Type.INT,
-                -1,
-                Importance.MEDIUM,
-                REPLICATION_FACTOR_DOC)
+                    Type.INT,
+                    -1,
+                    Importance.MEDIUM,
+                    REPLICATION_FACTOR_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
-                Type.STRING,
-                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(SecurityProtocol.class)),
-                Importance.MEDIUM,
-                CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                    Type.STRING,
+                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(SecurityProtocol.class)),
+                    Importance.MEDIUM,
+                    CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .define(TASK_TIMEOUT_MS_CONFIG,
-                Type.LONG,
-                Duration.ofMinutes(5L).toMillis(),
-                atLeast(0L),
-                Importance.MEDIUM,
-                TASK_TIMEOUT_MS_DOC)
+                    Type.LONG,
+                    Duration.ofMinutes(5L).toMillis(),
+                    atLeast(0L),
+                    Importance.MEDIUM,
+                    TASK_TIMEOUT_MS_DOC)
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
-                Type.STRING,
-                NO_OPTIMIZATION,
-                ConfigDef.LambdaValidator.with(
-                    (name, value) -> verifyTopologyOptimizationConfigs((String) value),
-                    TOPOLOGY_OPTIMIZATION_CONFIGS::toString),
-                Importance.MEDIUM,
-                TOPOLOGY_OPTIMIZATION_DOC)
+                    Type.STRING,
+                    NO_OPTIMIZATION,
+                    ConfigDef.LambdaValidator.with(
+                        (name, value) -> verifyTopologyOptimizationConfigs((String) value),
+                        TOPOLOGY_OPTIMIZATION_CONFIGS::toString),
+                    Importance.MEDIUM,
+                    TOPOLOGY_OPTIMIZATION_DOC)
             .define(GROUP_PROTOCOL_CONFIG,
-                Type.STRING,
-                DEFAULT_GROUP_PROTOCOL,
-                ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
-                Importance.MEDIUM,
-                GROUP_PROTOCOL_DOC)
+                    Type.STRING,
+                    DEFAULT_GROUP_PROTOCOL,
+                    ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
+                    Importance.MEDIUM,
+                    GROUP_PROTOCOL_DOC)
 
             // LOW
 
             .define(ALLOW_OS_GROUP_WRITE_ACCESS_CONFIG,
-                Type.BOOLEAN,
-                false,
-                Importance.LOW,
-                ALLOW_OS_GROUP_WRITE_ACCESS_DOC)
+                    Type.BOOLEAN,
+                    false,
+                    Importance.LOW,
+                    ALLOW_OS_GROUP_WRITE_ACCESS_DOC)
             .define(APPLICATION_SERVER_CONFIG,
-                Type.STRING,
-                "",
-                Importance.LOW,
-                APPLICATION_SERVER_DOC)
+                    Type.STRING,
+                    "",
+                    Importance.LOW,
+                    APPLICATION_SERVER_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
-                Type.INT,
-                1000,
-                Importance.LOW,
-                BUFFERED_RECORDS_PER_PARTITION_DOC)
+                    Type.INT,
+                    1000,
+                    Importance.LOW,
+                    BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(BUILT_IN_METRICS_VERSION_CONFIG,
-                Type.STRING,
-                METRICS_LATEST,
-                in(
-                    METRICS_LATEST
-                ),
-                Importance.LOW,
-                BUILT_IN_METRICS_VERSION_DOC)
+                    Type.STRING,
+                    METRICS_LATEST,
+                    in(
+                        METRICS_LATEST
+                    ),
+                    Importance.LOW,
+                    BUILT_IN_METRICS_VERSION_DOC)
             .define(COMMIT_INTERVAL_MS_CONFIG,
-                Type.LONG,
-                DEFAULT_COMMIT_INTERVAL_MS,
-                atLeast(0),
-                Importance.LOW,
-                COMMIT_INTERVAL_MS_DOC)
+                    Type.LONG,
+                    DEFAULT_COMMIT_INTERVAL_MS,
+                    atLeast(0),
+                    Importance.LOW,
+                    COMMIT_INTERVAL_MS_DOC)
             .define(CONFIG_PROVIDERS_CONFIG,
-                Type.LIST,
-                List.of(),
-                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                Importance.LOW,
-                CONFIG_PROVIDERS_DOC)
+                    Type.LIST,
+                    List.of(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                    Importance.LOW,
+                    CONFIG_PROVIDERS_DOC)
             .define(ENABLE_METRICS_PUSH_CONFIG,
-                Type.BOOLEAN,
-                true,
-                Importance.LOW,
-                ENABLE_METRICS_PUSH_DOC)
+                    Type.BOOLEAN,
+                    true,
+                    Importance.LOW,
+                    ENABLE_METRICS_PUSH_DOC)
             .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
-                Type.INT,
-                null,
-                Importance.LOW,
-                RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC)
+                    Type.INT,
+                    null,
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC)
             .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
-                Type.STRING,
-                RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-                in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY),
-                Importance.LOW,
-                RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
+                    Type.STRING,
+                    RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
+                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY),
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                Type.LIST,
-                Collections.emptyList(),
-                atMostOfSize(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
-                Importance.LOW,
-                RACK_AWARE_ASSIGNMENT_TAGS_DOC)
+                    Type.LIST,
+                    Collections.emptyList(),
+                    atMostOfSize(MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE),
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_TAGS_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
-                Type.INT,
-                null,
-                Importance.LOW,
-                RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
+                    Type.INT,
+                    null,
+                    Importance.LOW,
+                    RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
             .define(REPARTITION_PURGE_INTERVAL_MS_CONFIG,
-                Type.LONG,
-                DEFAULT_COMMIT_INTERVAL_MS,
-                atLeast(0),
-                Importance.LOW,
-                REPARTITION_PURGE_INTERVAL_MS_DOC)
+                    Type.LONG,
+                    DEFAULT_COMMIT_INTERVAL_MS,
+                    atLeast(0),
+                    Importance.LOW,
+                    REPARTITION_PURGE_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                Type.LONG,
-                9 * 60 * 1000L,
-                Importance.LOW,
-                CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+                    Type.LONG,
+                    9 * 60 * 1000L,
+                    Importance.LOW,
+                    CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(DEFAULT_DSL_STORE_CONFIG,
-                Type.STRING,
-                DEFAULT_DSL_STORE,
-                in(ROCKS_DB, IN_MEMORY),
-                Importance.LOW,
-                DEFAULT_DSL_STORE_DOC)
+                    Type.STRING,
+                    DEFAULT_DSL_STORE,
+                    in(ROCKS_DB, IN_MEMORY),
+                    Importance.LOW,
+                    DEFAULT_DSL_STORE_DOC)
             .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-                Type.CLASS,
-                DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
-                Importance.LOW,
-                DSL_STORE_SUPPLIERS_CLASS_DOC)
+                    Type.CLASS,
+                    DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
+                    Importance.LOW,
+                    DSL_STORE_SUPPLIERS_CLASS_DOC)
             .define(DSL_STORE_FORMAT_CONFIG,
-                Type.STRING,
-                DSL_STORE_FORMAT_DEFAULT,
-                ConfigDef.CaseInsensitiveValidString.in(DSL_STORE_FORMAT_DEFAULT, DSL_STORE_FORMAT_HEADERS),
-                Importance.LOW,
-                DSL_STORE_FORMAT_DOC)
+                    Type.STRING,
+                    DSL_STORE_FORMAT_DEFAULT,
+                    ConfigDef.CaseInsensitiveValidString.in(DSL_STORE_FORMAT_DEFAULT, DSL_STORE_FORMAT_HEADERS),
+                    Importance.LOW,
+                    DSL_STORE_FORMAT_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
-                Type.CLASS,
-                DefaultKafkaClientSupplier.class.getName(),
-                Importance.LOW,
-                DEFAULT_CLIENT_SUPPLIER_DOC)
+                    Type.CLASS,
+                    DefaultKafkaClientSupplier.class.getName(),
+                    Importance.LOW,
+                    DEFAULT_CLIENT_SUPPLIER_DOC)
             .define(LOG_SUMMARY_INTERVAL_MS_CONFIG,
-                Type.LONG,
-                2 * 60 * 1000L,
-                Importance.LOW,
-                LOG_SUMMARY_INTERVAL_MS_DOC)
+                    Type.LONG,
+                    2 * 60 * 1000L,
+                    Importance.LOW,
+                    LOG_SUMMARY_INTERVAL_MS_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
-                Type.LONG,
-                5 * 60 * 1000L,
-                atLeast(0),
-                Importance.LOW,
-                CommonClientConfigs.METADATA_MAX_AGE_DOC)
+                    Type.LONG,
+                    5 * 60 * 1000L,
+                    atLeast(0),
+                    Importance.LOW,
+                    CommonClientConfigs.METADATA_MAX_AGE_DOC)
             .define(METRICS_NUM_SAMPLES_CONFIG,
-                Type.INT,
-                2,
-                atLeast(1),
-                Importance.LOW,
-                CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                    Type.INT,
+                    2,
+                    atLeast(1),
+                    Importance.LOW,
+                    CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
             .define(METRIC_REPORTER_CLASSES_CONFIG,
-                Type.LIST,
-                JmxReporter.class.getName(),
-                ConfigDef.ValidList.anyNonDuplicateValues(true, false),
-                Importance.LOW,
-                CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                    Type.LIST,
+                    JmxReporter.class.getName(),
+                    ConfigDef.ValidList.anyNonDuplicateValues(true, false),
+                    Importance.LOW,
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
-                Type.STRING,
-                Sensor.RecordingLevel.INFO.toString(),
-                in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), RecordingLevel.TRACE.toString()),
-                Importance.LOW,
-                CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
+                    Type.STRING,
+                    Sensor.RecordingLevel.INFO.toString(),
+                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), RecordingLevel.TRACE.toString()),
+                    Importance.LOW,
+                    CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
             .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                Type.LONG,
-                30000L,
-                atLeast(0),
-                Importance.LOW,
-                CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
+                    Type.LONG,
+                    30000L,
+                    atLeast(0),
+                    Importance.LOW,
+                    CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
             .define(POLL_MS_CONFIG,
-                Type.LONG,
-                100L,
-                Importance.LOW,
-                POLL_MS_DOC)
+                    Type.LONG,
+                    100L,
+                    Importance.LOW,
+                    POLL_MS_DOC)
             .define(PROBING_REBALANCE_INTERVAL_MS_CONFIG,
-                Type.LONG,
-                10 * 60 * 1000L,
-                atLeast(60 * 1000L),
-                Importance.LOW,
-                PROBING_REBALANCE_INTERVAL_MS_DOC)
+                    Type.LONG,
+                    10 * 60 * 1000L,
+                    atLeast(60 * 1000L),
+                    Importance.LOW,
+                    PROBING_REBALANCE_INTERVAL_MS_DOC)
             .define(PROCESSOR_WRAPPER_CLASS_CONFIG,
-                Type.CLASS,
-                NoOpProcessorWrapper.class,
-                Importance.LOW,
-                PROCESSOR_WRAPPER_CLASS_DOC)
+                    Type.CLASS,
+                    NoOpProcessorWrapper.class,
+                    Importance.LOW,
+                    PROCESSOR_WRAPPER_CLASS_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
-                Type.INT,
-                32 * 1024,
-                atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
-                Importance.LOW,
-                CommonClientConfigs.RECEIVE_BUFFER_DOC)
+                    Type.INT,
+                    32 * 1024,
+                    atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
+                    Importance.LOW,
+                    CommonClientConfigs.RECEIVE_BUFFER_DOC)
             .define(RECONNECT_BACKOFF_MS_CONFIG,
-                Type.LONG,
-                50L,
-                atLeast(0L),
-                Importance.LOW,
-                CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+                    Type.LONG,
+                    50L,
+                    atLeast(0L),
+                    Importance.LOW,
+                    CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
             .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                Type.LONG,
-                1000L,
-                atLeast(0L),
-                Importance.LOW,
-                CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
+                    Type.LONG,
+                    1000L,
+                    atLeast(0L),
+                    Importance.LOW,
+                    CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
             .define(RETRY_BACKOFF_MS_CONFIG,
-                Type.LONG,
-                100L,
-                atLeast(0L),
-                Importance.LOW,
-                CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                    Type.LONG,
+                    100L,
+                    atLeast(0L),
+                    Importance.LOW,
+                    CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
             .define(REQUEST_TIMEOUT_MS_CONFIG,
-                Type.INT,
-                40 * 1000,
-                atLeast(0),
-                Importance.LOW,
-                CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+                    Type.INT,
+                    40 * 1000,
+                    atLeast(0),
+                    Importance.LOW,
+                    CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
             .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
-                Type.STRING,
-                CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
-                ConfigDef.CaseInsensitiveValidString
+                    Type.STRING,
+                    CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
+                    ConfigDef.CaseInsensitiveValidString
                     .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
-                Importance.LOW,
-                CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
+                    Importance.LOW,
+                    CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC)
             .define(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG,
-                Type.LONG,
-                CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
-                atLeast(0),
-                Importance.LOW,
-                CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                    Type.LONG,
+                    CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
+                    atLeast(0),
+                    Importance.LOW,
+                    CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
             .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
-                Type.CLASS,
-                null,
-                Importance.LOW,
-                ROCKSDB_CONFIG_SETTER_CLASS_DOC)
+                    Type.CLASS,
+                    null,
+                    Importance.LOW,
+                    ROCKSDB_CONFIG_SETTER_CLASS_DOC)
             .define(SEND_BUFFER_CONFIG,
-                Type.INT,
-                128 * 1024,
-                atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
-                Importance.LOW,
-                CommonClientConfigs.SEND_BUFFER_DOC)
+                    Type.INT,
+                    128 * 1024,
+                    atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
+                    Importance.LOW,
+                    CommonClientConfigs.SEND_BUFFER_DOC)
             .define(STATE_CLEANUP_DELAY_MS_CONFIG,
-                Type.LONG,
-                10 * 60 * 1000L,
-                Importance.LOW,
-                STATE_CLEANUP_DELAY_MS_DOC)
+                    Type.LONG,
+                    10 * 60 * 1000L,
+                    Importance.LOW,
+                    STATE_CLEANUP_DELAY_MS_DOC)
             .define(UPGRADE_FROM_CONFIG,
-                Type.STRING,
-                null,
-                in(Stream.concat(
-                    Stream.of((String) null),
-                    Arrays.stream(UpgradeFromValues.values()).map(UpgradeFromValues::toString)
-                ).toArray(String[]::new)),
-                Importance.LOW,
-                UPGRADE_FROM_DOC)
+                    Type.STRING,
+                    null,
+                    in(Stream.concat(
+                        Stream.of((String) null),
+                        Arrays.stream(UpgradeFromValues.values()).map(UpgradeFromValues::toString)
+                    ).toArray(String[]::new)),
+                    Importance.LOW,
+                    UPGRADE_FROM_DOC)
             .define(WINDOWED_INNER_CLASS_SERDE,
-                Type.STRING,
-                null,
-                Importance.LOW,
-                WINDOWED_INNER_CLASS_SERDE_DOC)
+                    Type.STRING,
+                    null,
+                    Importance.LOW,
+                    WINDOWED_INNER_CLASS_SERDE_DOC)
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
-                Type.LONG,
-                24 * 60 * 60 * 1000L,
-                Importance.LOW,
-                WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+                    Type.LONG,
+                    24 * 60 * 60 * 1000L,
+                    Importance.LOW,
+                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
             .define(WINDOW_SIZE_MS_CONFIG,
-                Type.LONG,
-                null,
-                Importance.LOW,
-                WINDOW_SIZE_MS_DOC);
+                    Type.LONG,
+                    null,
+                    Importance.LOW,
+                    WINDOW_SIZE_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -1536,19 +1536,19 @@ public class StreamsConfig extends AbstractConfig {
         final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
         final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
         final int transactionTimeout =
-            originals().containsKey(transactionTimeoutConfigKey) ?
-                (int) Objects.requireNonNull(
-                    parseType(transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT),
-                    "Could not parse config `" + COMMIT_INTERVAL_MS_CONFIG + "` because it's set to `null`") :
-                DEFAULT_TRANSACTION_TIMEOUT;
+                originals().containsKey(transactionTimeoutConfigKey) ?
+                    (int) Objects.requireNonNull(
+                        parseType(transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT),
+                        "Could not parse config `" + COMMIT_INTERVAL_MS_CONFIG + "` because it's set to `null`") :
+                    DEFAULT_TRANSACTION_TIMEOUT;
 
         if (transactionTimeout < commitInterval) {
             throw new IllegalArgumentException(String.format(
                 "Transaction timeout %d was set lower than " +
-                    "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
-                    "caused by long commit interval. Consider reconfiguring commit interval to match " +
-                    "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
-                    "commit interval by tuning `producer.transaction.timeout.ms` config.",
+                "streams commit interval %d. This will cause ongoing transaction always timeout due to inactivity " +
+                "caused by long commit interval. Consider reconfiguring commit interval to match " +
+                "transaction timeout by tuning 'commit.interval.ms' config, or increase the transaction timeout to match " +
+                "commit interval by tuning `producer.transaction.timeout.ms` config.",
                 transactionTimeout,
                 commitInterval
             ));
@@ -1573,8 +1573,8 @@ public class StreamsConfig extends AbstractConfig {
                                                                    final Boolean mainConsumerMetricsConfig) {
         if (consumerMetricsConfig != null) {
             if (!consumerMetricsConfig
-                && mainConsumerMetricsConfig == null
-                && adminMetricsConfig == null) {
+                    && mainConsumerMetricsConfig == null
+                    && adminMetricsConfig == null) {
                 throw new ConfigException("Kafka Streams metrics push enabled but consumer.enable.metrics is false, the setting needs to be consistent between the two");
             } else if (consumerMetricsConfig) {
                 checkMainConsumerAndAdminMetricsConfig(adminMetricsConfig, mainConsumerMetricsConfig, "and consumer.enable.metrics are enabled,");
@@ -1584,7 +1584,7 @@ public class StreamsConfig extends AbstractConfig {
 
     private void checkMainConsumerAndAdminMetricsConfig(final Boolean adminMetricsConfig, final Boolean mainConsumerMetricsConfig, final String message) {
         if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig
-            && adminMetricsConfig != null && !adminMetricsConfig) {
+                && adminMetricsConfig != null && !adminMetricsConfig) {
             throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer and admin.client metrics push are disabled, the setting needs to be consistent between the two");
         } else if (mainConsumerMetricsConfig != null && !mainConsumerMetricsConfig) {
             throw new ConfigException("Kafka Streams metrics push " + message + " but main.consumer metrics push is disabled, the setting needs to be consistent between the two");
@@ -1608,7 +1608,7 @@ public class StreamsConfig extends AbstractConfig {
 
         if (StreamsConfigUtils.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using {} default value of {} as exactly once is enabled.",
-                COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
+                    COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
 
@@ -1623,28 +1623,28 @@ public class StreamsConfig extends AbstractConfig {
 
         if (clientTags.size() > MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE) {
             throw new ConfigException("At most " + MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE + " client tags " +
-                "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
+                                      "can be specified using " + CLIENT_TAG_PREFIX + " prefix.");
         }
 
         for (final String rackAwareAssignmentTag : rackAwareAssignmentTags) {
             if (!clientTags.containsKey(rackAwareAssignmentTag)) {
                 throw new ConfigException(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
-                    rackAwareAssignmentTags,
-                    "Contains invalid value [" + rackAwareAssignmentTag + "] " +
-                        "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
+                                          rackAwareAssignmentTags,
+                                          "Contains invalid value [" + rackAwareAssignmentTag + "] " +
+                                          "which doesn't have corresponding tag set via [" + CLIENT_TAG_PREFIX + "] prefix.");
             }
         }
 
         clientTags.forEach((tagKey, tagValue) -> {
             if (tagKey.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH) {
                 throw new ConfigException(CLIENT_TAG_PREFIX,
-                    tagKey,
-                    "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
+                                          tagKey,
+                                          "Tag key exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH + ".");
             }
             if (tagValue.length() > MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH) {
                 throw new ConfigException(CLIENT_TAG_PREFIX,
-                    tagValue,
-                    "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
+                                          tagValue,
+                                          "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
             }
         });
     }

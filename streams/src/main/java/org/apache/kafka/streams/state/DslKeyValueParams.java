@@ -86,8 +86,8 @@ public class DslKeyValueParams {
         }
         final DslKeyValueParams that = (DslKeyValueParams) o;
         return isTimestamped == that.isTimestamped
-            && dslStoreFormat == that.dslStoreFormat
-            && Objects.equals(name, that.name);
+                && dslStoreFormat == that.dslStoreFormat
+                && Objects.equals(name, that.name);
     }
 
     @Override
@@ -98,9 +98,9 @@ public class DslKeyValueParams {
     @Override
     public String toString() {
         return "DslKeyValueParams{" +
-            "name='" + name + '\'' +
-            "isTimestamped=" + isTimestamped +
-            "dslStoreFormat=" + dslStoreFormat +
-            '}';
+                "name='" + name + '\'' +
+                "isTimestamped=" + isTimestamped +
+                "dslStoreFormat=" + dslStoreFormat +
+                '}';
     }
 }
