@@ -34,6 +34,7 @@ import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.internals.DefaultErrorHandlerContext;
+import org.apache.kafka.streams.errors.internals.FailedProcessingException;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -50,16 +51,10 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
@@ -344,7 +339,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             );
                             continue; // Skip this record
                         }
-
+                        final ProcessingExceptionHandler.Response response;
                         // Processing phase
                         try {
                             @SuppressWarnings("unchecked")
@@ -372,16 +367,35 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                     record.key(),
                                     record.value()
                                 );
-                                final ProcessingExceptionHandler.Response response = 
-                                    processingExceptionHandler.handleError(
-                                        errorHandlerContext,
-                                        deserializedRecord,
-                                        processingException
+                                try {
+                                     response =
+                                            Objects.requireNonNull(processingExceptionHandler.handleError(
+                                                    errorHandlerContext,
+                                                    deserializedRecord,
+                                                    processingException
+                                            ), "Invalid ProcessingExceptionHandler response");
+                                    log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
+                                                    "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
+                                            errorHandlerContext);
+                                } catch (Exception fatalUserException) {
+                                    log.error(
+                                            "Processing error callback failed after processing error for record: {}",
+                                            errorHandlerContext,
+                                            processingException
                                     );
+                                    throw new FailedProcessingException(
+                                            "Fatal user code error in processing error callback",
+                                            globalProcessorContext.currentNode().name(),
+                                            fatalUserException
+                                    );
+                                }
                                 
                                 if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
-                                    log.error("Processing exception handler chose to fail for record at offset {}", record.offset());
-                                    throw processingException;
+                                    log.error("Processing exception handler is set to fail upon" +
+                                            " a processing error. If you would rather have the streaming pipeline" +
+                                            " continue after a processing error, please set the " +
+                                            PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+                                    throw new FailedProcessingException(globalProcessorContext.currentNode().name(), processingException);
                                 }
                                 // RESUME - log and continue
                                 log.warn("Processing exception handler chose to resume for record at offset {}", record.offset(), processingException);

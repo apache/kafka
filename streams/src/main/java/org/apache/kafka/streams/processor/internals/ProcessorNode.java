@@ -256,8 +256,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             if (!deadLetterQueueRecords.isEmpty()) {
                 if (!(internalProcessorContext instanceof RecordCollector.Supplier)) {
                     log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
-                            "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " +
-                            "Record details logged: topic={}, headers={}", internalProcessorContext.topic(), internalProcessorContext.headers());
+                            "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
+                            errorHandlerContext);
                 } else {
                     final RecordCollector collector = ((RecordCollector.Supplier) internalProcessorContext).recordCollector();
                     for (final ProducerRecord<byte[], byte[]> deadLetterQueueRecord : deadLetterQueueRecords) {
@@ -274,9 +274,9 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
             if (response.result() == ProcessingExceptionHandler.Result.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
-                     " a processing error. If you would rather have the streaming pipeline" +
-                     " continue after a processing error, please set the " +
-                     PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
+                        " a processing error. If you would rather have the streaming pipeline" +
+                        " continue after a processing error, please set the " +
+                        PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
                 throw new FailedProcessingException(internalProcessorContext.currentNode().name(), processingException);
             } else {
                 droppedRecordsSensor.record();

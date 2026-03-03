@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -439,13 +440,18 @@ public class TopologyTestDriver implements Closeable {
                 new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache, mockWallClockTime);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
+            final ProcessingExceptionHandler processingExceptionHandler = 
+                streamsConfig.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) 
+                    ? streamsConfig.processingExceptionHandler() 
+                    : null;
+
             globalStateTask = new GlobalStateUpdateTask(
                 logContext,
                 globalTopology,
                 globalProcessorContext,
                 globalStateManager,
                 new LogAndContinueExceptionHandler(),
-                null,
+                processingExceptionHandler,
                 mockWallClockTime,
                 streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
             );

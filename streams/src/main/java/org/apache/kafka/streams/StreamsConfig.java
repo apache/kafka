@@ -1257,7 +1257,11 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.LOW,
                     WINDOW_SIZE_MS_DOC)
-                .define(PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, Type.BOOLEAN, false, Importance.LOW, PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC);
+            .define(PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.LOW,
+                    PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC);
     }
 
     // this is the list of configs for underlying clients

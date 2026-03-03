@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -108,6 +109,9 @@ public class GlobalKTableIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
+        TestGlobalProcessingExceptionHandler.handlerInvoked.set(false);
+        TestGlobalProcessingExceptionHandler.shouldResume = false;
+        
         builder = new StreamsBuilder();
         final String safeTestName = safeUniqueTestName(testInfo);
         createTopics(safeTestName);
@@ -362,7 +366,7 @@ public class GlobalKTableIntegrationTest {
                 Consumed.with(Serdes.Long(), Serdes.String()),
                 () -> new ContextualProcessor<Long, String, Void, Void>() {
                     @Override
-                    public void process(org.apache.kafka.streams.processor.api.Record<Long, String> record) {
+                    public void process(final Record<Long, String> record) {
                         if (record.key() == 2L) {
                             throw new RuntimeException("Test processing exception");
                         }
@@ -376,7 +380,7 @@ public class GlobalKTableIntegrationTest {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = true;
-        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
             TestGlobalProcessingExceptionHandler.class);
 
@@ -391,7 +395,7 @@ public class GlobalKTableIntegrationTest {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = false;
-        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
 
@@ -407,7 +411,7 @@ public class GlobalKTableIntegrationTest {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = false;
-        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,false);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
 
@@ -423,7 +427,7 @@ public class GlobalKTableIntegrationTest {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
         TestGlobalProcessingExceptionHandler.shouldResume = true;
-        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
 
@@ -441,7 +445,7 @@ public class GlobalKTableIntegrationTest {
     public void testProcessingExceptionHandlerFailEnabledRunTimePhase() throws Exception {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
-        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,true);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, true);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
 
@@ -455,7 +459,7 @@ public class GlobalKTableIntegrationTest {
     public void testProcessingExceptionHandlerDisabledRunTimePhase() throws Exception {
         createBuilderWithFailedProcessor();
         // enable processing exception handler invoked config
-        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,false);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG, false);
         streamsConfiguration.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                 TestGlobalProcessingExceptionHandler.class);
 
@@ -471,13 +475,13 @@ public class GlobalKTableIntegrationTest {
         static boolean shouldResume = false;
 
         @Override
-        public Response handleError(ErrorHandlerContext context, org.apache.kafka.streams.processor.api.Record<?, ?> record, Exception exception) {
+        public Response handleError(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
             handlerInvoked.set(true);
             return shouldResume ? Response.resume() : Response.fail();
         }
 
         @Override
-        public void configure(Map<String, ?> configs) {
+        public void configure(final Map<String, ?> configs) {
         }
     }
 
