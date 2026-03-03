@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -56,6 +57,11 @@ public class DefaultJwtValidator implements JwtValidator {
         this.verificationKeyResolver = Optional.empty();
     }
 
+    /**
+     * @param verificationKeyResolver The resolver (typed as Object to avoid
+     *        importing CloseableVerificationKeyResolver, which extends jose4j's
+     *        VerificationKeyResolver and would trigger class loading)
+     */
     public DefaultJwtValidator(Object verificationKeyResolver) {
         this.verificationKeyResolver = Optional.of(verificationKeyResolver);
     }
@@ -99,10 +105,10 @@ public class DefaultJwtValidator implements JwtValidator {
             Class<?> clazz = Class.forName(BROKER_JWT_VALIDATOR_CLASS);
             return (JwtValidator) clazz.getDeclaredConstructor().newInstance();
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException(
-                "BrokerJwtValidator requires the jose4j library. Please add org.bitbucket.b_c:jose4j to your classpath.", e);
+            throw new KafkaException(
+                BROKER_JWT_VALIDATOR_CLASS + " requires the jose4j library. Please add org.bitbucket.b_c:jose4j to your classpath.", e);
         } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException("Failed to create BrokerJwtValidator", e);
+            throw new KafkaException("Failed to create " + BROKER_JWT_VALIDATOR_CLASS, e);
         }
     }
 
@@ -113,10 +119,10 @@ public class DefaultJwtValidator implements JwtValidator {
             Constructor<?> ctor = clazz.getDeclaredConstructor(resolverClass);
             return (JwtValidator) ctor.newInstance(verificationKeyResolver);
         } catch (ClassNotFoundException e) {
-            throw new RuntimeException(
-                "BrokerJwtValidator requires the jose4j library. Please add org.bitbucket.b_c:jose4j to your classpath.", e);
+            throw new KafkaException(
+                BROKER_JWT_VALIDATOR_CLASS + " requires the jose4j library. Please add org.bitbucket.b_c:jose4j to your classpath.", e);
         } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException("Failed to create BrokerJwtValidator", e);
+            throw new KafkaException("Failed to create " + BROKER_JWT_VALIDATOR_CLASS, e);
         }
     }
 }
