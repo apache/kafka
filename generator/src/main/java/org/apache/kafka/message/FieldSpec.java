@@ -88,7 +88,7 @@ public final class FieldSpec {
                 name + " structure.");
         }
         this.fields = Collections.unmodifiableList(fields == null ?
-            Collections.emptyList() : new ArrayList<>(fields));
+            List.of() : new ArrayList<>(fields));
         this.type = FieldType.parse(Objects.requireNonNull(type));
         this.mapKey = mapKey;
         this.nullableVersions = Versions.parse(nullableVersions, Versions.NONE);
