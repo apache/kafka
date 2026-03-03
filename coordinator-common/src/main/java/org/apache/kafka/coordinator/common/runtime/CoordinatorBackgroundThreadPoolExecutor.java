@@ -51,7 +51,7 @@ public class CoordinatorBackgroundThreadPoolExecutor extends ThreadPoolExecutor 
             0L,
             TimeUnit.MILLISECONDS,
             new LinkedBlockingQueue<>(),
-            ThreadUtils.createThreadFactory(threadPrefix + "%d", false)
+            ThreadUtils.createThreadFactory(Objects.requireNonNull(threadPrefix) + "%d", false)
         );
         this.time = Objects.requireNonNull(time);
         this.metrics = Objects.requireNonNull(metrics);
