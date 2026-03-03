@@ -14,15 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.metrics;
+package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImpl;
+import org.junit.jupiter.api.Test;
 
-public class GroupCoordinatorRuntimeMetrics extends CoordinatorRuntimeMetricsImpl {
-    public static final String METRICS_GROUP = "group-coordinator-metrics";
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-    public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
-        super(metrics, METRICS_GROUP, true);
+public class RocksDBSessionStoreWithHeadersTest {
+
+    @Test
+    public void shouldThrowUnsupportedOperationOnQuery() {
+        final RocksDBSessionStoreWithHeaders store = new RocksDBSessionStoreWithHeaders(
+            new RocksDBSegmentedBytesStore("test", "scope", 10_000L,
+                60_000L, new SessionKeySchema()));
+        assertThrows(UnsupportedOperationException.class,
+            () -> store.query(null, null, null));
     }
 }

@@ -799,7 +799,15 @@ public class StreamsConfig extends AbstractConfig {
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
         "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config.";
 
-    /** {@code topology.optimization} */
+    /**
+     * {@code topology.optimization}
+     *
+     * <p><b>Important:</b> Setting this config alone is not sufficient to enable optimizations.
+     * You must also pass the {@link java.util.Properties} object to
+     * {@link org.apache.kafka.streams.StreamsBuilder#build(java.util.Properties)} when building
+     * your topology. Calling {@code StreamsBuilder.build()} without the properties argument will
+     * result in no optimizations being applied, even if this config is set.
+     */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
         + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
@@ -809,7 +817,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
         + CONFIG_ERROR_MSG
-        + "\"NO_OPTIMIZATION\" by default.";
+        + "\"NO_OPTIMIZATION\" by default. "
+        + "Note: this config must also be passed to StreamsBuilder#build(Properties) "
+        + "for optimizations to take effect.";
 
     /**
      * {@code windowed.inner.class.serde}
