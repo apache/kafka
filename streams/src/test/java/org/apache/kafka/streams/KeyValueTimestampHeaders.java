@@ -62,10 +62,10 @@ public class KeyValueTimestampHeaders<K, V> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         final KeyValueTimestampHeaders<?, ?> that = (KeyValueTimestampHeaders<?, ?>) o;
-        return timestamp == that.timestamp &&
-            Objects.equals(key, that.key) &&
-            Objects.equals(value, that.value) &&
-            Objects.equals(headers, that.headers);
+        return timestamp == that.timestamp
+                && Objects.equals(key, that.key)
+                && Objects.equals(value, that.value)
+                && Objects.equals(headers, that.headers);
     }
 
     @Override

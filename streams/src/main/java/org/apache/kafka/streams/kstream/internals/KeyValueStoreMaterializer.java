@@ -38,7 +38,7 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
     private static final Logger LOG = LoggerFactory.getLogger(KeyValueStoreMaterializer.class);
 
     public KeyValueStoreMaterializer(
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
+            final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized
     ) {
         super(materialized);
     }
@@ -76,20 +76,22 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
                 builder.withCachingEnabled();
             }
         }
+
+
         return builder;
     }
 
     @Override
     public long retentionPeriod() {
         throw new IllegalStateException(
-            "retentionPeriod is not supported when not a window store");
+                "retentionPeriod is not supported when not a window store");
     }
 
     @Override
     public long historyRetention() {
         if (!(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier)) {
             throw new IllegalStateException(
-                "historyRetention is not supported when not a versioned store");
+                    "historyRetention is not supported when not a versioned store");
         }
         return ((VersionedBytesStoreSupplier) materialized.storeSupplier()).historyRetentionMs();
     }
