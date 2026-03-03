@@ -249,8 +249,9 @@ public class TransactionMetadata {
     }
 
     public TxnTransitMetadata prepareProducerIdRotationForOngoing(long newNextProducerId, long updateTimestamp) {
-        if (hasPendingTransaction())
-            throw new IllegalStateException("Cannot rotate producer ids while a transaction is still pending");
+        if (state != TransactionState.ONGOING)
+            throw new IllegalStateException("Cannot rotate producer ids for ongoing transaction when state is " + state +
+                "; producer ID rotation for ongoing transactions is only allowed in ONGOING state");
 
         TransitionData data = new TransitionData(state);
         data.nextProducerId = newNextProducerId;
@@ -290,7 +291,7 @@ public class TransactionMetadata {
         if (clientTransactionVersion.supportsEpochBump()) {
             // We already ensured that we do not overflow here. MAX_SHORT is the highest possible value.
             data.producerEpoch = (short) (producerEpoch + 1);
-            data.lastProducerEpoch = producerEpoch;
+            data.lastProducerEpoch = clientProducerEpoch();
         } else {
             data.producerEpoch = producerEpoch;
             data.lastProducerEpoch = lastProducerEpoch;
@@ -521,13 +522,20 @@ public class TransactionMetadata {
 
         if (isAtLeastTransactionsV2 &&
             (txnState == TransactionState.COMPLETE_COMMIT || txnState == TransactionState.COMPLETE_ABORT) &&
-            transitProducerEpoch == 0) {
-            return transitLastProducerEpoch == lastProducerEpoch && transitMetadata.prevProducerId() == producerId;
+            transitProducerId != producerId) {
+            // Producer ID rotation case: validate that the transition metadata has the correct prevProducerId
+            // and that the transitProducerEpoch matches the nextProducerEpoch (which may have been bumped during EndTransaction).
+            // If nextProducerEpoch is not set (NO_PRODUCER_EPOCH), then transitProducerEpoch should be 0 (standard rotation).
+            boolean epochMatches = hasNextProducerEpoch() ?
+                transitProducerEpoch == nextProducerEpoch : transitProducerEpoch == 0;
+            return transitLastProducerEpoch == lastProducerEpoch &&
+                   transitMetadata.prevProducerId() == producerId &&
+                   epochMatches;
         }
 
         if (isAtLeastTransactionsV2 &&
             (txnState == TransactionState.PREPARE_COMMIT || txnState == TransactionState.PREPARE_ABORT)) {
-            return transitLastProducerEpoch == producerEpoch && transitProducerId == producerId;
+            return transitLastProducerEpoch == clientProducerEpoch() && transitProducerId == producerId;
         }
         return transitProducerEpoch == producerEpoch && transitProducerId == producerId;
     }

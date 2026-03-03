@@ -824,6 +824,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               // Calculate retry conditions, note that they are going to be used only
               // in CompleteCommit / CompleteAbort states, so we can use the semantics
               // of the producerId / epoch that's applicable in those states.
+              // Also note that the retry-on-overflow condition happens only when
+              // overflow happens during last commit / abort, overflows during
+              // InitProducerId(keepPreparedTxn=true) go through retry-on-epoch-bump
+              // path.  Example:
+              //  1. State ONGOING, {pid, epoch} = {42, 10}, {nextPid, nextEpoch} = {73, 85} -- the client-facing epoch has overflown
+              //  2. Commit transitions to {pid, epoch} = {73, 86} and the client retries with {73, 85} -- retryOnEpochBump
+              // Another example where we overflow during commit after going through overflow with keepPreparedTxn = true
+              //  1. State ONGOING, {pid, epoch} = {42, 10}, {nextPid, nextEpoch} = {73, 32766}
+              //  2. Commit transitions to {pid, epoch} = {85, 0}, prevPid = 73 and the client retries with {73, 32766} -- retryOnOverflow
+
               // True if the client retried a request that had overflowed the epoch, and a new producer ID is stored in the txnMetadata
               val retryOnOverflow = !isEpochFence && txnMetadata.prevProducerId == producerId &&
                 producerEpoch == Short.MaxValue - 1 && txnMetadata.producerEpoch == 0

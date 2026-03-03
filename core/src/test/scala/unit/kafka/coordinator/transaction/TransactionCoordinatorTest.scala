@@ -93,13 +93,13 @@ class TransactionCoordinatorTest {
    * and calls InitProducerId(keepPreparedTxn=true) to bump client epoch.
    * Returns the transit metadata captor for verifying subsequent operations.
    */
-  private def setupPrepared2PcTxnWithBumpedClientEpoch(): ArgumentCaptor[TxnTransitMetadata] = {
+  private def setupPrepared2PcTxnWithBumpedClientEpoch(initialEpoch: Short = producerEpoch, testProducerId: Long = producerId): ArgumentCaptor[TxnTransitMetadata] = {
     // Setup: ONGOING transaction with no next producer epoch set
     // Use Integer.MAX_VALUE for timeout to indicate this is a distributed 2PC transaction
     val txnMetadata = new TransactionMetadata(
       transactionalId,
-      producerId, producerId, RecordBatch.NO_PRODUCER_ID,
-      producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH,
+      testProducerId, testProducerId, RecordBatch.NO_PRODUCER_ID,
+      initialEpoch, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_PRODUCER_EPOCH,
       Integer.MAX_VALUE /*2PC*/, TransactionState.ONGOING, partitions,
       time.milliseconds(), time.milliseconds(), TV_2
     )
@@ -132,7 +132,7 @@ class TransactionCoordinatorTest {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
     })
 
-    val bumpedClientEpoch = (producerEpoch + 1).toShort
+    val bumpedClientEpoch = (initialEpoch + 1).toShort
 
     // Action: Call InitProducerId(keepPreparedTxn=true) to set up dual identity
     coordinator.handleInitProducerId(
@@ -145,14 +145,14 @@ class TransactionCoordinatorTest {
     )
 
     // Verify dual identity was set up in InitProducerId result
-    assertEquals(producerId, result.producerId)
+    assertEquals(testProducerId, result.producerId)
     assertEquals(bumpedClientEpoch, result.producerEpoch)
-    assertEquals(producerId, result.ongoingTxnProducerId)
-    assertEquals(producerEpoch, result.ongoingTxnProducerEpoch)
+    assertEquals(testProducerId, result.ongoingTxnProducerId)
+    assertEquals(initialEpoch, result.ongoingTxnProducerEpoch)
     assertEquals(Errors.NONE, result.error)
 
     // Verify dual identity was set up in TransactionMetadata
-    assertEquals(producerId, txnMetadata.nextProducerId)
+    assertEquals(testProducerId, txnMetadata.nextProducerId)
     assertEquals(bumpedClientEpoch, txnMetadata.nextProducerEpoch)
 
     capturedTransitMetadata
@@ -2314,17 +2314,19 @@ class TransactionCoordinatorTest {
       // Verify: Transaction completes successfully
       assertEquals(Errors.NONE, error)
 
-      // Verify: Transaction transitions to expected state
-      // Get the third call (index 2) which is the complete, index 0 was first InitProducerId, index 1 was second
+      // Verify: Transaction transitions to expected state.  Get the third call
+      // (index 2) which is the complete, index 0 was first InitProducerId,
+      // index 1 was second.
       val transitMetadata = capturedTransitMetadata.getAllValues.get(2)
       assertEquals(expectedState, transitMetadata.txnState)
 
-      // Verify: Markers are sent with bumped epoch
-      // prepareAbortOrCommit bumps producerEpoch for TV2
+      // Verify: Markers are sent with bumped epoch.
+      // prepareAbortOrCommit bumps producerEpoch for TV2.
       assertEquals(producerId, transitMetadata.producerId)
       assertEquals(bumpedEpoch, transitMetadata.producerEpoch)
 
-      // Verify: After complete, nextProducerEpoch is bumped again (third time total)
+      // Verify: After complete, nextProducerEpoch is bumped again
+      // (third time total).
       assertEquals(tripleBumpedEpoch, transitMetadata.nextProducerEpoch)
     }
 
@@ -2335,9 +2337,10 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRejectAddPartitionsAfterInitProducerIdWithKeepPreparedTxn(): Unit = {
-    // Test that trying to add partitions with the client-facing epoch (after calling
-    // InitProducerId with keepPreparedTxn=true) returns INVALID_TXN_STATE.
-    // A properly implemented client should never try this, but the server validates it.
+    // Test that trying to add partitions with the client-facing epoch (after
+    // calling InitProducerId with keepPreparedTxn=true) returns
+    // INVALID_TXN_STATE.  A properly implemented client should never try this,
+    // but the server validates it.
 
     setupPrepared2PcTxnWithBumpedClientEpoch()  // Return value not used - only need the setup and mocks
 
@@ -2360,5 +2363,381 @@ class TransactionCoordinatorTest {
 
     // Verify: Returns INVALID_TXN_STATE (cannot add partitions in this state)
     assertEquals(Errors.INVALID_TXN_STATE, error)
+  }
+
+  @Test
+  def shouldRotateProducerIdWhenClientEpochExhausted(): Unit = {
+    // Test that when the client epoch reaches Short.MaxValue, a new producer ID is allocated
+    // and the client epoch resets to 0, while the ongoing transaction identity remains unchanged.
+
+    val startEpoch = (Short.MaxValue - 2).toShort  // 32765
+    mockPidGenerator()
+
+    // Setup: Use helper to create ONGOING transaction at epoch boundary and make first InitProducerId call
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch(startEpoch)
+
+    // Intermediate verify: epoch bumped to 32766, same producer ID
+    val firstClientEpoch = (Short.MaxValue - 1).toShort
+    assertEquals(producerId, result.producerId)
+    assertEquals(firstClientEpoch, result.producerEpoch)
+    assertEquals(producerId, result.ongoingTxnProducerId)
+    assertEquals(startEpoch, result.ongoingTxnProducerEpoch)
+
+    // Verify captured metadata from first call
+    val firstMetadata = capturedTransitMetadata.getAllValues.get(0)
+    assertEquals(producerId, firstMetadata.nextProducerId)
+    assertEquals(firstClientEpoch, firstMetadata.nextProducerEpoch)
+
+    // Second call: exhaust at 32767, should rotate producer ID
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = true,
+      keepPreparedTxn = true,
+      None,
+      initProducerIdMockCallback
+    )
+
+    // Verify: new producer ID allocated, epoch reset to 0
+    val rotatedProducerId = nextPid - 1  // Most recently allocated PID
+    assertTrue(rotatedProducerId != producerId, "Producer ID should have rotated")
+    assertEquals(rotatedProducerId, result.producerId)
+    assertEquals(0, result.producerEpoch)
+    // Ongoing transaction identity unchanged
+    assertEquals(producerId, result.ongoingTxnProducerId)
+    assertEquals(startEpoch, result.ongoingTxnProducerEpoch)
+
+    // Verify captured metadata from second call shows rotation
+    val secondMetadata = capturedTransitMetadata.getAllValues.get(1)
+    assertEquals(rotatedProducerId, secondMetadata.nextProducerId)
+    assertEquals(0, secondMetadata.nextProducerEpoch)
+    // Original ongoing identity unchanged
+    assertEquals(producerId, secondMetadata.producerId)
+    assertEquals(startEpoch, secondMetadata.producerEpoch)
+  }
+
+  @Test
+  def shouldHandleMultipleProducerIdRotationsForOngoingTxn(): Unit = {
+    // Test that multiple producer ID rotations can occur during a single ongoing transaction,
+    // and the ongoing transaction identity remains constant throughout.
+
+    val startEpoch = (Short.MaxValue - 3).toShort  // 32764
+    mockPidGenerator()
+
+    // Setup: Use helper to create ONGOING transaction at epoch boundary and make first InitProducerId call
+    // Helper will bump: 32764 → 32765, establishing dual identity
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch(startEpoch)
+
+    // Track rotations starting from the state after helper's InitProducerId call
+    var rotationCount = 0
+    val targetRotations = 2
+    var currentClientEpoch: Short = result.producerEpoch  // 32765 after helper
+    val allocatedProducerIds = scala.collection.mutable.Set[Long](producerId)
+
+    // Loop until we've seen 2 rotations
+    while (rotationCount < targetRotations) {
+      coordinator.handleInitProducerId(
+        transactionalId,
+        txnTimeoutMs,
+        enableTwoPCFlag = true,
+        keepPreparedTxn = true,
+        None,
+        initProducerIdMockCallback
+      )
+
+      // Check if rotation occurred (epoch wrapped to 0)
+      if (result.producerEpoch == 0 && currentClientEpoch != 0) {
+        rotationCount += 1
+        // Verify new producer ID allocated
+        assertFalse(allocatedProducerIds.contains(result.producerId),
+          s"Producer ID ${result.producerId} should be new on rotation ${rotationCount}")
+        allocatedProducerIds.add(result.producerId)
+      }
+
+      // Verify ongoing transaction identity unchanged
+      assertEquals(producerId, result.ongoingTxnProducerId)
+      assertEquals(startEpoch, result.ongoingTxnProducerEpoch)
+
+      currentClientEpoch = result.producerEpoch
+    }
+
+    assertEquals(2, rotationCount, "Should have seen exactly 2 rotations")
+    assertEquals(3, allocatedProducerIds.size, "Should have 3 unique producer IDs (original + 2 rotations)")
+
+    // Verify final state
+    val finalMetadata = capturedTransitMetadata.getAllValues.get(capturedTransitMetadata.getAllValues.size - 1)
+    assertEquals(0, finalMetadata.nextProducerEpoch, "Final epoch should be 0 after rotations")
+    assertFalse(finalMetadata.nextProducerId == producerId, "Final producer ID should be rotated")
+    // Ongoing identity still original
+    assertEquals(producerId, finalMetadata.producerId)
+    assertEquals(startEpoch, finalMetadata.producerEpoch)
+  }
+
+  @Test
+  def shouldCompleteTransactionWithExhaustedEpochs(): Unit = {
+    // Test that transactions can be committed or aborted successfully even
+    // after producer ID rotation due to epoch exhaustion.  This tests the case
+    // where overflow happens either during the second InitProducerId call or
+    // during endTransaction.
+    def testCompleteWithRotation(txnResult: TransactionResult, startEpoch: Short, testProducerId: Long): Unit = {
+
+      // Setup: Use helper to create ONGOING transaction and make first
+      // InitProducerId call.  Helper will bump: startEpoch → startEpoch + 1,
+      // establishing dual identity.
+      val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch(startEpoch, testProducerId)
+
+      // Call InitProducerId again - may rotate producer id (depends on startEpoch)
+      coordinator.handleInitProducerId(
+        transactionalId,
+        txnTimeoutMs,
+        enableTwoPCFlag = true,
+        keepPreparedTxn = true,
+        None,
+        initProducerIdMockCallback
+      )
+
+      // Store client-facing producerId/epoch from InitProducerId result.
+      // Rotation may have happened during InitProducerId or later during
+      // EndTransaction.
+      val clientProducerId = result.producerId
+      val clientProducerEpoch = result.producerEpoch
+
+      // Verify ongoing transaction producerId/epoch unchanged after
+      // InitProducerId (regardless of when rotation happens).
+      assertEquals(testProducerId, result.ongoingTxnProducerId, "Ongoing ID unchanged")
+      assertEquals(startEpoch, result.ongoingTxnProducerEpoch, "Ongoing epoch unchanged")
+
+      val expectedState = if (txnResult == TransactionResult.COMMIT) {
+        TransactionState.PREPARE_COMMIT
+      } else {
+        TransactionState.PREPARE_ABORT
+      }
+
+      // Complete the transaction
+      // TV2 validates against clientProducerId/clientProducerEpoch returned from InitProducerId
+      coordinator.handleEndTransaction(
+        transactionalId,
+        clientProducerId,  // Use client's producer ID from InitProducerId result
+        clientProducerEpoch,  // Use client's epoch from InitProducerId result
+        txnResult,
+        TV_2,
+        endTxnCallback
+      )
+
+      // Capture the TxnTransitMetadata that was passed to addTxnMarkersToSend
+      // This represents the COMPLETE_* transition metadata created by the internal prepareComplete() call
+      val capturedMarkerMetadata: ArgumentCaptor[TxnTransitMetadata] = ArgumentCaptor.forClass(classOf[TxnTransitMetadata])
+      verify(transactionMarkerChannelManager).addTxnMarkersToSend(
+        ArgumentMatchers.eq(coordinatorEpoch),
+        ArgumentMatchers.eq(txnResult),
+        any[TransactionMetadata],
+        capturedMarkerMetadata.capture()
+      )
+
+      // Verify successful completion
+      assertEquals(Errors.NONE, error)
+
+      // Verify transition to expected state.
+      // Index 0: helper's InitProducerId
+      // Index 1: test's InitProducerId (rotation)
+      // Index 2: EndTransaction
+      val prepareMetadata = capturedTransitMetadata.getAllValues.get(2)
+      assertEquals(expectedState, prepareMetadata.txnState)
+
+      // Verify that transaction markers are sent with original (not rotated)
+      // producerId and startEpoch + 1.  The ongoing transaction maintains the
+      // original producerId/epoch, so markers use those credentials.
+      assertEquals(testProducerId, prepareMetadata.producerId,
+        "Markers should use original producerId (ongoing transaction)")
+      assertEquals((startEpoch + 1).toShort, prepareMetadata.producerEpoch,
+        "Markers should use startEpoch + 1 (bumped from ongoing transaction epoch)")
+
+      // Simulate markers being sent and transaction completing to
+      // COMPLETE_COMMIT/COMPLETE_ABORT.  At this point, handleEndTransaction
+      // has already internally called prepareComplete() in the
+      // sendTxnMarkersCallback, so the metadata already has
+      // pendingState=COMPLETE_COMMIT/COMPLETE_ABORT.  We just need to write
+      // the transition to the log to complete it.
+
+      // Use the TxnTransitMetadata created by the internal prepareComplete()
+      val txnTransitMetadata = capturedMarkerMetadata.getValue
+
+      // Append COMPLETE_* transition to log (mock calls completeTransitionTo)
+      transactionManager.appendTransactionToLog(
+        transactionalId,
+        coordinatorEpoch,
+        txnTransitMetadata,
+        _ => {},  // No-op callback since we're just completing the transition
+        _ => false,  // Don't retry on error
+        null
+      )
+
+      // Verify that rotation happened (regardless of whether it occurred during
+      // InitProducerId or EndTransaction). After transaction completes, the final
+      // state should have:
+      //  - A new producerId (different from the original testProducerId)
+      //  - Epoch determined by when rotation occurred (see scenarios below)
+      //  - prevProducerId set to the original testProducerId for retry detection
+      assertNotEquals(testProducerId, txnTransitMetadata.producerId,
+        "Producer ID should have rotated by transaction completion")
+
+      // Verify epoch overflow occurred and total epoch increments.
+      // We do 3 total epoch increments in this test:
+      //   1. In setupPrepared2PcTxnWithBumpedClientEpoch: startEpoch → startEpoch + 1
+      //   2. Second InitProducerId call: startEpoch + 1 → startEpoch + 2 (or rotation)
+      //   3. EndTransaction: bumps nextProducerEpoch again (post-rotation or triggers rotation)
+      // Since rotation happens when trying to exceed MaxValue - 1 (32766), the final
+      // epoch wraps around.
+
+      // Assert 1: Final epoch is less than startEpoch (overflow occurred)
+      assertTrue(txnTransitMetadata.producerEpoch < startEpoch,
+        s"Overflow should have occurred: finalEpoch=${txnTransitMetadata.producerEpoch} < startEpoch=$startEpoch")
+
+      // Assert 2: Total epoch increments = 3 (accounting for overflow)
+      // Formula: finalEpoch + (MaxValue - startEpoch) = total increments
+      // This accounts for increments from startEpoch to MaxValue boundary, then
+      // wrap to 0 and increments to finalEpoch.
+      val totalIncrements = txnTransitMetadata.producerEpoch + Short.MaxValue - startEpoch
+      assertEquals(3, totalIncrements,
+        s"Should have 3 total epoch increments: finalEpoch=${txnTransitMetadata.producerEpoch} + " +
+        s"(MaxValue=${Short.MaxValue} - startEpoch=$startEpoch) = $totalIncrements")
+
+      assertEquals(testProducerId, txnTransitMetadata.prevProducerId,
+        "prevProducerId should track original ID for retry detection")
+
+      // Retry EndTransaction with same client credentials - should succeed as a retry
+      coordinator.handleEndTransaction(
+        transactionalId,
+        clientProducerId,  // Use same client producer ID from InitProducerId result
+        clientProducerEpoch,  // Use same client epoch from InitProducerId result
+        txnResult,
+        TV_2,
+        endTxnCallback
+      )
+
+      // Verify retry succeeds with NONE
+      assertEquals(Errors.NONE, error, "Retry with client credentials should succeed")
+
+      // Reset mock to clear call history for next invocation
+      reset(transactionMarkerChannelManager)
+    }
+
+    // Test both commit and abort with rotation - use different producer IDs
+    // to avoid conflicts
+    mockPidGenerator()  // Initialize PID generator
+
+    // Scenario 1: Rotation happens during InitProducerId call
+    // Example flow:
+    //  1. (initial): Ongoing, pid=100, epoch=32765, nextPid=-1, nextEpoch=-1
+    //  2. InitProducerId(keepPreparedTxn): Ongoing, pid=100, epoch=32765,
+    //     nextPid=100, nextEpoch=32766
+    //  3. InitProducerId(keepPreparedTxn): clientEpoch=32766 triggers
+    //     isEpochExhausted() → rotation. Ongoing, pid=100, epoch=32765,
+    //     nextPid=<new>, nextEpoch=0
+    //  4. CommitTxn/AbortTxn: bumps nextEpoch 0→1 to fence delayed requests
+    //  5. Complete: CompleteCommit, pid=<new>, epoch=1, prevPid=100
+    val startEpoch = (Short.MaxValue - 2).toShort  // 32765
+    testCompleteWithRotation(TransactionResult.COMMIT, startEpoch, 100L)
+    testCompleteWithRotation(TransactionResult.ABORT, startEpoch, 200L)
+
+    // Scenario 2: Rotation happens during EndTransaction call
+    // Example flow:
+    //  1. (initial): Ongoing, pid=300, epoch=32764, nextPid=-1, nextEpoch=-1
+    //  2. InitProducerId(keepPreparedTxn): Ongoing, pid=300, epoch=32764,
+    //     nextPid=300, nextEpoch=32765
+    //  3. InitProducerId(keepPreparedTxn): clientEpoch=32765 < 32766
+    //     (not exhausted) → just epoch bump. Ongoing, pid=300, epoch=32764,
+    //     nextPid=300, nextEpoch=32766
+    //  4. CommitTxn/AbortTxn: prepareAbortOrCommit bumps epoch 32764→32765,
+    //     then generateTxnTransitMetadataForTxnCompletion sees
+    //     isProducerEpochExhausted() → rotation. PrepareCommit, pid=32765,
+    //     nextPid=<new>, nextEpoch=0
+    //  5. Complete: CompleteCommit, pid=<new>, epoch=0, prevPid=300
+    val startEpoch2 = (Short.MaxValue - 3).toShort  // 32764
+    testCompleteWithRotation(TransactionResult.COMMIT, startEpoch2, 300L)
+    testCompleteWithRotation(TransactionResult.ABORT, startEpoch2, 400L)
+  }
+
+  @Test
+  def shouldHandleProducerIdRotationPersistence(): Unit = {
+    // Test that producer ID rotation metadata is correctly persisted through state transitions.
+
+    val startEpoch = (Short.MaxValue - 2).toShort  // 32765
+    mockPidGenerator()
+
+    // Setup: Use helper to create ONGOING transaction and make first InitProducerId call
+    // Helper will bump: 32765 → 32766, establishing dual identity
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch(startEpoch)
+
+    // Call InitProducerId again - this will exhaust at 32767 and rotate
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = true,
+      keepPreparedTxn = true,
+      None,
+      initProducerIdMockCallback
+    )
+
+    // Verify rotation occurred
+    val rotatedProducerId = result.producerId
+    val rotatedEpoch = result.producerEpoch
+    assertNotEquals(producerId, rotatedProducerId, "Producer ID should have rotated")
+    assertEquals(0, rotatedEpoch, "Client epoch should reset to 0")
+
+    // Verify: Check captured metadata shows rotation with prevProducerId set
+    val rotationMetadata = capturedTransitMetadata.getAllValues.get(1)
+    assertEquals(rotatedProducerId, rotationMetadata.nextProducerId,
+      "Rotated ID should be stored in nextProducerId")
+    assertEquals(0, rotationMetadata.nextProducerEpoch,
+      "Rotated epoch should be 0")
+    assertEquals(producerId, rotationMetadata.prevProducerId,
+      "prevProducerId should be set to original ID for retry detection")
+
+    // Verify ongoing identity still uses original producer ID
+    assertEquals(producerId, rotationMetadata.producerId, "Ongoing transaction producerId unchanged")
+    assertEquals(startEpoch, rotationMetadata.producerEpoch, "Ongoing transaction epoch unchanged")
+
+    // Complete the transaction (commit)
+    coordinator.handleEndTransaction(
+      transactionalId,
+      rotatedProducerId,  // Use client's producer ID (rotated)
+      rotatedEpoch,  // Use client's epoch (0 after rotation)
+      TransactionResult.COMMIT,
+      TV_2,
+      endTxnCallback
+    )
+
+    assertEquals(Errors.NONE, error)
+
+    // Verify transition to PREPARE_COMMIT
+    val prepareCommitMetadata = capturedTransitMetadata.getAllValues.get(2)
+    assertEquals(TransactionState.PREPARE_COMMIT, prepareCommitMetadata.txnState)
+
+    // Verify: The key aspect of persistence is that prevProducerId was
+    // correctly set during rotation.  This ensures that after the transaction
+    // completes to EMPTY, retry detection will work correctly by recognizing
+    // requests from the old producer ID.
+    assertEquals(producerId, rotationMetadata.prevProducerId,
+      "prevProducerId persisted for retry detection")
+
+    // Verify: The rotation information is persisted in the metadata.  After
+    // this transaction completes, the next transaction will start with
+    // rotatedProducerId.
+    assertEquals(rotatedProducerId, rotationMetadata.nextProducerId,
+      "Rotated ID persisted in nextProducerId")
+    assertEquals(0, rotationMetadata.nextProducerEpoch,
+      "Rotated epoch persisted as 0")
+
+    // Verify: The state transitions are captured correctly in metadata
+    assertEquals(3, capturedTransitMetadata.getAllValues.size(),
+      "Three state transitions captured")
+    assertEquals(TransactionState.ONGOING,
+      capturedTransitMetadata.getAllValues.get(0).txnState,
+      "First: InitProducerId → ONGOING")
+    assertEquals(TransactionState.ONGOING, rotationMetadata.txnState,
+      "Second: InitProducerId with rotation → ONGOING")
+    assertEquals(TransactionState.PREPARE_COMMIT, prepareCommitMetadata.txnState,
+      "Third: EndTransaction → PREPARE_COMMIT")
   }
 }
