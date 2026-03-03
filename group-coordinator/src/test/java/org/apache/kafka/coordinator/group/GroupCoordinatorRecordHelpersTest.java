@@ -86,6 +86,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -388,8 +389,8 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setAssignedPartitions(Utils.toAssignmentWithEpochs(assigned, 22))
-                .setPartitionsPendingRevocation(Utils.toAssignmentWithEpochs(revoking, 22))
+                .setAssignedPartitions(toAssignmentWithEpochs(assigned, 22))
+                .setPartitionsPendingRevocation(toAssignmentWithEpochs(revoking, 22))
                 .build()
         ));
     }

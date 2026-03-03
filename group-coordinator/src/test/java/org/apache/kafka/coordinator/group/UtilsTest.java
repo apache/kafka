@@ -39,6 +39,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UtilsTest {
     private static final Uuid FOO_TOPIC_ID = Uuid.randomUuid();
@@ -286,6 +287,21 @@ public class UtilsTest {
                 mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 2)
             ),
             result
+        );
+    }
+
+    @Test
+    void testAssignmentFromTopicPartitionsWithInvalidEpochLength() {
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions = List.of(
+            new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(FOO_TOPIC_ID)
+                .setPartitions(Arrays.asList(0, 1, 2))
+                .setAssignmentEpochs(Arrays.asList(5, 6))
+        );
+
+        assertThrows(
+            IllegalStateException.class,
+            () -> Utils.assignmentFromTopicPartitions(topicPartitions, 7)
         );
     }
 }
