@@ -27,6 +27,7 @@ import com.yammer.metrics.core.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -185,9 +186,11 @@ public class DelayedProduce extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        Map<TopicIdPartition, PartitionResponse> responseStatus =
-                produceStatus.entrySet().stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().responseStatus()));
+        Map<TopicIdPartition, PartitionResponse> responseStatus = new HashMap<>();
+
+        for (Map.Entry<TopicIdPartition, ProducePartitionStatus> entry : produceStatus.entrySet()) {
+            responseStatus.put(entry.getKey(), entry.getValue().responseStatus());
+        }
 
         responseCallback.accept(responseStatus);
     }
