@@ -440,10 +440,10 @@ public class TopologyTestDriver implements Closeable {
                 new GlobalProcessorContextImpl(streamsConfig, globalStateManager, streamsMetrics, cache, mockWallClockTime);
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
+            @SuppressWarnings("deprecation")
+            final boolean globalEnabled = streamsConfig.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
             final ProcessingExceptionHandler processingExceptionHandler = 
-                streamsConfig.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) 
-                    ? streamsConfig.processingExceptionHandler() 
-                    : null;
+                globalEnabled ? streamsConfig.processingExceptionHandler() : null;
 
             globalStateTask = new GlobalStateUpdateTask(
                 logContext,

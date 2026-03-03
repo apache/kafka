@@ -130,7 +130,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
         deserializationExceptionHandler = config.deserializationExceptionHandler();
-        processingExceptionHandler = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG) ? config.processingExceptionHandler() : null;
+        @SuppressWarnings("deprecation")
+        final boolean globalEnabled = config.getBoolean(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG);
+        processingExceptionHandler = globalEnabled ? config.processingExceptionHandler() : null;
     }
 
     @Override
@@ -376,18 +378,18 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                     record.value()
                                 );
                                 try {
-                                     response =
-                                            Objects.requireNonNull(processingExceptionHandler.handleError(
-                                                    errorHandlerContext,
-                                                    deserializedRecord,
-                                                    processingException
-                                            ), "Invalid ProcessingExceptionHandler response");
-                                     if (!response.deadLetterQueueRecords().isEmpty()) {
-                                         log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
-                                                         "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
-                                                 errorHandlerContext);
-                                     }
-                                } catch (Exception fatalUserException) {
+                                    response =
+                                        Objects.requireNonNull(processingExceptionHandler.handleError(
+                                            errorHandlerContext,
+                                            deserializedRecord,
+                                            processingException
+                                        ), "Invalid ProcessingExceptionHandler response");
+                                    if (!response.deadLetterQueueRecords().isEmpty()) {
+                                        log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
+                                                "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
+                                            errorHandlerContext);
+                                    }
+                                } catch (final Exception fatalUserException) {
                                     log.error(
                                             "Processing error callback failed after processing error for record: {}",
                                             errorHandlerContext,

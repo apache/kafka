@@ -367,7 +367,7 @@ public class GlobalKTableIntegrationTest {
                 () -> new ContextualProcessor<Long, String, Void, Void>() {
                     @Override
                     public void process(final Record<Long, String> record) {
-                        if (record.key().equals( 2L)) {
+                        if (record.key().equals(2L)) {
                             throw new RuntimeException("Test processing exception");
                         }
                     }
