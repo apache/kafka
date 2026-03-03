@@ -101,6 +101,9 @@ public class BuiltInDslStoreSuppliers {
                         true);
             }
 
+            if (params.storeFormat() == DslStoreFormat.HEADERS) {
+                return Stores.persistentSessionStoreWithHeaders(params.name(), params.retentionPeriod());
+            }
             return Stores.persistentSessionStore(params.name(), params.retentionPeriod());
         }
     }

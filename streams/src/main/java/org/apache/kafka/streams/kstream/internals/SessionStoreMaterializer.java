@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.DslStoreFormat;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.state.DslSessionParams;
@@ -58,11 +59,13 @@ public class SessionStoreMaterializer<K, V> extends MaterializedStoreFactory<K, 
 
     @Override
     public StoreBuilder<?> builder() {
+        final DslStoreFormat storeFormat = dslStoreFormat() == null ? DslStoreFormat.PLAIN : DslStoreFormat.HEADERS;
         final SessionBytesStoreSupplier supplier = materialized.storeSupplier() == null
                 ? dslStoreSuppliers().sessionStore(new DslSessionParams(
                         materialized.storeName(),
                         Duration.ofMillis(retentionPeriod),
-                        emitStrategy))
+                        emitStrategy,
+                        storeFormat))
                 : (SessionBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder = Stores.sessionStoreBuilderWithHeaders(

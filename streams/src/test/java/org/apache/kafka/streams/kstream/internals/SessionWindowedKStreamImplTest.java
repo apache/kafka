@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStore;
@@ -424,7 +425,7 @@ public class SessionWindowedKStreamImplTest {
                 Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final SessionStore<String, String> store = driver.getSessionStore("aggregated");
+            final StateStore store = driver.getAllStateStores().get("aggregated");
             final WrappedStateStore changeLogging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
             assertThat(store, instanceOf(MeteredSessionStore.class));
             assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
