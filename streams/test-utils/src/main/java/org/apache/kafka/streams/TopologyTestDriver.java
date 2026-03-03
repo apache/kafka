@@ -91,6 +91,7 @@ import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
@@ -894,6 +895,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     public Map<String, StateStore> getAllStateStores() {
@@ -926,6 +928,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     public StateStore getStateStore(final String name) throws IllegalArgumentException {
@@ -1007,6 +1010,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1039,6 +1043,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1066,6 +1071,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1090,6 +1096,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getVersionedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1119,6 +1126,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getVersionedKeyValueStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
      * @see #getTimestampedWindowStore(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("unchecked")
@@ -1163,6 +1171,31 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
+     * Get the {@link TimestampedWindowStoreWithHeaders} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link TestInputTopic#pipeInput(TestRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the window store, or {@code null} if no {@link TimestampedWindowStoreWithHeaders} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getTimestampedKeyValueStore(String)
+     * @see #getVersionedKeyValueStore(String)
+     * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getWindowStore(String)
+     * @see #getTimestampedWindowStore(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> WindowStore<K, ValueTimestampHeaders<V>> getTimestampedWindowStoreWithHeaders(final String name) {
+        final StateStore store = getStateStore(name, false);
+        return store instanceof TimestampedWindowStoreWithHeaders ? (TimestampedWindowStoreWithHeaders<K, V>) store : null;
+    }
+
+    /**
      * Get the {@link SessionStore} with the given name.
      * The store can be a "regular" or global store.
      * <p>
@@ -1179,6 +1212,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getTimestampedKeyValueStoreWithHeaders(String)
+     * @see #getTimestampedWindowStoreWithHeaders(String)
      */
     @SuppressWarnings("unchecked")
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
