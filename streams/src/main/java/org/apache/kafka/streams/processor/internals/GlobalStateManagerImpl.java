@@ -51,7 +51,15 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -361,7 +369,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                     record.partition(),
                                     record.offset(),
                                     record.headers(),
-                                    storeName,
+                                    globalProcessorContext.currentNode().name(),
                                     globalProcessorContext.taskId(),
                                     record.timestamp(),
                                     record.key(),
@@ -374,9 +382,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                                     deserializedRecord,
                                                     processingException
                                             ), "Invalid ProcessingExceptionHandler response");
-                                    log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
-                                                    "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
-                                            errorHandlerContext);
+                                     if(!response.deadLetterQueueRecords().isEmpty()) {
+                                         log.warn("Dead letter queue records cannot be sent for GlobalKTable processors " +
+                                                         "(no producer available). DLQ support for GlobalKTable will be addressed in a future KIP. " + "Record context: {}",
+                                                 errorHandlerContext);
+                                     }
                                 } catch (Exception fatalUserException) {
                                     log.error(
                                             "Processing error callback failed after processing error for record: {}",

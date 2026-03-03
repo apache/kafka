@@ -843,6 +843,7 @@ public class StreamsConfig extends AbstractConfig {
             ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
             ProducerConfig.TRANSACTIONAL_ID_CONFIG
         };
+    @Deprecated
     @SuppressWarnings("WeakerAccess")
     public static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG = "processing.exception.handler.global.enabled";
     private static final String PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC =
@@ -1260,7 +1261,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_CONFIG,
                     Type.BOOLEAN,
                     false,
-                    Importance.LOW,
+                    Importance.HIGH,
                     PROCESSING_EXCEPTION_HANDLER_GLOBAL_ENABLED_DOC);
     }
 

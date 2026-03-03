@@ -211,8 +211,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
             // If the processing exception handler is not set (e.g., for global threads),
             // rethrow the exception to let it bubble up to the uncaught exception handler.
-            // The processing exception handler is only set for regular stream tasks, not for
-            // global state update tasks which use a different error handling mechanism.
             if (processingExceptionHandler == null) {
                 throw processingException;
             }
