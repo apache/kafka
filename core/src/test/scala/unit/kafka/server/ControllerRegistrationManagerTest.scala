@@ -295,12 +295,13 @@ class ControllerRegistrationManagerTest {
       assertEquals((true, 0, 0), rpcStats(manager))
 
       // time out the request before polling
+      // this will call the timeout callback
       context.time.sleep(context.mockChannelManager.getTimeoutMs)
       context.mockChannelManager.poll()
       // pendingRpc = false, successfulRpcs = 0, failedRpcs = 1
       assertEquals((false, 0, 1), rpcStats(manager))
 
-      // the timeout callback should schedule a request retry after a delay
+      // the retried request will be sent after retryBackoffMs
       context.time.sleep(retryBackoffMs)
       // pendingRpc = true, successfulRpcs = 0, failedRpcs = 1
       assertEquals((true, 0, 1), rpcStats(manager))
