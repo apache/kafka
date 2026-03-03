@@ -302,7 +302,7 @@ public class CurrentAssignmentBuilder {
 
         // Reuse the original map if no topics need to be removed.
         Map<Uuid, Map<Integer, Integer>> newAssignedPartitions;
-        Map<Uuid, Map<Integer, Integer>> newPartitionsPendingRevocation = Map.of();
+        Map<Uuid, Map<Integer, Integer>> newPartitionsPendingRevocation;
 
         if (subscribedTopicIds.isEmpty() && member.partitionsPendingRevocation().isEmpty()) {
             newAssignedPartitions = Map.of();
@@ -310,6 +310,7 @@ public class CurrentAssignmentBuilder {
             newPartitionsPendingRevocation = memberAssignedPartitions;
         } else {
             newAssignedPartitions = memberAssignedPartitions;
+            newPartitionsPendingRevocation = member.partitionsPendingRevocation();
             for (Map.Entry<Uuid, Map<Integer, Integer>> entry : memberAssignedPartitions.entrySet()) {
                 if (!subscribedTopicIds.contains(entry.getKey())) {
                     if (newAssignedPartitions == memberAssignedPartitions) {
@@ -408,12 +409,10 @@ public class CurrentAssignmentBuilder {
                 !member.partitionsPendingRevocation().getOrDefault(topicId, Map.of()).containsKey(partitionId)
             ) || hasUnreleasedPartitions;
 
-            // Build epochs map for assigned partitions, preserve existing epochs
             if (!assignedPartitions.isEmpty()) {
                 newAssignedPartitions.put(topicId, assignedPartitions);
             }
 
-            // Build epochs map for partitions pending revocation, preserve existing epochs
             if (!partitionsPendingRevocation.isEmpty()) {
                 newPartitionsPendingRevocation.put(topicId, partitionsPendingRevocation);
             }

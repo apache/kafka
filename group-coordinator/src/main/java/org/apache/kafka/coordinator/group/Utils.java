@@ -249,8 +249,14 @@ public class Utils {
             Map<Integer, Integer> partitionEpochs = new HashMap<>();
             List<Integer> partitions = tp.partitions();
             List<Integer> epochs = tp.assignmentEpochs();
+            if (epochs != null && !epochs.isEmpty() && epochs.size() != partitions.size()) {
+                throw new IllegalStateException(
+                    String.format("Assignment epochs size %d does not match partitions size %d for topic %s.",
+                        epochs.size(), partitions.size(), tp.topicId())
+                );
+            }
             for (int i = 0; i < partitions.size(); i++) {
-                int epoch = (epochs != null && epochs.size() > i) ? epochs.get(i) : adjustedDefaultEpoch;
+                int epoch = (epochs == null || epochs.isEmpty()) ? adjustedDefaultEpoch : epochs.get(i);
                 partitionEpochs.put(partitions.get(i), epoch);
             }
             assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));

@@ -804,13 +804,13 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     private static List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> toTopicPartitions(
-        Map<Uuid, Map<Integer, Integer>> topicPartitionsWithEpochs
+        Map<Uuid, Map<Integer, Integer>> assignment
     ) {
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(topicPartitionsWithEpochs.size());
-        topicPartitionsWithEpochs.forEach((topicId, partitionEpochMap) -> {
-            List<Integer> partitionList = new ArrayList<>(partitionEpochMap.keySet());
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topics = new ArrayList<>(assignment.size());
+        assignment.forEach((topicId, partitionEpochs) -> {
+            List<Integer> partitionList = new ArrayList<>(partitionEpochs.keySet());
             List<Integer> epochList = partitionList.stream()
-                .map(partitionEpochMap::get)
+                .map(partitionEpochs::get)
                 .toList();
             topics.add(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId)

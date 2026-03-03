@@ -308,7 +308,6 @@ public class ConsumerGroupMember extends ModernGroupMember {
      */
     private final ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata;
 
-
     private ConsumerGroupMember(
         String memberId,
         int memberEpoch,
@@ -479,10 +478,10 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromAssignmentWithoutEpochs(
+                .setTopicPartitions(topicPartitionsFromAssignment(
                     Utils.toAssignmentWithoutEpochs(assignedPartitions), image)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromAssignmentWithoutEpochs(
+                .setTopicPartitions(topicPartitionsFromAssignment(
                     targetAssignment != null ? targetAssignment.partitions() : Map.of(),
                     image
                 )))
@@ -495,7 +494,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setMemberType(useClassicProtocol() ? (byte) 0 : (byte) 1);
     }
 
-    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromAssignmentWithoutEpochs(
+    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromAssignment(
         Map<Uuid, Set<Integer>> partitions,
         CoordinatorMetadataImage image
     ) {

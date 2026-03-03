@@ -1053,10 +1053,10 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         Map<Uuid, Map<Integer, Integer>> assignment,
         int expectedEpoch
     ) {
-        assignment.forEach((topicId, partitionEpochMap) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    partitionEpochMap.keySet().forEach(partitionId -> {
+                    partitionEpochs.keySet().forEach(partitionId -> {
                         Integer prevValue = partitionsOrNull.get(partitionId);
                         if (prevValue != null && prevValue == expectedEpoch) {
                             partitionsOrNull.remove(partitionId);
@@ -1091,12 +1091,12 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         Map<Uuid, Map<Integer, Integer>> assignment,
         int epoch
     ) {
-        assignment.forEach((topicId, partitionEpochMap) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
-                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, partitionEpochMap.size());
+                    partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, partitionEpochs.size());
                 }
-                for (Integer partitionId : partitionEpochMap.keySet()) {
+                for (Integer partitionId : partitionEpochs.keySet()) {
                     Integer prevValue = partitionsOrNull.get(partitionId);
                     if (prevValue == null || prevValue < epoch) {
                         partitionsOrNull.put(partitionId, epoch);

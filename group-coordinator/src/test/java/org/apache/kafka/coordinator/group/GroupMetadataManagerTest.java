@@ -1481,9 +1481,9 @@ public class GroupMetadataManagerTest {
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setSubscribedTopicNames(List.of("foo", "bar"))
             .setServerAssignorName("range")
-            .setAssignedPartitions(Map.of(
-                fooTopicId, toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)), 10).get(fooTopicId),
-                barTopicId, toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(barTopicId, 0, 1, 2)), 11).get(barTopicId)))
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(fooTopicId, 10, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignmentWithEpochs(barTopicId, 11, 0, 1, 2)))
             .build();
 
         List<CoordinatorRecord> expectedRecords = List.of(
@@ -2475,10 +2475,6 @@ public class GroupMetadataManagerTest {
             .build();
 
         // foo partitions retain epoch 0 (from reset), bar partitions get epoch 11 (newly assigned)
-        Map<Uuid, Map<Integer, Integer>> expectedRejoinedAssignment = new HashMap<>();
-        expectedRejoinedAssignment.putAll(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(fooTopicId, 3, 4, 5)), 0));
-        expectedRejoinedAssignment.putAll(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(barTopicId, 0, 1, 2)), 11));
-
         ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
             .setState(MemberState.STABLE)
             .setMemberEpoch(11)
@@ -2489,7 +2485,10 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(5000)
             .setSubscribedTopicNames(List.of("foo", "bar"))
             .setServerAssignorName("range")
-            .setAssignedPartitions(expectedRejoinedAssignment)
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(fooTopicId, 0, 3, 4, 5),
+                mkTopicAssignmentWithEpochs(barTopicId, 11, 0, 1, 2)
+            ))
             .build();
 
         List<CoordinatorRecord> expectedRecordsAfterRejoin = List.of(
@@ -3576,16 +3575,16 @@ public class GroupMetadataManagerTest {
 
         // member2: partition 3 (fooTopicId) and 2 (barTopicId) were retained from epoch 10,
         // partition 2 (fooTopicId) is newly assigned at epoch 11
-        Map<Uuid, Map<Integer, Integer>> member2ExpectedAssignment = Map.of(
-            fooTopicId, new HashMap<>(Map.of(2, 11, 3, 10)),
-            barTopicId, Map.of(2, 10)
-        );
         assertRecordsEquals(List.of(
             GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
-                .setAssignedPartitions(member2ExpectedAssignment)
+                .setAssignedPartitions(mkAssignmentWithEpochs(
+                    mkTopicAssignmentWithEpochs(fooTopicId, 11, 2),
+                    mkTopicAssignmentWithEpochs(fooTopicId, 10, 3),
+                    mkTopicAssignmentWithEpochs(barTopicId, 10, 2)
+                ))
                 .build())),
             result.records()
         );
@@ -14135,10 +14134,6 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
 
         // foo partition 0 retains epoch 10 (from original), zar partition 0 gets epoch 11 (newly assigned)
-        Map<Uuid, Map<Integer, Integer>> expectedAssignment = new HashMap<>();
-        expectedAssignment.putAll(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(fooTopicId, 0)), 10));
-        expectedAssignment.putAll(toAssignmentWithEpochs(mkAssignment(mkTopicAssignment(zarTopicId, 0)), 11));
-
         ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId1)
             .setInstanceId(instanceId)
             .setMemberEpoch(11)
@@ -14148,7 +14143,10 @@ public class GroupMetadataManagerTest {
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setState(MemberState.STABLE)
             .setSubscribedTopicNames(List.of(fooTopicName, barTopicName, zarTopicName))
-            .setAssignedPartitions(expectedAssignment)
+            .setAssignedPartitions(mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(fooTopicId, 10, 0),
+                mkTopicAssignmentWithEpochs(zarTopicId, 11, 0)
+            ))
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(request.sessionTimeoutMs())

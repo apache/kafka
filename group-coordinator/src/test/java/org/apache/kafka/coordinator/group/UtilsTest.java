@@ -35,6 +35,8 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignmentWithEpochs;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -254,9 +256,12 @@ public class UtilsTest {
         );
 
         // Verify epoch is adjusted to 0
-        assertEquals(Map.of(
-            FOO_TOPIC_ID, Map.of(0, 0, 1, 0, 2, 0)
-        ), result);
+        assertEquals(
+            mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 0, 0, 1, 2)
+            ),
+            result
+        );
     }
 
     @Test
@@ -274,8 +279,13 @@ public class UtilsTest {
         );
 
         // Verify assignment epochs are used
-        assertEquals(Map.of(
-            FOO_TOPIC_ID, Map.of(0, 5, 1, 6, 2, 7)
-        ), result);
+        assertEquals(
+            mkAssignmentWithEpochs(
+                mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 5, 0),
+                mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 6, 1),
+                mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 2)
+            ),
+            result
+        );
     }
 }

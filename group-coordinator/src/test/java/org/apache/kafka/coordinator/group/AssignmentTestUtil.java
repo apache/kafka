@@ -89,15 +89,10 @@ public class AssignmentTestUtil {
     ) {
         Map<Uuid, Map<Integer, Integer>> assignment = new HashMap<>();
         for (Map.Entry<Uuid, Map<Integer, Integer>> entry : entries) {
-            assignment.merge(entry.getKey(), new HashMap<>(entry.getValue()), (existing, newValue) -> {
-                Map<Integer, Integer> merged = new HashMap<>(existing);
-                merged.putAll(newValue);
-                return merged;
-            });
+            assignment.computeIfAbsent(entry.getKey(), k -> new HashMap<>()).putAll(entry.getValue());
         }
-        Map<Uuid, Map<Integer, Integer>> result = new LinkedHashMap<>();
-        assignment.forEach((k, v) -> result.put(k, Collections.unmodifiableMap(v)));
-        return Collections.unmodifiableMap(result);
+        assignment.replaceAll((id, innerMap) -> Collections.unmodifiableMap(innerMap));
+        return Collections.unmodifiableMap(assignment);
     }
 
     /**
