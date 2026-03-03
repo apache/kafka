@@ -69,6 +69,7 @@ class ControllerRegistrationManagerTest {
 
   private def newControllerRegistrationManager(
     context: RegistrationTestContext,
+    exponentialBackoff: ExponentialBackoff = new ExponentialBackoff(1, 2, 100, 0.02)
   ): ControllerRegistrationManager = {
     new ControllerRegistrationManager(context.config.nodeId,
       context.clusterId,
@@ -77,7 +78,8 @@ class ControllerRegistrationManagerTest {
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
       ListenerInfo.create(context.config.controllerListeners.asJava),
-      new ExponentialBackoff(1, 2, 100, 0.02))
+      exponentialBackoff
+    )
   }
 
   private def registeredInLog(manager: ControllerRegistrationManager): Boolean = {
@@ -271,7 +273,13 @@ class ControllerRegistrationManagerTest {
   @Test
   def testRetransmitRegistrationAfterTimeout(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    val manager = newControllerRegistrationManager(context)
+    // Use a large retry backoff with no jitter so we can reliably observe the
+    // intermediate state after timeout before the scheduled retry fires.
+    val retryBackoffMs = 1000L
+    val manager = newControllerRegistrationManager(
+      context,
+      new ExponentialBackoff(retryBackoffMs, 2, context.mockChannelManager.getTimeoutMs, 0.0)
+    )
     try {
       context.controllerNodeProvider.node.set(controller1)
 
@@ -287,15 +295,13 @@ class ControllerRegistrationManagerTest {
       assertEquals((true, 0, 0), rpcStats(manager))
 
       // time out the request before polling
-      context.time.sleep(context.mockChannelManager.getTimeoutMs * 2)
-      TestUtils.retryOnExceptionWithTimeout(30000, () => {
-        context.mockChannelManager.poll()
-        // pendingRpc = false, successfulRpcs = 0, failedRpcs = 1
-        assertEquals((false, 0, 1), rpcStats(manager))
-      })
+      context.time.sleep(context.mockChannelManager.getTimeoutMs)
+      context.mockChannelManager.poll()
+      // pendingRpc = false, successfulRpcs = 0, failedRpcs = 1
+      assertEquals((false, 0, 1), rpcStats(manager))
 
       // the timeout callback should schedule a request retry after a delay
-      context.time.sleep(1000)
+      context.time.sleep(retryBackoffMs)
       // pendingRpc = true, successfulRpcs = 0, failedRpcs = 1
       assertEquals((true, 0, 1), rpcStats(manager))
     } finally {
