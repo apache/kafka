@@ -6122,6 +6122,17 @@ org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilderTest:
 - shouldThrowNullPointerIfMetricsScopeIsNull
 - shouldThrowNullPointerIfTimeIsNull
 - shouldWrapPlainKeyValueStoreAsTimestampStore
+org.apache.kafka.streams.state.internals.TimestampedWindowStoreWithHeadersBuilderTest:
+- shouldDisableCachingWithRetainDuplicates
+- shouldHaveCachingAndChangeLoggingWhenBothEnabled
+- shouldHaveCachingStoreWhenEnabled
+- shouldHaveChangeLoggingStoreByDefault
+- shouldHaveChangeLoggingStoreWhenLoggingEnabled
+- shouldHaveMeteredStoreAsOuterStore
+- shouldNotHaveChangeLoggingStoreWhenDisabled
+- shouldNotWrapHeadersByteStore
+- shouldThrowNullPointerIfInnerIsNull
+- shouldWrapTimestampedStoreAsHeadersStore
 org.apache.kafka.streams.state.internals.ValueAndTimestampSerializerTest:
 - shouldDropSerializedValueIfEqualWithGreaterTimestamp
 - shouldKeepSerializedValueIfOutOfOrder
