@@ -140,6 +140,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -260,6 +261,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 coordinatorRuntimeMetrics
             );
 
+            ExecutorService executorService = new CoordinatorBackgroundThreadPoolExecutor(
+                "group-coordinator-background-",
+                config.numBackgroundThreads(),
+                time,
+                coordinatorRuntimeMetrics
+            );
+
             CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime =
                 new CoordinatorRuntime.Builder<GroupCoordinatorShard, CoordinatorRecord>()
                     .withTime(time)
@@ -276,14 +284,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withSerializer(new GroupCoordinatorRecordSerde())
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
-                    .withExecutorService(
-                        new CoordinatorBackgroundThreadPoolExecutor(
-                            "group-coordinator-background-",
-                            config.numBackgroundThreads(),
-                            time,
-                            coordinatorRuntimeMetrics
-                        )
-                    )
+                    .withExecutorService(executorService)
                     .withCachedBufferMaxBytesSupplier(config::cachedBufferMaxBytes)
                     .build();
 
