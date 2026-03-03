@@ -1,3 +1,5 @@
+org.apache.kafka.coordinator.common.runtime.CoordinatorBackgroundThreadPoolExecutorTest:
+- testMetrics
 org.apache.kafka.coordinator.common.runtime.CoordinatorExecutorImplTest:
 - testCancelAllTasks
 - testTaskCancelledAfterBeingExecutedButBeforeWriteOperationIsExecuted
@@ -29,12 +31,14 @@ org.apache.kafka.coordinator.common.runtime.CoordinatorResultTest:
 - testEquals
 - testRecordsCannotBeNull
 org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetricsImplTest:
+- testBackgroundThreadIdleSensor
 - testBatchBufferCacheDiscardCount
 - testBatchBufferCacheSize
 - testEventQueueSize
 - testFlushRateSensor
 - testHistogramMetrics
-- testMetricNames
+- testMetricNamesWithBackgroundMetrics
+- testMetricNamesWithoutBackgroundMetrics
 - testMetricsGroupIsolation
 - testPartitionLoadSensorMetrics
 - testRecordEventPurgatoryTimeLimit
