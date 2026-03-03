@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -33,6 +34,29 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
     @Override
     StoreType storeType() {
         return StoreType.InMemoryStore;
+    }
+
+    @Test
+    public void shouldCountApproximateNumEntries() {
+        final InMemorySessionStore store = new InMemorySessionStore("test", RETENTION_PERIOD, "scope");
+        store.init(context, store);
+
+        assertEquals(0L, store.approximateNumEntries());
+
+        store.put(new Windowed<>(Bytes.wrap("a".getBytes()), new SessionWindow(0, 0)), "1".getBytes());
+        assertEquals(1L, store.approximateNumEntries());
+
+        store.put(new Windowed<>(Bytes.wrap("b".getBytes()), new SessionWindow(0, 10)), "2".getBytes());
+        assertEquals(2L, store.approximateNumEntries());
+
+        store.put(new Windowed<>(Bytes.wrap("a".getBytes()), new SessionWindow(5, 15)), "3".getBytes());
+        assertEquals(3L, store.approximateNumEntries());
+
+        // remove one entry
+        store.remove(new Windowed<>(Bytes.wrap("a".getBytes()), new SessionWindow(0, 0)));
+        assertEquals(2L, store.approximateNumEntries());
+
+        store.close();
     }
 
     @Test

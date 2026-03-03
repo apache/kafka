@@ -84,6 +84,33 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
             .build();
     }
 
+    @Test
+    public void shouldCountApproximateNumEntries() {
+        final InMemoryWindowStore store = new InMemoryWindowStore("test", RETENTION_PERIOD, WINDOW_SIZE, false, "scope");
+        store.init(context, store);
+
+        assertEquals(0L, store.approximateNumEntries());
+
+        store.put(Bytes.wrap("a".getBytes()), "1".getBytes(), 0L);
+        assertEquals(1L, store.approximateNumEntries());
+
+        store.put(Bytes.wrap("b".getBytes()), "2".getBytes(), 0L);
+        assertEquals(2L, store.approximateNumEntries());
+
+        store.put(Bytes.wrap("a".getBytes()), "3".getBytes(), 10L);
+        assertEquals(3L, store.approximateNumEntries());
+
+        // overwrite existing entry (same key, same timestamp)
+        store.put(Bytes.wrap("a".getBytes()), "4".getBytes(), 0L);
+        assertEquals(3L, store.approximateNumEntries());
+
+        // delete entry by putting null
+        store.put(Bytes.wrap("b".getBytes()), null, 0L);
+        assertEquals(2L, store.approximateNumEntries());
+
+        store.close();
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
