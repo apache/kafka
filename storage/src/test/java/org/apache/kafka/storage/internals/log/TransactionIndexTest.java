@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.message.AbortedTxn;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -219,5 +221,32 @@ public class TransactionIndexTest {
     public void testIsEmptyWhenFileIsNotEmpty() throws IOException {
         index.append(new AbortedTxn().setProducerId(0L).setFirstOffset(0).setLastOffset(10).setLastStableOffset(2));
         assertFalse(index.isEmpty());
+    }
+
+    @Test
+    public void testBinaryCompatibilityWithHandWrittenClass() {
+        long producerId = 983493L;
+        long firstOffset = 137L;
+        long lastOffset = 299L;
+        long lastStableOffset = 200L;
+
+        // Build the expected binary using the same layout as the old hand-written AbortedTxn
+        ByteBuffer expected = ByteBuffer.allocate(34);
+        expected.putShort((short) 0); // version
+        expected.putLong(producerId);
+        expected.putLong(firstOffset);
+        expected.putLong(lastOffset);
+        expected.putLong(lastStableOffset);
+        expected.flip();
+
+        // Serialize using the generated class
+        AbortedTxn abortedTxn = new AbortedTxn()
+            .setProducerId(producerId)
+            .setFirstOffset(firstOffset)
+            .setLastOffset(lastOffset)
+            .setLastStableOffset(lastStableOffset);
+        ByteBuffer actual = MessageUtil.toVersionPrefixedByteBuffer(AbortedTxn.HIGHEST_SUPPORTED_VERSION, abortedTxn);
+
+        assertEquals(expected, actual);
     }
 }
