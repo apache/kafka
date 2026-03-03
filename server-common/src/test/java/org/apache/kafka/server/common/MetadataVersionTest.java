@@ -23,7 +23,32 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import static org.apache.kafka.server.common.MetadataVersion.*;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_4_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_6_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_6_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_6_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_7_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_7_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_7_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_7_IV3;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_7_IV4;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_8_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_9_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_0_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_0_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_0_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_0_IV3;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_1_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_1_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_2_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_2_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_4_3_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.LATEST_PRODUCTION;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -101,7 +126,7 @@ class MetadataVersionTest {
         assertEquals("Unknown metadata.version '4.4-IV0'. Supported metadata.version are: 3.3-IV3, 3.4-IV0, 3.5-IV0, 3.5-IV1, 3.5-IV2, "
             + "3.6-IV0, 3.6-IV1, 3.6-IV2, 3.7-IV0, 3.7-IV1, 3.7-IV2, 3.7-IV3, 3.7-IV4, 3.8-IV0, 3.9-IV0, 4.0-IV0, 4.0-IV1, 4.0-IV2, 4.0-IV3, 4.1-IV0, "
             + "4.1-IV1, 4.2-IV0, 4.2-IV1, 4.3-IV0",
-            assertThrows(IllegalArgumentException.class, () -> fromVersionString("4.4-IV0", false)).getMessage());
+            assertThrows(IllegalArgumentException.class, () -> MetadataVersion.fromVersionString("4.4-IV0", false)).getMessage());
     }
 
     @Test
