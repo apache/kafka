@@ -674,22 +674,47 @@ public class ProducerConfig extends AbstractConfig {
         return newConfigs;
     }
 
+    /**
+     * Constructs a new ProducerConfig with the given properties.
+     *
+     * @param props The producer configuration properties
+     */
     public ProducerConfig(Properties props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Constructs a new ProducerConfig with the given configuration map.
+     *
+     * @param props The producer configuration map
+     */
     public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Gets the set of all producer configuration names.
+     *
+     * @return The set of configuration names
+     */
     public static Set<String> configNames() {
         return CONFIG.names();
     }
 
+    /**
+     * Gets a copy of the producer configuration definition.
+     *
+     * @return A new ConfigDef instance containing the producer configuration definition
+     */
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
     }
 
+    /**
+     * Generates HTML documentation for producer configurations.
+     *
+     * @param args Command line arguments (unused)
+     */
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "producerconfigs_" + config));
     }

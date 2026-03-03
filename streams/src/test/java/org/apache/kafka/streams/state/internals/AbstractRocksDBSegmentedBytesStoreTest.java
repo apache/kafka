@@ -870,7 +870,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     private Bytes serializeKey(final Windowed<String> key) {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (schema instanceof SessionKeySchema) {
-            return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+            return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), new RecordHeaders(), "dummy"));
         } else if (schema instanceof WindowKeySchema) {
             return WindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
         } else {
@@ -903,7 +903,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                     results.add(deserialized);
                 } else if (schema instanceof SessionKeySchema) {
                     final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
-                        SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
+                        SessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), new RecordHeaders(), "dummy"),
                         stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                     );
                     results.add(deserialized);

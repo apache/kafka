@@ -65,6 +65,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * @param <K> The key type
  * @param <V> The (raw) value type
  */
+// TODO: replace with new method in follow-up PR of KIP-1271
+@SuppressWarnings("deprecation")
 public class MeteredVersionedKeyValueStore<K, V>
     extends WrappedStateStore<VersionedBytesStore, K, V>
     implements VersionedKeyValueStore<K, V> {

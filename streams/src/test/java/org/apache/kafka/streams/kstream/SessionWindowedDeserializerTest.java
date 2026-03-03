@@ -17,11 +17,14 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +34,13 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class SessionWindowedDeserializerTest {
     private final SessionWindowedDeserializer<?> sessionWindowedDeserializer = new SessionWindowedDeserializer<>(new StringDeserializer());
@@ -106,4 +116,23 @@ public class SessionWindowedDeserializerTest {
         props.put(SessionWindowedDeserializer.WINDOWED_INNER_DESERIALIZER_CLASS, "some.non.existent.class");
         assertThrows(ConfigException.class, () -> sessionWindowedDeserializer.configure(props, false));
     }
+
+    @Test
+    public void shouldPassHeadersToUnderlyingSerializer() {
+        final Deserializer<String> mockDeserializer = mock(StringDeserializer.class);
+        when(mockDeserializer.deserialize(anyString(), any(Headers.class), any(byte[].class))).thenReturn("test-value");
+
+        final String key = "test-key";
+        final Windowed<String> windowed = new Windowed<>(key, new TimeWindow(0, 1));
+        final byte[] data = new SessionWindowedSerializer<>(Serdes.String().serializer()).serialize("dummy", windowed);
+        final Headers headers = new RecordHeaders().add("key1", "value1".getBytes());
+
+        final SessionWindowedDeserializer<String> testDeserializer = new SessionWindowedDeserializer<>(mockDeserializer);
+
+        testDeserializer.deserialize("dummy", headers, data);
+
+        verify(mockDeserializer).deserialize(anyString(), eq(headers), any(byte[].class));
+        verify(mockDeserializer, never()).deserialize(anyString(), any(byte[].class));
+    }
+
 }
