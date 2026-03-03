@@ -209,7 +209,6 @@ public class Cleaner {
                               CleanedTransactionMetadata transactionMetadata,
                               long legacyDeleteHorizonMs,
                               long upperBoundOffsetOfCleaningRound) throws IOException {
-
         List<LogSegment> cleanedSegments = new ArrayList<>();
 
         // Create initial cleaned segment with the base offset of the first source segment
@@ -233,7 +232,6 @@ public class Cleaner {
                 transactionMetadata.addAbortedTransactions(abortedTransactions);
 
                 boolean retainLegacyDeletesAndTxnMarkers = currentSegment.lastModified() > legacyDeleteHorizonMs;
-
                 logger.info(
                         "Cleaning {} in log {} into {} with an upper bound deletion horizon {} computed from " +
                         "the segment last modified time of {},{} deletes.",
@@ -252,7 +250,7 @@ public class Cleaner {
                                 log.topicPartition(),
                                 currentSegment.log(),
                                 currentCleaned,
-                                position,  // Pass current position
+                                position,
                                 map,
                                 retainLegacyDeletesAndTxnMarkers,
                                 log.config().deleteRetentionMs,
@@ -288,8 +286,8 @@ public class Cleaner {
                     }
 
                 } catch (LogSegmentOffsetOverflowException e) {
-                    // Split the current segment. It's also safest to abort the current cleaning process, 
-                    // so that we retry from scratch once the split is complete.
+                    // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
+                    // scratch once the split is complete.
                     logger.info("Caught segment overflow error during cleaning: {}", e.getMessage());
                     log.splitOverflowedSegment(currentSegment);
                     throw new LogCleaningAbortedException();
@@ -337,10 +335,10 @@ public class Cleaner {
      * @param dest The cleaned log segment
      * @param startPosition Starting position in sourceRecords (in bytes)
      * @param map The key=>offset mapping
-     * @param retainLegacyDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained
-     * @param deleteRetentionMs Defines how long a tombstone should be kept
+     * @param retainLegacyDeletesAndTxnMarkers Should tombstones (lower than version 2) and markers be retained while cleaning this segment
+     * @param deleteRetentionMs Defines how long a tombstone should be kept as defined by log configuration
      * @param maxLogMessageSize The maximum message size of the corresponding topic
-     * @param transactionMetadata The state of ongoing transactions
+     * @param transactionMetadata The state of ongoing transactions which is carried between the cleaning of the grouped segments
      * @param lastRecordsOfActiveProducers The active producers and its last data offset
      * @param upperBoundOffsetOfCleaningRound Next offset of the last batch in the source segment
      * @param stats Collector for cleaning statistics
@@ -362,7 +360,6 @@ public class Cleaner {
                            long upperBoundOffsetOfCleaningRound,
                            CleanerStats stats,
                            long currentTime) throws IOException {
-
         MemoryRecords.RecordFilter logCleanerFilter = new MemoryRecords.RecordFilter(currentTime, deleteRetentionMs) {
             private boolean discardBatchRecords;
 
@@ -463,7 +460,6 @@ public class Cleaner {
                     throw new SegmentSizeOverflowException(dest, position - result.bytesRead());
                 }
 
-                // Append to current destination segment
                 // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
                 // after `Log.replaceSegments` (which acquires the lock) is called
                 dest.append(result.maxOffset(), retained);

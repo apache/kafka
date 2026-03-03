@@ -19,7 +19,7 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.KafkaException;
 
 /**
- * Exception thrown when segment size would overflow during compaction
+ * Exception thrown when cleaning a segment would cause size overflow.
  */
 public class SegmentSizeOverflowException extends KafkaException {
 
