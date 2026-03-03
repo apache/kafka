@@ -245,10 +245,10 @@ public class TransactionIndex implements Closeable {
                     buffer.flip();
 
                     short version = buffer.getShort();
-                    if (version > AbortedTxn.HIGHEST_SUPPORTED_VERSION)
+                    if (version < AbortedTxn.LOWEST_SUPPORTED_VERSION || version > AbortedTxn.HIGHEST_SUPPORTED_VERSION)
                         throw new KafkaException("Unexpected aborted transaction version " + version
-                            + " in transaction index " + file.getAbsolutePath() + ", current version is "
-                            + AbortedTxn.HIGHEST_SUPPORTED_VERSION);
+                            + " in transaction index " + file.getAbsolutePath() + ", supported version range is "
+                            + AbortedTxn.LOWEST_SUPPORTED_VERSION + " to " + AbortedTxn.HIGHEST_SUPPORTED_VERSION);
                     AbortedTxn abortedTxn = new AbortedTxn(new ByteBufferAccessor(buffer), version);
                     AbortedTxnWithPosition nextEntry = new AbortedTxnWithPosition(abortedTxn, position.value);
                     position.value += ABORTED_TXN_RECORD_SIZE;
