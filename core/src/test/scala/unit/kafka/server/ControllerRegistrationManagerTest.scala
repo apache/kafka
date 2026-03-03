@@ -293,6 +293,7 @@ class ControllerRegistrationManagerTest {
         r => if (r.controllerId() == 1) None else Some(r))
       // pendingRpc = true, successfulRpcs = 0, failedRpcs = 0
       assertEquals((true, 0, 0), rpcStats(manager))
+      assertEquals(1, context.mockChannelManager.unsentQueue.size())
 
       // time out the request before polling
       // this will call the timeout callback
@@ -300,11 +301,13 @@ class ControllerRegistrationManagerTest {
       context.mockChannelManager.poll()
       // pendingRpc = false, successfulRpcs = 0, failedRpcs = 1
       assertEquals((false, 0, 1), rpcStats(manager))
+      assertEquals(0, context.mockChannelManager.unsentQueue.size())
 
       // the retried request will be sent after retryBackoffMs
       context.time.sleep(retryBackoffMs)
       // pendingRpc = true, successfulRpcs = 0, failedRpcs = 1
       assertEquals((true, 0, 1), rpcStats(manager))
+      assertEquals(1, context.mockChannelManager.unsentQueue.size())
     } finally {
       manager.close()
     }
