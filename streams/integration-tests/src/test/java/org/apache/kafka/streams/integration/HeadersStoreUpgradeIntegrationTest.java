@@ -59,6 +59,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -654,7 +655,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     @Test
     public void shouldFailDowngradeFromTimestampedWindowStoreWithHeadersToTimestampedWindowStore() throws Exception {
         final Properties props = props();
-        final long baseTime = setupAndPopulateWindowStoreWithHeaders(props);
+        final long baseTime = setupAndPopulateWindowStoreWithHeaders(props, singletonList(KeyValue.pair("key1", 100L)));
         kafkaStreams = null;
 
         // Attempt to downgrade to non-headers window store
@@ -698,7 +699,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     @Test
     public void shouldSuccessfullyDowngradeFromTimestampedWindowStoreWithHeadersAfterCleanup() throws Exception {
         final Properties props = props();
-        setupAndPopulateWindowStoreWithHeadersTwoRecords(props);
+        setupAndPopulateWindowStoreWithHeaders(props, asList(KeyValue.pair("key1", 100L), KeyValue.pair("key2", 200L)));
 
         kafkaStreams.cleanUp(); // Delete local state
         kafkaStreams = null;
@@ -749,37 +750,32 @@ public class HeadersStoreUpgradeIntegrationTest {
         }
     }
 
-    private long setupAndPopulateWindowStoreWithHeaders(final Properties props) throws Exception {
-        final StreamsBuilder headersBuilder = new StreamsBuilder();
-        headersBuilder.addStateStore(
-                Stores.timestampedWindowStoreWithHeadersBuilder(
-                    Stores.persistentTimestampedWindowStoreWithHeaders(WINDOW_STORE_NAME,
-                        Duration.ofMillis(RETENTION_MS),
-                        Duration.ofMillis(WINDOW_SIZE_MS),
-                        false),
-                    Serdes.String(),
-                    Serdes.String()))
-            .stream(inputStream, Consumed.with(Serdes.String(), Serdes.String()))
-            .process(TimestampedWindowedWithHeadersProcessor::new, WINDOW_STORE_NAME);
+    /**
+     * Setup and populate a window store with headers.
+     * @param props Streams properties
+     * @param records List of (key, timestampOffset) tuples. Values will be generated as "value{N}"
+     * @return base time used for record timestamps
+     */
+    private long setupAndPopulateWindowStoreWithHeaders(final Properties props,
+                                                        final List<KeyValue<String, Long>> records) throws Exception {
+        final long baseTime = setupWindowStoreWithHeaders(props);
 
-        kafkaStreams = new KafkaStreams(headersBuilder.build(), props);
-        kafkaStreams.start();
+        for (int i = 0; i < records.size(); i++) {
+            final KeyValue<String, Long> record = records.get(i);
+            final String value = "value" + (i + 1);
+            produceRecordWithHeaders(record.key, value, baseTime + record.value);
+        }
 
-        final long baseTime = CLUSTER.time.milliseconds();
-        final Headers headers = new RecordHeaders();
-        headers.add("source", "test".getBytes());
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair("key1", "value1")),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
-            headers,
-            baseTime + 100,
-            false);
-
-        // Wait for the data to be processed and available in the store
+        // Wait for all records to be processed
         TestUtils.waitForCondition(
-            () -> windowStoreContainsKey("key1", baseTime + 100),
+            () -> {
+                for (final KeyValue<String, Long> record : records) {
+                    if (!windowStoreContainsKey(record.key, baseTime + record.value)) {
+                        return false;
+                    }
+                }
+                return true;
+            },
             30_000L,
             "Store was not populated with expected data"
         );
@@ -788,7 +784,7 @@ public class HeadersStoreUpgradeIntegrationTest {
         return baseTime;
     }
 
-    private void setupAndPopulateWindowStoreWithHeadersTwoRecords(final Properties props) throws Exception {
+    private long setupWindowStoreWithHeaders(final Properties props) {
         final StreamsBuilder headersBuilder = new StreamsBuilder();
         headersBuilder.addStateStore(
                 Stores.timestampedWindowStoreWithHeadersBuilder(
@@ -804,33 +800,19 @@ public class HeadersStoreUpgradeIntegrationTest {
         kafkaStreams = new KafkaStreams(headersBuilder.build(), props);
         kafkaStreams.start();
 
-        final long baseTime = CLUSTER.time.milliseconds();
+        return CLUSTER.time.milliseconds();
+    }
+
+    private void produceRecordWithHeaders(final String key, final String value, final long timestamp) throws Exception {
         final Headers headers = new RecordHeaders();
         headers.add("source", "test".getBytes());
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
             inputStream,
-            singletonList(KeyValue.pair("key1", "value1")),
+            singletonList(KeyValue.pair(key, value)),
             TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
             headers,
-            baseTime + 100,
+            timestamp,
             false);
-
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            inputStream,
-            singletonList(KeyValue.pair("key2", "value2")),
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class),
-            headers,
-            baseTime + 200,
-            false);
-
-        // Wait for both records to be processed and available in the store
-        TestUtils.waitForCondition(
-            () -> windowStoreContainsKey("key1", baseTime + 100) && windowStoreContainsKey("key2", baseTime + 200),
-            30_000L,
-            "Store was not populated with expected data"
-        );
-
-        kafkaStreams.close();
     }
 }
