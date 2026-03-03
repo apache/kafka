@@ -413,8 +413,8 @@ public class DualColumnFamilyAccessorTest extends AbstractColumnFamilyAccessorTe
     }
 
     @Test
-    public void shouldCloseBothColumnFamilies() {
-        accessor.close();
+    public void shouldCloseBothColumnFamilies() throws RocksDBException {
+        accessor.close(dbAccessor);
 
         verify(oldCF).close();
         verify(newCF).close();

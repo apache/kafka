@@ -255,8 +255,8 @@ class DualColumnFamilyAccessor extends AbstractColumnFamilyAccessor {
     }
 
     @Override
-    public void close() {
-        super.close();
+    public void close(final DBAccessor accessor) throws RocksDBException {
+        super.close(accessor);
         oldColumnFamily.close();
         newColumnFamily.close();
     }

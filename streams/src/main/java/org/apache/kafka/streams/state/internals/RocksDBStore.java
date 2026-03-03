@@ -131,7 +131,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     // managed elsewhere (by the caller of those methods).
     private final boolean autoManagedIterators;
 
-    protected volatile boolean open = false;
+
     protected StateStoreContext context;
     protected Position position;
     private OffsetCheckpoint positionCheckpoint;
@@ -245,7 +245,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         setupStatistics(configs, dbOptions);
         openRocksDB(dbOptions, columnFamilyOptions);
         dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
-        open = true;
+        try {
+            cfAccessor.open(dbAccessor);
+        } catch (final Throwable fatal) {
+            throw new ProcessorStateException(fatal);
+        }
 
         addValueProvidersToMetricsRecorder();
     }
@@ -362,11 +366,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public boolean isOpen() {
-        return open;
+        return cfAccessor != null && cfAccessor.isOpen();
     }
 
     private void validateStoreOpen() {
-        if (!open) {
+        if (!isOpen()) {
             throw new InvalidStateStoreException("Store " + name + " is currently closed");
         }
     }
@@ -687,11 +691,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public synchronized void close() {
-        if (!open) {
+        if (!isOpen()) {
             return;
         }
 
-        open = false;
         closeOpenIterators();
 
         if (configSetter != null) {
@@ -703,7 +706,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
-        cfAccessor.close();
+        try {
+            cfAccessor.close(dbAccessor);
+        } catch (final RocksDBException ignored) {
+            // Swallowing exception during close. This is the best effort attempt to close the store.
+        }
         dbAccessor.close();
         db.close();
         userSpecifiedOptions.close();
@@ -860,7 +867,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                         final byte[] value,
                         final WriteBatchInterface batch) throws RocksDBException;
 
-        void close();
+        void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
+
+        void open(final RocksDBStore.DBAccessor accessor) throws RocksDBException;
+
+        boolean isOpen();
 
         Long getCommitedOffset(final RocksDBStore.DBAccessor accessor, final TopicPartition partition) throws RocksDBException;
     }
@@ -989,8 +1000,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
-        public void close() {
-            super.close();
+        public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
+            super.close(accessor);
             columnFamily.close();
         }
     }

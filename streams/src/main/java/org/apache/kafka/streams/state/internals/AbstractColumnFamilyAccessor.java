@@ -23,7 +23,9 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDBException;
 
+import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Abstract base class for all ColumnFamilyAccessor.
@@ -35,6 +37,10 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     private final ColumnFamilyHandle offsetColumnFamilyHandle;
     private final StringSerializer stringSerializer = new StringSerializer();
     private final Serdes.LongSerde longSerde = new Serdes.LongSerde();
+    private final byte[] statusKey = stringSerializer.serialize(null, "status");
+    private final byte[] openState = longSerde.serializer().serialize(null, 1L);
+    private final byte[] closedState = longSerde.serializer().serialize(null, 0L);
+    private final AtomicBoolean open = new AtomicBoolean(false);
 
     AbstractColumnFamilyAccessor(final ColumnFamilyHandle offsetColumnFamilyHandle) {
         this.offsetColumnFamilyHandle = offsetColumnFamilyHandle;
@@ -54,8 +60,30 @@ abstract class AbstractColumnFamilyAccessor implements RocksDBStore.ColumnFamily
     }
 
     @Override
-    public void close() {
+    public void open(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
+        final byte[] valueBytes = accessor.get(offsetColumnFamilyHandle, statusKey);
+        if (valueBytes == null || Arrays.equals(valueBytes, closedState)) {
+            // If the status key is not present, we initialize it to "OPEN"
+            accessor.put(offsetColumnFamilyHandle, statusKey, openState);
+            // Store the new status on disk
+            accessor.flush(offsetColumnFamilyHandle);
+            open.set(true);
+        } else {
+            throw new RocksDBException("Invalid state");
+        }
+    }
+
+    @Override
+    public void close(final RocksDBStore.DBAccessor accessor) throws RocksDBException {
+        accessor.put(offsetColumnFamilyHandle, statusKey, closedState);
+        accessor.flush(offsetColumnFamilyHandle);
         offsetColumnFamilyHandle.close();
+        open.set(false);
+    }
+
+    @Override
+    public final boolean isOpen() {
+        return open.get();
     }
 
     @Override
