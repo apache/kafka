@@ -247,24 +247,41 @@ class ControllerRegistrationManagerTest {
   @Test
   def testRetransmitRegistration(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    val manager = newControllerRegistrationManager(context)
+    // Use a large retry backoff with no jitter so we can reliably observe the
+    // intermediate state after receiving the error response before the scheduled retry fires.
+    val retryBackoffMs = 1000L
+    val manager = newControllerRegistrationManager(
+      context,
+      new ExponentialBackoff(retryBackoffMs, 2, context.mockChannelManager.getTimeoutMs, 0.0)
+    )
     try {
       context.controllerNodeProvider.node.set(controller1)
       manager.start(context.mockChannelManager)
-      context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
-        new ControllerRegistrationResponseData().
-          setErrorCode(Errors.UNKNOWN_CONTROLLER_ID.code()).
-          setErrorMessage("Unknown controller 1")), controller1)
-      context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
-        new ControllerRegistrationResponseData()), controller1)
+
+      // send a ControllerRegistrationRequest after learning the MV
       doMetadataUpdate(MetadataImage.EMPTY,
         manager,
         MetadataVersion.IBP_3_7_IV0,
         r => if (r.controllerId() == 1) None else Some(r))
-      TestUtils.retryOnExceptionWithTimeout(30000, () => {
-        context.mockChannelManager.poll()
-        assertEquals((false, 1, 0), rpcStats(manager))
-      })
+      assertEquals((true, 0, 0), rpcStats(manager))
+
+      // the first response will trigger a retry
+      context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
+        new ControllerRegistrationResponseData().
+          setErrorCode(Errors.UNKNOWN_CONTROLLER_ID.code()).
+          setErrorMessage("Unknown controller 1")), controller1)
+      context.mockChannelManager.poll()
+      assertEquals((false, 0, 1), rpcStats(manager))
+
+      // the retried request will be sent after retryBackoffMs
+      context.time.sleep(retryBackoffMs)
+      assertEquals((true, 0, 1), rpcStats(manager))
+
+      // the second response will complete the RPC successfully
+      context.mockClient.prepareResponseFrom(new ControllerRegistrationResponse(
+        new ControllerRegistrationResponseData()), controller1)
+      context.mockChannelManager.poll()
+      assertEquals((false, 1, 0), rpcStats(manager))
     } finally {
       manager.close()
     }
