@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.server.util.ShutdownableThread;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
@@ -283,7 +284,7 @@ public class LogCleanerLagIntegrationTest {
         cleaner.cleaners().forEach(Thread::interrupt);
         // wait until interruption is propagated to all the threads
         TestUtils.waitForCondition(
-            () -> cleaner.cleaners().stream().allMatch(t -> t.isThreadFailed()),
+            () -> cleaner.cleaners().stream().allMatch(ShutdownableThread::isThreadFailed),
             "Threads didn't terminate unexpectedly");
         assertEquals(cleaner.cleaners().size(), getGauge("DeadThreadCount").value());
         assertEquals(cleaner.cleaners().size(), cleaner.deadThreadCount());
@@ -600,9 +601,7 @@ public class LogCleanerLagIntegrationTest {
 
     @AfterEach
     public void cleanup() {
-        for (MetricName metricName : KafkaYammerMetrics.defaultRegistry().allMetrics().keySet()) {
-            KafkaYammerMetrics.defaultRegistry().removeMetric(metricName);
-        }
+        kafka.utils.TestUtils.clearYammerMetrics();
     }
 
     @AfterEach
