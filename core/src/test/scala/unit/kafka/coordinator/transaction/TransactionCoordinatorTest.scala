@@ -2740,4 +2740,71 @@ class TransactionCoordinatorTest {
     assertEquals(TransactionState.PREPARE_COMMIT, prepareCommitMetadata.txnState,
       "Third: EndTransaction → PREPARE_COMMIT")
   }
+
+  @Test
+  def shouldHandleConcurrentTransactionsInPrepareStatesTV2(): Unit = {
+    // Test that attempting EndTransaction while already in a PREPARE state
+    // returns CONCURRENT_TRANSACTIONS error in TV2.  This error is retriable -
+    // the client should wait for the current transaction to complete and then
+    // retry.
+
+    def testConcurrentInPrepareState(prepareState: TransactionState, attemptedResult: TransactionResult): Unit = {
+      // Setup ONGOING transaction with 2PC enabled
+      val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+
+      // Determine transaction result to reach desired PREPARE state
+      val txnResult = if (prepareState == TransactionState.PREPARE_COMMIT) {
+        TransactionResult.COMMIT
+      } else {
+        TransactionResult.ABORT
+      }
+
+      // Call EndTransaction to move to PREPARE state
+      coordinator.handleEndTransaction(
+        transactionalId,
+        result.producerId,  // Use client producer ID
+        result.producerEpoch,  // Use client epoch
+        txnResult,
+        TV_2,
+        endTxnCallback
+      )
+
+      // Verify we're in the expected PREPARE state
+      assertEquals(Errors.NONE, error, "EndTransaction should succeed")
+      val transitMetadata = capturedTransitMetadata.getAllValues.get(1)
+      assertEquals(prepareState, transitMetadata.txnState,
+        s"Transaction should be in $prepareState state")
+
+      val stateBefore = transitMetadata.txnState
+
+      // Attempt another EndTransaction while still in PREPARE state
+      coordinator.handleEndTransaction(
+        transactionalId,
+        result.producerId,  // Same client producer ID
+        result.producerEpoch,  // Same client epoch
+        attemptedResult,
+        TV_2,
+        endTxnCallback
+      )
+
+      // Verify: TV2 returns CONCURRENT_TRANSACTIONS (retriable error)
+      assertEquals(Errors.CONCURRENT_TRANSACTIONS, error,
+        s"Should return CONCURRENT_TRANSACTIONS when attempting $attemptedResult while in $prepareState")
+
+      // Verify: State unchanged after rejection
+      assertEquals(stateBefore, capturedTransitMetadata.getAllValues.get(1).txnState,
+        "State should remain unchanged after CONCURRENT_TRANSACTIONS error")
+
+      // Verify: No additional state transitions captured (request was rejected)
+      assertEquals(2, capturedTransitMetadata.getAllValues.size(),
+        "No new state transition should be captured for rejected request")
+    }
+
+    // Test Matrix: All 4 combinations of PREPARE state × attempted operation.
+    // All should return CONCURRENT_TRANSACTIONS regardless of operation type.
+    testConcurrentInPrepareState(TransactionState.PREPARE_COMMIT, TransactionResult.COMMIT)
+    testConcurrentInPrepareState(TransactionState.PREPARE_COMMIT, TransactionResult.ABORT)
+    testConcurrentInPrepareState(TransactionState.PREPARE_ABORT, TransactionResult.ABORT)
+    testConcurrentInPrepareState(TransactionState.PREPARE_ABORT, TransactionResult.COMMIT)
+  }
 }
