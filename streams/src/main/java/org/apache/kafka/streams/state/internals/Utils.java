@@ -82,7 +82,7 @@ public class Utils {
      * @param serdes the StateSerdes as serializer
      * @return the Bytes of the key
      */
-    static <K> Bytes keyBytes(final K key, final Headers headers, final StateSerdes<K, ?> serdes) {
+    public static <K> Bytes keyBytes(final K key, final Headers headers, final StateSerdes<K, ?> serdes) {
         return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
