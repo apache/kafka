@@ -430,37 +430,33 @@ public class FeatureControlManager {
             log.warn("Upgrading metadata.version from {} to {}.", currentVersion, newVersion);
         }
 
-        recordConsumer.accept(new ApiMessageAndVersion(
-            new FeatureLevelRecord()
-                .setName(MetadataVersion.FEATURE_NAME)
-                .setFeatureLevel(newVersionLevel), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
-
-        // Generate upgrade records if needed (e.g., ClusterIdRecord when upgrading to a version that supports it)
-        generateUpgradeRecords(currentVersion, newVersion, recordConsumer);
+        generateMetadataVersionUpgradeRecords(currentVersion, newVersion, recordConsumer);
 
         return ApiError.NONE;
     }
 
     /**
-     * Generate additional records required when upgrading from one metadata version to another.
+     * Generate records required when upgrading from one metadata version to another.
      * This provides a generic mechanism for adding records that must accompany certain MV upgrades.
      * <p>
-     * For example, when upgrading to IBP_4_4_IV0 or later, a ClusterIdRecord must be written
-     * if one doesn't already exist in the metadata log. This ensures that any MV that supports
-     * ClusterIdRecord will have one in the log.
+     * For example, all valid metadata version upgrades write a FeatureLevelRecord for MetadataVersion.
+     * However, when upgrading to IBP_4_4_IV0 or later, a ClusterIdRecord must be written because
+     * one does not already exist. This ensures that a cluster whose MV supports ClusterIdRecord
+     * will have one in the log.
+     *
+     * // TODO: Maybe this needs to be in a transaction/atomic batch if there are multiple records like the bootstrap write
      * <p>
-     * Note: Clusters whose MV does not support ClusterIdRecord will not have a ClusterIdRecord
-     * in their metadata. The cluster ID is obtained from the leader's meta.properties file,
-     * which was set during the original cluster formatting.
      */
-    private void generateUpgradeRecords(
+    private void generateMetadataVersionUpgradeRecords(
         MetadataVersion currentVersion,
         MetadataVersion newVersion,
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
-        // ClusterIdRecord: Required when upgrading to/past IBP_4_4_IV0
-        // Since clusters with MV < IBP_4_4_IV0 don't have a ClusterIdRecord in metadata,
-        // we need to generate one when crossing this threshold.
+        recordConsumer.accept(new ApiMessageAndVersion(
+            new FeatureLevelRecord()
+                .setName(MetadataVersion.FEATURE_NAME)
+                .setFeatureLevel(newVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+
         if (!currentVersion.isClusterIdSupported() && newVersion.isClusterIdSupported()) {
             if (clusterId == null) {
                 throw new IllegalStateException("Cannot generate ClusterIdRecord during upgrade: " +

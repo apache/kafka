@@ -1292,6 +1292,7 @@ public final class QuorumController implements Controller {
                 replicationControl.replay((ClearElrRecord) message);
                 break;
             case CLUSTER_ID_RECORD:
+                // KIP-1262: This record type is ignored because the active controller must have a cluster id to start-up
                 break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);

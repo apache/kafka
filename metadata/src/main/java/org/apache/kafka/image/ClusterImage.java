@@ -71,7 +71,6 @@ public record ClusterImage(
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
-        // Write ClusterIdRecord if present and supported
         if (clusterId.isPresent()) {
             if (!options.metadataVersion().isClusterIdSupported()) {
                 options.handleLoss("cluster id data");
