@@ -472,9 +472,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private void initializeResources() {
         log.info("Initializing topic-based RLMM resources");
         final NewTopic remoteLogMetadataTopicRequest = createRemoteLogMetadataTopicRequest();
-        final NewTopic remoteLogMetadataAuditTopicRequest = createRemoteLogMetadataAuditTopicRequest();
         boolean topicCreated = false;
-        boolean auditTopicCreated = false;
         long startTimeMs = time.milliseconds();
         Admin adminClient = null;
         try {
@@ -494,11 +492,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     topicCreated = createTopic(adminClient, remoteLogMetadataTopicRequest);
                 }
 
-                if (!auditTopicCreated) {
-                    auditTopicCreated = createTopic(adminClient, remoteLogMetadataAuditTopicRequest);
-                }
-
-                if (!topicCreated || !auditTopicCreated) {
+                if (!topicCreated) {
                     // Sleep for INITIALIZATION_RETRY_INTERVAL_MS before trying to create the topic again.
                     log.info("Sleep for {} ms before it is retried again.", rlmmConfig.initializationRetryIntervalMs());
                     Utils.sleep(rlmmConfig.initializationRetryIntervalMs());
@@ -507,10 +501,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     // If topics are already created, validate the existing topic partitions.
                     try {
                         String topicName = remoteLogMetadataTopicRequest.name();
-                        String auditTopicName = remoteLogMetadataAuditTopicRequest.name();
                         // If the existing topic partition size is not same as configured, mark initialization as failed and exit.
-                        if (!isPartitionsCountSameAsConfigured(adminClient, topicName) ||
-                            !isPartitionsCountSameAsConfigured(adminClient, auditTopicName)) {
+                        if (!isPartitionsCountSameAsConfigured(adminClient, topicName)) {
                             initializationFailed = true;
                         }
                     } catch (Exception e) {
@@ -623,16 +615,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         topicConfigs.put(TopicConfig.DELETE_RETENTION_MS_CONFIG, "86400000"); // 1 day
         topicConfigs.put(TopicConfig.SEGMENT_MS_CONFIG, "3600000"); // 1 hour segments
         return new NewTopic(rlmmConfig.remoteLogMetadataTopicName(),
-                            rlmmConfig.metadataTopicPartitionsCount(),
-                            rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
-    }
-
-    private NewTopic createRemoteLogMetadataAuditTopicRequest() {
-        Map<String, String> topicConfigs = new HashMap<>();
-        topicConfigs.put(TopicConfig.RETENTION_MS_CONFIG, "-1"); // Infinite retention
-        topicConfigs.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-        topicConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false");
-        return new NewTopic(rlmmConfig.remoteLogMetadataAuditTopicName(),
                             rlmmConfig.metadataTopicPartitionsCount(),
                             rlmmConfig.metadataTopicReplicationFactor()).configs(topicConfigs);
     }

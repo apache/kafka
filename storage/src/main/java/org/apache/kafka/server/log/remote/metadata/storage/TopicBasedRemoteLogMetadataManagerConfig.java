@@ -41,7 +41,6 @@ import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     public static final String REMOTE_LOG_METADATA_TOPIC_NAME = "__remote_log_metadata_compacted";
-    public static final String REMOTE_LOG_METADATA_AUDIT_TOPIC_NAME = "__remote_log_metadata";
 
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP = "remote.log.metadata.topic.replication.factor";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.num.partitions";
@@ -156,10 +155,6 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
 
     public String remoteLogMetadataTopicName() {
         return REMOTE_LOG_METADATA_TOPIC_NAME;
-    }
-
-    public String remoteLogMetadataAuditTopicName() {
-        return REMOTE_LOG_METADATA_AUDIT_TOPIC_NAME;
     }
 
     public int metadataTopicPartitionsCount() {

@@ -60,6 +60,20 @@ public class RemotePartitionDeleteMetadata extends RemoteLogMetadata {
         return state;
     }
 
+    /**
+     * This method is not supported for RemotePartitionDeleteMetadata since it represents partition-level
+     * operations, not segment-specific metadata that requires unique keys.
+     *
+     * @throws UnsupportedOperationException always
+     */
+    @Override
+    public String metadataKey() {
+        throw new UnsupportedOperationException(
+            "metadataKey() is not supported for RemotePartitionDeleteMetadata. " +
+            "This metadata type represents partition-level operations, not segment-specific keys."
+        );
+    }
+
     @Override
     public String toString() {
         return "RemotePartitionDeleteMetadata{" +
