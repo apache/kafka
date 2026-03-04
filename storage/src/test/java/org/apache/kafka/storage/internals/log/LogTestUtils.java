@@ -97,6 +97,48 @@ public class LogTestUtils {
         );
     }
 
+    /**
+     * Create a single record batch with the specified compression and timestamp.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, Compression codec, byte[] key, long timestamp) {
+        return records(
+            List.of(new SimpleRecord(timestamp, key, value)),
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            codec,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            0L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Create a single record batch with the specified compression, timestamp, and magic value.
+     */
+    public static MemoryRecords singletonRecords(byte[] value, Compression codec, byte[] key,
+                                                  long timestamp, byte magicValue) {
+        return records(
+            List.of(new SimpleRecord(timestamp, key, value)),
+            magicValue,
+            codec,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            0L,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH
+        );
+    }
+
+    /**
+     * Read a string from a ByteBuffer using the default charset.
+     */
+    public static String readString(ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        return new String(bytes);
+    }
+
     public static MemoryRecords records(List<SimpleRecord> records,
                                         byte magicValue,
                                         Compression codec,

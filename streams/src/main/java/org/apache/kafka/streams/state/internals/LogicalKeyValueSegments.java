@@ -62,25 +62,18 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     @Override
-    public LogicalKeyValueSegment getOrCreateSegment(final long segmentId,
-                                                     final StateStoreContext context) {
-        if (segments.containsKey(segmentId)) {
-            return segments.get(segmentId);
-        } else {
-            if (segmentId < 0) {
-                throw new IllegalArgumentException(
-                    "Negative segment IDs are reserved for reserved segments, "
-                        + "and should be created through createReservedSegment() instead");
-            }
-
-            final LogicalKeyValueSegment newSegment = new LogicalKeyValueSegment(segmentId, segmentName(segmentId), physicalStore);
-
-            if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("LogicalKeyValueSegment already exists. Possible concurrent access.");
-            }
-
-            return newSegment;
+    protected LogicalKeyValueSegment createSegment(final long segmentId, final String segmentName) {
+        if (segmentId < 0) {
+            throw new IllegalArgumentException(
+                "Negative segment IDs are reserved for reserved segments, "
+                    + "and should be created through createReservedSegment() instead");
         }
+        return new LogicalKeyValueSegment(segmentId, segmentName, physicalStore);
+    }
+
+    @Override
+    protected void openSegmentDB(final LogicalKeyValueSegment segment, final StateStoreContext context) {
+        // no-op -- a logical segment is just a view on an underlying physical store
     }
 
     LogicalKeyValueSegment createReservedSegment(final long segmentId,

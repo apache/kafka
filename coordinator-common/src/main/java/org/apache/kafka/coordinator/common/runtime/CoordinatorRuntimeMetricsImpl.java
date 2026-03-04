@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -78,6 +79,16 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
      * The buffer cache discard count metric name.
      */
     public static final String BATCH_BUFFER_CACHE_DISCARD_COUNT_METRIC_NAME = "batch-buffer-cache-discard-count";
+
+    /**
+     * The background queue time metric name.
+     */
+    public static final String BACKGROUND_QUEUE_TIME_METRIC_NAME = "background-queue-time-ms";
+
+    /**
+     * The background processing time metric name.
+     */
+    public static final String BACKGROUND_PROCESSING_TIME_METRIC_NAME = "background-processing-time-ms";
 
     /**
      * Metric to count the number of partitions in Loading state.
@@ -153,7 +164,22 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
      */
     private final Sensor flushSensor;
 
-    public CoordinatorRuntimeMetricsImpl(Metrics metrics, String metricsGroup) {
+    /**
+     * The background thread busy sensor. Null when background metrics are not enabled.
+     */
+    private final Sensor backgroundThreadBusySensor;
+
+    /**
+     * The background queue time sensor. Null when background metrics are not enabled.
+     */
+    private final Sensor backgroundQueueTimeSensor;
+
+    /**
+     * The background processing time sensor. Null when background metrics are not enabled.
+     */
+    private final Sensor backgroundProcessingTimeSensor;
+
+    public CoordinatorRuntimeMetricsImpl(Metrics metrics, String metricsGroup, boolean enableBackgroundMetrics) {
         this.metrics = Objects.requireNonNull(metrics);
         this.metricsGroup = Objects.requireNonNull(metricsGroup);
 
@@ -265,6 +291,44 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
                 this.metricsGroup,
                 "The flushes per second."),
             new Rate(TimeUnit.SECONDS, new WindowedCount()));
+
+        if (enableBackgroundMetrics) {
+            this.backgroundThreadBusySensor = metrics.sensor(this.metricsGroup + "-BackgroundThreadBusyRatio");
+            this.backgroundThreadBusySensor.add(
+                metrics.metricName(
+                    "background-thread-idle-ratio-avg",
+                    this.metricsGroup,
+                    "The fraction of time the background threads are idle. This is an average across " +
+                        "all coordinator background threads."),
+                new Rate(TimeUnit.MILLISECONDS) {
+                    @Override
+                    public double measure(MetricConfig config, long now) {
+                        return 1.0 - super.measure(config, now);
+                    }
+                });
+
+            KafkaMetricHistogram backgroundQueueTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+                suffix -> kafkaMetricName(
+                    BACKGROUND_QUEUE_TIME_METRIC_NAME + "-" + suffix,
+                    "The " + suffix + " background queue time in milliseconds"
+                )
+            );
+            this.backgroundQueueTimeSensor = metrics.sensor(this.metricsGroup + "-BackgroundQueueTime");
+            this.backgroundQueueTimeSensor.add(backgroundQueueTimeHistogram);
+
+            KafkaMetricHistogram backgroundProcessingTimeHistogram = KafkaMetricHistogram.newLatencyHistogram(
+                suffix -> kafkaMetricName(
+                    BACKGROUND_PROCESSING_TIME_METRIC_NAME + "-" + suffix,
+                    "The " + suffix + " background processing time in milliseconds"
+                )
+            );
+            this.backgroundProcessingTimeSensor = metrics.sensor(this.metricsGroup + "-BackgroundProcessingTime");
+            this.backgroundProcessingTimeSensor.add(backgroundProcessingTimeHistogram);
+        } else {
+            this.backgroundThreadBusySensor = null;
+            this.backgroundQueueTimeSensor = null;
+            this.backgroundProcessingTimeSensor = null;
+        }
     }
 
     /**
@@ -298,6 +362,15 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
         metrics.removeSensor(eventPurgatoryTimeSensor.name());
         metrics.removeSensor(lingerTimeSensor.name());
         metrics.removeSensor(flushSensor.name());
+        if (backgroundThreadBusySensor != null) {
+            metrics.removeSensor(backgroundThreadBusySensor.name());
+        }
+        if (backgroundQueueTimeSensor != null) {
+            metrics.removeSensor(backgroundQueueTimeSensor.name());
+        }
+        if (backgroundProcessingTimeSensor != null) {
+            metrics.removeSensor(backgroundProcessingTimeSensor.name());
+        }
     }
 
     /**
@@ -370,6 +443,27 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     @Override
     public void recordThreadIdleTime(double idleTimeMs) {
         threadIdleSensor.record(idleTimeMs);
+    }
+
+    @Override
+    public void recordBackgroundThreadBusyTime(double busyTimeMs) {
+        if (backgroundThreadBusySensor != null) {
+            backgroundThreadBusySensor.record(busyTimeMs);
+        }
+    }
+
+    @Override
+    public void recordBackgroundQueueTime(long durationMs) {
+        if (backgroundQueueTimeSensor != null) {
+            backgroundQueueTimeSensor.record(durationMs);
+        }
+    }
+
+    @Override
+    public void recordBackgroundProcessingTime(long durationMs) {
+        if (backgroundProcessingTimeSensor != null) {
+            backgroundProcessingTimeSensor.record(durationMs);
+        }
     }
 
     @Override
