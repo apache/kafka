@@ -27,6 +27,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -655,7 +656,7 @@ public class HeadersStoreUpgradeIntegrationTest {
     @Test
     public void shouldFailDowngradeFromTimestampedWindowStoreWithHeadersToTimestampedWindowStore() throws Exception {
         final Properties props = props();
-        final long baseTime = setupAndPopulateWindowStoreWithHeaders(props, singletonList(KeyValue.pair("key1", 100L)));
+        setupAndPopulateWindowStoreWithHeaders(props, singletonList(KeyValue.pair("key1", 100L)));
         kafkaStreams = null;
 
         // Attempt to downgrade to non-headers window store
@@ -673,26 +674,31 @@ public class HeadersStoreUpgradeIntegrationTest {
 
         kafkaStreams = new KafkaStreams(downgradedBuilder.build(), props);
 
+        boolean exceptionThrown = false;
         try {
             kafkaStreams.start();
-
-            final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store =
-                IntegrationTestUtils.getStore(WINDOW_STORE_NAME, kafkaStreams, QueryableStoreTypes.timestampedWindowStore());
-
-            final long windowStart = baseTime + 100 - ((baseTime + 100) % WINDOW_SIZE_MS);
-            final ValueAndTimestamp<String> result = store.fetch("key1", windowStart);
-
-            // If we can read the data correctly, the test should fail
-            if (result != null && result.value().equals("value1") && result.timestamp() == (baseTime + 100)) {
-                throw new AssertionError("Expected data corruption or read failure when downgrading without cleanup, " +
-                    "but data was read correctly (value=" + result.value() + ", timestamp=" + result.timestamp() + "). " +
-                    "Downgrades without cleanup should not succeed.");
-            }
-            // Otherwise (null or corrupted data), the downgrade failed as expected
         } catch (final Exception e) {
-            // Exception during read is expected - indicates format mismatch
+            Throwable cause = e;
+            while (cause != null) {
+                if (cause instanceof ProcessorStateException &&
+                    cause.getMessage() != null &&
+                    cause.getMessage().contains("headers-aware") &&
+                    cause.getMessage().contains("Downgrade")) {
+                    exceptionThrown = true;
+                    break;
+                }
+                cause = cause.getCause();
+            }
+
+            if (!exceptionThrown) {
+                throw new AssertionError("Expected ProcessorStateException about downgrade not being supported, but got: " + e.getMessage(), e);
+            }
         } finally {
             kafkaStreams.close(Duration.ofSeconds(30L));
+        }
+
+        if (!exceptionThrown) {
+            throw new AssertionError("Expected ProcessorStateException to be thrown when attempting to downgrade from headers-aware to non-headers window store");
         }
     }
 
