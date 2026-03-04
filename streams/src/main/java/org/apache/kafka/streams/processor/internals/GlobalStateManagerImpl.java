@@ -371,7 +371,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                     record.partition(),
                                     record.offset(),
                                     record.headers(),
-                                    storeName,
+                                    null,
                                     globalProcessorContext.taskId(),
                                     record.timestamp(),
                                     record.key(),
