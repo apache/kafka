@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfigProvider;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimeoutHandler;
 import org.apache.kafka.server.share.fetch.AcquisitionLockTimerTask;
@@ -91,12 +92,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import static kafka.server.share.ShareFetchUtils.deliveryCountLimitOrDefault;
-import static kafka.server.share.ShareFetchUtils.isRenewAcknowledgeEnabled;
 import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
-import static kafka.server.share.ShareFetchUtils.recordLockDurationMsOrDefault;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -213,6 +211,11 @@ public class SharePartition {
      * The group config manager is used to retrieve the values for dynamic group configurations
      */
     private final GroupConfigManager groupConfigManager;
+
+    /**
+     * The provider used to retrieve share group dynamic configuration values.
+     */
+    private final ShareGroupConfigProvider configProvider;
 
     /**
      * This is the default value which is used unless the group has a configuration which overrides it.
@@ -382,6 +385,7 @@ public class SharePartition {
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
+        this.configProvider = new ShareGroupConfigProvider(groupConfigManager);
         this.fetchOffsetMetadata = new OffsetMetadata();
         this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
@@ -1852,7 +1856,7 @@ public class SharePartition {
                         null,
                         timeoutHandler,
                         sharePartitionMetrics);
-                    int delayMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+                    int delayMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
                     long lastOffset = acquiredRecords.firstOffset() + maxFetchRecords - 1;
                     inFlightBatch.maybeInitializeOffsetStateUpdate(lastOffset, delayMs);
                     updateFindNextFetchOffset(true);
@@ -2299,7 +2303,7 @@ public class SharePartition {
                 byte ackType = ackTypeMap.size() > 1 ? ackTypeMap.get(offsetState.getKey()) : batch.acknowledgeTypes().get(0);
 
                 if (ackType == AcknowledgeType.RENEW.id) {
-                    if (!isRenewAcknowledgeEnabled(groupConfigManager, groupId)) {
+                    if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
                         log.warn("Renew acknowledge is not enabled for the group: {}", groupId);
                         return Optional.of(new InvalidRecordStateException(
                             "Renewing acquisition locks is not enabled for the group."));
@@ -2377,7 +2381,7 @@ public class SharePartition {
             // Before reaching this point, it should be verified that it is full batch ack and
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
-                if (!isRenewAcknowledgeEnabled(groupConfigManager, groupId)) {
+                if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
                     log.warn("Renew acknowledge is not enabled for the group: {}", groupId);
                     return Optional.of(new InvalidRecordStateException(
                         "Renewing acquisition locks is not enabled for the group."));
@@ -2842,7 +2846,7 @@ public class SharePartition {
         // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
         // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
-        int recordLockDurationMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
+        int recordLockDurationMs = configProvider.recordLockDurationMsOrDefault(groupId, defaultRecordLockDurationMs);
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
@@ -3324,7 +3328,7 @@ public class SharePartition {
      * config if available, otherwise the broker default.
      */
     int maxDeliveryCount() {
-        return deliveryCountLimitOrDefault(groupConfigManager, groupId, defaultMaxDeliveryCount);
+        return configProvider.deliveryCountLimitOrDefault(groupId, defaultMaxDeliveryCount);
     }
 
     /**

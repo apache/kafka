@@ -34,8 +34,6 @@ import org.apache.kafka.common.record.internal.RecordBatch;
 import org.apache.kafka.common.record.internal.Records;
 import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
@@ -73,7 +71,6 @@ import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShar
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -728,42 +725,6 @@ public class ShareFetchUtilsTest {
         result = new ArrayList<>();
         ShareFetchUtils.accumulateAcquiredRecords(result, input);
         assertArrayEquals(input.toArray(), result.toArray());
-    }
-
-    @Test
-    void testDeliveryCountLimitOrDefaultWithGroupConfig() {
-        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
-        GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.shareDeliveryCountLimit()).thenReturn(8);
-        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
-
-        assertEquals(8, ShareFetchUtils.deliveryCountLimitOrDefault(groupConfigManager, "test-group", 5));
-    }
-
-    @Test
-    void testDeliveryCountLimitOrDefaultWithoutGroupConfig() {
-        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
-        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.empty());
-
-        assertEquals(5, ShareFetchUtils.deliveryCountLimitOrDefault(groupConfigManager, "test-group", 5));
-    }
-
-    @Test
-    void testIsRenewAcknowledgeDisabledWithGroupConfig() {
-        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
-        GroupConfig groupConfig = mock(GroupConfig.class);
-        when(groupConfig.shareRenewAcknowledgeEnable()).thenReturn(false);
-        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.of(groupConfig));
-
-        assertFalse(ShareFetchUtils.isRenewAcknowledgeEnabled(groupConfigManager, "test-group"));
-    }
-
-    @Test
-    void testIsRenewAcknowledgeEnabledWithoutGroupConfig() {
-        GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
-        when(groupConfigManager.groupConfig("test-group")).thenReturn(Optional.empty());
-
-        assertTrue(ShareFetchUtils.isRenewAcknowledgeEnabled(groupConfigManager, "test-group"));
     }
 
     private static class RecordsArgumentsProvider implements ArgumentsProvider {
