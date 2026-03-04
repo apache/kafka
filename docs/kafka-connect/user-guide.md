@@ -425,7 +425,7 @@ Kafka Connect is capable of providing exactly-once semantics for sink connectors
 
 ### Sink connectors
 
-If a sink connector supports exactly-once semantics, to enable exactly-once at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property `consumer.isolation.level` to `read_committed` or, if running a version of Kafka Connect that supports it, using a connector client config override policy that allows the `consumer.override.isolation.level` property to be set to `read_committed` in individual connector configs. There are no additional ACL requirements.
+If a sink connector supports exactly-once semantics, to enable exactly-once at the Connect worker level, you must ensure its consumer group is configured to ignore records in aborted transactions. You can do this by setting the worker property `consumer.isolation.level` to `read_committed` or, if running a version of Kafka Connect that supports it, using a connector client config override policy that allows the `consumer.override.isolation.level` property to be set to `read_committed` in individual connector configs.
 
 ### Source connectors
 
@@ -553,7 +553,9 @@ The principal for each Connect worker requires the following ACLs:
 </td><td>Only necessary if the status topic for Connect does not exist yet</td></tr>
 <tr><td>Write</td><td>TransactionalId</td><td>
 
-`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
+`connect-cluster-${groupId}`
+
+where `${groupId}` is the `group.id` of the cluster
 </td><td>
 
 Only necessary if [exactly-once support](#exactly-once-support) is enabled
@@ -561,11 +563,20 @@ or if `exactly.once.source.support` is set to `preparing`.
 </td> </tr>
 <tr><td>Describe</td><td>TransactionalId</td><td>
 
-`connect-cluster-${groupId}`, where `${groupId}` is the `group.id` of the cluster
+`connect-cluster-${groupId}`
+
+where `${groupId}` is the `group.id` of the cluster
 </td><td>
 
 Only necessary if [exactly-once support](#exactly-once-support) is enabled
 or if `exactly.once.source.support` is set to `preparing`.
+</td> </tr>
+<tr><td>IdempotentWrite</td><td>Cluster</td><td>ID of the Kafka cluster that hosts the worker's config topic</td>  <td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled
+or if `exactly.once.source.support` is set to `preparing`.
+
+The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
 </td> </tr>
 </table>
 
@@ -586,7 +597,10 @@ Only necessary if `topic.creation.enable` is `true` and the topic(s) do not exis
 <tr><td>Describe</td><td>Topic</td>
 <td>
 
-Offsets topic used by the connector, which is either the value of the `offsets.storage.topic` property in the connector’s configuration if provided,
+Offsets topic used by the connector
+
+This is the value of the `offsets.storage.topic` property in the connector’s configuration if provided,
+
 or the value of the `offsets.storage.topic` property in the worker’s configuration if not.
 </td>
 <td>
@@ -595,21 +609,45 @@ Only necessary if [exactly-once support](#exactly-once-support) is enabled.
 </td> </tr>
 <tr><td>Write</td><td>TransactionalId</td><td>
 
-`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
+`${groupId}-${connector}-${taskId}`
+
+for each task that the connector will create, where
+
+`${groupId}` is the `group.id` of the Connect cluster
+
+`${connector}` is the name of the connector
+
+`${taskId}` is the ID of the task (starting from zero)
 </td><td>
 
 Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+
 A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
 </td></tr>
 <tr><td>Describe</td><td>TransactionalId</td><td>
 
-`${groupId}-${connector}-${taskId}`, for each task that the connector will create, where `${groupId}` is the `group.id` of the Connect cluster, `${connector}` is the name of the connector, and `${taskId}` is the ID of the task (starting from zero)
+`${groupId}-${connector}-${taskId}`
+
+for each task that the connector will create, where
+
+`${groupId}` is the `group.id` of the Connect cluster
+
+`${connector}` is the name of the connector
+
+`${taskId}` is the ID of the task (starting from zero)
 </td>
 <td>
 
 Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+
 A wildcard prefix of `${groupId}-${connector}*` can be used for convenience if there is no risk of conflict with other transactional IDs or if conflicts are acceptable to the user.
 </td></tr>
+<tr><td>IdempotentWrite</td><td>Cluster</td><td>ID of the Kafka cluster that hosts the worker's config topic</td>  <td>
+
+Only necessary if [exactly-once support](#exactly-once-support) is enabled.
+
+The IdempotentWrite ACL has been deprecated as of 2.8 and will only be necessary for Connect clusters running on pre-2.8 Kafka clusters
+</td> </tr>
 </table>
 
 To support Sink connectors, the principal for each individual connector will require the following ACLs:
@@ -623,8 +661,14 @@ To support Sink connectors, the principal for each individual connector will req
 </tr>
 <tr><td>Read</td><td>Group</td><td>
 
-`connect-${connector}` where `${connector}` is the name of the connector,
+`connect-${connector}`
+
+where `${connector}` is
+
+the name of the connector
+
 or the value of `consumer.group.id` if present in the Connect configuration,
+
 or the value of `consumer.overrides.group.id` if present in the Connector configuration
 </td><td> </td></tr>
 <tr><td>Read</td><td>Topic</td><td>sink topic(s) that the connector will consume from</td><td>
