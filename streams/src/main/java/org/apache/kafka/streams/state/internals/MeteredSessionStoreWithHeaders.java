@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.SessionStoreWithHeaders;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.Utils.keyBytes;
 
 public class MeteredSessionStoreWithHeaders<K, AGG>
     extends MeteredSessionStore<K, AggregationWithHeaders<AGG>>
@@ -48,7 +49,7 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         try {
             final Headers headers = aggregate != null ? aggregate.headers() : new RecordHeaders();
-            final Bytes key = keyBytes(sessionKey, headers);
+            final Bytes key = keyBytes(sessionKey, headers, serdes);
             maybeMeasureLatency(() -> wrapped().put(new Windowed<>(key, sessionKey.window()),
                 serdes.rawValue(aggregate, headers)), time, putSensor);
             maybeRecordE2ELatency();
@@ -57,9 +58,5 @@ public class MeteredSessionStoreWithHeaders<K, AGG>
             throw new ProcessorStateException(message, e);
         }
 
-    }
-
-    protected Bytes keyBytes(final Windowed<K> sessionKey, final Headers headers) {
-        return Bytes.wrap(serdes.rawKey(sessionKey.key(), headers));
     }
 }

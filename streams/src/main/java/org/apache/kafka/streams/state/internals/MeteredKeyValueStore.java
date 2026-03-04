@@ -64,6 +64,7 @@ import java.util.function.Function;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.state.internals.Utils.keyBytes;
 
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
@@ -254,8 +255,8 @@ public class MeteredKeyValueStore<K, V>
         RangeQuery<Bytes, byte[]> rawRangeQuery;
         final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
-                keyBytes(typedQuery.getLowerBound().orElse(null)),
-                keyBytes(typedQuery.getUpperBound().orElse(null))
+                keyBytes(typedQuery.getLowerBound().orElse(null), serdes),
+                keyBytes(typedQuery.getUpperBound().orElse(null), serdes)
         );
         if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
@@ -292,7 +293,7 @@ public class MeteredKeyValueStore<K, V>
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
-            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey()));
+            KeyQuery.withKey(keyBytes(typedKeyQuery.getKey(), serdes));
         final QueryResult<byte[]> rawResult =
             wrapped().query(rawKeyQuery, positionBound, config);
         if (rawResult.isSuccess()) {
@@ -312,7 +313,7 @@ public class MeteredKeyValueStore<K, V>
     public V get(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key))), time, getSensor);
+            return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key, serdes))), time, getSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -324,7 +325,7 @@ public class MeteredKeyValueStore<K, V>
                     final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value, new RecordHeaders())), time, putSensor);
+            maybeMeasureLatency(() -> wrapped().put(keyBytes(key, serdes), serdes.rawValue(value, new RecordHeaders())), time, putSensor);
             maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -337,7 +338,7 @@ public class MeteredKeyValueStore<K, V>
                          final V value) {
         Objects.requireNonNull(key, "key cannot be null");
         final V currentValue = maybeMeasureLatency(
-            () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
+            () -> outerValue(wrapped().putIfAbsent(keyBytes(key, serdes), serdes.rawValue(value))),
             time,
             putIfAbsentSensor
         );
@@ -355,7 +356,7 @@ public class MeteredKeyValueStore<K, V>
     public V delete(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         try {
-            return maybeMeasureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), time, deleteSensor);
+            return maybeMeasureLatency(() -> outerValue(wrapped().delete(keyBytes(key, serdes))), time, deleteSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -422,10 +423,6 @@ public class MeteredKeyValueStore<K, V>
 
     protected V outerValue(final byte[] value) {
         return value != null ? serdes.valueFrom(value, new RecordHeaders()) : null;
-    }
-
-    protected Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key, new RecordHeaders()));
     }
 
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {
