@@ -71,14 +71,4 @@ public interface ConnectRestExtension extends Configurable, ConnectPlugin, Close
     default ConfigDef config() {
         return new ConfigDef();
     }
-
-    /**
-     * Get the version of this component.
-     *
-     * @return the version, formatted as a String. The version may not be {@code null} or empty.
-     */
-    @Override
-    default String version() {
-        return "undefined";
-    }
 }
