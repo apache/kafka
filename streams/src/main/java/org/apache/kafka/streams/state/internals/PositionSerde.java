@@ -18,14 +18,14 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.query.Position;
 
-import static org.apache.kafka.streams.state.internals.Utils.readBytes;
-
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
 
 public final class PositionSerde {
 
