@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ClusterTestDefaults(brokers = 3)
 public class RemoteLogMetadataTombstoneTest {
     private static final int SEG_SIZE = 1048576;
-    private static final String METADATA_TOPIC = "__remote_log_metadata_compacted";
+    private static final String METADATA_TOPIC = "__remote_log_metadata";
 
     private final ClusterInstance clusterInstance;
     private final Time time = Time.SYSTEM;

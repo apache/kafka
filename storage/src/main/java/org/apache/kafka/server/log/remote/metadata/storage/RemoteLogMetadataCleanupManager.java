@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * This class manages periodic cleanup of expired metadata keys from the remote log metadata topic.
  *
  * It runs a background thread that periodically:
- * 1. Consumes all records from __remote_log_metadata_compacted topic
+ * 1. Consumes all records from __remote_log_metadata topic
  * 2. For each TopicIdPartition, checks if segment endOffset < current remote/global log start offset
  * 3. Tombstones all keys for expired segments (matching topicId:partition:endOffset:*)
  */
@@ -139,7 +139,7 @@ public class RemoteLogMetadataCleanupManager implements Closeable {
 
     /**
      * Main cleanup logic:
-     * 1. Consume all records from __remote_log_metadata_compacted
+     * 1. Consume all records from __remote_log_metadata
      * 2. Group by TopicIdPartition and endOffset
      * 3. For each partition, check if endOffset < logStartOffset
      * 4. Tombstone all keys for expired segments
