@@ -16,6 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -30,12 +45,14 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
@@ -44,24 +61,9 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
@@ -70,10 +72,18 @@ public class KTableAggregateTest {
     private final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
     private static final Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
+    
+    private StreamsBuilder createStreamBuilderInMemory() {
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+        props.putAll(CONFIG);  // Add the STATE_DIR from CONFIG
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+                    BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class.getName());
+        return new StreamsBuilder(new TopologyConfig(new StreamsConfig(props)));
+    }
 
     @Test
     public void testAggBasic() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final String topic1 = "topic1";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
@@ -121,7 +131,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testAggRepartition() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final String topic1 = "topic1";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
@@ -262,7 +272,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testCount() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final String input = "count-test-input";
 
         builder
@@ -277,7 +287,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testCountWithInternalStore() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final String input = "count-test-input";
 
         builder
@@ -331,7 +341,7 @@ public class KTableAggregateTest {
 
     @Test
     public void testRemoveOldBeforeAddNew() {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final String input = "count-test-input";
         final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
@@ -377,7 +387,7 @@ public class KTableAggregateTest {
     }
 
     private void testUpgradeFromConfig(final Properties config, final List<KeyValueTimestamp<String, Long>> expected) {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final String input = "input-topic";
         final String output = "output-topic";
         final Serde<String> stringSerde = Serdes.String();
@@ -460,7 +470,7 @@ public class KTableAggregateTest {
     private void testKeyWithNoEquals(
             final KeyValueMapper<NoEqualsImpl, NoEqualsImpl, KeyValue<NoEqualsImpl, NoEqualsImpl>> keyValueMapper,
             final List<TestRecord<NoEqualsImpl, Long>> expected) {
-        final StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = createStreamBuilderInMemory();
         final String input = "input-topic";
         final String output = "output-topic";
         final Serde<NoEqualsImpl> noEqualsImplSerde = new NoEqualsImplSerde();
