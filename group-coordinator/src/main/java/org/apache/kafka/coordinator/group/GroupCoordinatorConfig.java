@@ -655,12 +655,13 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * Copy the subset of properties that are relevant to consumer group and share group.
+     * Copy the subset of properties that are relevant to consumer group, share group and streams group.
      */
     public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
         defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap(this));
+        defaultConfigs.putAll(extractStreamsGroupConfigMap());
         return Collections.unmodifiableMap(defaultConfigs);
     }
 
@@ -671,6 +672,17 @@ public class GroupCoordinatorConfig {
         return Map.of(
             GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs(),
             GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs());
+    }
+
+    /**
+     * Copy the subset of properties that are relevant to streams group.
+     */
+    public Map<String, Integer> extractStreamsGroupConfigMap() {
+        return Map.of(
+            GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
+            GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
+            GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
+            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs());
     }
 
     /**
