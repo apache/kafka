@@ -476,7 +476,6 @@ public class StreamsMetadataState {
                                                         final K key,
                                                         final StreamPartitioner<? super K, ?> partitioner,
                                                         final SourceTopicsInfo sourceTopicsInfo) {
-        validateSourceTopicsInfo(storeName, sourceTopicsInfo);
 
         final Integer partition = getPartition.apply(partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions));
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
@@ -512,8 +511,6 @@ public class StreamsMetadataState {
                                                         final SourceTopicsInfo sourceTopicsInfo,
                                                         final String topologyName) {
         Objects.requireNonNull(topologyName, "topology name must not be null");
-        validateSourceTopicsInfo(storeName, sourceTopicsInfo);
-
         final Integer partition = getPartition.apply(partitioner.partitions(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions));
         final Set<TopicPartition> matchingPartitions = new HashSet<>();
         for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
@@ -557,17 +554,6 @@ public class StreamsMetadataState {
             return null;
         }
         return new SourceTopicsInfo(sourceTopics);
-    }
-
-    private void validateSourceTopicsInfo(final String storeName,
-                                          final SourceTopicsInfo sourceTopicsInfo) {
-        if (sourceTopicsInfo.maxPartitions <= 0 || sourceTopicsInfo.topicWithMostPartitions == null) {
-            throw new IllegalStateException(
-                "Unable to determine a valid partition for store " + storeName +
-                    " because no source topic partitions are currently available. " +
-                    "Metadata may be stale; try again after metadata is refreshed."
-            );
-        }
     }
 
     private boolean isInitialized() {

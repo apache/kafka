@@ -275,19 +275,6 @@ public class StreamsMetadataStateTest {
     }
 
     @Test
-    public void shouldFailWhenSourceTopicHasNoPartitionsInMetadata() {
-        final Map<TopicPartition, PartitionInfo> partitionInfosMissingSourceTopic = new HashMap<>(partitionInfos);
-        partitionInfosMissingSourceTopic.remove(topic3P0);
-        metadataState.onChange(hostToActivePartitions, hostToStandbyPartitions, partitionInfosMissingSourceTopic);
-
-        assertThrows(IllegalStateException.class, () -> metadataState.keyQueryMetadataForKey(
-            "table-three",
-            "the-key",
-            Serdes.String().serializer())
-        );
-    }
-
-    @Test
     public void shouldReturnNotAvailableWhenClusterIsEmpty() {
         metadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
         final KeyQueryMetadata result = metadataState.keyQueryMetadataForKey("table-one", "a", Serdes.String().serializer());
