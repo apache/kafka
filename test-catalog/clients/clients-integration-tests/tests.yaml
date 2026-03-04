@@ -29,6 +29,11 @@ org.apache.kafka.clients.admin.AdminFenceProducersTest:
 - testFenceAfterProducerCommit
 - testFenceBeforeProducerCommit
 - testFenceProducerTimeoutMs
+org.apache.kafka.clients.admin.AutoTopicCreationTest:
+- testAutoCreateTopicWithDefaultConfig
+- testAutoCreateTopicWithExplicitBrokerConfig
+- testAutoCreateTopicWithImplicitBrokerConfig
+- testAutoCreateTopicWithMixedConfig
 org.apache.kafka.clients.admin.ClientTelemetryTest:
 - testClientInstanceId
 - testIntervalMsParser
