@@ -1117,6 +1117,10 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedWindowStoreWithHeaders) {
+            log.warn("Method #getTimestampedWindowStoreWithHeaders() should be used to access a TimestampedWindowStoreWithHeaders.");
+            return new WindowStoreFacadeForHeaders<>((TimestampedWindowStoreWithHeaders<K, V>) store);
+        }
         if (store instanceof TimestampedWindowStore) {
             log.warn("Method #getTimestampedWindowStore() should be used to access a TimestampedWindowStore.");
             return new WindowStoreFacade<>((TimestampedWindowStore<K, V>) store);
@@ -1145,6 +1149,9 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("unchecked")
     public <K, V> WindowStore<K, ValueAndTimestamp<V>> getTimestampedWindowStore(final String name) {
         final StateStore store = getStateStore(name, false);
+        if (store instanceof TimestampedWindowStoreWithHeaders) {
+            return new TimestampedWindowStoreFacadeForHeaders<>((TimestampedWindowStoreWithHeaders<K, V>) store);
+        }
         return store instanceof TimestampedWindowStore ? (TimestampedWindowStore<K, V>) store : null;
     }
 
@@ -1695,6 +1702,408 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public Position getPosition() {
             return inner.getPosition();
+        }
+    }
+
+    static class WindowStoreFacadeForHeaders<K, V> extends ReadOnlyWindowStoreFacadeForHeaders<K, V> implements WindowStore<K, V> {
+
+        public WindowStoreFacadeForHeaders(final TimestampedWindowStoreWithHeaders<K, V> store) {
+            super(store);
+        }
+
+        @Override
+        public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+            inner.init(stateStoreContext, root);
+        }
+
+        @Override
+        public void put(final K key,
+                        final V value,
+                        final long windowStartTimestamp) {
+            inner.put(key, ValueTimestampHeaders.makeAllowNullable(value, ConsumerRecord.NO_TIMESTAMP, null), windowStartTimestamp);
+        }
+
+        @Override
+        public WindowStoreIterator<V> fetch(final K key,
+                                            final long timeFrom,
+                                            final long timeTo) {
+            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<V> backwardFetch(final K key,
+                                                    final long timeFrom,
+                                                    final long timeTo) {
+            return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                      final K keyTo,
+                                                      final long timeFrom,
+                                                      final long timeTo) {
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom),
+                Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                              final K keyTo,
+                                                              final long timeFrom,
+                                                              final long timeTo) {
+            return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
+                                                         final long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                                 final long timeTo) {
+            return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+    }
+
+    static class ReadOnlyWindowStoreFacadeForHeaders<K, V> implements ReadOnlyWindowStore<K, V> {
+        protected final TimestampedWindowStoreWithHeaders<K, V> inner;
+
+        protected ReadOnlyWindowStoreFacadeForHeaders(final TimestampedWindowStoreWithHeaders<K, V> store) {
+            inner = store;
+        }
+
+        @Override
+        public V fetch(final K key, final long time) {
+            final ValueTimestampHeaders<V> vth = inner.fetch(key, time);
+            return vth == null ? null : vth.value();
+        }
+
+        @Override
+        public WindowStoreIterator<V> fetch(final K key,
+                                            final Instant timeFrom,
+                                            final Instant timeTo) throws IllegalArgumentException {
+            return new WindowStoreIteratorFacadeForHeaders<>(inner.fetch(key, timeFrom, timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<V> backwardFetch(final K key,
+                                                    final Instant timeFrom,
+                                                    final Instant timeTo) throws IllegalArgumentException {
+            return new WindowStoreIteratorFacadeForHeaders<>(inner.backwardFetch(key, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                      final K keyTo,
+                                                      final Instant timeFrom,
+                                                      final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                              final K keyTo,
+                                                              final Instant timeFrom,
+                                                              final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant timeFrom,
+                                                         final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.fetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom,
+                                                                 final Instant timeTo) throws IllegalArgumentException {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.backwardFetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> all() {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.all());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> backwardAll() {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.backwardAll());
+        }
+
+        private static class WindowStoreIteratorFacadeForHeaders<V> implements WindowStoreIterator<V> {
+            final KeyValueIterator<Long, ValueTimestampHeaders<V>> innerIterator;
+
+            WindowStoreIteratorFacadeForHeaders(final KeyValueIterator<Long, ValueTimestampHeaders<V>> iterator) {
+                innerIterator = iterator;
+            }
+
+            @Override
+            public void close() {
+                innerIterator.close();
+            }
+
+            @Override
+            public Long peekNextKey() {
+                return innerIterator.peekNextKey();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return innerIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Long, V> next() {
+                final KeyValue<Long, ValueTimestampHeaders<V>> innerKeyValue = innerIterator.next();
+                final ValueTimestampHeaders<V> vth = innerKeyValue.value;
+                return KeyValue.pair(innerKeyValue.key, vth == null ? null : vth.value());
+            }
+        }
+
+        private static class KeyValueIteratorFacadeForHeaders<K, V> implements KeyValueIterator<K, V> {
+            private final KeyValueIterator<K, ValueTimestampHeaders<V>> innerIterator;
+
+            private KeyValueIteratorFacadeForHeaders(final KeyValueIterator<K, ValueTimestampHeaders<V>> iterator) {
+                innerIterator = iterator;
+            }
+
+            @Override
+            public void close() {
+                innerIterator.close();
+            }
+
+            @Override
+            public K peekNextKey() {
+                return innerIterator.peekNextKey();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return innerIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<K, V> next() {
+                final KeyValue<K, ValueTimestampHeaders<V>> innerKeyValue = innerIterator.next();
+                final ValueTimestampHeaders<V> vth = innerKeyValue.value;
+                return KeyValue.pair(innerKeyValue.key, vth == null ? null : vth.value());
+            }
+        }
+    }
+
+    static class TimestampedWindowStoreFacadeForHeaders<K, V> implements WindowStore<K, ValueAndTimestamp<V>> {
+        private final TimestampedWindowStoreWithHeaders<K, V> inner;
+
+        public TimestampedWindowStoreFacadeForHeaders(final TimestampedWindowStoreWithHeaders<K, V> store) {
+            this.inner = store;
+        }
+
+        @Override
+        public void put(final K key, final ValueAndTimestamp<V> value, final long windowStartTimestamp) {
+            inner.put(key, ValueTimestampHeaders.makeAllowNullable(value.value(), value.timestamp(), null), windowStartTimestamp);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> fetch(final K key, final long time) {
+            final ValueTimestampHeaders<V> vth = inner.fetch(key, time);
+            return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
+        }
+
+        @Override
+        public WindowStoreIterator<ValueAndTimestamp<V>> fetch(final K key, final Instant timeFrom, final Instant timeTo) {
+            return new WindowStoreIteratorFacadeForHeaders<>(inner.fetch(key, timeFrom, timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<ValueAndTimestamp<V>> fetch(final K key, final long timeFrom, final long timeTo) {
+            return fetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<ValueAndTimestamp<V>> backwardFetch(final K key, final Instant timeFrom, final Instant timeTo) {
+            return new WindowStoreIteratorFacadeForHeaders<>(inner.backwardFetch(key, timeFrom, timeTo));
+        }
+
+        @Override
+        public WindowStoreIterator<ValueAndTimestamp<V>> backwardFetch(final K key, final long timeFrom, final long timeTo) {
+            return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetch(final K keyFrom, final K keyTo, final Instant timeFrom, final Instant timeTo) {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.fetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetch(final K keyFrom, final K keyTo, final long timeFrom, final long timeTo) {
+            return fetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> backwardFetch(final K keyFrom, final K keyTo, final Instant timeFrom, final Instant timeTo) {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> backwardFetch(final K keyFrom, final K keyTo, final long timeFrom, final long timeTo) {
+            return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> all() {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.all());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> backwardAll() {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.backwardAll());
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetchAll(final Instant timeFrom, final Instant timeTo) {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.fetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetchAll(final long timeFrom, final long timeTo) {
+            return fetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> backwardFetchAll(final Instant timeFrom, final Instant timeTo) {
+            return new KeyValueIteratorFacadeForHeaders<>(inner.backwardFetchAll(timeFrom, timeTo));
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> backwardFetchAll(final long timeFrom, final long timeTo) {
+            return backwardFetchAll(Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public void init(final StateStoreContext context, final StateStore root) {
+            inner.init(context, root);
+        }
+
+        @Override
+        public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+            inner.commit(changelogOffsets);
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
+
+        private static class WindowStoreIteratorFacadeForHeaders<V> implements WindowStoreIterator<ValueAndTimestamp<V>> {
+            final KeyValueIterator<Long, ValueTimestampHeaders<V>> innerIterator;
+
+            WindowStoreIteratorFacadeForHeaders(final KeyValueIterator<Long, ValueTimestampHeaders<V>> iterator) {
+                innerIterator = iterator;
+            }
+
+            @Override
+            public void close() {
+                innerIterator.close();
+            }
+
+            @Override
+            public Long peekNextKey() {
+                return innerIterator.peekNextKey();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return innerIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Long, ValueAndTimestamp<V>> next() {
+                final KeyValue<Long, ValueTimestampHeaders<V>> innerKeyValue = innerIterator.next();
+                final ValueTimestampHeaders<V> vth = innerKeyValue.value;
+                return KeyValue.pair(innerKeyValue.key, vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp()));
+            }
+        }
+
+        private static class KeyValueIteratorFacadeForHeaders<K, V> implements KeyValueIterator<K, ValueAndTimestamp<V>> {
+            private final KeyValueIterator<K, ValueTimestampHeaders<V>> innerIterator;
+
+            private KeyValueIteratorFacadeForHeaders(final KeyValueIterator<K, ValueTimestampHeaders<V>> iterator) {
+                innerIterator = iterator;
+            }
+
+            @Override
+            public void close() {
+                innerIterator.close();
+            }
+
+            @Override
+            public K peekNextKey() {
+                return innerIterator.peekNextKey();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return innerIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<K, ValueAndTimestamp<V>> next() {
+                final KeyValue<K, ValueTimestampHeaders<V>> innerKeyValue = innerIterator.next();
+                final ValueTimestampHeaders<V> vth = innerKeyValue.value;
+                return KeyValue.pair(innerKeyValue.key, vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp()));
+            }
         }
     }
 

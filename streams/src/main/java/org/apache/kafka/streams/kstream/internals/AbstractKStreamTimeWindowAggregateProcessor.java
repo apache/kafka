@@ -34,8 +34,8 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
-
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+
 import org.slf4j.Logger;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION;
@@ -98,7 +98,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
                 context,
-                new TimestampedCacheFlushListener<>(context),
+                new TimestampedCacheFlushListenerWithHeaders<>(context),
                 sendOldValues);
         }
     }

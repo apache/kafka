@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.EmitStrategy;
@@ -469,9 +470,10 @@ public class KStreamSlidingWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 final VAgg newAgg = aggregator.apply(record.key(), record.value(), oldAgg);
 
                 final long newTimestamp = oldAgg == null ? record.timestamp() : Math.max(record.timestamp(), valueTimestampHeaders.timestamp());
+                final Headers headers  =  oldAgg == null ? record.headers() : valueTimestampHeaders.headers();
                 windowStore.put(
                     record.key(),
-                    ValueTimestampHeaders.make(newAgg, newTimestamp, valueTimestampHeaders.headers()),
+                    ValueTimestampHeaders.make(newAgg, newTimestamp, headers),
                     windowStart);
                 maybeForwardUpdate(record, window, oldAgg, newAgg, newTimestamp);
             } else {

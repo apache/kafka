@@ -33,8 +33,8 @@ import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
-
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

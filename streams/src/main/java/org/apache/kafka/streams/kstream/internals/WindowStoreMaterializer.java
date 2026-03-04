@@ -22,7 +22,7 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -68,7 +68,7 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
                 ))
                 : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
-        final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores.timestampedWindowStoreBuilder(
+        final StoreBuilder<TimestampedWindowStoreWithHeaders<K, V>> builder = Stores.timestampedWindowStoreWithHeadersBuilder(
                 supplier,
                 materialized.keySerde(),
                 materialized.valueSerde()
