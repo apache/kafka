@@ -124,11 +124,11 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>
                 builder =
                 new ListValueStoreBuilder<>(
-                    supplier,
-                    timestampedKeyAndJoinSideSerde,
-                    leftOrRightValueSerde,
-                    Time.SYSTEM
-            );
+                        supplier,
+                        timestampedKeyAndJoinSideSerde,
+                        leftOrRightValueSerde,
+                        Time.SYSTEM
+                );
 
         if (loggingEnabled) {
             builder.withLoggingEnabled(streamJoined.logConfig());
@@ -208,8 +208,8 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             return KStreamImpl.OUTERSHARED_NAME
                     + joinThisGeneratedName.substring(
                     type == Type.RIGHT
-                        ? KStreamImpl.OUTERTHIS_NAME.length()
-                        : KStreamImpl.JOINTHIS_NAME.length());
+                            ? KStreamImpl.OUTERTHIS_NAME.length()
+                            : KStreamImpl.JOINTHIS_NAME.length());
         }
     }
 }

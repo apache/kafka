@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
+import static org.apache.kafka.streams.state.ValueTimestampHeaders.getValueOrNull;
+
 class TimestampedCacheFlushListenerWithHeaders<KOut, VOut> implements CacheFlushListener<KOut, ValueTimestampHeaders<VOut>> {
 
     private final InternalProcessorContext<KOut, Change<VOut>> context;
@@ -42,8 +44,8 @@ class TimestampedCacheFlushListenerWithHeaders<KOut, VOut> implements CacheFlush
         @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            final VOut newValue = record.value().newValue != null ? record.value().newValue.value() : null;
-            final VOut oldValue = record.value().oldValue != null ? record.value().oldValue.value() : null;
+            final VOut newValue = getValueOrNull(record.value().newValue);
+            final VOut oldValue = getValueOrNull(record.value().oldValue);
             final long timestamp = record.value().newValue != null ? record.value().newValue.timestamp() : record.timestamp();
             final Headers headers = record.headers() != null ? record.headers() : new RecordHeaders();
 

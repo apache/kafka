@@ -28,7 +28,6 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -41,16 +40,16 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainT
 
 /**
  * Adapter for backward compatibility between {@link TimestampedWindowStoreWithHeaders}
- * and {@link TimestampedWindowStore}.
+ * and {@link WindowStore}.
  * <p>
- * If a user provides a supplier for {@code TimestampedWindowStore} (without headers) when building
- * a {@code TimestampedWindowStoreWithHeaders}, this adapter translates between the timestamped
+ * If a user provides a supplier for {@code WindowStore} (without timestamp and headers) when building
+ * a {@code TimestampedWindowStoreWithHeaders}, this adapter translates between the plain
  * {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
  * <p>
  * Format conversion:
  * <ul>
- *   <li>Write: {@code [headers][timestamp][value]} → {@code [timestamp][value]} (strip headers)</li>
- *   <li>Read: {@code [timestamp][value]} → {@code [headers][timestamp][value]} (add empty headers)</li>
+ *   <li>Write: {@code [headers][timestamp][value]} → {@code [value]} (strip timestamp and headers)</li>
+ *   <li>Read: {@code [value]} → {@code [headers][timestamp][value]} (add -1 as timestamp and empty headers)</li>
  * </ul>
  */
 public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte[]> {
@@ -60,19 +59,16 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
-//        if (!(store instanceof TimestampedBytesStore)) {
-//            throw new IllegalArgumentException("Provided store must be a timestamped store, but it is not.");
-//        }
         this.store = store;
     }
 
     /**
-     * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
-     * This strips the headers portion but keeps timestamp and value intact.
+     * Extract raw value (with no timestamp and headers) from serialized ValueTimestampHeaders.
+     * This strips the timestamp and headers portion but keeps the value intact.
      *
      * Format conversion:
      * Input:  [headersSize(varint)][headers][timestamp(8)][value]
-     * Output: [timestamp(8)][value]
+     * Output: [value]
      */
     // TODO: should be extract to util class, tracked by KAFKA-20205
     static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
@@ -219,8 +215,8 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
     }
 
     /**
-     * Iterator adapter for WindowStoreIterator that converts timestamp-only values
-     * to timestamp-with-headers format by adding empty headers.
+     * Iterator adapter for WindowStoreIterator that converts plain values
+     * to timestamp-with-headers format by adding 1- as timestamp and empty headers.
      */
     private static class PlainWindowToHeadersWindowStoreIteratorAdapter
         extends PlainToHeadersIteratorAdapter<Long>
