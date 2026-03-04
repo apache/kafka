@@ -82,7 +82,7 @@ public class Utils {
      * @param serdes the StateSerdes as serializer
      * @return the Bytes of the key
      */
-    static <K> Bytes keyBytes(final K key, final Headers headers, StateSerdes<K, ?> serdes) {
+    static <K> Bytes keyBytes(final K key, final Headers headers, final StateSerdes<K, ?> serdes) {
         return Bytes.wrap(serdes.rawKey(key, headers));
     }
 
@@ -92,7 +92,7 @@ public class Utils {
      * @param serdes the StateSerdes as serializer
      * @return the Bytes of the key
      */
-    static <K> Bytes keyBytes(final K key, StateSerdes<K, ?> serdes) {
+    static <K> Bytes keyBytes(final K key, final StateSerdes<K, ?> serdes) {
         return keyBytes(key, new RecordHeaders(), serdes);
     }
 
@@ -103,7 +103,7 @@ public class Utils {
      * @param serdes the StateSerdes as serializer
      * @return the Bytes of the key
      */
-    static <K> Bytes keyBytes(final Windowed<K> sessionKey, final Headers headers, StateSerdes<K, ?> serdes) {
+    static <K> Bytes keyBytes(final Windowed<K> sessionKey, final Headers headers, final StateSerdes<K, ?> serdes) {
         return keyBytes(sessionKey.key(), headers, serdes);
     }
 }
