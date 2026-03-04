@@ -1533,11 +1533,19 @@ public class StreamThread extends Thread implements ProcessingThread {
                 activeHostInfoMap.put(new HostInfo(hostInfo.host(), hostInfo.port()), new HashSet<>(endpointPartitions.activePartitions()));
                 standbyHostInfoMap.put(new HostInfo(hostInfo.host(), hostInfo.port()), new HashSet<>(endpointPartitions.standbyPartitions()));
             });
-            streamsMetadataState.onChange(
-                    activeHostInfoMap,
-                    standbyHostInfoMap,
-                    getTopicPartitionInfo(activeHostInfoMap)
-            );
+            final Map<TopicPartition, PartitionInfo> topicPartitionInfo = getTopicPartitionInfo(activeHostInfoMap);
+            final Set<String> missingSourceTopics = StreamsMetadataState.missingSourceTopicsForMetadata(topicPartitionInfo, topologyMetadata);
+            if (missingSourceTopics.isEmpty()) {
+                streamsMetadataState.onChange(
+                        activeHostInfoMap,
+                        standbyHostInfoMap,
+                        topicPartitionInfo
+                );
+            } else {
+                log.info("Skipping streams metadata update because partition metadata is missing for source topics {}. " +
+                        "Will retry after metadata is refreshed.", missingSourceTopics);
+                streamsMetadataState.onChange(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+            }
         }
     }
 

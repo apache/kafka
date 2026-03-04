@@ -1473,6 +1473,40 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
+    public void shouldPublishEmptyMetadataWhenAssignmentMissesStoreSourceTopicMetadata(final Map<String, Object> parameterizedConfig) {
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        streamsBuilder.table("topic1", Materialized.as("store"));
+        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+
+        setUp(parameterizedConfig, false);
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor(parameterizedConfig);
+
+        final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
+            new HostInfo("localhost", 9090),
+            Collections.singleton(t2p0)
+        );
+        final AssignmentInfo info = new AssignmentInfo(
+            LATEST_SUPPORTED_VERSION,
+            Collections.singletonList(TASK_0_0),
+            Collections.emptyMap(),
+            hostState,
+            emptyMap(),
+            0
+        );
+        final Assignment assignment = new Assignment(Collections.singletonList(t2p0), info.encode());
+
+        partitionAssignor.onAssignment(assignment, null);
+
+        verify(streamsMetadataState).onChange(
+            eq(Collections.emptyMap()),
+            eq(Collections.emptyMap()),
+            eq(Collections.emptyMap())
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameter")
     public void testAssignWithInternalTopics(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, true);
         builder.addInternalTopic("topicX", InternalTopicProperties.empty());

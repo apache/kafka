@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -317,6 +318,24 @@ public class StreamsMetadataState {
                 .add(value));
 
         rebuildMetadata(activePartitionHostMap, standbyPartitionHostMap);
+    }
+
+    static Set<String> missingSourceTopicsForMetadata(final Map<TopicPartition, PartitionInfo> topicPartitionInfo,
+                                                      final TopologyMetadata topologyMetadata) {
+        final Set<String> topicsWithMetadata = topicPartitionInfo.keySet().stream()
+            .map(TopicPartition::topic)
+            .collect(Collectors.toSet());
+        final Set<String> globalStores = topologyMetadata.globalStateStores().keySet();
+        final Set<String> missingSourceTopics = new LinkedHashSet<>();
+
+        topologyMetadata.stateStoreNameToSourceTopics().forEach((storeName, sourceTopics) -> {
+            if (!globalStores.contains(storeName)) {
+                sourceTopics.stream()
+                    .filter(sourceTopic -> !topicsWithMetadata.contains(sourceTopic))
+                    .forEach(missingSourceTopics::add);
+            }
+        });
+        return missingSourceTopics;
     }
 
     private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
