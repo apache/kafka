@@ -352,12 +352,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                         final ProcessingExceptionHandler.Response response;
                         // Processing phase
                         try {
-                            @SuppressWarnings("unchecked")
-                            final Processor<Object, Object, Object, Object> typedSource = 
-                                (Processor<Object, Object, Object, Object>) source;
-                            @SuppressWarnings("unchecked")
-                            final Record<Object, Object> typedRecord = (Record<Object, Object>) deserializedRecord;
-                            typedSource.process(typedRecord);
+                            ((Processor) source).process(deserializedRecord);
                             restoreCount++;
                             batchRestoreCount++;
                         } catch (final Exception processingException) {
