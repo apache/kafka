@@ -306,7 +306,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 log.info("Successfully completed resetting offsets.");
                 break;
             } catch (final InterruptedException ex) {
-                ex.printStackTrace();
+                log.warn("Interrupted while resetting offsets", ex);
                 log.error("Offset reset failed.", ex);
                 throw new StreamsException(ex);
             } catch (final ExecutionException ex) {
@@ -331,7 +331,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
             try {
                 Thread.sleep(100);
             } catch (final InterruptedException ex) {
-                ex.printStackTrace();
+                log.warn("Interrupted while resetting offsets", ex);
             }
         }
     }
