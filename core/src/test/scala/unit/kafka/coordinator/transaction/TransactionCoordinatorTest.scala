@@ -2807,4 +2807,167 @@ class TransactionCoordinatorTest {
     testConcurrentInPrepareState(TransactionState.PREPARE_ABORT, TransactionResult.ABORT)
     testConcurrentInPrepareState(TransactionState.PREPARE_ABORT, TransactionResult.COMMIT)
   }
+
+  @Test
+  def shouldRejectKeepPreparedTxnWithExpectedEpoch(): Unit = {
+    // Test that keepPreparedTxn=true with expectedEpoch returns INVALID_REQUEST.
+    // This is defense-in-depth validation: properly implemented clients should
+    // never send both flags together, as keepPreparedTxn is for initial calls
+    // and expectedEpoch is for retries.
+
+    // Setup EMPTY transaction and enable 2PC
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(None))
+    when(transactionManager.isTransaction2pcEnabled())
+      .thenReturn(true)
+
+    // Attempt InitProducerId with both keepPreparedTxn and expectedEpoch
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = true,
+      keepPreparedTxn = true,
+      expectedProducerIdAndEpoch = Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
+      initProducerIdMockCallback
+    )
+
+    // Verify: Returns INVALID_REQUEST
+    assertEquals(Errors.INVALID_REQUEST, result.error,
+      "Should return INVALID_REQUEST when both keepPreparedTxn and expectedEpoch are set")
+  }
+
+  @Test
+  def shouldRejectKeepPreparedTxnWithoutOngoingTransaction(): Unit = {
+    // Test that keepPreparedTxn=true without an ONGOING transaction returns an
+    // appropriate error.  Properly implemented clients call keepPreparedTxn only
+    // after a crash with a transaction in flight, but server validates this.
+
+    def testKeepPreparedInState(state: TransactionState): Unit = {
+      val txnMetadata = new TransactionMetadata(
+        transactionalId,
+        producerId,
+        RecordBatch.NO_PRODUCER_ID,
+        RecordBatch.NO_PRODUCER_ID,
+        producerEpoch,
+        RecordBatch.NO_PRODUCER_EPOCH,
+        RecordBatch.NO_PRODUCER_EPOCH,
+        txnTimeoutMs,
+        state,
+        new util.HashSet[TopicPartition](),
+        time.milliseconds(),
+        time.milliseconds(),
+        TV_0
+      )
+
+      when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+        .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+      // Attempt InitProducerId with keepPreparedTxn in non-ONGOING state
+      coordinator.handleInitProducerId(
+        transactionalId,
+        txnTimeoutMs,
+        enableTwoPCFlag = true,
+        keepPreparedTxn = true,
+        None,
+        initProducerIdMockCallback
+      )
+
+      // Verify: Returns error (no ONGOING transaction to prepare)
+      assertNotEquals(Errors.NONE, result.error,
+        s"Should return error when keepPreparedTxn=true in $state state")
+    }
+
+    // Test keepPreparedTxn in states where there's no ongoing transaction
+    testKeepPreparedInState(TransactionState.EMPTY)
+    testKeepPreparedInState(TransactionState.COMPLETE_COMMIT)
+    testKeepPreparedInState(TransactionState.COMPLETE_ABORT)
+  }
+
+  @Test
+  def shouldValidateEpochsCorrectlyWithDualIdentity(): Unit = {
+    // Test comprehensive epoch validation when dual identity is present
+    // (ongoing transaction with client-facing epoch bumped).  Validates that
+    // operations use the correct epoch: ongoing epoch for AddPartitions,
+    // client epoch for EndTransaction.
+
+    // Setup ONGOING transaction with dual identity:
+    // - Ongoing: pid=10, epoch=1
+    // - Client: nextPid=10, nextEpoch=2
+    val capturedTransitMetadata = setupPrepared2PcTxnWithBumpedClientEpoch()
+    val ongoingEpoch = producerEpoch  // 1
+    val clientEpoch = result.producerEpoch  // 2
+
+    // Scenario 1: AddPartitions with ongoing epoch (1) → Success
+    // This is normal operation: adding partitions to the ongoing transaction.
+    coordinator.handleAddPartitionsToTransaction(
+      transactionalId,
+      producerId,
+      ongoingEpoch,  // Use ongoing epoch
+      Set(new TopicPartition("topic1", 0)).asJava,
+      errorsCallback,
+      TV_2
+    )
+    assertEquals(Errors.NONE, error,
+      "AddPartitions with ongoing epoch should succeed")
+
+    // Scenario 2: AddPartitions with client epoch (2) → INVALID_TXN_STATE
+    // This is already tested in shouldRejectAddPartitionsAfterInitProducerIdWithKeepPreparedTxn
+    // but included here for completeness of the validation matrix.
+    coordinator.handleAddPartitionsToTransaction(
+      transactionalId,
+      producerId,
+      clientEpoch,  // Use client epoch (wrong for AddPartitions)
+      Set(new TopicPartition("topic2", 0)).asJava,
+      errorsCallback,
+      TV_2
+    )
+    assertEquals(Errors.INVALID_TXN_STATE, error,
+      "AddPartitions with client epoch should return INVALID_TXN_STATE")
+
+    // Scenario 3: AddPartitions with future epoch (3) → PRODUCER_FENCED
+    val futureEpoch = (clientEpoch + 1).toShort
+    coordinator.handleAddPartitionsToTransaction(
+      transactionalId,
+      producerId,
+      futureEpoch,  // Unknown future epoch
+      Set(new TopicPartition("topic3", 0)).asJava,
+      errorsCallback,
+      TV_2
+    )
+    assertEquals(Errors.PRODUCER_FENCED, error,
+      "AddPartitions with future epoch should return PRODUCER_FENCED")
+
+    // Scenario 4: EndTransaction with ongoing epoch (1) → PRODUCER_FENCED (TV2)
+    // Client should use client epoch for EndTransaction, not ongoing epoch.
+    coordinator.handleEndTransaction(
+      transactionalId,
+      producerId,
+      ongoingEpoch,  // Wrong epoch for EndTransaction in TV2
+      TransactionResult.COMMIT,
+      TV_2,
+      endTxnCallback
+    )
+    assertEquals(Errors.PRODUCER_FENCED, error,
+      "EndTransaction with ongoing epoch should return PRODUCER_FENCED in TV2")
+
+    // Scenario 5: EndTransaction with client epoch (2) → Success
+    // This is the correct 2PC completion path.
+    coordinator.handleEndTransaction(
+      transactionalId,
+      producerId,
+      clientEpoch,  // Correct client epoch
+      TransactionResult.COMMIT,
+      TV_2,
+      endTxnCallback
+    )
+    assertEquals(Errors.NONE, error,
+      "EndTransaction with client epoch should succeed")
+
+    // Verify state transitioned to PREPARE_COMMIT
+    // Index 0: InitProducerId transition from setup
+    // Index 1: EndTransaction PREPARE_COMMIT transition
+    val finalMetadata = capturedTransitMetadata.getAllValues.get(1)
+    assertEquals(TransactionState.PREPARE_COMMIT, finalMetadata.txnState,
+      "Transaction should transition to PREPARE_COMMIT")
+  }
 }
