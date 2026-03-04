@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.query.Position;
 
+import static org.apache.kafka.streams.state.internals.Utils.readBytes;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -40,8 +42,7 @@ public final class PositionSerde {
                 final Map<String, Map<Integer, Long>> position = new HashMap<>(nTopics);
                 for (int i = 0; i < nTopics; i++) {
                     final int topicNameLength = buffer.getInt();
-                    final byte[] topicNameBytes = new byte[topicNameLength];
-                    buffer.get(topicNameBytes);
+                    final byte[] topicNameBytes = readBytes(buffer, topicNameLength);
                     final String topic = new String(topicNameBytes, StandardCharsets.UTF_8);
 
                     final int numPairs = buffer.getInt();
