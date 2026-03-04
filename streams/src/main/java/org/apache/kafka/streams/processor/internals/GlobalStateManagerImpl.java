@@ -397,7 +397,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                     );
                                     throw new FailedProcessingException(
                                             "Fatal user code error in processing error callback",
-                                            globalProcessorContext.currentNode().name(),
+                                            null,
                                             fatalUserException
                                     );
                                 }
@@ -407,7 +407,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                             " a processing error. If you would rather have the streaming pipeline" +
                                             " continue after a processing error, please set the " +
                                             PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
-                                    throw new FailedProcessingException(globalProcessorContext.currentNode().name(), processingException);
+                                    throw new FailedProcessingException(null, processingException);
                                 }
                                 // RESUME - log and continue
                                 log.warn("Processing exception handler chose to resume for record at offset {}", record.offset(), processingException);
