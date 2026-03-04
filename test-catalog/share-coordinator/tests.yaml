@@ -95,6 +95,7 @@ org.apache.kafka.coordinator.share.ShareCoordinatorShardTest:
 - testSnapshotColdPartitionsNoEligiblePartitions
 - testSnapshotColdPartitionsPartialEligiblePartitions
 - testSnapshotColdPartitionsSnapshotUpdateNotConsidered
+- testSnapshotUpdateCountBoundary
 - testSubsequentWriteStateSnapshotEpochUpdatesSuccessfully
 - testWriteFailsOnUninitializedPartition
 - testWriteNullMetadataImage
