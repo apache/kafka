@@ -222,7 +222,7 @@ public class TimestampedWindowStoreWithHeadersBuilder<K, V>
         public <R> QueryResult<R> query(final Query<R> query,
                                         final PositionBound positionBound,
                                         final QueryConfig config) {
-            throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped window stores with headers yet.");
+            return wrapped().query(query, positionBound, config);
         }
 
         @Override

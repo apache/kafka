@@ -206,7 +206,7 @@ public class PlainToHeadersWindowStoreAdapter implements WindowStore<Bytes, byte
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
 
-        throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped window stores with headers yet.");
+        return store.query(query, positionBound, config);
     }
 
     @Override

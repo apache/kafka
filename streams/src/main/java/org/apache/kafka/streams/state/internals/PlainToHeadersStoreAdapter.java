@@ -40,7 +40,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFormat;
+import static org.apache.kafka.streams.state.HeadersBytesStore.convertFromPlainToHeaderFormat;
 
 /**
  * This class is used to ensure backward compatibility at DSL level between
@@ -52,39 +52,36 @@ import static org.apache.kafka.streams.state.HeadersBytesStore.convertToHeaderFo
  * a {@code TimestampedKeyValueStoreWithHeaders}, this adapter is used to translate between
  * the timestamped {@code byte[]} format and the timestamped-with-headers {@code byte[]} format.
  *
- * @see TimestampedToHeadersIteratorAdapter
+ * @see PlainToHeadersIteratorAdapter
  */
 @SuppressWarnings("unchecked")
-public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> {
+public class PlainToHeadersStoreAdapter implements KeyValueStore<Bytes, byte[]> {
     final KeyValueStore<Bytes, byte[]> store;
 
-    TimestampedToHeadersStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
+    PlainToHeadersStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
-        }
-        if (!(store instanceof TimestampedBytesStore)) {
-            throw new IllegalArgumentException("xxProvided store must be a timestamped store, but it is not.");
         }
         this.store = store;
     }
 
     /**
-     * Extract raw timestamped value (timestamp + value) from serialized ValueTimestampHeaders.
+     * Extract raw value from serialized ValueTimestampHeaders.
      * This strips the headers portion but keeps timestamp and value intact.
      *
      * Format conversion:
      * Input:  [headersSize(varint)][headers][timestamp(8)][value]
      * Output: [timestamp(8)][value]
      */
-    static byte[] rawTimestampedValue(final byte[] rawValueTimestampHeaders) {
+    static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
         if (rawValueTimestampHeaders == null) {
             return null;
         }
 
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
-        // Skip headers, keep timestamp + value
-        buffer.position(buffer.position() + headersSize);
+        // Skip headers and time stamp, keep only the value
+        buffer.position(buffer.position() + headersSize + 8);
 
         final byte[] result = new byte[buffer.remaining()];
         buffer.get(result);
@@ -94,28 +91,28 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestampAndHeaders) {
-        store.put(key, rawTimestampedValue(valueWithTimestampAndHeaders));
+        store.put(key, rawValue(valueWithTimestampAndHeaders));
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
                               final byte[] valueWithTimestampAndHeaders) {
-        return convertToHeaderFormat(store.putIfAbsent(
+        return convertFromPlainToHeaderFormat(store.putIfAbsent(
             key,
-            rawTimestampedValue(valueWithTimestampAndHeaders)));
+            rawValue(valueWithTimestampAndHeaders)));
     }
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             final byte[] valueWithTimestampAndHeaders = entry.value;
-            store.put(entry.key, rawTimestampedValue(valueWithTimestampAndHeaders));
+            store.put(entry.key, rawValue(valueWithTimestampAndHeaders));
         }
     }
 
     @Override
     public byte[] delete(final Bytes key) {
-        return convertToHeaderFormat(store.delete(key));
+        return convertFromPlainToHeaderFormat(store.delete(key));
     }
 
     @Override
@@ -162,35 +159,35 @@ public class TimestampedToHeadersStoreAdapter implements KeyValueStore<Bytes, by
 
     @Override
     public byte[] get(final Bytes key) {
-        return convertToHeaderFormat(store.get(key));
+        return convertFromPlainToHeaderFormat(store.get(key));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.range(from, to));
+        return new PlainToHeadersIteratorAdapter<>(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.reverseRange(from, to));
+        return new PlainToHeadersIteratorAdapter<>(store.reverseRange(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.all());
+        return new PlainToHeadersIteratorAdapter<>(store.all());
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return new TimestampedToHeadersIteratorAdapter<>(store.reverseAll());
+        return new PlainToHeadersIteratorAdapter<>(store.reverseAll());
     }
 
     @Override
     public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
                                                                                     final PS prefixKeySerializer) {
-        return new TimestampedToHeadersIteratorAdapter<>(store.prefixScan(prefix, prefixKeySerializer));
+        return new PlainToHeadersIteratorAdapter<>(store.prefixScan(prefix, prefixKeySerializer));
     }
 
     @Override

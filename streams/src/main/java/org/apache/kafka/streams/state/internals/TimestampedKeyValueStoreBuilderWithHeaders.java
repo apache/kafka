@@ -30,6 +30,7 @@ import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 
@@ -69,7 +70,11 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
 
         if (!(store instanceof HeadersBytesStore)) {
             if (store.persistent()) {
-                store = new TimestampedToHeadersStoreAdapter(store);
+                if (store instanceof TimestampedBytesStore) {
+                    store = new TimestampedToHeadersStoreAdapter(store);
+                } else {
+                    store = new PlainToHeadersStoreAdapter(store);
+                }
             } else {
                 store = new InMemoryTimestampedKeyValueStoreWithHeadersMarker(store);
             }
@@ -174,7 +179,7 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
                                         final PositionBound positionBound,
                                         final QueryConfig config) {
 
-            throw new UnsupportedOperationException("Queries (IQv2) are not supported by timestamped key-value stores with headers yet.");
+            return wrapped().query(query, positionBound, config);
         }
 
         @Override
