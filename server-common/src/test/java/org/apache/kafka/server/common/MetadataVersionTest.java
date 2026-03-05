@@ -56,7 +56,6 @@ import static org.apache.kafka.server.common.MetadataVersion.LATEST_PRODUCTION;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -317,18 +316,8 @@ class MetadataVersionTest {
 
     @Test
     public void assertPythonLatestStableMetadataVersionMatchesLatestProduction() throws IOException {
-        // Walk up from cwd to find repo root (contains tests/kafkatest/version.py)
-        Path repoRoot = Paths.get("").toAbsolutePath();
-        Path versionPy = null;
-        while (repoRoot != null) {
-            Path candidate = repoRoot.resolve("tests/kafkatest/version.py");
-            if (Files.exists(candidate)) {
-                versionPy = candidate;
-                break;
-            }
-            repoRoot = repoRoot.getParent();
-        }
-        assertNotNull(versionPy, "Could not find tests/kafkatest/version.py");
+        Path versionPy = Paths.get("../tests/kafkatest/version.py").toAbsolutePath();
+        assertTrue(Files.exists(versionPy), "Could not find tests/kafkatest/version.py at: " + versionPy);
 
         String pythonVersion = Files.readAllLines(versionPy).stream()
             .filter(line -> line.startsWith("LATEST_STABLE_METADATA_VERSION"))
