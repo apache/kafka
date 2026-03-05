@@ -1136,6 +1136,14 @@ public class KafkaConsumerTest {
         assertEquals(50L, consumer.position(tp0));
     }
 
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testResetUsingStartTimeBasedAutoResetPolicy(GroupProtocol groupProtocol) {
+        AutoOffsetResetStrategy startTimeStrategy = AutoOffsetResetStrategy.fromString("by_start_time");
+        setUpConsumerWithAutoResetPolicy(groupProtocol, startTimeStrategy);
+        assertEquals(50L, consumer.position(tp0));
+    }
+
     private void setUpConsumerWithAutoResetPolicy(GroupProtocol groupProtocol, AutoOffsetResetStrategy strategy) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), strategy);
         ConsumerMetadata metadata = createMetadata(subscription);

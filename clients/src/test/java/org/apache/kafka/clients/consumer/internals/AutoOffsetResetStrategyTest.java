@@ -52,6 +52,11 @@ public class AutoOffsetResetStrategyTest {
 
         AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString("by_duration:PT1H");
         assertEquals("by_duration", strategy.name());
+
+        AutoOffsetResetStrategy byStartTime = AutoOffsetResetStrategy.fromString("by_start_time");
+        assertEquals("by_start_time", byStartTime.name());
+        assertEquals(AutoOffsetResetStrategy.StrategyType.BY_START_TIME, byStartTime.type());
+        assertTrue(byStartTime.startupTimestamp().isPresent());
     }
 
     @Test
@@ -61,6 +66,7 @@ public class AutoOffsetResetStrategyTest {
         assertDoesNotThrow(() -> validator.ensureValid("test", "latest"));
         assertDoesNotThrow(() -> validator.ensureValid("test", "none"));
         assertDoesNotThrow(() -> validator.ensureValid("test", "by_duration:PT1H"));
+        assertDoesNotThrow(() -> validator.ensureValid("test", "by_start_time"));
         assertThrows(ConfigException.class, () -> validator.ensureValid("test", "invalid"));
         assertThrows(ConfigException.class, () -> validator.ensureValid("test", "by_duration:invalid"));
         assertThrows(ConfigException.class, () -> validator.ensureValid("test", "by_duration:-PT1H"));
@@ -89,6 +95,10 @@ public class AutoOffsetResetStrategyTest {
 
         assertNotEquals(latest1, duration2);
         assertEquals(duration1, duration2);
+
+        AutoOffsetResetStrategy byStartTime1 = AutoOffsetResetStrategy.fromString("by_start_time");
+        AutoOffsetResetStrategy byStartTime2 = AutoOffsetResetStrategy.fromString("by_start_time");
+        assertNotEquals(byStartTime1, byStartTime2);
     }
 
     @Test
@@ -118,5 +128,14 @@ public class AutoOffsetResetStrategyTest {
 
         assertEquals(byDuration1, byDuration2);
         assertNotEquals(byDuration1, byDuration3);
+
+        long before = Instant.now().toEpochMilli();
+        AutoOffsetResetStrategy byStartTime = AutoOffsetResetStrategy.fromString("by_start_time");
+        long after = Instant.now().toEpochMilli();
+
+        Optional<Long> startupTs = byStartTime.startupTimestamp();
+        assertTrue(startupTs.isPresent());
+        assertTrue(startupTs.get() >= before);
+        assertTrue(startupTs.get() <= after);
     }
 }

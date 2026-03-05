@@ -175,6 +175,10 @@ public class ConsumerConfig extends AbstractConfig {
             "<li>latest: automatically reset the offset to the latest offset</li>" +
             "<li>by_duration:&lt;duration&gt;: automatically reset the offset to a configured &lt;duration&gt; from the current timestamp. &lt;duration&gt; must be specified in ISO8601 format (PnDTnHnMn.nS). " +
             "Negative duration is not allowed.</li>" +
+            "<li>by_start_time: automatically reset the offset to the first message with a timestamp at or after the consumer's startup time. " +
+            "The startup timestamp is captured once at consumer initialization and used consistently for all partitions, " +
+            "regardless of when they are discovered. This prevents data loss during partition expansion because newly added partitions " +
+            "will start from the earliest available offset when their creation time postdates the consumer's startup time.</li>" +
             "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
             "<li>anything else: throw exception to the consumer.</li></ul>" +
             "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +

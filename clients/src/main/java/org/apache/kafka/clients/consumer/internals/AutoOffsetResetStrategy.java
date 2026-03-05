@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 
 public class AutoOffsetResetStrategy {
     public enum StrategyType {
-        LATEST, EARLIEST, NONE, BY_DURATION;
+        LATEST, EARLIEST, NONE, BY_DURATION, BY_START_TIME;
 
         @Override
         public String toString() {
@@ -45,15 +45,24 @@ public class AutoOffsetResetStrategy {
 
     private final StrategyType type;
     private final Optional<Duration> duration;
+    private final Optional<Long> startupTimestamp;
 
     private AutoOffsetResetStrategy(StrategyType type) {
         this.type = type;
         this.duration = Optional.empty();
+        this.startupTimestamp = Optional.empty();
     }
 
     private AutoOffsetResetStrategy(Duration duration) {
         this.type = StrategyType.BY_DURATION;
         this.duration = Optional.of(duration);
+        this.startupTimestamp = Optional.empty();
+    }
+
+    private AutoOffsetResetStrategy(long startupTimestamp) {
+        this.type = StrategyType.BY_START_TIME;
+        this.duration = Optional.empty();
+        this.startupTimestamp = Optional.of(startupTimestamp);
     }
 
     /**
@@ -77,6 +86,8 @@ public class AutoOffsetResetStrategy {
                     return LATEST;
                 case NONE:
                     return NONE;
+                case BY_START_TIME:
+                    return new AutoOffsetResetStrategy(Instant.now().toEpochMilli());
                 default:
                     throw new IllegalArgumentException("Unknown auto offset reset strategy: " + offsetStrategy);
             }
@@ -115,7 +126,7 @@ public class AutoOffsetResetStrategy {
     /**
      * Return the timestamp to be used for the ListOffsetsRequest.
      * @return the timestamp for the OffsetResetStrategy,
-     * if the strategy is EARLIEST or LATEST or duration is provided
+     * if the strategy is EARLIEST or LATEST or duration is provided or startup timestamp is captured
      * else return Optional.empty()
      */
     public Optional<Long> timestamp() {
@@ -126,7 +137,9 @@ public class AutoOffsetResetStrategy {
         else if (type == StrategyType.BY_DURATION && duration.isPresent()) {
             Instant now = Instant.now();
             return Optional.of(now.minus(duration.get()).toEpochMilli());
-        } else
+        } else if (type == StrategyType.BY_START_TIME)
+            return startupTimestamp;
+        else
             return Optional.empty();
     }
 
@@ -134,17 +147,21 @@ public class AutoOffsetResetStrategy {
         return duration;
     }
 
+    public Optional<Long> startupTimestamp() {
+        return startupTimestamp;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AutoOffsetResetStrategy that = (AutoOffsetResetStrategy) o;
-        return type == that.type && Objects.equals(duration, that.duration);
+        return type == that.type && Objects.equals(duration, that.duration) && Objects.equals(startupTimestamp, that.startupTimestamp);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, duration);
+        return Objects.hash(type, duration, startupTimestamp);
     }
 
     @Override
@@ -152,6 +169,7 @@ public class AutoOffsetResetStrategy {
         return "AutoOffsetResetStrategy{" +
                 "type=" + type +
                 (duration.map(value -> ", duration=" + value).orElse("")) +
+                (startupTimestamp.map(value -> ", startupTimestamp=" + value).orElse("")) +
                 '}';
     }
 
@@ -163,7 +181,7 @@ public class AutoOffsetResetStrategy {
                 fromString(offsetStrategy);
             } catch (Exception e) {
                 throw new ConfigException(name, value, "Invalid value `" + offsetStrategy + "` for configuration " +
-                        name + ". The value must be either 'earliest', 'latest', 'none' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
+                        name + ". The value must be either 'earliest', 'latest', 'none', 'by_start_time' or of the format 'by_duration:<PnDTnHnMn.nS.>'.");
             }
         }
 

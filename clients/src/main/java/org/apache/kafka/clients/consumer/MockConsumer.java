@@ -64,6 +64,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
     private final Map<TopicPartition, Long> durationResetOffsets;
+    private final Map<TopicPartition, Long> startTimeResetOffsets;
     private final Map<TopicPartition, OffsetAndMetadata> committed;
     private final Queue<Runnable> pollTasks;
     private final Set<TopicPartition> paused;
@@ -109,6 +110,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
         this.durationResetOffsets = new HashMap<>();
+        this.startTimeResetOffsets = new HashMap<>();
         this.pollTasks = new LinkedList<>();
         this.pollException = null;
         this.wakeup = new AtomicBoolean(false);
@@ -458,6 +460,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         durationResetOffsets.putAll(newOffsets);
     }
 
+    public synchronized void updateStartTimeOffsets(final Map<TopicPartition, Long> newOffsets) {
+        startTimeResetOffsets.putAll(newOffsets);
+    }
+
     public void disableTelemetry() {
         telemetryDisabled = true;
     }
@@ -645,6 +651,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             offset = durationResetOffsets.get(tp);
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have duration offset specified, but tried to seek to timestamp");
+        } else if (strategy.type() == AutoOffsetResetStrategy.StrategyType.BY_START_TIME) {
+            offset = startTimeResetOffsets.get(tp);
+            if (offset == null)
+                throw new IllegalStateException("MockConsumer didn't have start time offset specified, but tried to seek to startup timestamp");
         } else {
             throw new NoOffsetForPartitionException(tp);
         }

@@ -209,6 +209,27 @@ public class OffsetFetcherTest {
         assertEquals(5, subscriptions.position(tp0).offset);
     }
 
+    @Test
+    public void testUpdateFetchPositionResetToStartTimeOffset() {
+        // BY_START_TIME captures the startup timestamp once at construction time
+        AutoOffsetResetStrategy startTimeStrategy = AutoOffsetResetStrategy.fromString("by_start_time");
+        long capturedTimestamp = startTimeStrategy.startupTimestamp().orElseThrow();
+        buildFetcher(startTimeStrategy);
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, startTimeStrategy);
+
+        client.updateMetadata(initialUpdateResponse);
+
+        // The ListOffsets request should use the fixed startup timestamp (not recalculated)
+        client.prepareResponse(listOffsetRequestMatcher(capturedTimestamp),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        offsetFetcher.resetPositionsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
     /**
      * Make sure the client behaves appropriately when receiving an exception for unavailable offsets
      */

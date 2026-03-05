@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -24,9 +27,11 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,6 +47,7 @@ import static org.apache.kafka.clients.ClientsTestUtils.awaitAssignment;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.consumeRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
+import static org.apache.kafka.clients.CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MAX_BYTES_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG;
@@ -267,6 +273,84 @@ public class PlaintextConsumerFetchTest {
                 startingTimestamp + 24 * hourMillis,
                 hourMillis
             );
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerByStartTimePreventDataLossOnPartitionExpansion() throws ExecutionException, InterruptedException {
+        testByStartTimePreventDataLossOnPartitionExpansion(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerByStartTimePreventDataLossOnPartitionExpansion() throws ExecutionException, InterruptedException {
+        testByStartTimePreventDataLossOnPartitionExpansion(GroupProtocol.CONSUMER);
+    }
+
+    private void testByStartTimePreventDataLossOnPartitionExpansion(GroupProtocol groupProtocol) throws ExecutionException, InterruptedException {
+        var startTimeTopic = "by-start-time-topic";
+        var historicalKey = "historical-key".getBytes(StandardCharsets.UTF_8);
+        var historicalValue = "historical-value".getBytes(StandardCharsets.UTF_8);
+        var currentKey = "current-key".getBytes(StandardCharsets.UTF_8);
+        var currentValue = "current-value".getBytes(StandardCharsets.UTF_8);
+        var newPartitionKey = "new-partition-key".getBytes(StandardCharsets.UTF_8);
+        var newPartitionValue = "new-partition-value".getBytes(StandardCharsets.UTF_8);
+
+        // Use an explicit past timestamp so historical records are unambiguously before consumer startup
+        var pastTimestamp = Instant.now().minus(Duration.ofMinutes(5)).toEpochMilli();
+
+        try (
+                Admin admin = cluster.admin(); 
+                Producer<byte[], byte[]> producer = cluster.producer(); 
+                Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
+                    GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT), 
+                    AUTO_OFFSET_RESET_CONFIG, "by_start_time",
+                    METADATA_MAX_AGE_CONFIG, 100
+                ))
+        ) {
+
+            // Create topic and produce historical records with an explicit past timestamp.
+            // The consumer's startupTimestamp was already captured above (at consumer creation time),
+            // so historical records with timestamps 5 minutes in the past will be filtered out.
+            admin.createTopics(List.of(new NewTopic(startTimeTopic, 1, (short) 1))).all().get();
+            producer.send(new ProducerRecord<>(startTimeTopic, 0, pastTimestamp, historicalKey, historicalValue));
+            producer.flush();
+
+            consumer.subscribe(List.of(startTimeTopic));
+
+            producer.send(new ProducerRecord<>(startTimeTopic, currentKey, currentValue));
+            producer.flush();
+
+            var recordsFromP0 = new ArrayList<ConsumerRecord<byte[], byte[]>>();
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(500)).forEach(recordsFromP0::add);
+                return recordsFromP0.stream().anyMatch(r ->
+                        new String(r.key(), StandardCharsets.UTF_8).equals("current-key"));
+            }, "Timed out waiting for post-startup record from partition 0");
+            assertTrue(recordsFromP0.stream().noneMatch(r ->
+                    new String(r.key(), StandardCharsets.UTF_8).equals("historical-key")),
+                "Consumer should not receive historical records produced before startup");
+
+            // Expand topic to 2 partitions, then immediately produce to partition 1
+            // before the consumer has a chance to discover it.
+            admin.createPartitions(Map.of(startTimeTopic, NewPartitions.increaseTo(2)));
+            TestUtils.waitForCondition(
+                () -> admin.describeTopics(List.of(startTimeTopic))
+                    .topicNameValues()
+                    .get(startTimeTopic).get().partitions().size() == 2, 
+                "Timed out waiting for topic partition expansion to complete"
+            );
+            producer.send(new ProducerRecord<>(startTimeTopic, 1, newPartitionKey, newPartitionValue));
+            producer.flush();
+
+            // Verify consumer receives the record from the new partition — no data loss.
+            var recordsFromP1 = new ArrayList<ConsumerRecord<byte[], byte[]>>();
+            TestUtils.waitForCondition(() -> {
+                consumer.poll(Duration.ofMillis(500)).forEach(recordsFromP1::add);
+                return !recordsFromP1.isEmpty();
+            }, 15_000, "Timed out waiting for record from new partition 1 — possible data loss");
+
+            assertEquals(1, recordsFromP1.size());
+            assertArrayEquals(newPartitionKey, recordsFromP1.get(0).key());
         }
     }
 
