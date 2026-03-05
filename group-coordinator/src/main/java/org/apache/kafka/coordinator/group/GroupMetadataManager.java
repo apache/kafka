@@ -5329,6 +5329,7 @@ public class GroupMetadataManager {
         if (value != null) {
             ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentTimestamp(value.timestamp());
         } else {
             ConsumerGroup group;
             try {
@@ -5342,6 +5343,7 @@ public class GroupMetadataManager {
                     + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
             group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentTimestamp(0L);
         }
     }
 
@@ -5645,6 +5647,7 @@ public class GroupMetadataManager {
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
             streamsGroup.setTargetAssignmentEpoch(value.assignmentEpoch());
+            streamsGroup.setTargetAssignmentTimestamp(value.timestamp());
         } else {
             StreamsGroup streamsGroup;
             try {
@@ -5658,6 +5661,7 @@ public class GroupMetadataManager {
                     + " but the assignment still has " + streamsGroup.targetAssignment().size() + " members.");
             }
             streamsGroup.setTargetAssignmentEpoch(-1);
+            streamsGroup.setTargetAssignmentTimestamp(0L);
         }
     }
 
@@ -5793,12 +5797,14 @@ public class GroupMetadataManager {
 
         if (value != null) {
             group.setTargetAssignmentEpoch(value.assignmentEpoch());
+            group.setTargetAssignmentTimestamp(value.timestamp());
         } else {
             if (!group.targetAssignment().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
                         + " but the assignment still has " + group.targetAssignment().size() + " members.");
             }
             group.setTargetAssignmentEpoch(-1);
+            group.setTargetAssignmentTimestamp(0L);
         }
     }
 
