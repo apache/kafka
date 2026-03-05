@@ -194,7 +194,7 @@ public class DelayedProduce extends DelayedOperation {
         responseCallback.accept(responseStatus);
     }
 
-    private static void recordExpiration(TopicPartition partition) {
+    public static void recordExpiration(TopicPartition partition) {
         AGGREGATE_EXPIRATION_METER.mark();
         PARTITION_EXPIRATION_METERS.computeIfAbsent(partition,
                 key -> METRICS_GROUP.newMeter("ExpiresPerSec",

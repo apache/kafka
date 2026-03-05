@@ -412,7 +412,7 @@ class ReplicaManager(val config: KafkaConfig,
       completeDelayedOperationsWhenNotPartitionLeader(topicPartition, topicId)
       // Clean up per-partition expiration metrics regardless of whether the local log
       // is deleted. This covers both partition deletion and reassignment (leader -> follower).
-      DelayedProduceMetrics.removePartitionMetrics(topicPartition)
+      DelayedProduce.removePartitionMetrics(topicPartition)
       DelayedRemoteListOffsets.removePartitionMetrics(topicPartition)
     }
 
@@ -2538,7 +2538,7 @@ class ReplicaManager(val config: KafkaConfig,
       partitionsToStartFetching.foreach{ case (topicPartition, partition) =>
         completeDelayedOperationsWhenNotPartitionLeader(topicPartition, partition.topicId)
         // Clean up per-partition expiration metrics when transitioning from leader to follower.
-        DelayedProduceMetrics.removePartitionMetrics(topicPartition)
+        DelayedProduce.removePartitionMetrics(topicPartition)
         DelayedRemoteListOffsets.removePartitionMetrics(topicPartition)
       }
 
