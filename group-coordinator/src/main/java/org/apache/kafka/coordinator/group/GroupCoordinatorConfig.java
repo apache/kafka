@@ -80,8 +80,13 @@ public class GroupCoordinatorConfig {
     public static final int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = -1;
 
     public static final String GROUP_COORDINATOR_NUM_THREADS_CONFIG = "group.coordinator.threads";
-    public static final String GROUP_COORDINATOR_NUM_THREADS_DOC = "The number of threads used by the group coordinator.";
+    public static final String GROUP_COORDINATOR_NUM_THREADS_DOC = "The number of threads used by the group coordinator for processing requests.";
     public static final int GROUP_COORDINATOR_NUM_THREADS_DEFAULT = 4;
+
+    public static final String GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG = "group.coordinator.background.threads";
+    public static final String GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DOC = "The number of threads used by the group coordinator for " +
+        "processing background tasks (e.g. updating regular expression subscriptions and offloaded assignments).";
+    public static final int GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DEFAULT = 2;
 
     public static final String OFFSETS_LOAD_BUFFER_SIZE_CONFIG = "offsets.load.buffer.size";
     public static final int OFFSETS_LOAD_BUFFER_SIZE_DEFAULT = 5 * 1024 * 1024;
@@ -260,6 +265,12 @@ public class GroupCoordinatorConfig {
         SHARE_GROUP_BUILTIN_ASSIGNOR.name() + ".";
     public static final String SHARE_GROUP_ASSIGNORS_DEFAULT = SHARE_GROUP_BUILTIN_ASSIGNOR.name();
 
+    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG = "group.share.initialize.retry.interval.ms";
+    // Because persister retries with exp backoff 5 times and upper cap of 30 secs.
+    public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = 30_000;
+    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. " +
+        "If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
+
     ///
     /// Streams group configs
     ///
@@ -303,11 +314,6 @@ public class GroupCoordinatorConfig {
     public static final int STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DEFAULT = 3000;
     public static final String STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_DOC = "The amount of time the group coordinator will wait for more streams clients to join a new group before performing the first rebalance. A longer delay means potentially fewer rebalances.";
 
-    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_CONFIG = "group.share.initialize.retry.interval.ms";
-    // Because persister retries with exp backoff 5 times and upper cap of 30 secs.
-    public static final int SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DEFAULT = 30_000;
-    public static final String SHARE_GROUP_INITIALIZE_RETRY_INTERVAL_MS_DOC = "Time elapsed before retrying initialize share group state request. If below offsets.commit.timeout.ms, then value of offsets.commit.timeout.ms is used.";
-
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
         CACHED_BUFFER_MAX_BYTES_CONFIG
     );
@@ -317,6 +323,7 @@ public class GroupCoordinatorConfig {
         .define(GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, LIST, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT, 
             ConfigDef.ValidList.in(false, Group.GroupType.documentValidValues()), MEDIUM, GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC)
         .define(GROUP_COORDINATOR_NUM_THREADS_CONFIG, INT, GROUP_COORDINATOR_NUM_THREADS_DEFAULT, atLeast(1), HIGH, GROUP_COORDINATOR_NUM_THREADS_DOC)
+        .define(GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG, INT, GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_DOC)
         .define(GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG, INT, GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT, atLeast(-1), MEDIUM, GROUP_COORDINATOR_APPEND_LINGER_MS_DOC)
         .define(OFFSET_COMMIT_TIMEOUT_MS_CONFIG, INT, OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, OFFSET_COMMIT_TIMEOUT_MS_DOC)
         .define(OFFSETS_LOAD_BUFFER_SIZE_CONFIG, INT, OFFSETS_LOAD_BUFFER_SIZE_DEFAULT, atLeast(1), HIGH, OFFSETS_LOAD_BUFFER_SIZE_DOC)
@@ -382,6 +389,7 @@ public class GroupCoordinatorConfig {
     public static final int CLASSIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
 
     private final int numThreads;
+    private final int numBackgroundThreads;
     private final int appendLingerMs;
     private final int consumerGroupSessionTimeoutMs;
     private final int consumerGroupHeartbeatIntervalMs;
@@ -433,6 +441,7 @@ public class GroupCoordinatorConfig {
     @SuppressWarnings("this-escape")
     public GroupCoordinatorConfig(AbstractConfig config) {
         this.numThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG);
+        this.numBackgroundThreads = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_BACKGROUND_THREADS_CONFIG);
         this.appendLingerMs = config.getInt(GroupCoordinatorConfig.GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG);
         this.consumerGroupSessionTimeoutMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG);
         this.consumerGroupHeartbeatIntervalMs = config.getInt(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -646,12 +655,13 @@ public class GroupCoordinatorConfig {
     }
 
     /**
-     * Copy the subset of properties that are relevant to consumer group and share group.
+     * Copy the subset of properties that are relevant to consumer group, share group and streams group.
      */
     public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
         defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap(this));
+        defaultConfigs.putAll(extractStreamsGroupConfigMap());
         return Collections.unmodifiableMap(defaultConfigs);
     }
 
@@ -665,10 +675,28 @@ public class GroupCoordinatorConfig {
     }
 
     /**
+     * Copy the subset of properties that are relevant to streams group.
+     */
+    public Map<String, Integer> extractStreamsGroupConfigMap() {
+        return Map.of(
+            GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, streamsGroupSessionTimeoutMs(),
+            GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, streamsGroupHeartbeatIntervalMs(),
+            GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, streamsGroupNumStandbyReplicas(),
+            GroupConfig.STREAMS_INITIAL_REBALANCE_DELAY_MS_CONFIG, streamsGroupInitialRebalanceDelayMs());
+    }
+
+    /**
      * The number of threads or event loops running.
      */
     public int numThreads() {
         return numThreads;
+    }
+
+    /**
+     * The number of background threads.
+     */
+    public int numBackgroundThreads() {
+        return numBackgroundThreads;
     }
 
     /**

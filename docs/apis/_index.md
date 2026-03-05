@@ -101,7 +101,10 @@ To use Kafka Streams, add the following Maven dependency to your project:
 When using Scala you may optionally include the `kafka-streams-scala` library. Additional documentation on using the Kafka Streams DSL for Scala is available [in the developer guide](/43/documentation/streams/developer-guide/dsl-api.html#scala-dsl). 
 
 To use Kafka Streams DSL for Scala 2.13, add the following Maven dependency to your project: 
-    
+
+> **⚠️ DEPRECATION NOTICE**: The `kafka-streams-scala` library is deprecated as of Kafka 4.3
+> and will be removed in Kafka 5.0. Please migrate to using the Java Streams API directly from Scala.
+> See the [migration guide](/{version}/streams/developer-guide/scala-migration) for details.
     
     <dependency>
     	<groupId>org.apache.kafka</groupId>

@@ -161,7 +161,6 @@ import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
-import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -240,7 +239,6 @@ import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.SHARE_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.STREAMS_GROUP_REBALANCES_SENSOR_NAME;
-import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord;
@@ -2124,6 +2122,7 @@ public class GroupMetadataManager {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIdsFromEpochs(updatedMember.assignedTasks().activeTasksWithEpochs()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
+            group.invalidateCachedEndpointToPartitions(updatedMember.memberId());
             if (updatedMember.userEndpoint().isPresent()) {
                 // If no user endpoint is defined, there is no change in the endpoint information.
                 // Otherwise, bump the endpoint information epoch
@@ -2132,7 +2131,7 @@ public class GroupMetadataManager {
         }
 
         if (group.endpointInformationEpoch() != memberEndpointEpoch) {
-            response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group, updatedMember));
+            response.setPartitionsByUserEndpoint(group.buildEndpointToPartitions(updatedMember, metadataImage));
         }
         if (groups.containsKey(group.groupId())) {
             // If we just created the group, the endpoint information epoch will not be persisted, so return epoch 0.
@@ -2247,26 +2246,6 @@ public class GroupMetadataManager {
                 .setSubtopologyId(entry.getKey())
                 .setPartitions(entry.getValue().keySet().stream().sorted().toList()))
             .collect(Collectors.toList());
-    }
-
-    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group,
-                                                                                                        StreamsGroupMember updatedMember) {
-        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
-        final Map<String, StreamsGroupMember> members = group.members();
-        // Build endpoint information for all members except the updated member
-        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
-            if (updatedMember != null && entry.getKey().equals(updatedMember.memberId())) {
-                continue;
-            }
-            EndpointToPartitionsManager.maybeEndpointToPartitions(entry.getValue(), group, metadataImage)
-                .ifPresent(endpointToPartitionsList::add);
-        }
-        // Always build endpoint information for the updated member (whether new or existing)
-        if (updatedMember != null) {
-            EndpointToPartitionsManager.maybeEndpointToPartitions(updatedMember, group, metadataImage)
-                .ifPresent(endpointToPartitionsList::add);
-        }
-        return endpointToPartitionsList;
     }
 
     /**
@@ -2456,7 +2435,7 @@ public class GroupMetadataManager {
         //    to detect a full request as those must be set in a full request.
         // 2. The member's assignment has been updated.
         boolean isFullRequest = rebalanceTimeoutMs != -1 && (subscribedTopicNames != null || subscribedTopicRegex != null) && ownedTopicPartitions != null;
-        if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
+        if (memberEpoch == 0 || isFullRequest || ConsumerGroupMember.hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(ConsumerGroupHeartbeatResponse.createAssignment(updatedMember.assignedPartitions()));
         }
 
@@ -2828,7 +2807,7 @@ public class GroupMetadataManager {
         //    (subscribedTopicNames) to detect a full request as those must be set in a full request.
         // 2. The member's assignment has been updated.
         boolean isFullRequest = subscribedTopicNames != null;
-        if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
+        if (memberEpoch == 0 || isFullRequest || ShareGroupMember.hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(ShareGroupHeartbeatResponse.createAssignment(updatedMember.assignedPartitions()));
         }
         return new CoordinatorResult<>(

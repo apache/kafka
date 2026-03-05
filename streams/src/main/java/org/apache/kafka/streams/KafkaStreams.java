@@ -1366,13 +1366,25 @@ public class KafkaStreams implements AutoCloseable {
      * {@link #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler) register an uncaught exception handler}
      * before starting the {@code KafkaStreams} instance.
      * <p>
-     * Note, for brokers with version {@code 0.9.x} or lower, the broker version cannot be checked.
-     * There will be no error and the client will hang and retry to verify the broker version until it
-     * {@link StreamsConfig#REQUEST_TIMEOUT_MS_CONFIG times out}.
-
+     * <b>Note on broker compatibility:</b>
+     * <ul>
+     *   <li>Kafka Streams 4.x requires brokers on version 2.1 or higher. Connection attempts to
+     *       older brokers will fail due to unsupported protocol versions.</li>
+     *   <li>When {@link StreamsConfig#PROCESSING_GUARANTEE_CONFIG processing.guarantee} is set to
+     *       {@link StreamsConfig#EXACTLY_ONCE_V2 exactly_once_v2}, brokers must be version 2.5 or higher.
+     *       If the broker version is too old, the application will detect this during the first rebalance
+     *       and transition to {@link State#ERROR ERROR} state.</li>
+     * </ul>
+     * <p>
+     * Broker compatibility issues are typically detected asynchronously after {@code start()} returns.
+     * Use {@link #setStateListener(StateListener)} or
+     * {@link #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)} to be notified of such failures.
+     *
      * @throws IllegalStateException if process was already started
-     * @throws StreamsException if the Kafka brokers have version 0.10.0.x or
-     *                          if {@link StreamsConfig#PROCESSING_GUARANTEE_CONFIG exactly-once} is enabled for pre 0.11.0.x brokers
+     * @throws StreamsException if the Kafka Streams instance has fatal error and cannot be restarted
+     *
+     * @see #setStateListener(StateListener)
+     * @see #setUncaughtExceptionHandler(StreamsUncaughtExceptionHandler)
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
         if (setState(State.REBALANCING)) {

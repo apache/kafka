@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
-import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
@@ -115,28 +114,61 @@ public class AssignorBenchmarkUtils {
     }
 
     /**
-     * Creates a GroupSpec from the given ModernGroupMembers.
+     * Creates a GroupSpec from the given ConsumerGroupMembers.
      *
-     * @param members               The ModernGroupMembers.
+     * @param members               The ConsumerGroupMembers.
      * @param subscriptionType      The group's subscription type.
      * @param topicResolver         The TopicResolver to use.
      * @return The new GroupSpec.
      */
-    public static GroupSpec createGroupSpec(
-        Map<String, ? extends ModernGroupMember> members,
+    public static GroupSpec createConsumerGroupSpec(
+        Map<String, ConsumerGroupMember> members,
         SubscriptionType subscriptionType,
         TopicIds.TopicResolver topicResolver
     ) {
         Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
-        // Prepare the member spec for all members.
-        for (Map.Entry<String, ? extends ModernGroupMember> memberEntry : members.entrySet()) {
+        for (Map.Entry<String, ConsumerGroupMember> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
-            ModernGroupMember member = memberEntry.getValue();
+            ConsumerGroupMember member = memberEntry.getValue();
 
             memberSpecs.put(memberId, new MemberSubscriptionAndAssignmentImpl(
                 Optional.ofNullable(member.rackId()),
                 Optional.ofNullable(member.instanceId()),
+                new TopicIds(member.subscribedTopicNames(), topicResolver),
+                new Assignment(member.assignedPartitions())
+            ));
+        }
+
+        return new GroupSpecImpl(
+            memberSpecs,
+            subscriptionType,
+            Map.of()
+        );
+    }
+
+    /**
+     * Creates a GroupSpec from the given ShareGroupMembers.
+     *
+     * @param members               The ShareGroupMembers.
+     * @param subscriptionType      The group's subscription type.
+     * @param topicResolver         The TopicResolver to use.
+     * @return The new GroupSpec.
+     */
+    public static GroupSpec createShareGroupSpec(
+        Map<String, ShareGroupMember> members,
+        SubscriptionType subscriptionType,
+        TopicIds.TopicResolver topicResolver
+    ) {
+        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
+
+        for (Map.Entry<String, ShareGroupMember> memberEntry : members.entrySet()) {
+            String memberId = memberEntry.getKey();
+            ShareGroupMember member = memberEntry.getValue();
+
+            memberSpecs.put(memberId, new MemberSubscriptionAndAssignmentImpl(
+                Optional.ofNullable(member.rackId()),
+                Optional.empty(),
                 new TopicIds(member.subscribedTopicNames(), topicResolver),
                 new Assignment(member.assignedPartitions())
             ));

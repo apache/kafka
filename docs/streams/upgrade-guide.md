@@ -67,6 +67,12 @@ Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires Ma
 
 The streams thread metrics `commit-ratio`, `process-ratio`, `punctuate-ratio`, and `poll-ratio`, along with streams state updater metrics `active-restore-ratio`, `standby-restore-ratio`, `idle-ratio`, and `checkpoint-ratio` have been updated. Each metric now reports, over a rolling measurement window, the ratio of time this thread spends performing the given action (`{action}`) to the total elapsed time in that window. The effective window duration is determined by the metrics configuration: `metrics.sample.window.ms` (per-sample window length) and `metrics.num.samples` (number of rolling windows).
 
+### Deprecation of streams-scala module (KIP-1244)
+
+The `kafka-streams-scala` module (`org.apache.kafka.streams.scala` package) is deprecated in 4.3.0 and will be removed in 5.0.
+
+For a detailed migration guide with code examples, see [Migrating from Streams Scala to Java API](/{version}/streams/developer-guide/scala-migration).
+
 ## Streams API changes in 4.2.0
 
 ### General Availability for a core feature set of the Streams Rebalance Protocol (KIP-1071)
@@ -78,7 +84,7 @@ please refer to the [developer guide](/{version}/documentation/streams/developer
 
 ### Other changes
 
-Kafka Streams now supports Dead Letter Queue (DLQ). A new config `errors.deadletterqueue.topic.name` allows to specify the name of the DLQ topic. When set and `DefaultProductionExceptionHandler` is used, records that cause exceptions will be forwarded to the DLQ topic. If a custom exception handler is used, it is up to the custom handler to build DLQ records to send, hence, depending on the implementation, the `errors.deadletterqueue.topic.name` configuration may be ignored. `org.apache.kafka.streams.errors.ProductionExceptionHandler$ProductionExceptionHandlerResponse` is deprecated and replaced by `org.apache.kafka.streams.errors.ProductionExceptionHandler$Response`. Methods `handle` and `handleSerializationException` in `org.apache.kafka.streams.errors.ProductionExceptionHandler` are deprecated and replaced by `handleError` and `handleSerializationError` respectively in order to use the new `Response` class. More details can be found in [KIP-1034](https://cwiki.apache.org/confluence/x/HwviEQ). 
+Kafka Streams now supports Dead Letter Queue (DLQ). A new config `errors.dead.letter.queue.topic.name` allows to specify the name of the DLQ topic. When set and `DefaultProductionExceptionHandler` is used, records that cause exceptions will be forwarded to the DLQ topic. If a custom exception handler is used, it is up to the custom handler to build DLQ records to send, hence, depending on the implementation, the `errors.dead.letter.queue.topic.name` configuration may be ignored. `org.apache.kafka.streams.errors.ProductionExceptionHandler$ProductionExceptionHandlerResponse` is deprecated and replaced by `org.apache.kafka.streams.errors.ProductionExceptionHandler$Response`. Methods `handle` and `handleSerializationException` in `org.apache.kafka.streams.errors.ProductionExceptionHandler` are deprecated and replaced by `handleError` and `handleSerializationError` respectively in order to use the new `Response` class. More details can be found in [KIP-1034](https://cwiki.apache.org/confluence/x/HwviEQ). 
 
 We introduce a new `org.apache.kafka.streams.CloseOptions` class which replaces the existing `org.apache.kafka.streams.KafkaStreams$CloseOptions`. The latter is deprecated and will be removed in the next major release. `CloseOptions` class allows to specify close timeout and group membership operation - whether the consumer needs to leave the group or remain in the group. More details can be found in [KIP-1153](https://cwiki.apache.org/confluence/x/QAq9F). 
 
