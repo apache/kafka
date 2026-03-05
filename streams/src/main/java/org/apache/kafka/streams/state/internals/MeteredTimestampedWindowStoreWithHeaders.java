@@ -24,10 +24,14 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.WindowKeyQuery;
+import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -36,6 +40,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -97,106 +102,133 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
     public <R> QueryResult<R> query(final Query<R> query,
                                     final PositionBound positionBound,
                                     final QueryConfig config) {
-        // Get the result from parent which will have ValueTimestampHeaders<V>
-        final QueryResult<R> result = super.query(query, positionBound, config);
+        final long start = time.nanoseconds();
+        final QueryResult<R> result;
 
-        // Convert ValueTimestampHeaders<V> to ValueAndTimestamp<V> for backward compatibility
-        if (result.isSuccess()) {
-            final Object resultValue = result.getResult();
-            if (resultValue instanceof WindowStoreIterator) {
-                final WindowStoreIterator<ValueTimestampHeaders<V>> headersIterator =
-                    (WindowStoreIterator<ValueTimestampHeaders<V>>) resultValue;
-                final WindowStoreIterator<ValueAndTimestamp<V>> convertedIterator =
-                    new ValueTimestampHeadersToValueAndTimestampWindowIterator<>(headersIterator);
-                final QueryResult<R> convertedResult = (QueryResult<R>) QueryResult.forResult(convertedIterator);
-                convertedResult.setPosition(result.getPosition());
-                for (final String info : result.getExecutionInfo()) {
-                    convertedResult.addExecutionInfo(info);
-                }
-                return convertedResult;
-            } else if (resultValue instanceof KeyValueIterator) {
-                final KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> headersIterator =
-                    (KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>>) resultValue;
-                final KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> convertedIterator =
-                    new ValueTimestampHeadersToValueAndTimestampKeyValueIterator<>(headersIterator);
-                final QueryResult<R> convertedResult = (QueryResult<R>) QueryResult.forResult(convertedIterator);
-                convertedResult.setPosition(result.getPosition());
-                for (final String info : result.getExecutionInfo()) {
-                    convertedResult.addExecutionInfo(info);
-                }
-                return convertedResult;
-            }
+        if (query instanceof WindowKeyQuery) {
+            result = runWindowKeyQuery((WindowKeyQuery<K, ValueTimestampHeaders<V>>) query, positionBound, config);
+        } else if (query instanceof WindowRangeQuery) {
+            result = runWindowRangeQuery((WindowRangeQuery<K, ValueTimestampHeaders<V>>) query, positionBound, config);
+        } else {
+            result = super.query(query, positionBound, config);
+        }
+
+        if (config.isCollectExecutionInfo()) {
+            result.addExecutionInfo(
+                    "Handled in " + getClass() + " with conversion to ValueAndTimestamp in "
+                    + (time.nanoseconds() - start) + "ns");
         }
         return result;
     }
 
     /**
-     * Iterator wrapper that converts ValueTimestampHeaders to ValueAndTimestamp.
+     * Handles WindowKeyQuery by creating a MeteredWindowStoreIterator with conversion from
+     * ValueTimestampHeaders to ValueAndTimestamp.
      */
-    private static class ValueTimestampHeadersToValueAndTimestampWindowIterator<V> implements WindowStoreIterator<ValueAndTimestamp<V>> {
-        private final WindowStoreIterator<ValueTimestampHeaders<V>> inner;
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runWindowKeyQuery(final WindowKeyQuery<K, ValueTimestampHeaders<V>> query,
+                                                   final PositionBound positionBound,
+                                                   final QueryConfig config) {
+        final QueryResult<R> queryResult;
+        if (query.getTimeFrom().isPresent() && query.getTimeTo().isPresent()) {
+            final WindowKeyQuery<Bytes, byte[]> rawKeyQuery =
+                    WindowKeyQuery.withKeyAndWindowStartRange(
+                            keyBytes(query.getKey(), new RecordHeaders()),
+                            query.getTimeFrom().get(),
+                            query.getTimeTo().get()
+                    );
+            final QueryResult<WindowStoreIterator<byte[]>> rawResult = wrapped().query(
+                    rawKeyQuery,
+                    positionBound,
+                    config
+            );
+            if (rawResult.isSuccess()) {
+                final Function<byte[], ValueAndTimestamp<V>> valueFrom = bytes -> {
+                    final ValueTimestampHeaders<V> vth = serdes.valueFrom(bytes, new RecordHeaders());
+                    return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
+                };
 
-        ValueTimestampHeadersToValueAndTimestampWindowIterator(final WindowStoreIterator<ValueTimestampHeaders<V>> inner) {
-            this.inner = inner;
+                final MeteredWindowStoreIterator<ValueAndTimestamp<V>> typedResult =
+                        new MeteredWindowStoreIterator<>(
+                                rawResult.getResult(),
+                                fetchSensor,
+                                iteratorDurationSensor,
+                                streamsMetrics,
+                                valueFrom,
+                                time,
+                                numOpenIterators,
+                                openIterators
+                    );
+                final QueryResult<MeteredWindowStoreIterator<ValueAndTimestamp<V>>> typedQueryResult =
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                queryResult = (QueryResult<R>) typedQueryResult;
+            } else {
+                queryResult = (QueryResult<R>) rawResult;
+            }
+        } else {
+            queryResult = QueryResult.forFailure(
+                    FailureReason.UNKNOWN_QUERY_TYPE,
+                        "This store (" + getClass() + ") doesn't know how to"
+                            + " execute the given query (" + query + ") because"
+                            + " WindowStores only supports WindowKeyQuery.withKeyAndWindowStartRange."
+                            + " Contact the store maintainer if you need support for a new query type."
+            );
         }
-
-        @Override
-        public void close() {
-            inner.close();
-        }
-
-        @Override
-        public Long peekNextKey() {
-            return inner.peekNextKey();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return inner.hasNext();
-        }
-
-        @Override
-        public org.apache.kafka.streams.KeyValue<Long, ValueAndTimestamp<V>> next() {
-            final org.apache.kafka.streams.KeyValue<Long, ValueTimestampHeaders<V>> entry = inner.next();
-            final ValueTimestampHeaders<V> vth = entry.value;
-            final ValueAndTimestamp<V> vat = vth == null ? null :
-                ValueAndTimestamp.make(vth.value(), vth.timestamp());
-            return org.apache.kafka.streams.KeyValue.pair(entry.key, vat);
-        }
+        return queryResult;
     }
 
     /**
-     * Iterator wrapper that converts ValueTimestampHeaders to ValueAndTimestamp.
+     * Handles WindowRangeQuery by creating a MeteredWindowedKeyValueIterator with conversion from
+     * ValueTimestampHeaders to ValueAndTimestamp.
      */
-    private static class ValueTimestampHeadersToValueAndTimestampKeyValueIterator<K, V> implements KeyValueIterator<K, ValueAndTimestamp<V>> {
-        private final KeyValueIterator<K, ValueTimestampHeaders<V>> inner;
+    @SuppressWarnings("unchecked")
+    private <R> QueryResult<R> runWindowRangeQuery(final WindowRangeQuery<K, ValueTimestampHeaders<V>> query,
+                                                   final PositionBound positionBound,
+                                                   final QueryConfig config) {
+        final QueryResult<R> result;
+        if (query.getTimeFrom().isPresent() && query.getTimeTo().isPresent()) {
+            final WindowRangeQuery<Bytes, byte[]> rawKeyQuery =
+                    WindowRangeQuery.withWindowStartRange(
+                            query.getTimeFrom().get(),
+                            query.getTimeTo().get()
+                    );
+            final QueryResult<KeyValueIterator<Windowed<Bytes>, byte[]>> rawResult =
+                    wrapped().query(rawKeyQuery, positionBound, config);
+            if (rawResult.isSuccess()) {
+                final Function<byte[], K> keyFrom = bytes -> serdes.keyFrom(bytes, new RecordHeaders());
 
-        ValueTimestampHeadersToValueAndTimestampKeyValueIterator(final KeyValueIterator<K, ValueTimestampHeaders<V>> inner) {
-            this.inner = inner;
-        }
+                final Function<byte[], ValueAndTimestamp<V>> valueFrom = bytes -> {
+                    final ValueTimestampHeaders<V> vth = serdes.valueFrom(bytes, new RecordHeaders());
+                    return vth == null ? null : ValueAndTimestamp.make(vth.value(), vth.timestamp());
+                };
 
-        @Override
-        public void close() {
-            inner.close();
+                final MeteredWindowedKeyValueIterator<K, ValueAndTimestamp<V>> typedResult =
+                        new MeteredWindowedKeyValueIterator<>(
+                                rawResult.getResult(),
+                                fetchSensor,
+                                iteratorDurationSensor,
+                                streamsMetrics,
+                                keyFrom,
+                                valueFrom,
+                                time,
+                                numOpenIterators,
+                                openIterators
+                        );
+                final QueryResult<MeteredWindowedKeyValueIterator<K, ValueAndTimestamp<V>>> typedQueryResult =
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                result = (QueryResult<R>) typedQueryResult;
+            } else {
+                result = (QueryResult<R>) rawResult;
+            }
+        } else {
+            result = QueryResult.forFailure(
+                    FailureReason.UNKNOWN_QUERY_TYPE,
+                    "This store (" + getClass() + ") doesn't know how to"
+                        + " execute the given query (" + query + ") because"
+                        + " WindowStores only supports WindowRangeQuery.withWindowStartRange."
+                        + " Contact the store maintainer if you need support for a new query type."
+            );
         }
-
-        @Override
-        public K peekNextKey() {
-            return inner.peekNextKey();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return inner.hasNext();
-        }
-
-        @Override
-        public org.apache.kafka.streams.KeyValue<K, ValueAndTimestamp<V>> next() {
-            final org.apache.kafka.streams.KeyValue<K, ValueTimestampHeaders<V>> entry = inner.next();
-            final ValueTimestampHeaders<V> vth = entry.value;
-            final ValueAndTimestamp<V> vat = vth == null ? null :
-                ValueAndTimestamp.make(vth.value(), vth.timestamp());
-            return org.apache.kafka.streams.KeyValue.pair(entry.key, vat);
-        }
+        return result;
     }
 }
