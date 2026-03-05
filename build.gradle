@@ -2244,6 +2244,10 @@ project(':server-common') {
     delete "${layout.buildDirectory.get().asFile.path}/kafka/"
   }
 
+  test {
+    systemProperty 'project.root.dir', project.rootDir.absolutePath
+  }
+
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-server-common.xml")
   }
