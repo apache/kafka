@@ -24,12 +24,15 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+
 import java.io.File;
 import java.util.Map;
 
 public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, StateStore {
     private final String name;
     private final boolean rocksdbStore;
+    private final StateRestoreCallback stateRestoreCallback;
     private boolean open = true;
     public boolean initialized;
     public boolean committed;
@@ -44,8 +47,15 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
 
     public NoOpReadOnlyStore(final String name,
                              final boolean rocksdbStore) {
+        this(name, rocksdbStore, null);
+    }
+
+    public NoOpReadOnlyStore(final String name,
+                             final boolean rocksdbStore,
+                             final StateRestoreCallback stateRestoreCallback) {
         this.name = name;
         this.rocksdbStore = rocksdbStore;
+        this.stateRestoreCallback = stateRestoreCallback;
     }
 
     @Override
@@ -87,7 +97,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
             new File(stateStoreContext.stateDir() + File.separator + name).mkdir();
         }
         this.initialized = true;
-        stateStoreContext.register(root, (k, v) -> { });
+        stateStoreContext.register(root, stateRestoreCallback != null ? stateRestoreCallback : (k, v) -> { });
     }
 
     @Override
