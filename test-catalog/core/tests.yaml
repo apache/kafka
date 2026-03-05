@@ -938,10 +938,6 @@ kafka.integration.UncleanLeaderElectionTest:
 - testUncleanLeaderElectionEnabled
 - testUncleanLeaderElectionEnabledByTopicOverride
 - testUncleanLeaderElectionInvalidTopicOverride
-kafka.log.LogCleanerIntegrationTest:
-- testIsThreadFailed
-- testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics
-- testMaxLogCompactionLag
 kafka.log.LogCleanerParameterizedIntegrationTest:
 - cleanerConfigUpdateTest
 - cleanerTest

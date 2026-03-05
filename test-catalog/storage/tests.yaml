@@ -306,6 +306,9 @@ org.apache.kafka.storage.internals.log.LocalLogTest:
 - testWhenFetchOffsetHigherThanMaxOffset
 org.apache.kafka.storage.internals.log.LogCleanerLagIntegrationTest:
 - cleanerTest
+- testIsThreadFailed
+- testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics
+- testMaxLogCompactionLag
 org.apache.kafka.storage.internals.log.LogCleanerManagerTest:
 - testAlterCheckpointDirShouldRemoveDataInSrcDirAndAddInNewDir
 - testCheckpointUpdatedForInvalidOffsetNoCleaning
