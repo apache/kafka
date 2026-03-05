@@ -509,9 +509,6 @@ public class GroupCoordinatorConfig {
                 String.format("%s must be less than or equal to %s", CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG));
         require(consumerGroupHeartbeatIntervalMs < consumerGroupSessionTimeoutMs,
                 String.format("%s must be less than %s", CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_GROUP_SESSION_TIMEOUT_MS_CONFIG));
-        require(consumerGroupMinSessionTimeoutMs > consumerGroupMaxHeartbeatIntervalMs,
-                String.format("%s must be greater than %s", CONSUMER_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
-
         // Share group configs validation.
         require(shareGroupMaxHeartbeatIntervalMs >= shareGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
@@ -536,11 +533,8 @@ public class GroupCoordinatorConfig {
         require(shareGroupHeartbeatIntervalMs < shareGroupSessionTimeoutMs,
             String.format("%s must be less than %s",
                 SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG));
-        require(shareGroupMinSessionTimeoutMs > shareGroupMaxHeartbeatIntervalMs,
-            String.format("%s must be greater than %s", SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
         require(shareGroupAssignors.size() == 1,
             String.format("%s must contain exactly one assignor, but found %d", SHARE_GROUP_ASSIGNORS_CONFIG, shareGroupAssignors.size()));
-
         // Streams group configs validation.
         require(streamsGroupMaxHeartbeatIntervalMs >= streamsGroupMinHeartbeatIntervalMs,
             String.format("%s must be greater than or equal to %s",
@@ -562,8 +556,6 @@ public class GroupCoordinatorConfig {
         require(streamsGroupHeartbeatIntervalMs < streamsGroupSessionTimeoutMs,
             String.format("%s must be less than %s",
                 STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG));
-        require(streamsGroupMinSessionTimeoutMs > streamsGroupMaxHeartbeatIntervalMs,
-            String.format("%s must be greater than %s", STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG));
     }
 
     public static GroupCoordinatorConfig fromProps(
