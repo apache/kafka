@@ -1026,7 +1026,7 @@ public class GroupMetadataManager {
             // any GroupMetadataKey/Value records in the __consumer_offsets topic, only offset commit
             // records, so the in-memory group can be safely replaced here. Without this, replaying
             // streams group records after offset commit records would not work.
-            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId, time);
+            StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId);
             groups.put(groupId, streamsGroup);
             return streamsGroup;
         } else {
