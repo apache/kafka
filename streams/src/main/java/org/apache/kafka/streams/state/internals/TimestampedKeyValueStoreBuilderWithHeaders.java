@@ -173,8 +173,7 @@ public class TimestampedKeyValueStoreBuilderWithHeaders<K, V>
         public <R> QueryResult<R> query(final Query<R> query,
                                         final PositionBound positionBound,
                                         final QueryConfig config) {
-
-            throw new UnsupportedOperationException("Queries (IQv2) are not supported by timestamped key-value stores with headers yet.");
+            return wrapped().query(query, positionBound, config);
         }
 
         @Override

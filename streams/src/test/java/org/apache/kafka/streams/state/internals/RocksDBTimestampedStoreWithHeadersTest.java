@@ -635,20 +635,6 @@ public class RocksDBTimestampedStoreWithHeadersTest extends RocksDBStoreTest {
         }
     }
 
-//    @Test
-//    public void shouldThrowUnsupportedOperationExceptionOnQuery() {
-//        rocksDBStore.init(context, rocksDBStore);
-//
-//        final KeyQuery<Bytes, byte[]> query = KeyQuery.withKey(new Bytes("test".getBytes()));
-//
-//        final UnsupportedOperationException exception = assertThrows(
-//                UnsupportedOperationException.class,
-//                () -> rocksDBStore.query(query, PositionBound.unbounded(), new QueryConfig(false))
-//        );
-//
-//        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
-//    }
-
     private byte[] wrapTimestampedValue(final byte[] value) {
         // Format: [timestamp(8 bytes)][value]
         // Use the numeric value as timestamp
