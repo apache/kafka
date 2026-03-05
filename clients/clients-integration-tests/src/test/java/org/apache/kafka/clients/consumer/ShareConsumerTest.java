@@ -3103,7 +3103,6 @@ public class ShareConsumerTest {
                 shareConsumer.acknowledge(rec, AcknowledgeType.RENEW);
             }
 
-            // The RENEW should be rejected by the broker because share.renew.acknowledge.enable defaults to false.
             Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
             assertEquals(1, result.size());
             Optional<KafkaException> error = result.get(new TopicIdPartition(tpId, tp.partition(), tp.topic()));

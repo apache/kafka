@@ -2304,7 +2304,7 @@ public class SharePartition {
 
                 if (ackType == AcknowledgeType.RENEW.id) {
                     if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
-                        log.warn("Renew acknowledge is not enabled for the group: {}", groupId);
+                        log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
                         return Optional.of(new InvalidRecordStateException(
                             "Renewing acquisition locks is not enabled for the group."));
                     }
@@ -2382,7 +2382,7 @@ public class SharePartition {
             // not per offset ack as well as startOffset not moved.
             if (ackType == AcknowledgeType.RENEW.id) {
                 if (!configProvider.isRenewAcknowledgeEnabled(groupId)) {
-                    log.warn("Renew acknowledge is not enabled for the group: {}", groupId);
+                    log.debug("Renew acknowledge is not enabled for the group: {}", groupId);
                     return Optional.of(new InvalidRecordStateException(
                         "Renewing acquisition locks is not enabled for the group."));
                 }
