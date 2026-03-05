@@ -172,6 +172,11 @@ public class StreamsGroup implements Group {
     private final TimelineHashMap<String, TasksTuple> targetAssignment;
 
     /**
+     * The time at which the target assignment calculation finished.
+     */
+    private final TimelineLong targetAssignmentTimestamp;
+
+    /**
      * These maps map each active/standby/warmup task to the process ID(s) of their current owner.
      * The mapping is of the form <code>subtopology -> partition -> memberId</code>.
      * When a member revokes a partition, it removes its process ID from this map.
@@ -243,6 +248,7 @@ public class StreamsGroup implements Group {
         this.metadataHash = new TimelineLong(snapshotRegistry);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.targetAssignmentTimestamp = new TimelineLong(snapshotRegistry);
         this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -351,6 +357,22 @@ public class StreamsGroup implements Group {
     public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
         this.targetAssignmentEpoch.set(targetAssignmentEpoch);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * @return The time at which the target assignment calculation finished.
+     */
+    public long assignmentTimestamp() {
+        return targetAssignmentTimestamp.get();
+    }
+
+    /**
+     * Sets the time at which the assignment calculation finished.
+     *
+     * @param timestamp The time at which the assignment calculation finished.
+     */
+    public void setTargetAssignmentTimestamp(long timestamp) {
+        this.targetAssignmentTimestamp.set(timestamp);
     }
 
     /**

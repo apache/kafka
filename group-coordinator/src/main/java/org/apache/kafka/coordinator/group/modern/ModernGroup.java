@@ -114,6 +114,11 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> invertedTargetAssignment;
 
     /**
+     * The time at which the target assignment calculation finished.
+     */
+    protected final TimelineLong targetAssignmentTimestamp;
+
+    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
@@ -139,6 +144,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.targetAssignmentTimestamp = new TimelineLong(snapshotRegistry);
     }
 
     /**
@@ -192,6 +198,22 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     public void setTargetAssignmentEpoch(int targetAssignmentEpoch) {
         this.targetAssignmentEpoch.set(targetAssignmentEpoch);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * @return The time at which the target assignment calculation finished.
+     */
+    public long assignmentTimestamp() {
+        return targetAssignmentTimestamp.get();
+    }
+
+    /**
+     * Sets the time at which the assignment calculation finished.
+     *
+     * @param timestamp The time at which the assignment calculation finished.
+     */
+    public void setTargetAssignmentTimestamp(long timestamp) {
+        this.targetAssignmentTimestamp.set(timestamp);
     }
 
     /**

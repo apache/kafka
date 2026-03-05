@@ -1157,6 +1157,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         ConsumerGroup consumerGroup = new ConsumerGroup(logContext, snapshotRegistry, groupId);
         consumerGroup.setGroupEpoch(classicGroup.generationId());
         consumerGroup.setTargetAssignmentEpoch(classicGroup.generationId());
+        consumerGroup.setTargetAssignmentTimestamp(0L);
 
         classicGroup.allMembers().forEach(classicGroupMember -> {
             // The assigned partition can be empty if the member just joined and has never synced.
