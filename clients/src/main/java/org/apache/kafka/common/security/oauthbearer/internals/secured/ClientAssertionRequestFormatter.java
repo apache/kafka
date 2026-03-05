@@ -86,16 +86,22 @@ public class ClientAssertionRequestFormatter implements HttpRequestFormatter, Cl
     @Override
     public String formatBody() {
         StringBuilder requestParameters = new StringBuilder();
+        // client_assertion_type: Pre-encoded URN (colons encoded as %3A per RFC 6749)
         requestParameters.append("client_assertion_type=").append("urn%3Aietf%3Aparams%3Aoauth%3Aclient-assertion-type%3Ajwt-bearer");
+        // client_assertion: JWT is Base64url-encoded (URL-safe by definition per RFC 7515), no encoding needed
         requestParameters.append("&client_assertion=").append(assertionSupplier.get());
+        // grant_type: Encoded per RFC 6749 Section 4.4.2
         requestParameters.append("&grant_type=").append(URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8));
         if (!Utils.isBlank(clientId)) {
+            // client_id: Typically an alphanumeric identifier, no encoding needed
             requestParameters.append("&client_id=").append(clientId);
         }
         if (!Utils.isBlank(scope)) {
+            // scope: May contain special characters, encoded per RFC 6749 Section 3.3
             String encodedScope = URLEncoder.encode(scope.trim(), StandardCharsets.UTF_8);
             requestParameters.append("&scope=").append(encodedScope);
         }
+
         return String.valueOf(requestParameters);
     }
 

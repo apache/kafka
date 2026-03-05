@@ -17,9 +17,9 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
@@ -368,7 +368,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
 
         ConfigurationUtils cu = new ConfigurationUtils(configs);
         JaasOptionsUtils jou = new JaasOptionsUtils(Collections.emptyMap());
-        HttpRequestFormatter formatter = HttpRequestFormatterFactory.create(cu, jou);
+        HttpRequestFormatter formatter = ClientCredentialsRequestFormatterFactory.create(cu, jou);
 
         // Verify headers
         Map<String, String> headers = formatter.formatHeaders();
@@ -435,7 +435,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
 
         ConfigurationUtils cu = new ConfigurationUtils(configs);
         JaasOptionsUtils jou = new JaasOptionsUtils(Collections.emptyMap());
-        HttpRequestFormatter formatter = HttpRequestFormatterFactory.create(cu, jou);
+        HttpRequestFormatter formatter = ClientCredentialsRequestFormatterFactory.create(cu, jou);
 
         Map<String, String> headers = formatter.formatHeaders();
         assertTrue(headers.containsKey("Authorization"),
@@ -495,7 +495,7 @@ public class ClientAssertionKeycloakIntegrationTest extends OAuthBearerTest {
      * Test that assertion configs take precedence over client secret when both are present.
      *
      * <p>Simulates a migration scenario where a user adds assertion configs alongside
-     * existing client secret configs. The {@link HttpRequestFormatterFactory} should
+     * existing client secret configs. The {@link ClientCredentialsRequestFormatterFactory} should
      * select the assertion path over client secret (fallback). The client_id is set
      * to the assertion client, and a deliberately wrong secret is provided. If the
      * factory incorrectly chose the secret path, the wrong secret would cause a

@@ -17,10 +17,10 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -102,7 +102,7 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
 
-        HttpRequestFormatter requestFormatter = HttpRequestFormatterFactory.create(cu, jou);
+        HttpRequestFormatter requestFormatter = ClientCredentialsRequestFormatterFactory.create(cu, jou);
         delegate = new HttpJwtRetriever(requestFormatter);
 
         LOG.debug("Created instance of {} as delegate", delegate.getClass().getName());

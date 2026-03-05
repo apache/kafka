@@ -28,8 +28,8 @@ import org.jose4j.jwt.consumer.JwtContext;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.security.KeyPair;
-import java.security.PublicKey;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD;
@@ -45,6 +45,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -121,8 +122,18 @@ public class AssertionSupplierFactoryTest extends OAuthBearerTest {
             String assertion = supplier.get();
             assertNotNull(assertion);
             assertValidJwtFormat(assertion);
-            // Use a consumer that expects the configured audience
-            assertClaimsWithAudience(keyPair.getPublic(), assertion, "https://auth.example.com");
+
+            // Verify all configured static claims are present in the assertion
+            JwtConsumer jwtConsumer = new JwtConsumerBuilder()
+                .setVerificationKey(keyPair.getPublic())
+                .setRequireExpirationTime()
+                .setAllowedClockSkewInSeconds(30)
+                .setExpectedAudience("https://auth.example.com")
+                .setExpectedIssuer("my-client")
+                .setExpectedSubject("service-account")
+                .build();
+            JwtContext context = jwtConsumer.process(assertion);
+            assertNotNull(context);
         }
     }
 
@@ -146,7 +157,9 @@ public class AssertionSupplierFactoryTest extends OAuthBearerTest {
         Time time = new MockTime();
 
         // Providing a passphrase for an unencrypted key triggers an error during key loading
-        assertThrows(JwtRetrieverException.class, () -> AssertionSupplierFactory.create(cu, time));
+        // because the raw key bytes cannot be parsed as an EncryptedPrivateKeyInfo structure
+        JwtRetrieverException e = assertThrows(JwtRetrieverException.class, () -> AssertionSupplierFactory.create(cu, time));
+        assertInstanceOf(IOException.class, e.getCause());
 
         // Verify that the password config was read from configuration
         verify(cu).validatePassword(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE);
@@ -200,8 +213,9 @@ public class AssertionSupplierFactoryTest extends OAuthBearerTest {
     }
 
     /**
-     * The locally-generated supplier should produce different assertions on each call
-     * since timestamps (iat, exp, nbf) are regenerated.
+     * The locally-generated supplier should produce valid assertions on consecutive calls.
+     * With {@link MockTime}, timestamps are deterministic so both assertions will be identical,
+     * confirming that no randomness (e.g. JTI) causes unexpected variation.
      */
     @Test
     public void testLocallyGeneratedSupplierProducesConsistentAssertions() throws Exception {
@@ -283,20 +297,14 @@ public class AssertionSupplierFactoryTest extends OAuthBearerTest {
         assertDoesNotThrow(supplier::close);
     }
 
+    /**
+     * Minimal structural check that the string is a valid JWT format (three Base64-encoded
+     * parts separated by dots). Full claim and signature validation is performed by
+     * {@link OAuthBearerTest#assertClaims} where cryptographic verification is needed.
+     */
     private void assertValidJwtFormat(String jwt) {
         String[] parts = jwt.split("\\.");
         assertEquals(3, parts.length, "JWT should have 3 parts (header.payload.signature), but was: " + jwt);
-    }
-
-    private void assertClaimsWithAudience(PublicKey publicKey, String assertion, String expectedAudience) throws Exception {
-        JwtConsumer jwtConsumer = new JwtConsumerBuilder()
-            .setVerificationKey(publicKey)
-            .setRequireExpirationTime()
-            .setAllowedClockSkewInSeconds(30)
-            .setExpectedAudience(expectedAudience)
-            .build();
-        JwtContext context = jwtConsumer.process(assertion);
-        assertNotNull(context);
     }
 
     /**

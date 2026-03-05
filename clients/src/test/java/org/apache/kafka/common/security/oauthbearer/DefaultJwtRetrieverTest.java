@@ -18,8 +18,8 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatterFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.junit.jupiter.api.AfterEach;
@@ -129,7 +129,7 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
     @MethodSource("urlEncodeHeaderSupplier")
     public void testUrlEncodeHeader(Map<String, Object> configs, boolean expectedValue) {
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        boolean actualValue = HttpRequestFormatterFactory.validateUrlEncodeHeader(cu);
+        boolean actualValue = ClientCredentialsRequestFormatterFactory.validateUrlEncodeHeader(cu);
         assertEquals(expectedValue, actualValue);
     }
 

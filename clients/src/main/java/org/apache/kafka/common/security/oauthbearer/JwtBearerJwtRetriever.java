@@ -26,6 +26,9 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.assertion.
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -105,6 +108,8 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
  */
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
+    private static final Logger LOG = LoggerFactory.getLogger(JwtBearerJwtRetriever.class);
+
     private final Time time;
     private HttpJwtRetriever delegate;
     private CloseableSupplier<String> assertionSupplier;
@@ -128,6 +133,7 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         HttpRequestFormatter requestFormatter = new JwtBearerRequestFormatter(scope, assertionSupplier);
 
         delegate = new HttpJwtRetriever(requestFormatter);
+        LOG.debug("Created instance of {} as delegate", delegate.getClass().getName());
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 

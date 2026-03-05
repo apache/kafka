@@ -47,9 +47,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER
  * (for backward compatibility) using {@link ConfigOrJaas}.
  * </p>
  */
-public class HttpRequestFormatterFactory {
+public class ClientCredentialsRequestFormatterFactory {
 
-    private static final Logger LOG = LoggerFactory.getLogger(HttpRequestFormatterFactory.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ClientCredentialsRequestFormatterFactory.class);
 
     /**
      * Creates an appropriate {@link HttpRequestFormatter} based on the provided configuration using a
@@ -89,7 +89,7 @@ public class HttpRequestFormatterFactory {
             } else {
                 LOG.info("Using client assertion authentication with locally-generated assertion (second preference)");
             }
-            
+
             CloseableSupplier<String> assertionSupplier = AssertionSupplierFactory.create(cu, Time.SYSTEM);
             return new ClientAssertionRequestFormatter(configOrJaas.clientId(false), scope, assertionSupplier);
         } else {

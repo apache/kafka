@@ -59,37 +59,52 @@ public class AssertionUtils {
     public static final String TOKEN_SIGNING_ALGORITHM_ES256 = "ES256";
 
     /**
+     * Strips PEM headers/footers and whitespace from a PEM-encoded private key string,
+     * returning the raw Base64-encoded key content as bytes.
+     */
+    public static byte[] stripPemEncoding(String pemContents) {
+        String stripped = pemContents
+            .replace("-----BEGIN PRIVATE KEY-----", "")
+            .replace("-----END PRIVATE KEY-----", "")
+            .replace("-----BEGIN ENCRYPTED PRIVATE KEY-----", "")
+            .replace("-----END ENCRYPTED PRIVATE KEY-----", "")
+            .replace("\n", "")
+            .replace("\r", "");
+        return stripped.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
      * Inspired by {@code org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PemStore}, which is not
      * visible to reuse directly.
      */
     public static PrivateKey privateKey(byte[] privateKeyContents,
+                                        String signingAlgorithm,
                                         Optional<String> passphrase) throws GeneralSecurityException, IOException {
-        byte[] derEncodedBytes = Base64.getDecoder().decode(privateKeyContents);
+        byte[] decodedKeyBytes = Base64.getDecoder().decode(privateKeyContents);
         PKCS8EncodedKeySpec keySpec;
         if (passphrase.isPresent()) {
-            EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(derEncodedBytes);
-            String algorithm = keyInfo.getAlgName();
-            SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(algorithm);
+            EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(decodedKeyBytes);
+            String encryptionAlgorithm = keyInfo.getAlgName();
+            SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(encryptionAlgorithm);
             SecretKey pbeKey = secretKeyFactory.generateSecret(new PBEKeySpec(passphrase.get().toCharArray()));
-            Cipher cipher = Cipher.getInstance(algorithm);
+            Cipher cipher = Cipher.getInstance(encryptionAlgorithm);
             cipher.init(Cipher.DECRYPT_MODE, pbeKey, keyInfo.getAlgParameters());
             keySpec = keyInfo.getKeySpec(cipher);
         } else {
-            keySpec = new PKCS8EncodedKeySpec(derEncodedBytes);
+            keySpec = new PKCS8EncodedKeySpec(decodedKeyBytes);
         }
 
-        // Try RSA first, then EC. PKCS#8 encoded keys are algorithm-agnostic, so we need to
-        // attempt multiple key factories to determine the correct key type.
-        for (String keyAlgorithm : new String[]{"RSA", "EC"}) {
-            try {
-                KeyFactory keyFactory = KeyFactory.getInstance(keyAlgorithm);
-                return keyFactory.generatePrivate(keySpec);
-            } catch (GeneralSecurityException e) {
-                // Try next algorithm
-            }
-        }
+        KeyFactory keyFactory = KeyFactory.getInstance(keyAlgorithm(signingAlgorithm));
+        return keyFactory.generatePrivate(keySpec);
+    }
 
-        throw new GeneralSecurityException("Unable to load private key: unsupported key type (tried RSA, EC)");
+    /**
+     * Maps a JWT signing algorithm (e.g. RS256, ES256) to the corresponding Java key algorithm (RSA, EC).
+     */
+    static String keyAlgorithm(String signingAlgorithm) {
+        if (signingAlgorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_RS256)) return "RSA";
+        if (signingAlgorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_ES256)) return "EC";
+        throw new IllegalArgumentException("Unsupported signing algorithm: " + signingAlgorithm);
     }
 
     public static Signature getSignature(String algorithm) throws GeneralSecurityException {

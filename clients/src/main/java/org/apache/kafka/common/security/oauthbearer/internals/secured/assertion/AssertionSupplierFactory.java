@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured.assertion;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.JwtRetrieverException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Time;
@@ -42,10 +44,10 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  * This factory supports two methods of obtaining JWT assertions for client authentication:
  * <ul>
  *   <li><b>File-based assertions:</b> Pre-generated JWT assertions read from a file specified by
- *       {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_ASSERTION_FILE}.
+ *       {@link SaslConfigs#SASL_OAUTHBEARER_ASSERTION_FILE}.
  *       This is useful for testing or when assertions are managed externally.</li>
- *   <li><b>Locally-generated assertions:</b> JWTs dynamically created and signed using a private key
- *       specified by {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE}.
+ *   <li><b>Dynamically-generated assertions:</b> JWTs dynamically created and signed using a private key
+ *       specified by {@link SaslConfigs#SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE}.
  *       This is the recommended approach for production use.</li>
  * </ul>
  * </p>
@@ -53,7 +55,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.ass
  * <p>
  * The created supplier can be invoked repeatedly to obtain assertions as needed (for example, when
  * refreshing tokens). For file-based assertions, the assertion is cached and reloaded automatically when the file changes on disk.
- * For locally-generated assertions, a new assertion with updated timestamps is created on each invocation.
+ * For dynamically-generated assertions, a new assertion with updated timestamps is created on each invocation.
  * </p>
  */
 public class AssertionSupplierFactory {
@@ -70,13 +72,13 @@ public class AssertionSupplierFactory {
      *
      * <p>
      * <b>Important:</b> The returned {@link CloseableSupplier} must be closed when no longer needed
-     * to properly release resources such as file handles and cryptographic resources.
+     * to properly release resources.
      * </p>
      *
      * @param cu   The configuration utilities containing assertion configuration
-     * @param time The time source for generating timestamps in locally-created assertions
+     * @param time The time source for generating timestamps in dynamically-created assertions
      * @return A closeable supplier that provides JWT assertion strings when invoked
-     * @throws org.apache.kafka.common.config.ConfigException if required configuration is missing or invalid
+     * @throws ConfigException if required configuration is missing or invalid
      * @throws JwtRetrieverException if assertion creation fails (wrapped in the returned supplier)
      */
     public static CloseableSupplier<String> create(ConfigurationUtils cu, Time time) {
@@ -94,7 +96,8 @@ public class AssertionSupplierFactory {
             Optional<String> passphrase = cu.containsKey(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE) ?
                 Optional.of(cu.validatePassword(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE)) :
                 Optional.empty();
-            LOG.info("Configuring local assertion creation");
+            LOG.info("Configuring dynamic assertion creation using algorithm: {} and private key file: {}",
+                algorithm, privateKeyFile.getAbsolutePath());
             assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, passphrase);
             assertionJwtTemplate = layeredAssertionJwtTemplate(cu, time);
         }
