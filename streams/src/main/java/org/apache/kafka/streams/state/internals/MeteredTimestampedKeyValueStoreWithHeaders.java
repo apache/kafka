@@ -132,6 +132,19 @@ public class MeteredTimestampedKeyValueStoreWithHeaders<K, V>
         return currentValue;
     }
 
+    /**
+     * Executes a query against this store.
+     *
+     * <p>Note: Query results do NOT include headers, even though headers are
+     * preserved in the underlying store. This behavior provides compatibility
+     * with existing IQv2 APIs that operate on timestamped stores.
+     *
+     * @param query the query to execute
+     * @param positionBound the position bound
+     * @param config the query configuration
+     * @return the query result
+     */
+
     @SuppressWarnings("unchecked")
     @Override
     public <R> QueryResult<R> query(final Query<R> query,
