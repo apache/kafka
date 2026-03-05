@@ -17,7 +17,7 @@
   "apiKey": 1,
   "type": "metadata",
   "name": "RemoteLogSegmentMetadataUpdateRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     {
@@ -67,12 +67,6 @@
       "about": "Broker id from which this event is generated."
     },
     {
-      "name": "EndOffset",
-      "type": "int64",
-      "versions": "1+",
-      "about": "End offset of the segment being updated."
-    },
-    {
       "name": "EventTimestampMs",
       "type": "int64",
       "versions": "0+",
@@ -96,9 +90,19 @@
       "name": "BrokerLeaderEpoch",
       "type": "int32",
       "versions": "1+",
+      "default": "-1",
+      "about": "The leader epoch of the broker (partition leader epoch) at the time this update is being published.",
       "taggedVersions": "1+",
-      "tag": 0,
-      "about": "The leader epoch of the broker (partition leader epoch) at the time this update is being published."
+      "tag": 0
+    },
+    {
+      "name": "EndOffset",
+      "type": "int64",
+      "versions": "1+",
+      "default": "-1",
+      "about": "End offset of the segment being updated.",
+      "taggedVersions": "1+",
+      "tag": 1
     }
   ]
 }

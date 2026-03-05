@@ -17,7 +17,7 @@
   "apiKey": 2,
   "type": "metadata",
   "name": "RemotePartitionDeleteMetadataRecord",
-  "validVersions": "0",
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     {
@@ -53,18 +53,6 @@
       "about": "Broker (controller or leader) id from which this event is created. DELETE_PARTITION_MARKED is sent by the controller. DELETE_PARTITION_STARTED and DELETE_PARTITION_FINISHED are sent by remote log metadata topic partition leader."
     },
     {
-      "name": "BrokerLeaderEpoch",
-      "type": "int32",
-      "versions": "1+",
-      "about": "The leader epoch of the broker (partition leader epoch) at the time this delete metadata is being published."
-    },
-    {
-      "name": "EndOffset",
-      "type": "int64",
-      "versions": "1+",
-      "about": "End offset of the partition at the time of deletion."
-    },
-    {
       "name": "EventTimestampMs",
       "type": "int64",
       "versions": "0+",
@@ -75,6 +63,22 @@
       "type": "int8",
       "versions": "0+",
       "about": "Deletion state identifier of the remote partition, which is RemotePartitionDeleteState.id()."
+    },
+    {
+      "name": "BrokerLeaderEpoch",
+      "type": "int32",
+      "versions": "1+",
+      "about": "The leader epoch of the broker (partition leader epoch) at the time this delete metadata is being published.",
+      "taggedVersions": "1+",
+      "tag": 0
+    },
+    {
+      "name": "EndOffset",
+      "type": "int64",
+      "versions": "1+",
+      "about": "End offset of the partition at the time of deletion.",
+      "taggedVersions": "1+",
+      "tag": 1
     }
   ]
 }

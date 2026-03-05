@@ -163,6 +163,14 @@ class ConsumerTask implements Runnable, Closeable {
     }
 
     private void processConsumerRecord(ConsumerRecord<byte[], byte[]> record) {
+        // Tombstone messages (value == null) are used for compaction hints.
+        // We don't need to process them, just track the offset.
+        if (record.value() == null) {
+            log.debug("Skipping tombstone message at offset {} partition {}", record.offset(), record.partition());
+            readOffsetsByMetadataPartition.put(record.partition(), record.offset());
+            return;
+        }
+
         final RemoteLogMetadata remoteLogMetadata = serde.deserialize(record.value());
         if (shouldProcess(remoteLogMetadata, record.offset())) {
             remotePartitionMetadataEventHandler.handleRemoteLogMetadata(remoteLogMetadata);
