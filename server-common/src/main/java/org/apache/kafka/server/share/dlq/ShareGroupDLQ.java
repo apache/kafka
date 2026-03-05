@@ -35,4 +35,3 @@ public interface ShareGroupDLQ {
      */
     CompletableFuture<Void> enqueue(ShareGroupDLQRecord record);
 }
-
