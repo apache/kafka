@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.internals.BytesUtils;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Objects;
 
 /**
  * An immutable wrapper for a byte array.
@@ -61,9 +62,10 @@ public class Bytes implements Comparable<Bytes> {
      * Create a Bytes using the byte array.
      *
      * @param bytes This array becomes the backing storage for the object.
+     * @throws NullPointerException if bytes is null
      */
     public Bytes(byte[] bytes) {
-        this.bytes = bytes;
+        this.bytes = Objects.requireNonNull(bytes, "bytes cannot be null");
 
         // initialize hash code to 0
         hashCode = 0;
