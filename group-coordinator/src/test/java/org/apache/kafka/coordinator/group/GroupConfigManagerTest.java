@@ -17,13 +17,16 @@
 
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -32,6 +35,7 @@ import java.util.Properties;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -81,11 +85,44 @@ public class GroupConfigManagerTest {
         assertEquals(6000, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
     }
 
+    @Test
+    public void testValidateUsesAllGroupTypeDefaults() {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, 46000);
+        configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 46000);
+
+        GroupCoordinatorConfig groupCoordinatorConfig = createGroupCoordinatorConfig(configs);
+        ShareGroupConfig shareGroupConfig = createShareGroupConfig();
+
+        Properties newGroupConfig = new Properties();
+        newGroupConfig.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "2");
+
+        assertDoesNotThrow(() ->
+            GroupConfigManager.validate(newGroupConfig, groupCoordinatorConfig, shareGroupConfig));
+    }
+
     public static GroupConfigManager createConfigManager() {
         Map<String, String> defaultConfig = new HashMap<>();
         defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_SESSION_TIMEOUT_MS_DEFAULT));
         defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT));
         defaultConfig.put(SHARE_RECORD_LOCK_DURATION_MS_CONFIG, String.valueOf(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT));
         return new GroupConfigManager(defaultConfig);
+    }
+
+    private static GroupCoordinatorConfig createGroupCoordinatorConfig(Map<String, Object> overrides) {
+        Map<String, Object> configs = new HashMap<>(overrides);
+        return new GroupCoordinatorConfig(new AbstractConfig(
+            GroupCoordinatorConfig.CONFIG_DEF,
+            configs,
+            false
+        ));
+    }
+
+    private static ShareGroupConfig createShareGroupConfig() {
+        return new ShareGroupConfig(new AbstractConfig(
+            Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)),
+            new HashMap<>(),
+            false
+        ));
     }
 }
