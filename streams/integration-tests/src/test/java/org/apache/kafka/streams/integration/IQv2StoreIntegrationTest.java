@@ -267,6 +267,22 @@ public class IQv2StoreIntegrationTest {
                 return true;
             }
         },
+        TIME_ROCKS_KV_HEADERS {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME);
+            }
+
+            @Override
+            public boolean keyValue() {
+                return true;
+            }
+
+            @Override
+            public boolean isHeaders() {
+                return true;
+            }
+        },
         IN_MEMORY_WINDOW {
             @Override
             public StoreSupplier<?> supplier() {
@@ -330,22 +346,6 @@ public class IQv2StoreIntegrationTest {
 
             @Override
             public boolean isSession() {
-                return true;
-            }
-        },
-        TIME_ROCKS_KV_HEADERS {
-            @Override
-            public StoreSupplier<?> supplier() {
-                return Stores.persistentTimestampedKeyValueStoreWithHeaders(STORE_NAME);
-            }
-
-            @Override
-            public boolean keyValue() {
-                return true;
-            }
-
-            @Override
-            public boolean isHeaders() {
                 return true;
             }
         };
