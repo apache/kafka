@@ -223,37 +223,37 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
             "Queries (IQv2) are not supported by timestamped key-value stores with headers yet."));
     }
 
-    @Test
-    public void shouldThrowWhenUsingIQv2InHeadersStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
-
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped);
-
-        final KeyQuery<String, ValueTimestampHeaders<String>> query =
-                KeyQuery.withKey("test-key");
-
-        final UnsupportedOperationException exception = assertThrows(
-                UnsupportedOperationException.class,
-                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
-        );
-
-        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
-    }
+//    @Test
+//    public void shouldThrowWhenUsingIQv2InHeadersStore() {
+//        when(supplier.name()).thenReturn("test-store");
+//        when(supplier.metricsScope()).thenReturn("metricScope");
+//        when(supplier.get()).thenReturn(new RocksDBTimestampedStore("test-store", "metrics-scope"));
+//
+//        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+//                supplier,
+//                Serdes.String(),
+//                Serdes.String(),
+//                new MockTime()
+//        );
+//
+//        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+//                .withLoggingDisabled()
+//                .withCachingDisabled()
+//                .build();
+//
+//        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+//        assertInstanceOf(TimestampedToHeadersStoreAdapter.class, wrapped);
+//
+//        final KeyQuery<String, ValueTimestampHeaders<String>> query =
+//                KeyQuery.withKey("test-key");
+//
+//        final UnsupportedOperationException exception = assertThrows(
+//                UnsupportedOperationException.class,
+//                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
+//        );
+//
+//        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
+//    }
 
     @Test
     public void shouldThrowWhenPlainKeyValueStoreIsProvided() {
@@ -276,37 +276,37 @@ public class TimestampedKeyValueStoreBuilderWithHeadersTest {
         assertTrue(exception.getMessage().contains("Provided store must be a timestamped store"));
     }
 
-    @Test
-    public void shouldThrowUsingIQv2ForNativeHeadersStore() {
-        when(supplier.name()).thenReturn("test-store");
-        when(supplier.metricsScope()).thenReturn("metricScope");
-        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
-
-        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
-                supplier,
-                Serdes.String(),
-                Serdes.String(),
-                new MockTime()
-        );
-
-        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
-                .withLoggingDisabled()
-                .withCachingDisabled()
-                .build();
-
-        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertInstanceOf(RocksDBTimestampedStoreWithHeaders.class, wrapped);
-
-        final KeyQuery<String, ValueTimestampHeaders<String>> query =
-                KeyQuery.withKey("test-key");
-
-        final UnsupportedOperationException exception = assertThrows(
-                UnsupportedOperationException.class,
-                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
-        );
-
-        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
-    }
+//    @Test
+//    public void shouldThrowUsingIQv2ForNativeHeadersStore() {
+//        when(supplier.name()).thenReturn("test-store");
+//        when(supplier.metricsScope()).thenReturn("metricScope");
+//        when(supplier.get()).thenReturn(new RocksDBTimestampedStoreWithHeaders("test-store", "metrics-scope"));
+//
+//        builder = new TimestampedKeyValueStoreBuilderWithHeaders<>(
+//                supplier,
+//                Serdes.String(),
+//                Serdes.String(),
+//                new MockTime()
+//        );
+//
+//        final TimestampedKeyValueStoreWithHeaders<String, String> store = builder
+//                .withLoggingDisabled()
+//                .withCachingDisabled()
+//                .build();
+//
+//        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+//        assertInstanceOf(RocksDBTimestampedStoreWithHeaders.class, wrapped);
+//
+//        final KeyQuery<String, ValueTimestampHeaders<String>> query =
+//                KeyQuery.withKey("test-key");
+//
+//        final UnsupportedOperationException exception = assertThrows(
+//                UnsupportedOperationException.class,
+//                () -> wrapped.query(query, PositionBound.unbounded(), new QueryConfig(false))
+//        );
+//
+//        assertTrue(exception.getMessage().contains("Queries (IQv2) are not supported for timestamped key-value stores with headers yet."));
+//    }
 
     @Test
     public void shouldThrowOnGetPositionForInMemoryStores() {

@@ -36,8 +36,18 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.FailureReason;
+import org.apache.kafka.streams.query.KeyQuery;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.TimestampedKeyQuery;
+import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.test.KeyValueIteratorStub;
 
@@ -495,5 +505,616 @@ public class MeteredTimestampedKeyValueStoreWithHeadersTest {
 
     private KafkaMetric metric(final MetricName metricName) {
         return this.metrics.metric(metricName);
+    }
+
+    // ===== Query Tests =====
+
+    @Test
+    public void shouldHandleKeyQuery() {
+        setUp();
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> QueryResult.forResult(VALUE_TIMESTAMP_HEADERS_BYTES));
+        init();
+
+        final KeyQuery<String, String> query = KeyQuery.withKey(KEY);
+        final QueryResult<String> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        assertEquals(VALUE_TIMESTAMP_HEADERS.value(), result.getResult());
+    }
+
+    @Test
+    public void shouldHandleKeyQueryWithNullValue() {
+        setUp();
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn(QueryResult.forResult(null));
+        init();
+
+        final KeyQuery<String, String> query = KeyQuery.withKey("missing-key");
+        final QueryResult<String> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        assertEquals(null, result.getResult());
+    }
+
+    @Test
+    public void shouldHandleTimestampedKeyQuery() {
+        setUp();
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> QueryResult.forResult(VALUE_TIMESTAMP_HEADERS_BYTES));
+        init();
+
+        final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey(KEY);
+        final QueryResult<ValueAndTimestamp<String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getResult());
+        assertEquals(VALUE_TIMESTAMP_HEADERS.value(), result.getResult().value());
+        assertEquals(VALUE_TIMESTAMP_HEADERS.timestamp(), result.getResult().timestamp());
+    }
+
+    @Test
+    public void shouldHandleTimestampedKeyQueryWithNullValue() {
+        setUp();
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn(QueryResult.forResult(null));
+        init();
+
+        final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey("missing-key");
+        final QueryResult<ValueAndTimestamp<String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        assertEquals(null, result.getResult());
+    }
+
+    @Test
+    public void shouldHandleRangeQuery() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        final KeyValueIterator<String, String> iterator = result.getResult();
+        assertNotNull(iterator);
+
+        int count = 0;
+        while (iterator.hasNext()) {
+            final KeyValue<String, String> kv = iterator.next();
+            assertNotNull(kv);
+            assertEquals(VALUE_TIMESTAMP_HEADERS.value(), kv.value);
+            count++;
+        }
+        assertEquals(2, count);
+        iterator.close();
+    }
+
+    @Test
+    public void shouldHandleRangeQueryWithEmptyResult() {
+        setUp();
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(Collections.emptyIterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        final KeyValueIterator<String, String> iterator = result.getResult();
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldHandleTimestampedRangeQuery() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final TimestampedRangeQuery<String, String> query = TimestampedRangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = result.getResult();
+        assertNotNull(iterator);
+
+        int count = 0;
+        while (iterator.hasNext()) {
+            final KeyValue<String, ValueAndTimestamp<String>> kv = iterator.next();
+            assertNotNull(kv);
+            assertNotNull(kv.value);
+            assertEquals(VALUE_TIMESTAMP_HEADERS.value(), kv.value.value());
+            assertEquals(VALUE_TIMESTAMP_HEADERS.timestamp(), kv.value.timestamp());
+            count++;
+        }
+        assertEquals(2, count);
+        iterator.close();
+    }
+
+    @Test
+    public void shouldHandleTimestampedRangeQueryWithEmptyResult() {
+        setUp();
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(Collections.emptyIterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final TimestampedRangeQuery<String, String> query = TimestampedRangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = result.getResult();
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoForKeyQuery() {
+        setUp();
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> QueryResult.forResult(VALUE_TIMESTAMP_HEADERS_BYTES));
+        init();
+
+        final KeyQuery<String, String> query = KeyQuery.withKey(KEY);
+        final QueryResult<String> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(true));
+
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getExecutionInfo());
+        assertFalse(result.getExecutionInfo().isEmpty());
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoForTimestampedKeyQuery() {
+        setUp();
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> QueryResult.forResult(VALUE_TIMESTAMP_HEADERS_BYTES));
+        init();
+
+        final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey(KEY);
+        final QueryResult<ValueAndTimestamp<String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(true));
+
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getExecutionInfo());
+        assertFalse(result.getExecutionInfo().isEmpty());
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoForRangeQuery() {
+        setUp();
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(Collections.emptyIterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, String>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(true));
+
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getExecutionInfo());
+        assertFalse(result.getExecutionInfo().isEmpty());
+        result.getResult().close();
+    }
+
+    @Test
+    public void shouldCollectExecutionInfoForTimestampedRangeQuery() {
+        setUp();
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(Collections.emptyIterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final TimestampedRangeQuery<String, String> query = TimestampedRangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(true));
+
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getExecutionInfo());
+        assertFalse(result.getExecutionInfo().isEmpty());
+        result.getResult().close();
+    }
+
+    @Test
+    public void shouldHandleRangeQueryWithDescendingOrder() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.<String, String>withRange("key1", "key3").withDescendingKeys();
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        final KeyValueIterator<String, String> iterator = result.getResult();
+
+        assertTrue(iterator.hasNext());
+        assertEquals("key2", iterator.next().key);
+        assertTrue(iterator.hasNext());
+        assertEquals(KEY, iterator.next().key);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldHandleRangeQueryWithNullBounds() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange(null, null);
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (final KeyValueIterator<String, String> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+        }
+    }
+
+
+    @Test
+    public void shouldTimeIteratorDurationForRangeQuery() {
+        setUp();
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(Collections.emptyIterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        assertNotNull(iteratorDurationAvgMetric);
+        assertNotNull(iteratorDurationMaxMetric);
+
+        assertEquals(Double.NaN, (Double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(Double.NaN, (Double) iteratorDurationMaxMetric.metricValue());
+
+        final RangeQuery<String, String> query = RangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        try (final KeyValueIterator<String, String> iterator = result.getResult()) {
+            mockTime.sleep(2);
+        }
+
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationAvgMetric.metricValue());
+        assertEquals(2.0 * TimeUnit.MILLISECONDS.toNanos(1), (double) iteratorDurationMaxMetric.metricValue());
+    }
+
+
+    @Test
+    public void shouldHandleFailedQuery() {
+        setUp();
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenReturn(QueryResult.forFailure(
+                FailureReason.UNKNOWN_QUERY_TYPE,
+                "Unknown query type"
+            ));
+        init();
+
+        final KeyQuery<String, String> query = KeyQuery.withKey(KEY);
+        final QueryResult<String> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertFalse(result.isSuccess());
+        assertEquals(FailureReason.UNKNOWN_QUERY_TYPE, result.getFailureReason());
+    }
+
+
+    @Test
+    public void shouldHandleTimestampedRangeQueryWithAscendingOrder() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final TimestampedRangeQuery<String, String> query = TimestampedRangeQuery.<String, String>withRange("key1", "key3").withAscendingKeys();
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+            assertEquals(KEY, iterator.next().key);
+            assertTrue(iterator.hasNext());
+            assertEquals("key2", iterator.next().key);
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    // ===== Position Bounds Tests =====
+
+    @Test
+    public void shouldHandleKeyQueryWithPositionBound() {
+        setUp();
+        final Position position = Position.emptyPosition();
+        position.withComponent("topic", 0, 10L);
+
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> QueryResult.forResult(VALUE_TIMESTAMP_HEADERS_BYTES));
+        init();
+
+        final KeyQuery<String, String> query = KeyQuery.withKey(KEY);
+        final PositionBound bound = PositionBound.at(position);
+        final QueryResult<String> result = metered.query(query, bound, new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        assertEquals(VALUE_TIMESTAMP_HEADERS.value(), result.getResult());
+    }
+
+    @Test
+    public void shouldHandleTimestampedKeyQueryWithPositionBound() {
+        setUp();
+        final Position position = Position.emptyPosition();
+        position.withComponent("topic", 0, 10L);
+
+        when(inner.query(any(KeyQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> QueryResult.forResult(VALUE_TIMESTAMP_HEADERS_BYTES));
+        init();
+
+        final TimestampedKeyQuery<String, String> query = TimestampedKeyQuery.withKey(KEY);
+        final PositionBound bound = PositionBound.at(position);
+        final QueryResult<ValueAndTimestamp<String>> result = metered.query(query, bound, new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        assertNotNull(result.getResult());
+        assertEquals(VALUE_TIMESTAMP_HEADERS.value(), result.getResult().value());
+        assertEquals(VALUE_TIMESTAMP_HEADERS.timestamp(), result.getResult().timestamp());
+    }
+
+    @Test
+    public void shouldHandleRangeQueryWithPositionBound() {
+        setUp();
+        final Position position = Position.emptyPosition();
+        position.withComponent("topic", 0, 10L);
+
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange("key1", "key3");
+        final PositionBound bound = PositionBound.at(position);
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, bound, new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (final KeyValueIterator<String, String> iterator = result.getResult()) {
+            assertTrue(iterator.hasNext());
+            assertEquals(VALUE_TIMESTAMP_HEADERS.value(), iterator.next().value);
+        }
+    }
+
+    // ===== Single-sided Range Bounds Tests =====
+
+    @Test
+    public void shouldHandleRangeQueryWithOnlyLowerBound() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange("key1", null);
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (final KeyValueIterator<String, String> iterator = result.getResult()) {
+            int count = 0;
+            while (iterator.hasNext()) {
+                iterator.next();
+                count++;
+            }
+            assertEquals(2, count);
+        }
+    }
+
+    @Test
+    public void shouldHandleRangeQueryWithOnlyUpperBound() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange(null, "key3");
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (final KeyValueIterator<String, String> iterator = result.getResult()) {
+            int count = 0;
+            while (iterator.hasNext()) {
+                iterator.next();
+                count++;
+            }
+            assertEquals(2, count);
+        }
+    }
+
+    @Test
+    public void shouldHandleTimestampedRangeQueryWithOnlyLowerBound() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final TimestampedRangeQuery<String, String> query = TimestampedRangeQuery.withRange("key1", null);
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = result.getResult()) {
+            int count = 0;
+            while (iterator.hasNext()) {
+                final KeyValue<String, ValueAndTimestamp<String>> kv = iterator.next();
+                assertNotNull(kv.value);
+                assertEquals(VALUE_TIMESTAMP_HEADERS.value(), kv.value.value());
+                count++;
+            }
+            assertEquals(2, count);
+        }
+    }
+
+    @Test
+    public void shouldHandleTimestampedRangeQueryWithOnlyUpperBound() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES),
+            KeyValue.pair(Bytes.wrap("key2".getBytes()), VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final TimestampedRangeQuery<String, String> query = TimestampedRangeQuery.withRange(null, "key3");
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        assertTrue(result.isSuccess());
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = result.getResult()) {
+            int count = 0;
+            while (iterator.hasNext()) {
+                final KeyValue<String, ValueAndTimestamp<String>> kv = iterator.next();
+                assertNotNull(kv.value);
+                assertEquals(VALUE_TIMESTAMP_HEADERS.timestamp(), kv.value.timestamp());
+                count++;
+            }
+            assertEquals(2, count);
+        }
+    }
+
+    // ===== Sensor/Metrics Recording Tests =====
+
+    @Test
+    public void shouldRecordIteratorMetricsForRangeQuery() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final RangeQuery<String, String> query = RangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, String>> result = metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        try (final KeyValueIterator<String, String> iterator = result.getResult()) {
+            while (iterator.hasNext()) {
+                iterator.next();
+            }
+        }
+
+        // Verify that iterator was tracked (even if briefly)
+        final KafkaMetric openIteratorMetric = metric("num-open-iterators");
+        assertNotNull(openIteratorMetric);
+        // Iterator should be closed now
+        assertEquals(0L, (Long) openIteratorMetric.metricValue());
+    }
+
+    @Test
+    public void shouldRecordIteratorMetricsForTimestampedRangeQuery() {
+        setUp();
+        final List<KeyValue<Bytes, byte[]>> rangeData = List.of(
+            KeyValue.pair(KEY_BYTES, VALUE_TIMESTAMP_HEADERS_BYTES)
+        );
+        when(inner.query(any(RangeQuery.class), any(PositionBound.class), any(QueryConfig.class)))
+            .thenAnswer(invocation -> {
+                final KeyValueIterator<Bytes, byte[]> iterator = new KeyValueIteratorStub<>(rangeData.iterator());
+                return QueryResult.forResult(iterator);
+            });
+        init();
+
+        final TimestampedRangeQuery<String, String> query = TimestampedRangeQuery.withRange("key1", "key3");
+        final QueryResult<KeyValueIterator<String, ValueAndTimestamp<String>>> result =
+            metered.query(query, PositionBound.unbounded(), new QueryConfig(false));
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = result.getResult()) {
+            while (iterator.hasNext()) {
+                iterator.next();
+            }
+        }
+
+        // Verify that iterator was tracked (even if briefly)
+        final KafkaMetric openIteratorMetric = metric("num-open-iterators");
+        assertNotNull(openIteratorMetric);
+        // Iterator should be closed now
+        assertEquals(0L, (Long) openIteratorMetric.metricValue());
     }
 }

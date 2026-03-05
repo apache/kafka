@@ -18,10 +18,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.query.PositionBound;
-import org.apache.kafka.streams.query.Query;
-import org.apache.kafka.streams.query.QueryConfig;
-import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.HeadersBytesStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
@@ -150,13 +146,6 @@ public class RocksDBTimestampedStoreWithHeaders extends RocksDBStore implements 
                     "Please first upgrade to RocksDBTimestampedStore, then upgrade to RocksDBTimestampedStoreWithHeaders.");
             }
         }
-    }
-
-    @Override
-    public <R> QueryResult<R> query(final Query<R> query,
-                                    final PositionBound positionBound,
-                                    final QueryConfig config) {
-        throw new UnsupportedOperationException("Queries (IQv2) are not supported for timestamped key-value stores with headers yet.");
     }
 
 }
