@@ -18,7 +18,6 @@
 package org.apache.kafka.server.share.dlq;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.header.Headers;
 
 import java.util.Optional;
 
@@ -30,7 +29,7 @@ import java.util.Optional;
  * @param offset             The offset of the record in the kafka topic partition.
  * @param deliveryCount      If known, the number of times the message was delivered to the share consumer.
  * @param cause              If known, throwable representing the reason for queueing the message.
- * @param originalRecordData If desired, header data and the key/value information in the original message.
+ * @param preserveRecordData If true, store original record headers, key and value in the dlq record as well.
  */
 public record ShareGroupDLQRecord(
     String groupId,
@@ -38,20 +37,6 @@ public record ShareGroupDLQRecord(
     long offset,
     Optional<Integer> deliveryCount,
     Optional<Throwable> cause,
-    Optional<OriginalRecordData> originalRecordData
+    boolean preserveRecordData
 ) {
-    /**
-     * Record representing header, key and value information about the original message.
-     * If known, this information will be written to the DLQ topic as well.
-     *
-     * @param headers   The headers of the original record.
-     * @param key       A byte array representing the key of the original record.
-     * @param value     A byte array representing the value of the original record.
-     */
-    public record OriginalRecordData(
-        Headers headers,
-        byte[] key,
-        byte[] value
-    ) {
-    }
 }
