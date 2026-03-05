@@ -42,4 +42,4 @@ public interface ConnectPlugin extends Versioned {
      * @return the configuration definition for this component; never null
      */
     ConfigDef config();
-} 
+}

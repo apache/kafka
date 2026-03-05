@@ -717,11 +717,6 @@ public class PluginsTest {
         public SchemaAndValue toConnectData(String topic, byte[] value) {
             return null;
         }
-
-        @Override
-        public String version() {
-            return "test";
-        }
     }
 
     public static class TestHeaderConverter implements HeaderConverter {
@@ -782,7 +777,7 @@ public class PluginsTest {
         }
     }
 
-    public static class TestInternalConverter extends JsonConverter implements Versioned {
+    public static class TestInternalConverter extends JsonConverter {
         public Map<String, ?> configs;
 
         @Override

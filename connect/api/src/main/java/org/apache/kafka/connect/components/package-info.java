@@ -15,6 +15,6 @@
  * limitations under the License.
  */
 /**
- * Provides common interfaces used to describe pluggable and configurable components.
+ * Provides common interfaces used to describe pluggable, configurable and versioned components.
  */
 package org.apache.kafka.connect.components;

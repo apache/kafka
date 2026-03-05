@@ -61,7 +61,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     public abstract static class TestConnector extends Connector {
     }
 
-    public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned  {
+    public static class SimpleTransformation<R extends ConnectRecord<R>> implements Transformation<R>  {
 
         int magicNumber = 0;
 
@@ -399,7 +399,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
     }
 
-    public abstract static class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R>, Versioned {
+    public abstract static class AbstractTestPredicate<R extends ConnectRecord<R>> implements Predicate<R> {
 
         @Override
         public String version() {
@@ -446,14 +446,10 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
 
 
-        public static class Key<R extends ConnectRecord<R>> extends AbstractKeyValueTransformation<R> implements Versioned {
-
-            @Override
-            public String version() {
-                return "1.0";
-            }
+        public static class Key<R extends ConnectRecord<R>> extends AbstractKeyValueTransformation<R> {
 
         }
+
         public static class Value<R extends ConnectRecord<R>> extends AbstractKeyValueTransformation<R> {
 
         }
