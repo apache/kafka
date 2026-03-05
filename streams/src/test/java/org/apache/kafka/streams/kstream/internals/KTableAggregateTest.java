@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.streams.kstream.internals;
-
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -64,6 +63,7 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+
 
 public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
