@@ -7157,7 +7157,7 @@ public class SharePartitionTest {
 
         AcquisitionLockTimerTask timerTask = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(1)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs, timerTask.delayMs);
     }
@@ -7179,13 +7179,13 @@ public class SharePartitionTest {
 
         AcquisitionLockTimerTask timerTask1 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(1)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs1, timerTask1.delayMs);
 
         AcquisitionLockTimerTask timerTask2 = sharePartition.scheduleAcquisitionLockTimeout(MEMBER_ID, 100L, 200L);
 
-        Mockito.verify(groupConfigManager, Mockito.times(4)).groupConfig(GROUP_ID);
+        Mockito.verify(groupConfigManager, Mockito.times(2)).groupConfig(GROUP_ID);
         Mockito.verify(groupConfig, Mockito.times(2)).shareRecordLockDurationMs();
         assertEquals(expectedDurationMs2, timerTask2.delayMs);
     }
