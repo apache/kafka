@@ -26,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class NoOpShareGroupDLQManager implements ShareGroupDLQ {
     @Override
-    public CompletableFuture<Void> enqueue(ShareGroupDLQRecord record) {
+    public CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param) {
         return CompletableFuture.completedFuture(null);
     }
 }

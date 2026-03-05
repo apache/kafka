@@ -22,19 +22,22 @@ import org.apache.kafka.common.TopicIdPartition;
 import java.util.Optional;
 
 /**
- * Record representing information needed from callers of {@link ShareGroupDLQ#enqueue}
+ * Record representing information needed from callers of {@link ShareGroupDLQ#enqueue}. Inclusion
+ * of first and last offset allows passing batch information as well.
  *
  * @param groupId            The share group id of the message being recorded.
  * @param topicIdPartition   The topic and partition information of the message.
- * @param offset             The offset of the record in the kafka topic partition.
+ * @param firstOffset        The first offset of the records in the kafka topic partition.
+ * @param lastOffset         The last offset of the records in the kafka topic partition.
  * @param deliveryCount      If known, the number of times the message was delivered to the share consumer.
  * @param cause              If known, throwable representing the reason for queueing the message.
  * @param preserveRecordData If true, store original record headers, key and value in the dlq record as well.
  */
-public record ShareGroupDLQRecord(
+public record ShareGroupDLQRecordParameter(
     String groupId,
     TopicIdPartition topicIdPartition,
-    long offset,
+    long firstOffset,
+    long lastOffset,
     Optional<Integer> deliveryCount,
     Optional<Throwable> cause,
     boolean preserveRecordData

@@ -29,9 +29,9 @@ public interface ShareGroupDLQ {
     /**
      * Main method exposed to the world to enqueuing a record to the share groups dead letter queue.
      *
-     * @param record A java record encapsulating required and optional information about the kafka record
-     *               being dead letter queued.
+     * @param param A java record encapsulating required and optional information about the kafka record
+     *              being dead letter queued.
      * @return A completable future of Void type, mainly to signal exceptions.
      */
-    CompletableFuture<Void> enqueue(ShareGroupDLQRecord record);
+    CompletableFuture<Void> enqueue(ShareGroupDLQRecordParameter param);
 }
