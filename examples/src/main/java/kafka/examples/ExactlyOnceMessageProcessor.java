@@ -36,15 +36,14 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 import static java.time.Duration.ofMillis;
-import static java.util.Collections.emptyList;
-import static java.util.Collections.singleton;
 
 /**
  * This class implements a read-process-write application.
@@ -121,7 +120,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                  "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null).createKafkaConsumer()) {
             // called first and once to fence zombies and abort any pending transaction
             producer.initTransactions();
-            consumer.subscribe(singleton(inputTopic), this);
+            consumer.subscribe(Set.of(inputTopic), this);
 
             Utils.printOut("Processing new records");
             while (!closed && remainingRecords > 0) {
@@ -155,7 +154,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                 } catch (OffsetOutOfRangeException | NoOffsetForPartitionException e) {
                     // invalid or no offset found without auto.reset.policy
                     Utils.printOut("Invalid or no offset found, using latest");
-                    consumer.seekToEnd(emptyList());
+                    consumer.seekToEnd(List.of());
                     consumer.commitSync();
                     retries = 0;
                 } catch (KafkaException e) {
@@ -244,7 +243,7 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                 if (offsetAndMetadata != null) {
                     consumer.seek(tp, offsetAndMetadata.offset());
                 } else {
-                    consumer.seekToBeginning(Collections.singleton(tp));
+                    consumer.seekToBeginning(Set.of(tp));
                 }
             });
             retries++;
