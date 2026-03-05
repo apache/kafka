@@ -280,27 +280,32 @@ public class ShareCompletedFetch {
     }
 
     private <K, V> Set<Long> rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
-                                          final RecordBatch currentBatch) {
+                                               final RecordBatch currentBatch) {
         // Rewind the acquiredRecordIterator to the start, so we are in a known state
         acquiredRecordIterator = acquiredRecordList.listIterator();
 
-        OffsetAndDeliveryCount nextAcquired = nextAcquiredRecord();
+        OffsetAndDeliveryCount acquired = nextAcquiredRecord();
         Set<Long> offsets = new HashSet<>();
         for (long offset = currentBatch.baseOffset(); offset <= currentBatch.lastOffset(); offset++) {
-            if (nextAcquired == null) {
+            while (acquired != null && acquired.offset < offset) {
+                acquired = nextAcquiredRecord();
+            }
+
+            if (acquired == null) {
                 // No more acquired records, so we are done
                 break;
-            } else if (offset == nextAcquired.offset) {
+            } else if (offset == acquired.offset) {
                 // It's acquired, so we reject it
                 inFlightBatch.addAcknowledgement(offset, AcknowledgeType.REJECT);
                 offsets.add(offset);
-            } else if (offset < nextAcquired.offset) {
+            } else {
                 // It's not acquired, so we skip it
                 continue;
             }
 
-            nextAcquired = nextAcquiredRecord();
+            acquired = nextAcquiredRecord();
         }
+        this.nextAcquired = acquired;
         return offsets;
     }
 

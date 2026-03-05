@@ -28,6 +28,7 @@ import org.apache.kafka.common.record.internal.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.server.common.TransactionVersion;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.Scheduler;
@@ -35,8 +36,12 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
+import com.yammer.metrics.core.Gauge;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,7 +56,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 
 public class UnifiedLogTest {
 
@@ -746,5 +754,163 @@ public class UnifiedLogTest {
             builder.append(record);
         }
         return builder.build();
+    }
+
+    /**
+     * Test RetentionSizeInPercent metric for regular (non-tiered) topics.
+     * The metric should only be reported for non-tiered topics with size-based retention configured.
+     *
+     * @param remoteLogStorageEnable whether remote log storage is enabled
+     * @param remoteLogCopyDisable whether remote log copy is disabled (only relevant when remote storage is enabled)
+     * @param expectedSizeInPercent expected percentage value after retention cleanup
+     */
+    @ParameterizedTest
+    @CsvSource({
+        // Remote storage enabled with copy enabled: metric handled by RemoteLogManager, returns 0 here
+        "true, false, 0",
+        // Remote storage enabled but copy disabled: metric should be calculated (100%)
+        "true, true, 100",
+        // Remote storage disabled: metric should be calculated (100%)
+        "false, false, 100",
+        // Remote storage disabled (remoteLogCopyDisable is ignored): metric should be calculated (100%)
+        "false, true, 100"
+    })
+    public void testRetentionSizeInPercentMetric(
+            boolean remoteLogStorageEnable,
+            boolean remoteLogCopyDisable,
+            int expectedSizeInPercent
+    ) throws IOException {
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
+        int recordSize = records.get().sizeInBytes();
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 5)
+                .retentionBytes(recordSize * 10L)
+                .remoteLogStorageEnable(remoteLogStorageEnable)
+                .remoteLogCopyDisable(remoteLogCopyDisable)
+                .build();
+        log = createLog(logDir, logConfig, true);
+
+        String metricName = "name=RetentionSizeInPercent,topic=" + log.topicPartition().topic() + 
+                ",partition=" + log.topicPartition().partition();
+
+        // Append some messages to create 3 segments (15 records / 5 records per segment = 3 segments)
+        for (int i = 0; i < 15; i++) {
+            log.appendAsLeader(records.get(), 0);
+        }
+
+        // Before deletion, calculate what the percentage should be
+        // Total size = 15 * recordSize, retention = 10 * recordSize
+        // Percentage = (15 * 100) / 10 = 150% (for non-tiered topics)
+        if (!remoteLogStorageEnable || remoteLogCopyDisable) {
+            assertEquals(150, log.calculateRetentionSizeInPercent());
+        }
+
+        log.updateHighWatermark(log.logEndOffset());
+        // For tiered storage tests, simulate remote storage having the data
+        if (remoteLogStorageEnable) {
+            log.updateHighestOffsetInRemoteStorage(9);
+        }
+        log.deleteOldSegments();
+
+        // After deletion: log size should be ~10 * recordSize (2 segments), retention = 10 * recordSize
+        // Percentage = (10 * 100) / 10 = 100% (for non-tiered topics)
+        // Verify via Yammer metric (JMX)
+        assertEquals(expectedSizeInPercent, yammerMetricValue(metricName));
+        assertEquals(2, log.numberOfSegments(), "should have 2 segments after deletion");
+    }
+
+    @Test
+    public void testRetentionSizeInPercentWithInfiniteRetention() throws IOException {
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
+        // Create log with no retention configured (retentionBytes = -1 means unlimited)
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(records.get().sizeInBytes() * 5)
+                .retentionBytes(-1L)
+                .build();
+        log = createLog(logDir, logConfig, false);
+
+        String metricName = "name=RetentionSizeInPercent,topic=" + log.topicPartition().topic() + 
+                ",partition=" + log.topicPartition().partition();
+
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(records.get(), 0);
+        }
+
+        // With unlimited retention, the metric should be 0
+        assertEquals(0, log.calculateRetentionSizeInPercent());
+
+        log.updateHighWatermark(log.logEndOffset());
+        log.deleteOldSegments();
+
+        // After deleteOldSegments, metric should still be 0
+        // Verify via Yammer metric (JMX)
+        assertEquals(0, yammerMetricValue(metricName));
+    }
+
+    /**
+     * Test that verifies the RetentionSizeInPercent metric is always updated in the finally block
+     * of deleteOldSegments(), even when an exception is thrown during deletion.
+     * This ensures the metric is calculated even when log deletion encounters errors.
+     */
+    @Test
+    public void testRetentionSizeInPercentMetricUpdatedOnDeletionError() throws IOException {
+        Supplier<MemoryRecords> records = () -> singletonRecords("test".getBytes());
+        int recordSize = records.get().sizeInBytes();
+
+        // Create log with retention smaller than data to force deletion
+        LogConfig logConfig = new LogTestUtils.LogConfigBuilder()
+                .segmentBytes(recordSize * 5)
+                .retentionBytes(recordSize * 10L)
+                .build();
+        log = createLog(logDir, logConfig, false);
+
+        String metricName = "name=RetentionSizeInPercent,topic=" + log.topicPartition().topic() +
+                ",partition=" + log.topicPartition().partition();
+
+        // Append messages to create multiple segments (15 records / 5 per segment = 3 segments)
+        for (int i = 0; i < 15; i++) {
+            log.appendAsLeader(records.get(), 0);
+        }
+        assertEquals(3, log.numberOfSegments(), "Should have 3 segments");
+
+        log.updateHighWatermark(log.logEndOffset());
+
+        // First call to initialize the metric normally
+        log.deleteOldSegments();
+        assertEquals(100, yammerMetricValue(metricName), "Metric should be 100% after initial deletion");
+
+        // Add more data to change the metric value
+        for (int i = 0; i < 10; i++) {
+            log.appendAsLeader(records.get(), 0);
+        }
+        log.updateHighWatermark(log.logEndOffset());
+
+        // Create a spy and make config() throw on first call, but work normally on subsequent calls
+        // This simulates an error in the try block while allowing the finally block to succeed
+        // The config() method is called in both the try block and calculateRetentionSizeInPercent()
+        UnifiedLog spyLog = spy(log);
+        doThrow(new RuntimeException("Simulated error during deletion"))
+                .doCallRealMethod()  // Allow subsequent calls to work (for finally block)
+                .when(spyLog).config();
+
+        // Call deleteOldSegments on the spy - it should throw due to config() error
+        // But the finally block should still execute and update the metric
+        assertThrows(RuntimeException.class, spyLog::deleteOldSegments);
+
+        // Verify the metric was still updated in the finally block despite the exception
+        // After adding 10 more records (2 more segments), total = 4 segments = 20 records
+        // Percentage = (20 * 100) / 10 = 200%
+        assertEquals(200, yammerMetricValue(metricName),
+                "Metric should be updated in finally block even when exception occurs");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object yammerMetricValue(String name) {
+        Gauge<Object> gauge = (Gauge<Object>) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+                .filter(e -> e.getKey().getMBeanName().endsWith(name))
+                .findFirst()
+                .get()
+                .getValue();
+        return gauge.value();
     }
 }

@@ -776,9 +776,9 @@ public class KRaftClusterTest {
                 TopicPartition topicPartition = new TopicPartition("foo", partitionId);
                 var partition = broker.replicaManager().getPartition(topicPartition);
                 if (isHosted) {
-                    assertNotEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertNotEquals(new HostedPartition.None<kafka.cluster.Partition>(), partition, "topicPartition = " + topicPartition);
                 } else {
-                    assertEquals(kafka.server.HostedPartition.None$.MODULE$, partition, "topicPartition = " + topicPartition);
+                    assertEquals(new HostedPartition.None<kafka.cluster.Partition>(), partition, "topicPartition = " + topicPartition);
                 }
             }
         }

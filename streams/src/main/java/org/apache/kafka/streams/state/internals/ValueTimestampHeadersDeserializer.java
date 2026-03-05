@@ -49,24 +49,20 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.i
  */
 class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializer<ValueTimestampHeaders<V>, Void, V> {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-    private static final HeadersDeserializer HEADERS_DESERIALIZER = new HeadersDeserializer();
 
     public final Deserializer<V> valueDeserializer;
     private final LongDeserializer timestampDeserializer;
-    private final HeadersDeserializer headersDeserializer;
 
     ValueTimestampHeadersDeserializer(final Deserializer<V> valueDeserializer) {
         Objects.requireNonNull(valueDeserializer);
         this.valueDeserializer = valueDeserializer;
         this.timestampDeserializer = new LongDeserializer();
-        this.headersDeserializer = new HeadersDeserializer();
     }
 
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         valueDeserializer.configure(configs, isKey);
         timestampDeserializer.configure(configs, isKey);
-        headersDeserializer.configure(configs, isKey);
     }
 
     @Override
@@ -79,7 +75,7 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         final int headersSize = ByteUtils.readVarint(buffer);
 
         final byte[] rawHeaders = readBytes(buffer, headersSize);
-        final Headers headers = headersDeserializer.deserialize(topic, rawHeaders);
+        final Headers headers = HeadersDeserializer.deserialize(rawHeaders);
         final byte[] rawTimestamp = readBytes(buffer, Long.BYTES);
         final long timestamp = timestampDeserializer.deserialize(topic, rawTimestamp);
         final byte[] rawValue = readBytes(buffer, buffer.remaining());
@@ -92,7 +88,6 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
     public void close() {
         valueDeserializer.close();
         timestampDeserializer.close();
-        headersDeserializer.close();
     }
 
     @Override
@@ -162,6 +157,19 @@ class ValueTimestampHeadersDeserializer<V> implements WrappingNullableDeserializ
         final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
         final int headersSize = ByteUtils.readVarint(buffer);
         final byte[] rawHeaders = readBytes(buffer, headersSize);
-        return HEADERS_DESERIALIZER.deserialize("", rawHeaders);
+        return HeadersDeserializer.deserialize(rawHeaders);
+    }
+    /**
+     * Extract raw value from serialized ValueTimestampHeaders.
+     */
+    static byte[] rawValue(final byte[] rawValueTimestampHeaders) {
+        if (rawValueTimestampHeaders == null) {
+            return null;
+        }
+
+        final ByteBuffer buffer = ByteBuffer.wrap(rawValueTimestampHeaders);
+        final int headersSize = ByteUtils.readVarint(buffer);
+        buffer.position(buffer.position() + headersSize + Long.BYTES);
+        return readBytes(buffer, buffer.remaining());
     }
 }
