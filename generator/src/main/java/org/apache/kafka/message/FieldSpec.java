@@ -87,8 +87,7 @@ public final class FieldSpec {
             throw new RuntimeException("You must specify the version of the " +
                 name + " structure.");
         }
-        this.fields = Collections.unmodifiableList(fields == null ?
-            List.of() : new ArrayList<>(fields));
+        this.fields = fields == null ? List.of() : List.copyOf(fields);
         this.type = FieldType.parse(Objects.requireNonNull(type));
         this.mapKey = mapKey;
         this.nullableVersions = Versions.parse(nullableVersions, Versions.NONE);
