@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.headers;
 import static org.apache.kafka.streams.state.internals.ValueTimestampHeadersDeserializer.rawValue;
@@ -39,6 +40,40 @@ class ChangeLoggingTimestampedWindowBytesStoreWithHeaders extends ChangeLoggingW
     ChangeLoggingTimestampedWindowBytesStoreWithHeaders(final WindowStore<Bytes, byte[]> bytesStore,
                                                         final boolean retainDuplicates) {
         super(bytesStore, retainDuplicates, WindowKeySchema::toStoreKeyBinary);
+    }
+
+    @Override
+    public void put(final Bytes key,
+                    final byte[] valueTimestampHeaders,
+                    final long windowStartTimestamp) {
+        byte[] oldValueTimestampHeaders = null;
+        if (valueTimestampHeaders == null) {
+            // Deletion: fetch old value to preserve its headers in the tombstone
+            try (final WindowStoreIterator<byte[]> iter = wrapped().fetch(key, windowStartTimestamp, windowStartTimestamp)) {
+                if (iter.hasNext()) {
+                    oldValueTimestampHeaders = iter.next().value;
+                }
+            }
+        }
+
+        wrapped().put(key, valueTimestampHeaders, windowStartTimestamp);
+
+        final Bytes changelogKey = keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups());
+
+        if (valueTimestampHeaders == null && oldValueTimestampHeaders != null) {
+            // Deleting an existing record: log tombstone with old value's headers
+            internalContext.logChange(
+                name(),
+                changelogKey,
+                null,  // tombstone
+                timestamp(oldValueTimestampHeaders),
+                headers(oldValueTimestampHeaders),
+                wrapped().getPosition()
+            );
+        } else {
+            // Normal put or deleting non-existent key: use standard log
+            log(changelogKey, valueTimestampHeaders);
+        }
     }
 
     @Override

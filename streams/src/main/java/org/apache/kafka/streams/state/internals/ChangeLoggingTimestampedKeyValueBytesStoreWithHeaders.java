@@ -45,6 +45,21 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreWithHeaders
     }
 
     @Override
+    public byte[] delete(final Bytes key) {
+        final byte[] oldValue = wrapped().delete(key);
+        log(key,
+            null,
+            oldValue == null
+                ? internalContext.recordContext().timestamp()
+                : timestamp(oldValue),
+            oldValue == null
+                ? internalContext.recordContext().headers()
+                : headers(oldValue)
+        );
+        return oldValue;
+    }
+
+    @Override
     public void put(final Bytes key,
                     final byte[] valueTimestampHeaders) {
         wrapped().put(key, valueTimestampHeaders);

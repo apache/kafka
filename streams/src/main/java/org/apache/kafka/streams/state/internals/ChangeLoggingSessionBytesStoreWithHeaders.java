@@ -43,13 +43,20 @@ public class ChangeLoggingSessionBytesStoreWithHeaders
 
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
+        final byte[] oldAggregationWithHeaders = wrapped().fetchSession(
+            sessionKey.key(),
+            sessionKey.window().start(),
+            sessionKey.window().end()
+        );
         wrapped().remove(sessionKey);
         internalContext.logChange(
             name(),
             SessionKeySchema.toBinary(sessionKey),
             null,
             internalContext.recordContext().timestamp(),
-            internalContext.recordContext().headers(),
+            oldAggregationWithHeaders == null
+                ? internalContext.recordContext().headers()
+                : headers(oldAggregationWithHeaders),
             wrapped().getPosition()
         );
     }

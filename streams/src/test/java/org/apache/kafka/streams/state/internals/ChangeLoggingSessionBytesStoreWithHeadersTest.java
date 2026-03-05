@@ -179,17 +179,50 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
     }
 
     @Test
-    public void shouldLogRemoveWithRecordContextHeaders() {
+    public void shouldLogRemoveWithOldValueHeadersWhenKeyExists() {
+        final RecordHeaders oldHeaders = new RecordHeaders();
+        oldHeaders.add("oldKey", "oldValue".getBytes());
+        final AggregationWithHeaders<byte[]> oldAggWithHeaders = AggregationWithHeaders.make(value1, oldHeaders);
+        final byte[] serializedOldValue = serializer.serialize(TOPIC, oldAggWithHeaders);
+
         final RecordHeaders contextHeaders = new RecordHeaders();
         contextHeaders.add("contextKey", "contextValue".getBytes());
 
         final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         when(inner.getPosition()).thenReturn(Position.emptyPosition());
         when(context.recordContext()).thenReturn(new ProcessorRecordContext(42L, 0, 0, TOPIC, contextHeaders));
+        when(inner.fetchSession(key1.key(), key1.window().start(), key1.window().end()))
+            .thenReturn(serializedOldValue);
 
         store.remove(key1);
 
         verify(inner).remove(key1);
+        // Should use headers from the old value, not from record context
+        verify(context).logChange(
+            store.name(),
+            binaryKey,
+            null,
+            42L,
+            oldHeaders,  // Headers from old value
+            Position.emptyPosition()
+        );
+    }
+
+    @Test
+    public void shouldLogRemoveWithRecordContextHeadersWhenKeyDoesNotExist() {
+        final RecordHeaders contextHeaders = new RecordHeaders();
+        contextHeaders.add("contextKey", "contextValue".getBytes());
+
+        final Bytes binaryKey = SessionKeySchema.toBinary(key1);
+        when(inner.getPosition()).thenReturn(Position.emptyPosition());
+        when(context.recordContext()).thenReturn(new ProcessorRecordContext(42L, 0, 0, TOPIC, contextHeaders));
+        when(inner.fetchSession(key1.key(), key1.window().start(), key1.window().end()))
+            .thenReturn(null);
+
+        store.remove(key1);
+
+        verify(inner).remove(key1);
+        // Should use headers from record context when key doesn't exist
         verify(context).logChange(
             store.name(),
             binaryKey,
