@@ -22,6 +22,8 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -63,7 +65,9 @@ import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -307,6 +311,24 @@ public class IQv2StoreIntegrationTest {
                 return true;
             }
         },
+        TIME_ROCKS_WINDOW_HEADERS {
+            @Override
+            public StoreSupplier<?> supplier() {
+                return Stores.persistentTimestampedWindowStoreWithHeaders(STORE_NAME, Duration.ofDays(1),
+                    WINDOW_SIZE, false
+                );
+            }
+
+            @Override
+            public boolean isWindowed() {
+                return true;
+            }
+
+            @Override
+            public boolean isHeaders() {
+                return true;
+            }
+        },
         IN_MEMORY_SESSION {
             @Override
             public StoreSupplier<?> supplier() {
@@ -345,6 +367,10 @@ public class IQv2StoreIntegrationTest {
         }
 
         public boolean isWindowed() {
+            return false;
+        }
+
+        public boolean isHeaders() {
             return false;
         }
 
@@ -394,6 +420,7 @@ public class IQv2StoreIntegrationTest {
             for (int i = 0; i < 10; i++) {
                 final int key = i / 2;
                 final int partition = key % partitions;
+                final Headers headers = new RecordHeaders().add("key-" + i, ("value-" + i).getBytes());
                 final Future<RecordMetadata> send = producer.send(
                     new ProducerRecord<>(
                         INPUT_TOPIC_NAME,
@@ -401,7 +428,7 @@ public class IQv2StoreIntegrationTest {
                         WINDOW_START + Duration.ofMinutes(2).toMillis() * i,
                         key,
                         i,
-                        null
+                        headers
                     )
                 );
                 futures.add(send);
@@ -444,6 +471,11 @@ public class IQv2StoreIntegrationTest {
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof KeyValueBytesStoreSupplier) {
             setUpKeyValuePAPITopology((KeyValueBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
         } else if (Objects.equals(kind, "DSL") && supplier instanceof WindowBytesStoreSupplier) {
+            if (storeToTest.isHeaders()) {
+                // DSL doesn't support headers stores - skip this test combination
+                kafkaStreams = null;
+                return;
+            }
             setUpWindowDSLTopology((WindowBytesStoreSupplier) supplier, builder, cache, log);
         } else if (Objects.equals(kind, "PAPI") && supplier instanceof WindowBytesStoreSupplier) {
             setUpWindowPAPITopology((WindowBytesStoreSupplier) supplier, builder, cache, log, storeToTest);
@@ -637,7 +669,28 @@ public class IQv2StoreIntegrationTest {
                                          final StoresToTest storeToTest) {
         final StoreBuilder<?> windowStoreStoreBuilder;
         final ProcessorSupplier<Integer, Integer, Void, Void> processorSupplier;
-        if (storeToTest.timestamped()) {
+        if (storeToTest.isHeaders()) {
+            windowStoreStoreBuilder = Stores.timestampedWindowStoreWithHeadersBuilder(
+                supplier,
+                Serdes.Integer(),
+                Serdes.Integer()
+            );
+            processorSupplier = () -> new ContextualProcessor<Integer, Integer, Void, Void>() {
+                @Override
+                public void process(final Record<Integer, Integer> record) {
+                    final TimestampedWindowStoreWithHeaders<Integer, Integer> stateStore =
+                        context().getStateStore(windowStoreStoreBuilder.name());
+                    // We don't re-implement the DSL logic (which implements sum) but instead just keep the lasted value per window
+                    stateStore.put(
+                        record.key(),
+                        ValueTimestampHeaders.make(
+                            record.value(), record.timestamp(), record.headers()
+                        ),
+                        (record.timestamp() / WINDOW_SIZE.toMillis()) * WINDOW_SIZE.toMillis()
+                    );
+                }
+            };
+        } else if (storeToTest.timestamped()) {
             windowStoreStoreBuilder = Stores.timestampedWindowStoreBuilder(
                 supplier,
                 Serdes.Integer(),
@@ -770,6 +823,10 @@ public class IQv2StoreIntegrationTest {
     @MethodSource("data")
     public void verifyStore(final boolean cache, final boolean log, final StoresToTest storeToTest, final String kind, final String groupProtocol) {
         setup(cache, log, storeToTest, kind, groupProtocol);
+        // Skip this test combination if setup determined it's not supported (e.g., DSL with headers stores)
+        if (kafkaStreams == null) {
+            return;
+        }
         try {
             if (storeToTest.global()) {
                 // See KAFKA-13523
@@ -805,7 +862,7 @@ public class IQv2StoreIntegrationTest {
                 }
 
                 if (storeToTest.isWindowed()) {
-                    if (storeToTest.timestamped()) {
+                    if (storeToTest.timestamped() || storeToTest.isHeaders()) {
                         final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
                             ValueAndTimestamp::value;
                         if (kind.equals("DSL")) {
@@ -1314,7 +1371,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
                 assertThat(partitionResult.getFailureMessage(), matchesPattern(
                     "This store"
-                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
+                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore.*\\)"
                         + " doesn't know how to execute the given query"
                         + " \\(WindowRangeQuery\\{key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
                         + " because WindowStores only supports WindowRangeQuery.withWindowStartRange\\."
@@ -1427,7 +1484,7 @@ public class IQv2StoreIntegrationTest {
                 assertThat(partitionResult.getFailureReason(), is(FailureReason.UNKNOWN_QUERY_TYPE));
                 assertThat(partitionResult.getFailureMessage(), matchesPattern(
                     "This store"
-                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore\\)"
+                        + " \\(class org.apache.kafka.streams.state.internals.Metered.*WindowStore.*\\)"
                         + " doesn't know how to execute the given query"
                         + " \\(WindowRangeQuery\\{key=Optional\\[2], timeFrom=Optional.empty, timeTo=Optional.empty}\\)"
                         + " because WindowStores only supports WindowRangeQuery.withWindowStartRange\\."

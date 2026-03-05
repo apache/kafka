@@ -22,10 +22,18 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStoreWithHeaders;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.ValueTimestampHeaders;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.Objects;
 
@@ -82,5 +90,113 @@ class MeteredTimestampedWindowStoreWithHeaders<K, V>
 
     protected Bytes keyBytes(final K key, final Headers headers) {
         return Bytes.wrap(serdes.rawKey(key, headers));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query,
+                                    final PositionBound positionBound,
+                                    final QueryConfig config) {
+        // Get the result from parent which will have ValueTimestampHeaders<V>
+        final QueryResult<R> result = super.query(query, positionBound, config);
+
+        // Convert ValueTimestampHeaders<V> to ValueAndTimestamp<V> for backward compatibility
+        if (result.isSuccess()) {
+            final Object resultValue = result.getResult();
+            if (resultValue instanceof WindowStoreIterator) {
+                final WindowStoreIterator<ValueTimestampHeaders<V>> headersIterator =
+                    (WindowStoreIterator<ValueTimestampHeaders<V>>) resultValue;
+                final WindowStoreIterator<ValueAndTimestamp<V>> convertedIterator =
+                    new ValueTimestampHeadersToValueAndTimestampWindowIterator<>(headersIterator);
+                final QueryResult<R> convertedResult = (QueryResult<R>) QueryResult.forResult(convertedIterator);
+                convertedResult.setPosition(result.getPosition());
+                for (final String info : result.getExecutionInfo()) {
+                    convertedResult.addExecutionInfo(info);
+                }
+                return convertedResult;
+            } else if (resultValue instanceof KeyValueIterator) {
+                final KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>> headersIterator =
+                    (KeyValueIterator<Windowed<K>, ValueTimestampHeaders<V>>) resultValue;
+                final KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> convertedIterator =
+                    new ValueTimestampHeadersToValueAndTimestampKeyValueIterator<>(headersIterator);
+                final QueryResult<R> convertedResult = (QueryResult<R>) QueryResult.forResult(convertedIterator);
+                convertedResult.setPosition(result.getPosition());
+                for (final String info : result.getExecutionInfo()) {
+                    convertedResult.addExecutionInfo(info);
+                }
+                return convertedResult;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Iterator wrapper that converts ValueTimestampHeaders to ValueAndTimestamp.
+     */
+    private static class ValueTimestampHeadersToValueAndTimestampWindowIterator<V> implements WindowStoreIterator<ValueAndTimestamp<V>> {
+        private final WindowStoreIterator<ValueTimestampHeaders<V>> inner;
+
+        ValueTimestampHeadersToValueAndTimestampWindowIterator(final WindowStoreIterator<ValueTimestampHeaders<V>> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public Long peekNextKey() {
+            return inner.peekNextKey();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return inner.hasNext();
+        }
+
+        @Override
+        public org.apache.kafka.streams.KeyValue<Long, ValueAndTimestamp<V>> next() {
+            final org.apache.kafka.streams.KeyValue<Long, ValueTimestampHeaders<V>> entry = inner.next();
+            final ValueTimestampHeaders<V> vth = entry.value;
+            final ValueAndTimestamp<V> vat = vth == null ? null :
+                ValueAndTimestamp.make(vth.value(), vth.timestamp());
+            return org.apache.kafka.streams.KeyValue.pair(entry.key, vat);
+        }
+    }
+
+    /**
+     * Iterator wrapper that converts ValueTimestampHeaders to ValueAndTimestamp.
+     */
+    private static class ValueTimestampHeadersToValueAndTimestampKeyValueIterator<K, V> implements KeyValueIterator<K, ValueAndTimestamp<V>> {
+        private final KeyValueIterator<K, ValueTimestampHeaders<V>> inner;
+
+        ValueTimestampHeadersToValueAndTimestampKeyValueIterator(final KeyValueIterator<K, ValueTimestampHeaders<V>> inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public K peekNextKey() {
+            return inner.peekNextKey();
+        }
+
+        @Override
+        public boolean hasNext() {
+            return inner.hasNext();
+        }
+
+        @Override
+        public org.apache.kafka.streams.KeyValue<K, ValueAndTimestamp<V>> next() {
+            final org.apache.kafka.streams.KeyValue<K, ValueTimestampHeaders<V>> entry = inner.next();
+            final ValueTimestampHeaders<V> vth = entry.value;
+            final ValueAndTimestamp<V> vat = vth == null ? null :
+                ValueAndTimestamp.make(vth.value(), vth.timestamp());
+            return org.apache.kafka.streams.KeyValue.pair(entry.key, vat);
+        }
     }
 }
