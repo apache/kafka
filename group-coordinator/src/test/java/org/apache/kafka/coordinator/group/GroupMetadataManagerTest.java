@@ -24868,7 +24868,7 @@ public class GroupMetadataManagerTest {
             new InitMapValue(
                 topicName,
                 Set.of(0, 1),
-                0
+                context.time.milliseconds()
             )
         );
 
