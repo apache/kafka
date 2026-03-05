@@ -33,6 +33,9 @@ import com.dynatrace.hash4j.hashing.Hashing;
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -48,6 +51,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class Utils {
+    private static final Logger log = LoggerFactory.getLogger(Utils.class);
+
     private Utils() {}
 
     /**
@@ -245,20 +250,27 @@ public class Utils {
         // But we want to ensure the default memberEpoch assigned is non-negative.
         int adjustedDefaultEpoch = Math.max(defaultEpoch, 0);
         Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs = new HashMap<>();
+
         for (ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions tp : topicPartitions) {
             Map<Integer, Integer> partitionEpochs = new HashMap<>();
             List<Integer> partitions = tp.partitions();
             List<Integer> epochs = tp.assignmentEpochs();
-            if (epochs != null && !epochs.isEmpty() && epochs.size() != partitions.size()) {
-                throw new IllegalStateException(
-                    String.format("Assignment epochs size %d does not match partitions size %d for topic %s.",
-                        epochs.size(), partitions.size(), tp.topicId())
-                );
+
+            if (epochs != null && epochs.size() == partitions.size()) {
+                for (int i = 0; i < partitions.size(); i++) {
+                    partitionEpochs.put(partitions.get(i), epochs.get(i));
+                }
+            } else {
+                if (epochs != null) {
+                    log.error("Size of assignment epochs {} is not equal to partitions {} for topic {}. " +
+                            "Using default epoch {} for all partitions.",
+                        epochs.size(), partitions.size(), tp.topicId(), adjustedDefaultEpoch);
+                }
+                for (Integer partition : partitions) {
+                    partitionEpochs.put(partition, adjustedDefaultEpoch);
+                }
             }
-            for (int i = 0; i < partitions.size(); i++) {
-                int epoch = (epochs == null || epochs.isEmpty()) ? adjustedDefaultEpoch : epochs.get(i);
-                partitionEpochs.put(partitions.get(i), epoch);
-            }
+
             assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));
         }
         return Collections.unmodifiableMap(assignmentWithEpochs);

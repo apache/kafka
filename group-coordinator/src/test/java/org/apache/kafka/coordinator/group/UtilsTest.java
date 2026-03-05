@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetadataImage;
 import org.apache.kafka.coordinator.common.runtime.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -39,7 +40,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UtilsTest {
     private static final Uuid FOO_TOPIC_ID = Uuid.randomUuid();
@@ -291,17 +291,31 @@ public class UtilsTest {
     }
 
     @Test
-    void testAssignmentFromTopicPartitionsWithInvalidEpochLength() {
+    void testAssignmentFromTopicPartitionsWithUnequalEpochLength() {
+        // Empty array epochs list
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions = List.of(
             new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(FOO_TOPIC_ID)
                 .setPartitions(Arrays.asList(0, 1, 2))
-                .setAssignmentEpochs(Arrays.asList(5, 6))
+                .setAssignmentEpochs(List.of(0))
         );
 
-        assertThrows(
-            IllegalStateException.class,
-            () -> Utils.assignmentFromTopicPartitions(topicPartitions, 7)
-        );
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(Utils.class)) {
+            Map<Uuid, Map<Integer, Integer>> result = Utils.assignmentFromTopicPartitions(topicPartitions, 7);
+            // Verify fallback to default epoch for empty epochs list
+            assertEquals(
+                mkAssignmentWithEpochs(
+                    mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 0),
+                    mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 1),
+                    mkTopicAssignmentWithEpochs(FOO_TOPIC_ID, 7, 2)
+                ),
+                result
+            );
+            // Verify error log
+            assertEquals(1, appender.getMessages("ERROR").stream()
+                .filter(msg -> msg.contains("Size of assignment epochs 1 is not equal to partitions 3 for topic "
+                    + FOO_TOPIC_ID))
+                .count());
+        }
     }
 }
