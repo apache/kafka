@@ -20,13 +20,13 @@ package org.apache.kafka.server.common;
 import org.apache.kafka.common.protocol.ApiKeys;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_4_IV0;
