@@ -75,7 +75,7 @@ For a detailed migration guide with code examples, see [Migrating from Streams S
 
 ## Streams API changes in 4.2.0
 
-**Note:** Due to a critical bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Users planning to migrate should upgrade to a later release that includes the fix.
+**Note:** Due to a critical bug in the offline migration code ([KAFKA-20254](https://issues.apache.org/jira/browse/KAFKA-20254)), we recommend against doing migrations from classic to streams groups in 4.2.0. Newly created streams groups are not impacted. Users planning to migrate should upgrade to a later release that includes the fix.
 
 ### General Availability for a core feature set of the Streams Rebalance Protocol (KIP-1071)
 
