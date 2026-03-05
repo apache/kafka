@@ -305,6 +305,10 @@ println("Build properties: ignoreFailures=$userIgnoreFailures, maxParallelForks=
 
 subprojects {
 
+  tasks.withType(JavaForkOptions).configureEach {
+    systemProperty 'project.root.dir', project.rootDir.absolutePath
+  }
+
   // enable running :dependencies task recursively on all subprojects
   // eg: ./gradlew allDeps
   task allDeps(type: DependencyReportTask) {}
@@ -2242,10 +2246,6 @@ project(':server-common') {
 
   clean.doFirst {
     delete "${layout.buildDirectory.get().asFile.path}/kafka/"
-  }
-
-  test {
-    systemProperty 'project.root.dir', project.rootDir.absolutePath
   }
 
   checkstyle {
