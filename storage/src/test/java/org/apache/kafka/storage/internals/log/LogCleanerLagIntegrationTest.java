@@ -600,12 +600,8 @@ public class LogCleanerLagIntegrationTest {
     }
 
     @AfterEach
-    public void cleanup() {
-        kafka.utils.TestUtils.clearYammerMetrics();
-    }
-
-    @AfterEach
     public void teardown() throws IOException, InterruptedException {
+        kafka.utils.TestUtils.clearYammerMetrics();
         if (cleaner != null) {
             cleaner.shutdown();
         }
