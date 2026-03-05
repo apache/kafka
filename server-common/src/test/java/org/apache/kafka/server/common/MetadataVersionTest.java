@@ -316,7 +316,7 @@ class MetadataVersionTest {
 
     @Test
     public void assertPythonLatestStableMetadataVersionMatchesLatestProduction() throws IOException {
-        Path versionPy = Paths.get("../tests/kafkatest/version.py").toAbsolutePath();
+        Path versionPy = Paths.get(System.getProperty("user.dir") + "/../tests/kafkatest/version.py");
         assertTrue(Files.exists(versionPy), "Could not find tests/kafkatest/version.py at: " + versionPy);
 
         String pythonVersion = Files.readAllLines(versionPy).stream()
