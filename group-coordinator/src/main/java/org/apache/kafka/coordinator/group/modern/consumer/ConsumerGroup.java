@@ -1094,17 +1094,17 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
-     * Removes the partition epochs based on the provided assignment.
+     * Removes the partition epochs based on the provided assignment and member epoch.
      *
-     * @param assignmentWithEpochs    The assignment with epochs.
-     * @param expectedEpoch The expected epoch.
+     * @param assignment    The assignment with epochs. The assignment epochs are ignored.
+     * @param expectedEpoch The expected member epoch.
      * package-private for testing.
      */
     void removePartitionEpochs(
-        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs,
+        Map<Uuid, Map<Integer, Integer>> assignment,
         int expectedEpoch
     ) {
-        assignmentWithEpochs.forEach((topicId, partitionEpochs) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     partitionEpochs.keySet().forEach(partitionId -> {
@@ -1131,18 +1131,18 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
-     * Adds the partitions epoch based on the provided assignment.
+     * Adds the partitions epoch based on the provided assignment and member epoch.
      *
-     * @param assignmentWithEpochs    The assignment with epochs.
-     * @param epoch         The new epoch.
-     * @throws IllegalStateException if updating a partition with a smaller or equal epoch.
+     * @param assignment    The assignment with epochs. The assignment epochs are ignored.
+     * @param epoch         The new member epoch.
+     * @throws IllegalStateException if updating a partition with a smaller or equal member epoch.
      * package-private for testing.
      */
     void addPartitionEpochs(
-        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs,
+        Map<Uuid, Map<Integer, Integer>> assignment,
         int epoch
     ) {
-        assignmentWithEpochs.forEach((topicId, partitionEpochs) -> {
+        assignment.forEach((topicId, partitionEpochs) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, partitionEpochs.size());
@@ -1245,7 +1245,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
-                .setAssignedPartitions(assignedPartitions, classicGroup.generationId())
+                .setAssignedPartitions(Utils.toAssignmentWithEpochs(assignedPartitions, classicGroup.generationId()))
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())

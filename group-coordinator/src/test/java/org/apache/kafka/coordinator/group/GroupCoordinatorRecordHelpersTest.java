@@ -69,6 +69,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -85,6 +86,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
+import static org.apache.kafka.coordinator.group.Utils.toAssignmentWithEpochs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -381,14 +383,14 @@ public class GroupCoordinatorRecordHelpersTest {
             )
         );
 
-        assertEquals(expectedRecord, newConsumerGroupCurrentAssignmentRecord(
+        assertRecordEquals(expectedRecord, newConsumerGroupCurrentAssignmentRecord(
             "group-id",
             new ConsumerGroupMember.Builder("member-id")
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setAssignedPartitions(AssignmentTestUtil.toEpochsAssignment(assigned, 22))
-                .setPartitionsPendingRevocation(AssignmentTestUtil.toEpochsAssignment(revoking, 22))
+                .setAssignedPartitions(toAssignmentWithEpochs(assigned, 22))
+                .setPartitionsPendingRevocation(toAssignmentWithEpochs(revoking, 22))
                 .build()
         ));
     }

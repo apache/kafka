@@ -99,7 +99,7 @@ public class Utils {
      * Example:
      * [topicid1-0@5, topicid1-1@5, topicid2-0@3, topicid2-1@3]
      */
-    public static String assignmentEpochToString(
+    public static String assignmentWithEpochsToString(
         Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
     ) {
         StringBuilder builder = new StringBuilder("[");
@@ -231,17 +231,17 @@ public class Utils {
     }
 
     /**
-     * Creates a map of topic id and partition-epoch map from a list of consumer group TopicPartitions.
+     * Creates a map of topic id and partition with assignment epochs from a list of consumer group TopicPartitions.
      *
      * @param topicPartitions The list of TopicPartitions.
      * @param defaultEpoch The default epoch to use when the epoch information is not available for a partition.
-     * @return a map of topic id and partition-epoch map.
+     * @return a map of topic id and partitions with assignment epochs.
      */
     public static Map<Uuid, Map<Integer, Integer>> assignmentFromTopicPartitions(
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitions,
         int defaultEpoch
     ) {
-        // For legacy static member, the defaultEpoch could be -2(LEAVE_GROUP_STATIC_MEMBER_EPOCH).
+        // For legacy static member, the defaultEpoch could be -2 (LEAVE_GROUP_STATIC_MEMBER_EPOCH).
         // But we want to ensure the default memberEpoch assigned is non-negative.
         int adjustedDefaultEpoch = Math.max(defaultEpoch, 0);
         Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs = new HashMap<>();
@@ -249,13 +249,50 @@ public class Utils {
             Map<Integer, Integer> partitionEpochs = new HashMap<>();
             List<Integer> partitions = tp.partitions();
             List<Integer> epochs = tp.assignmentEpochs();
+            if (epochs != null && !epochs.isEmpty() && epochs.size() != partitions.size()) {
+                throw new IllegalStateException(
+                    String.format("Assignment epochs size %d does not match partitions size %d for topic %s.",
+                        epochs.size(), partitions.size(), tp.topicId())
+                );
+            }
             for (int i = 0; i < partitions.size(); i++) {
-                int epoch = (epochs != null && epochs.size() > i) ? epochs.get(i) : adjustedDefaultEpoch;
+                int epoch = (epochs == null || epochs.isEmpty()) ? adjustedDefaultEpoch : epochs.get(i);
                 partitionEpochs.put(partitions.get(i), epoch);
             }
             assignmentWithEpochs.put(tp.topicId(), Collections.unmodifiableMap(partitionEpochs));
         }
         return Collections.unmodifiableMap(assignmentWithEpochs);
+    }
+
+    /**
+     * Adds the given assignment epoch to an assignment without epochs.
+     */
+    public static Map<Uuid, Map<Integer, Integer>> toAssignmentWithEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int epoch
+    ) {
+        Map<Uuid, Map<Integer, Integer>> result = new HashMap<>();
+        for (Map.Entry<Uuid, Set<Integer>> entry : assignment.entrySet()) {
+            Map<Integer, Integer> partitionEpochs = new HashMap<>();
+            for (Integer partition : entry.getValue()) {
+                partitionEpochs.put(partition, epoch);
+            }
+            result.put(entry.getKey(), Collections.unmodifiableMap(partitionEpochs));
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Discards the assignment epochs from an assignment with epochs.
+     */
+    public static Map<Uuid, Set<Integer>> toAssignmentWithoutEpochs(
+        Map<Uuid, Map<Integer, Integer>> assignmentWithEpochs
+    ) {
+        Map<Uuid, Set<Integer>> result = new HashMap<>();
+        for (Map.Entry<Uuid, Map<Integer, Integer>> entry : assignmentWithEpochs.entrySet()) {
+            result.put(entry.getKey(), Collections.unmodifiableSet(new HashSet<>(entry.getValue().keySet())));
+        }
+        return Collections.unmodifiableMap(result);
     }
 
     /**

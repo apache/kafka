@@ -224,8 +224,8 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.Utils.assignmentEpochToString;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
+import static org.apache.kafka.coordinator.group.Utils.assignmentWithEpochsToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
@@ -1414,7 +1414,7 @@ public class GroupMetadataManager {
      * it owns any other partitions.
      *
      * @param ownedTopicPartitions  The partitions provided by the consumer in the request.
-     * @param target                The partitions with epochs that the member should have.
+     * @param target                The partitions that the member should have with assignment epochs.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
@@ -3565,7 +3565,7 @@ public class GroupMetadataManager {
                 log.debug("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
                         + "assignedPartitions={} and revokedPartitions={}.",
                     groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                    assignmentEpochToString(updatedMember.assignedPartitions()), assignmentEpochToString(updatedMember.partitionsPendingRevocation()));
+                    assignmentWithEpochsToString(updatedMember.assignedPartitions()), assignmentWithEpochsToString(updatedMember.partitionsPendingRevocation()));
             }
 
             // Schedule/cancel the rebalance timeout if the member uses the consumer protocol.
@@ -7606,11 +7606,7 @@ public class GroupMetadataManager {
         try {
             return ConsumerProtocol.serializeAssignment(
                 toConsumerProtocolAssignment(
-                    member.assignedPartitions().entrySet().stream()
-                        .collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            e -> Set.copyOf(e.getValue().keySet())
-                        )),
+                    Utils.toAssignmentWithoutEpochs(member.assignedPartitions()),
                     metadataImage
                 ),
                 ConsumerProtocol.deserializeVersion(
